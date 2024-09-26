@@ -1,0 +1,5 @@
+/target
+/assets
+/pkg
+.zed
+.DS_Store

@@ -1,0 +1,24 @@
+<html lang="en">
+    <head>
+        <title>VIBRANT</title>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+        <style>
+            * {
+                padding: 0;
+                margin: 0;
+            }
+
+            canvas {
+                width: 100vw;
+                height: 100vh;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
+        <script type="module">
+            import init from "./pkg/vibrant.js";
+            init();
+        </script>
+    </body>
+</html>
