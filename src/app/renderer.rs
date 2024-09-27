@@ -1,33 +1,73 @@
+pub mod camera;
 pub mod tractogram;
 pub mod uv;
 
+use std::sync::Arc;
+
+use camera::Camera;
+use log::info;
 use tractogram::TractogramRenderer;
 use uv::UvRenderer;
-use wgpu::{CommandEncoderDescriptor, TextureView};
+use wgpu::{CommandEncoderDescriptor, TextureViewDescriptor};
+use winit::{dpi::PhysicalSize, window::Window};
 
-use super::gpu::Gpu;
+use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
 pub struct Renderer {
+    gpu: Gpu,
+    surface: Option<Surface>,
+
+    camera: Camera,
     uv: UvRenderer,
     tractogram: TractogramRenderer,
 }
 
 impl Renderer {
-    pub fn new(gpu: &Gpu) -> Self {
+    pub async fn new() -> Self {
+        let gpu = Gpu::new().await;
+
+        let camera = Camera::new(&gpu);
+
         Self {
-            uv: UvRenderer::new(gpu),
-            tractogram: TractogramRenderer::new(gpu),
+            surface: None,
+            uv: UvRenderer::new(&gpu),
+            tractogram: TractogramRenderer::new(&gpu, &camera),
+
+            camera,
+            gpu,
         }
     }
 
-    pub fn render(&self, gpu: &Gpu, view: &TextureView) {
-        let mut cmd = gpu
+    pub fn create_surface(&mut self, window: Arc<Window>) {
+        self.surface = Some(Surface::new(&self.gpu, window))
+    }
+
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        self.surface
+            .as_mut()
+            .expect("Surface is not initialized")
+            .resize(&self.gpu, size.width, size.height);
+    }
+
+    pub fn render(&self, controller: &Controller) {
+        self.camera.update(&self.gpu, controller.camera());
+
+        let frame = self
+            .surface
+            .as_ref()
+            .expect("Surface is not initialized")
+            .frame();
+
+        let mut cmd = self
+            .gpu
             .device()
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
-        self.uv.render(&mut cmd, view);
-        self.tractogram.render(&mut cmd, view);
+        self.uv.render(&mut cmd, &frame);
+        self.tractogram.render(&mut cmd, &self.camera, &frame);
 
-        gpu.queue().submit([cmd.finish()]);
+        self.gpu.queue().submit([cmd.finish()]);
+
+        frame.present();
     }
 }

@@ -1,24 +1,11 @@
 use std::{iter::once, u32};
 
-use bytemuck::{cast_slice, Pod, Zeroable};
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable, PartialEq)]
-pub struct Vertex(f32, f32, f32);
-
-impl Vertex {
-    pub fn is_nan(&self) -> bool {
-        self.0.is_nan() || self.1.is_nan() || self.2.is_nan()
-    }
-
-    pub fn is_infinite(&self) -> bool {
-        self.0.is_infinite() || self.1.is_infinite() || self.2.is_infinite()
-    }
-}
+use bytemuck::cast_slice;
+use glam::Vec3;
 
 #[derive(Debug)]
 pub struct Tractogram {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<Vec3>,
     pub indices: Vec<u32>,
 }
 
@@ -31,8 +18,8 @@ pub fn load_tck(bytes: &[u8]) -> Tractogram {
 
     let payload = bytes[offset..].to_owned();
 
-    let vertices: Vec<Vec<Vertex>> = cast_slice(&payload)
-        .split(|x: &Vertex| x.is_nan() || x.is_infinite())
+    let vertices: Vec<Vec<Vec3>> = cast_slice(&payload)
+        .split(|x: &Vec3| x.is_nan() || !x.is_finite())
         .map(|x| x.into())
         .collect();
 
@@ -48,7 +35,11 @@ pub fn load_tck(bytes: &[u8]) -> Tractogram {
         .flatten()
         .collect();
 
-    let vertices: Vec<Vertex> = vertices.into_iter().flatten().collect();
+    let vertices: Vec<Vec3> = vertices
+        .into_iter()
+        .flatten()
+        .map(|vertex| Vec3::new(vertex.y, vertex.z, vertex.x))
+        .collect();
 
     Tractogram { vertices, indices }
 }

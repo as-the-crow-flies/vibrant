@@ -1,54 +1,57 @@
+pub mod controller;
 pub mod gpu;
 pub mod loader;
 pub mod renderer;
 pub mod surface;
 
+use log::warn;
 use std::sync::Arc;
+use web_time::Instant;
 
-use gpu::Gpu;
-use log::info;
+use controller::Controller;
 use renderer::Renderer;
-use surface::Surface;
-use wgpu::TextureViewDescriptor;
 use winit::{
     application::ApplicationHandler,
-    dpi::LogicalSize,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowId},
+    window::{self, WindowId},
 };
 
 struct App {
-    gpu: Gpu,
+    window: Option<Arc<window::Window>>,
+    instant: Instant,
     renderer: Renderer,
-    window: Option<Arc<Window>>,
-    surface: Option<Surface>,
+    controller: Controller,
 }
 
 impl App {
-    async fn new() -> App {
-        let gpu = Gpu::new().await;
-
+    async fn new() -> Self {
         Self {
-            renderer: Renderer::new(&gpu),
-            gpu,
             window: None,
-            surface: None,
+            instant: Instant::now(),
+            renderer: Renderer::new().await,
+            controller: Controller::new(),
         }
     }
 
-    fn redraw(&self) {
-        self.window.as_ref().unwrap().request_redraw();
+    fn window(&self) -> &Arc<window::Window> {
+        self.window.as_ref().expect("Window was uninitialized")
+    }
+
+    fn request_redraw(&self) {
+        self.window().request_redraw();
+    }
+
+    fn run(&mut self) {
+        EventLoop::new().unwrap().run_app(self).unwrap();
     }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let mut attributes = Window::default_attributes();
+        let mut attributes = window::Window::default_attributes();
 
-        let size = LogicalSize::new(800, 600);
-
-        attributes = attributes.with_title("VIBRANT").with_inner_size(size);
+        attributes = attributes.with_title("VIBRANT");
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -63,63 +66,41 @@ impl ApplicationHandler for App {
                 .dyn_into::<HtmlCanvasElement>()
                 .expect("No Element of type canvas");
 
-            canvas.set_width(size.width);
-            canvas.set_height(size.height);
+            canvas.set_width(1);
+            canvas.set_height(1);
 
             attributes = attributes.with_canvas(Some(canvas));
         }
 
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
-        let surface = Surface::new(&self.gpu, Arc::clone(&window), size.width, size.height);
-
+        self.renderer.create_surface(Arc::clone(&window));
         self.window = Some(window);
-        self.surface = Some(surface);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         match event {
-            WindowEvent::Focused(focused) => {
-                if focused {
-                    self.redraw();
-                }
-            }
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => {
-                self.surface
-                    .as_ref()
-                    .unwrap()
-                    .configure(&self.gpu, size.width, size.height);
-
-                info!("{:?}", size);
-
-                self.redraw()
-            }
-            WindowEvent::MouseInput {
-                device_id,
-                state,
-                button,
-            } => self.redraw(),
+            WindowEvent::Focused(_) => self.request_redraw(),
+            WindowEvent::Resized(size) => self.renderer.resize(size),
             WindowEvent::RedrawRequested => {
-                let texture = self.surface.as_ref().unwrap().get_current_texture();
+                let instant = Instant::now();
+                let duration = instant - self.instant;
 
-                let view = texture.texture.create_view(&TextureViewDescriptor {
-                    label: Some("surface view"),
-                    format: Some(Surface::VIEW_FORMAT),
-                    ..Default::default()
-                });
+                self.controller.update(duration.as_secs_f32());
+                self.instant = instant;
 
-                self.renderer.render(&self.gpu, &view);
+                self.renderer.render(&self.controller);
 
-                texture.present();
+                self.request_redraw();
             }
             _ => (),
         }
+
+        self.controller.event(event);
     }
 }
 
 pub async fn run() {
-    let mut app = App::new().await;
-
-    EventLoop::new().unwrap().run_app(&mut app).unwrap();
+    App::new().await.run();
 }
