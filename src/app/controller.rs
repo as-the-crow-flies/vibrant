@@ -12,6 +12,13 @@ pub struct ControllerState {
     position: Vec2,
     delta: Vec2,
     scroll: Vec2,
+    size: Vec2,
+}
+
+impl ControllerState {
+    fn relative_delta(&self) -> Vec2 {
+        self.delta / self.size
+    }
 }
 
 impl ControllerState {
@@ -23,6 +30,10 @@ impl ControllerState {
         };
 
         match event {
+            WindowEvent::Resized(size) => ControllerState {
+                size: Vec2::new(size.width as f32, size.height as f32),
+                ..default
+            },
             WindowEvent::CursorMoved {
                 device_id: _,
                 position,
@@ -100,25 +111,17 @@ impl Controller {
 
         self.state = self.state.update(event);
 
-        let rotation_speed = 0.01;
-        let pan_speed = 0.1;
-        let zoom_speed = 0.1;
-
         if self.state.left {
-            self.camera.rotate(
-                -self.state.delta.x * rotation_speed,
-                -self.state.delta.y * rotation_speed,
-            );
+            let rotation = self.state.relative_delta() * 10.0;
+            self.camera.rotate(-rotation.x, -rotation.y);
         }
 
         if self.state.right {
-            self.camera.pan(
-                self.state.delta.x * pan_speed,
-                -self.state.delta.y * pan_speed,
-            );
+            let pan = self.state.relative_delta();
+            self.camera.pan(pan.x, -pan.y);
         }
 
-        self.camera.zoom(-self.state.scroll.y * zoom_speed);
+        self.camera.zoom(-self.state.scroll.y * 0.05);
     }
 
     pub fn camera(&self) -> &Camera {

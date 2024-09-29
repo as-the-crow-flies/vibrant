@@ -9,35 +9,44 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use super::gpu::Gpu;
 
-pub struct Frame {
+pub struct Frame<'a> {
     surface: SurfaceTexture,
+    depth: &'a Texture,
+}
+
+pub struct FrameView {
     color: TextureView,
     depth: TextureView,
 }
 
-impl Frame {
-    pub fn new(surface: SurfaceTexture, depth: &Texture) -> Self {
-        Self {
-            color: surface.texture.create_view(&TextureViewDescriptor {
-                label: Some(type_name::<Self>()),
-                format: Some(Surface::VIEW_FORMAT),
-                ..Default::default()
-            }),
-            depth: depth.create_view(&TextureViewDescriptor {
-                label: Some(type_name::<Self>()),
-                format: Some(Surface::DEPTH_FORMAT),
-                ..Default::default()
-            }),
-            surface,
-        }
-    }
-
+impl FrameView {
     pub fn color(&self) -> &TextureView {
         &self.color
     }
 
     pub fn depth(&self) -> &TextureView {
         &self.depth
+    }
+}
+
+impl<'a> Frame<'a> {
+    pub fn new(surface: SurfaceTexture, depth: &'a Texture) -> Self {
+        Self { surface, depth }
+    }
+
+    pub fn view(&self) -> FrameView {
+        FrameView {
+            color: self.surface.texture.create_view(&TextureViewDescriptor {
+                label: Some(type_name::<Self>()),
+                format: Some(Surface::VIEW_FORMAT),
+                ..Default::default()
+            }),
+            depth: self.depth.create_view(&TextureViewDescriptor {
+                label: Some(type_name::<Self>()),
+                format: Some(Surface::DEPTH_FORMAT),
+                ..Default::default()
+            }),
+        }
     }
 
     pub fn present(self) {

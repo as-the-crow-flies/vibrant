@@ -9,7 +9,7 @@ use wgpu::{
 
 use crate::app::{
     gpu::Gpu,
-    surface::{Frame, Surface},
+    surface::{Frame, FrameView, Surface},
 };
 
 pub struct UvRenderer {
@@ -58,7 +58,7 @@ impl UvRenderer {
         Self { pipeline }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame) {
+    pub fn render(&self, cmd: &mut CommandEncoder, frame: &FrameView) {
         let attachment = RenderPassColorAttachment {
             view: frame.color(),
             resolve_target: None,

@@ -6,7 +6,7 @@ use winit::dpi::PhysicalSize;
 pub struct Camera {
     yaw: f32,
     pitch: f32,
-    zoom: f32,
+    distance: f32,
     pan: Vec3,
     fov: f32,
     near: f32,
@@ -19,7 +19,7 @@ impl Camera {
         Self {
             yaw: 0.0,
             pitch: 0.0,
-            zoom: 200.0,
+            distance: 200.0,
             pan: Vec3::ZERO,
             fov: PI / 4.0,
             near: 0.1,
@@ -38,7 +38,7 @@ impl Camera {
 
     pub fn mvp(&self) -> Mat4 {
         self.projection()
-            * Mat4::from_rotation_translation(self.rotation(), Vec3::Z * self.zoom)
+            * Mat4::from_rotation_translation(self.rotation(), Vec3::Z * self.distance)
             * Mat4::from_translation(self.pan)
     }
 
@@ -47,7 +47,8 @@ impl Camera {
     }
 
     pub fn zoom(&mut self, zoom: f32) {
-        self.zoom = (self.zoom + self.zoom.sqrt() * zoom).clamp(self.near * 10.0, self.far * 0.1);
+        self.distance =
+            (self.distance + self.distance.sqrt() * zoom).clamp(self.near * 10.0, self.far * 0.1);
     }
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
@@ -56,7 +57,7 @@ impl Camera {
     }
 
     pub fn pan(&mut self, x: f32, y: f32) {
-        self.pan += self.rotation().inverse().mul_vec3(Vec3::new(x, y, 0.0));
+        self.pan += self.rotation().inverse().mul_vec3(Vec3::new(x, y, 0.0)) * self.distance;
     }
 
     pub fn update(&self, dt: f32) {}

@@ -15,7 +15,7 @@ use wgpu::{
 use crate::app::{
     gpu::Gpu,
     loader::load_tck,
-    surface::{Frame, Surface},
+    surface::{Frame, FrameView, Surface},
 };
 
 use super::camera::Camera;
@@ -116,7 +116,7 @@ impl TractogramRenderer {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, camera: &Camera, frame: &Frame) {
+    pub fn render(&self, cmd: &mut CommandEncoder, camera: &Camera, frame: &FrameView) {
         let color_attachment = RenderPassColorAttachment {
             view: frame.color(),
             resolve_target: None,

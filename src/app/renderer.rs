@@ -5,10 +5,9 @@ pub mod uv;
 use std::sync::Arc;
 
 use camera::Camera;
-use log::info;
 use tractogram::TractogramRenderer;
 use uv::UvRenderer;
-use wgpu::{CommandEncoderDescriptor, TextureViewDescriptor};
+use wgpu::CommandEncoderDescriptor;
 use winit::{dpi::PhysicalSize, window::Window};
 
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
@@ -58,13 +57,15 @@ impl Renderer {
             .expect("Surface is not initialized")
             .frame();
 
+        let view = frame.view();
+
         let mut cmd = self
             .gpu
             .device()
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
-        self.uv.render(&mut cmd, &frame);
-        self.tractogram.render(&mut cmd, &self.camera, &frame);
+        self.uv.render(&mut cmd, &view);
+        self.tractogram.render(&mut cmd, &self.camera, &view);
 
         self.gpu.queue().submit([cmd.finish()]);
 
