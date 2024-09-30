@@ -1,7 +1,6 @@
 use std::f32::consts::PI;
 
-use glam::{Mat4, Quat, Vec3};
-use winit::dpi::PhysicalSize;
+use glam::{Mat4, Quat, Vec2, Vec3};
 
 pub struct Camera {
     yaw: f32,
@@ -42,8 +41,8 @@ impl Camera {
             * Mat4::from_translation(self.pan)
     }
 
-    pub fn aspect(&mut self, size: PhysicalSize<u32>) {
-        self.aspect = size.width as f32 / size.height as f32;
+    pub fn aspect(&mut self, size: Vec2) {
+        self.aspect = size.x / size.y;
     }
 
     pub fn zoom(&mut self, zoom: f32) {

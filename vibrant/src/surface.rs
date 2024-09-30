@@ -1,17 +1,71 @@
-use std::{any::type_name, sync::Arc};
+use std::any::type_name;
 
 use wgpu::{
     CompositeAlphaMode, Extent3d, PresentMode, SurfaceCapabilities, SurfaceConfiguration,
-    SurfaceTexture, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureView, TextureViewDescriptor,
+    SurfaceTarget, SurfaceTexture, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
-use winit::{dpi::PhysicalSize, window::Window};
 
 use super::gpu::Gpu;
 
-pub struct Frame<'a> {
+pub struct Frame {
     surface: SurfaceTexture,
-    depth: &'a Texture,
+    depth: Texture,
+}
+
+pub struct TestFrame {
+    color: Texture,
+    depth: Texture,
+}
+
+impl TestFrame {
+    pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
+        Self {
+            color: gpu.device().create_texture(&TextureDescriptor {
+                label: Some(type_name::<Self>()),
+                size: Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: Surface::COLOR_FORMAT,
+                usage: TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[Surface::COLOR_FORMAT],
+            }),
+            depth: gpu.device().create_texture(&TextureDescriptor {
+                label: Some(type_name::<Self>()),
+                size: Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: Surface::DEPTH_FORMAT,
+                usage: TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[Surface::DEPTH_FORMAT],
+            }),
+        }
+    }
+
+    pub fn view(&self) -> FrameView {
+        FrameView {
+            color: self.color.create_view(&TextureViewDescriptor {
+                label: Some(type_name::<Self>()),
+                format: Some(Surface::COLOR_FORMAT),
+                ..Default::default()
+            }),
+            depth: self.depth.create_view(&TextureViewDescriptor {
+                label: Some(type_name::<Self>()),
+                format: Some(Surface::DEPTH_FORMAT),
+                ..Default::default()
+            }),
+        }
+    }
 }
 
 pub struct FrameView {
@@ -29,8 +83,8 @@ impl FrameView {
     }
 }
 
-impl<'a> Frame<'a> {
-    pub fn new(surface: SurfaceTexture, depth: &'a Texture) -> Self {
+impl Frame {
+    pub fn new(surface: SurfaceTexture, depth: Texture) -> Self {
         Self { surface, depth }
     }
 
@@ -38,7 +92,7 @@ impl<'a> Frame<'a> {
         FrameView {
             color: self.surface.texture.create_view(&TextureViewDescriptor {
                 label: Some(type_name::<Self>()),
-                format: Some(Surface::VIEW_FORMAT),
+                format: Some(Surface::COLOR_FORMAT),
                 ..Default::default()
             }),
             depth: self.depth.create_view(&TextureViewDescriptor {
@@ -57,16 +111,13 @@ impl<'a> Frame<'a> {
 pub struct Surface {
     surface: wgpu::Surface<'static>,
     format: TextureFormat,
-    depth: Texture, // TODO: Depth Texture per Swap Chain Texture!?
 }
 
 impl Surface {
-    pub const VIEW_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+    pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
     pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
-    pub fn new(gpu: &Gpu, window: Arc<Window>) -> Self {
-        let size = window.inner_size().max(PhysicalSize::new(1, 1));
-
+    pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         let surface = gpu
             .instance()
             .create_surface(window)
@@ -74,13 +125,9 @@ impl Surface {
 
         let format = Self::choose_format(surface.get_capabilities(gpu.adapter()));
 
-        let mut surface = Self {
-            surface,
-            format,
-            depth: Self::create_depth_texture(gpu, size.width, size.height),
-        };
+        let mut surface = Self { surface, format };
 
-        surface.resize(gpu, size.width, size.height);
+        surface.resize(gpu, 1, 1);
 
         surface
     }
@@ -96,20 +143,21 @@ impl Surface {
                 present_mode: PresentMode::Fifo,
                 desired_maximum_frame_latency: 2,
                 alpha_mode: CompositeAlphaMode::Auto,
-                view_formats: vec![Self::VIEW_FORMAT],
+                view_formats: vec![Self::COLOR_FORMAT],
             },
         );
-
-        self.depth = Self::create_depth_texture(gpu, width, height);
     }
 
-    pub fn frame(&self) -> Frame {
-        Frame::new(
-            self.surface
-                .get_current_texture()
-                .expect("Could not obtain surface texture"),
-            &self.depth,
-        )
+    pub fn frame(&self, gpu: &Gpu) -> Frame {
+        let surface = self
+            .surface
+            .get_current_texture()
+            .expect("Could not obtain surface texture");
+
+        let depth =
+            Self::create_depth_texture(gpu, surface.texture.width(), surface.texture.height());
+
+        Frame::new(surface, depth)
     }
 
     pub fn get_current_texture(&self) -> SurfaceTexture {

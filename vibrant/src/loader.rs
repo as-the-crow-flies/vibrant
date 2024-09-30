@@ -1,9 +1,6 @@
-use std::{collections::HashMap, io::BufRead, u32};
-
-use bytemuck::checked::cast_slice;
 use glam::Vec3;
-use itertools::Itertools;
 use rfd::AsyncFileDialog;
+use std::{collections::HashMap, fs, io::BufRead, u32};
 
 #[derive(Debug, Default)]
 pub struct Tractogram {
@@ -12,14 +9,7 @@ pub struct Tractogram {
 }
 
 impl Tractogram {
-    pub async fn from_file_dialog() -> Option<Tractogram> {
-        let file = AsyncFileDialog::new()
-            .add_filter("Tracks file format", &[".tck"])
-            .pick_file()
-            .await?;
-
-        let bytes = file.read().await;
-
+    pub fn from_bytes(bytes: Vec<u8>) -> Tractogram {
         let header: HashMap<String, String> = bytes
             .lines()
             .map(|line| line.unwrap())
@@ -34,9 +24,9 @@ impl Tractogram {
             .get("file")
             .expect("No 'file' entry in .tck header")
             .strip_prefix(". ")
-            .expect(".tck header 'file' entry was expected to have '. ' prefix")
+            .expect("'file' entry in .tck header was expected to have '. ' prefix")
             .parse()
-            .expect("");
+            .expect("Couldnt parse 'file' entry in .tck header as usize");
 
         let vertices: Vec<Vec3> = bytemuck::cast_slice(&bytes[offset..]).to_vec();
 
@@ -53,6 +43,19 @@ impl Tractogram {
             })
             .collect();
 
-        Some(Tractogram { vertices, indices })
+        Tractogram { vertices, indices }
+    }
+
+    pub fn from_file(path: &str) -> Tractogram {
+        Self::from_bytes(fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
+    }
+
+    pub async fn from_file_dialog() -> Option<Tractogram> {
+        let file = AsyncFileDialog::new()
+            .add_filter("Tracks file format", &[".tck"])
+            .pick_file()
+            .await?;
+
+        Some(Self::from_bytes(file.read().await))
     }
 }

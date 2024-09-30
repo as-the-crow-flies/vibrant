@@ -1,6 +1,8 @@
 use std::any::type_name;
 
-use wgpu::{Limits, PowerPreference, RequestAdapterOptions};
+use wgpu::{
+    CommandEncoderDescriptor, Limits, PowerPreference, RequestAdapterOptions, SubmissionIndex,
+};
 
 pub struct Gpu {
     instance: wgpu::Instance,
@@ -20,8 +22,6 @@ impl Gpu {
             })
             .await
             .expect("Could not aqcuire GPU Adapter");
-
-        dbg!(adapter.limits());
 
         let (device, queue) = adapter
             .request_device(
@@ -60,5 +60,20 @@ impl Gpu {
 
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
+    }
+
+    pub fn cmd(&self) -> wgpu::CommandEncoder {
+        self.device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some(type_name::<Self>()),
+            })
+    }
+
+    pub fn submit(&self, cmd: wgpu::CommandEncoder) {
+        self.queue.submit([cmd.finish()]);
+    }
+
+    pub fn wait(&self) {
+        self.device.poll(wgpu::MaintainBase::Wait);
     }
 }

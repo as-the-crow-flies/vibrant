@@ -8,14 +8,13 @@ use wgpu::{
     Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
     PrimitiveTopology, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StencilFaceState, StencilState,
-    StoreOp, TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
-    VertexStepMode,
+    StoreOp, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
-use crate::app::{
+use crate::{
     gpu::Gpu,
     loader::Tractogram,
-    surface::{Frame, FrameView, Surface},
+    surface::{FrameView, Surface},
 };
 
 use super::camera::Camera;
@@ -43,7 +42,7 @@ impl TractogramRenderer {
             });
 
         let target = ColorTargetState {
-            format: Surface::VIEW_FORMAT,
+            format: Surface::COLOR_FORMAT,
             blend: None,
             write_mask: ColorWrites::all(),
         };

@@ -1,0 +1,13 @@
+[package]
+name = "vibrant"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = "22.1"
+rfd = "0.15"
+bytemuck = { version = "1.18", features = ["derive"] }
+glam = { version = "0.29", features = ["bytemuck"] }
+futures = "0.3"
+itertools = "0.13"
+log = "0.4"

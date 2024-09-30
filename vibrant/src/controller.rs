@@ -1,8 +1,9 @@
 pub mod camera;
+pub mod event;
 
 use camera::Camera;
+use event::{Event, MouseButton};
 use glam::Vec2;
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ControllerState {
@@ -22,7 +23,7 @@ impl ControllerState {
 }
 
 impl ControllerState {
-    fn update(&self, event: WindowEvent) -> Self {
+    fn update(&self, event: Event) -> Self {
         let default = ControllerState {
             delta: Vec2::default(),
             scroll: Vec2::default(),
@@ -30,62 +31,33 @@ impl ControllerState {
         };
 
         match event {
-            WindowEvent::Resized(size) => ControllerState {
-                size: Vec2::new(size.width as f32, size.height as f32),
-                ..default
-            },
-            WindowEvent::CursorMoved {
-                device_id: _,
+            Event::Resized(size) => ControllerState { size, ..default },
+            Event::MouseMoved(position) => ControllerState {
                 position,
-            } => ControllerState {
-                position: Vec2::new(position.x as f32, position.y as f32),
-                delta: Vec2::new(position.x as f32, position.y as f32) - self.position,
+                delta: position - self.position,
                 ..default
             },
-            WindowEvent::MouseInput {
-                device_id: _,
-                state: ElementState::Pressed,
-                button: MouseButton::Left,
-            } => ControllerState {
+            Event::MousePressed(MouseButton::Left) => ControllerState {
                 pressed: true,
                 left: true,
                 ..default
             },
-            WindowEvent::MouseInput {
-                device_id: _,
-                state: ElementState::Released,
-                button: MouseButton::Left,
-            } => ControllerState {
+            Event::MouseReleased(MouseButton::Left) => ControllerState {
                 pressed: false,
                 left: false,
                 ..default
             },
-            WindowEvent::MouseInput {
-                device_id: _,
-                state: ElementState::Pressed,
-                button: MouseButton::Right,
-            } => ControllerState {
+            Event::MousePressed(MouseButton::Right) => ControllerState {
                 pressed: true,
                 right: true,
                 ..default
             },
-            WindowEvent::MouseInput {
-                device_id: _,
-                state: ElementState::Released,
-                button: MouseButton::Right,
-            } => ControllerState {
+            Event::MouseReleased(MouseButton::Right) => ControllerState {
                 pressed: false,
                 right: false,
                 ..default
             },
-            WindowEvent::MouseWheel {
-                device_id: _,
-                delta: MouseScrollDelta::PixelDelta(zoom),
-                phase: _,
-            } => ControllerState {
-                scroll: Vec2::new(zoom.x as f32, zoom.y as f32),
-                ..default
-            },
+            Event::MouseWheel(scroll) => ControllerState { scroll, ..default },
             _ => default,
         }
     }
@@ -104,8 +76,8 @@ impl Controller {
         }
     }
 
-    pub fn event(&mut self, event: WindowEvent) {
-        if let WindowEvent::Resized(size) = event {
+    pub fn event(&mut self, event: Event) {
+        if let Event::Resized(size) = event {
             self.camera.aspect(size);
         }
 

@@ -1,5 +1,8 @@
+[workspace]
+members = ["vibrant"]
+
 [package]
-name = "vibrant"
+name = "vibrant-app"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,14 +10,10 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-wgpu = "22.1"
+vibrant = { path = "vibrant" }
 winit = "0.30"
-rfd = "0.15"
-bytemuck = { version = "1.18", features = ["derive"] }
-glam = { version = "0.29", features = ["bytemuck"] }
 web-time = "1.1"
 futures = "0.3"
-itertools = "0.13"
 env_logger = "0.11"
 log = "0.4"
 
@@ -29,3 +28,10 @@ web-sys = { version = "0.3", features = [
     "Element",
     "HtmlCanvasElement",
 ] }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "benchmark"
+harness = false

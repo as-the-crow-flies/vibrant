@@ -2,14 +2,10 @@ pub mod camera;
 pub mod tractogram;
 pub mod uv;
 
-use std::sync::Arc;
-
 use camera::Camera;
-use rfd::AsyncFileDialog;
 use tractogram::TractogramRenderer;
 use uv::UvRenderer;
-use wgpu::CommandEncoderDescriptor;
-use winit::{dpi::PhysicalSize, window::Window};
+use wgpu::{CommandEncoderDescriptor, SurfaceTarget};
 
 use super::{controller::Controller, gpu::Gpu, loader::Tractogram, surface::Surface};
 
@@ -41,25 +37,25 @@ impl Renderer {
         }
     }
 
-    pub fn create_surface(&mut self, window: Arc<Window>) {
+    pub fn create_surface(&mut self, window: impl Into<SurfaceTarget<'static>>) {
         self.surface = Some(Surface::new(&self.gpu, window))
     }
 
-    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, width: u32, height: u32) {
         self.surface
             .as_mut()
             .expect("Surface is not initialized")
-            .resize(&self.gpu, size.width, size.height);
+            .resize(&self.gpu, width, height);
     }
 
     pub fn render(&self, controller: &Controller) {
-        self.camera.update(&self.gpu, controller.camera());
+        self.camera.update(&self.gpu, controller.camera().mvp());
 
         let frame = self
             .surface
             .as_ref()
             .expect("Surface is not initialized")
-            .frame();
+            .frame(&self.gpu);
 
         let view = frame.view();
 

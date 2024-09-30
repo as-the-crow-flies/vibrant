@@ -7,7 +7,7 @@ use wgpu::{
     RenderPipeline, RenderPipelineDescriptor, StoreOp, TextureView, VertexState,
 };
 
-use crate::app::{
+use crate::{
     gpu::Gpu,
     surface::{Frame, FrameView, Surface},
 };
@@ -23,7 +23,7 @@ impl UvRenderer {
             .create_shader_module(include_wgsl!("../wgsl/uv.wgsl"));
 
         let target = ColorTargetState {
-            format: Surface::VIEW_FORMAT,
+            format: Surface::COLOR_FORMAT,
             blend: None,
             write_mask: ColorWrites::all(),
         };

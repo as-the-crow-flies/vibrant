@@ -1,13 +1,14 @@
 use std::any::type_name;
 
 use bytemuck::bytes_of;
+use glam::Mat4;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType,
     BufferDescriptor, BufferUsages, ShaderStages,
 };
 
-use crate::app::{controller, gpu::Gpu};
+use crate::gpu::Gpu;
 
 pub struct Camera {
     pub layout: BindGroupLayout,
@@ -62,8 +63,7 @@ impl Camera {
         }
     }
 
-    pub fn update(&self, gpu: &Gpu, camera: &controller::camera::Camera) {
-        gpu.queue()
-            .write_buffer(&self.buffer, 0, bytes_of(&camera.mvp()));
+    pub fn update(&self, gpu: &Gpu, mvp: Mat4) {
+        gpu.queue().write_buffer(&self.buffer, 0, bytes_of(&mvp));
     }
 }
