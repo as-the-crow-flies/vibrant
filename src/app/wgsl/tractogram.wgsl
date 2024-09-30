@@ -12,8 +12,9 @@ struct Fragment {
 @vertex
 fn vertex(vertex: Vertex) -> Fragment
 {
-    let clip = CAMERA * vec4<f32>(vertex.position, 1.0);
-    return Fragment(clip, vertex.position);
+    let position = vertex.position.xzy;
+    let clip = CAMERA * vec4<f32>(position, 1.0);
+    return Fragment(clip, position);
 }
 
 @fragment

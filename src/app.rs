@@ -41,10 +41,6 @@ impl App {
     fn request_redraw(&self) {
         self.window().request_redraw();
     }
-
-    fn run(&mut self) {
-        EventLoop::new().unwrap().run_app(self).unwrap();
-    }
 }
 
 impl ApplicationHandler for App {
@@ -102,5 +98,7 @@ impl ApplicationHandler for App {
 }
 
 pub async fn run() {
-    App::new().await.run();
+    let event_loop = EventLoop::new().unwrap();
+    let mut app = App::new().await;
+    event_loop.run_app(&mut app).unwrap();
 }

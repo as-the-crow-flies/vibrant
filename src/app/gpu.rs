@@ -1,5 +1,7 @@
 use std::any::type_name;
 
+use wgpu::{Limits, PowerPreference, RequestAdapterOptions};
+
 pub struct Gpu {
     instance: wgpu::Instance,
     adapter: wgpu::Adapter,
@@ -12,14 +14,23 @@ impl Gpu {
         let instance = wgpu::Instance::default();
 
         let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .request_adapter(&RequestAdapterOptions {
+                power_preference: PowerPreference::HighPerformance,
+                ..Default::default()
+            })
             .await
             .expect("Could not aqcuire GPU Adapter");
+
+        dbg!(adapter.limits());
 
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some(type_name::<Self>()),
+                    required_limits: Limits {
+                        max_buffer_size: 1024 * 1024 * 1024,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 None,

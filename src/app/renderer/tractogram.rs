@@ -14,7 +14,7 @@ use wgpu::{
 
 use crate::app::{
     gpu::Gpu,
-    loader::load_tck,
+    loader::Tractogram,
     surface::{Frame, FrameView, Surface},
 };
 
@@ -27,10 +27,8 @@ pub struct TractogramRenderer {
 }
 
 impl TractogramRenderer {
-    pub fn new(gpu: &Gpu, camera: &Camera) -> Self {
+    pub fn new(gpu: &Gpu, camera: &Camera, tractogram: &Tractogram) -> Self {
         let label = Some(type_name::<Self>());
-
-        let tractogram = load_tck(include_bytes!("../../../assets/CC.tck"));
 
         let module = gpu
             .device()

@@ -5,12 +5,13 @@ pub mod uv;
 use std::sync::Arc;
 
 use camera::Camera;
+use rfd::AsyncFileDialog;
 use tractogram::TractogramRenderer;
 use uv::UvRenderer;
 use wgpu::CommandEncoderDescriptor;
 use winit::{dpi::PhysicalSize, window::Window};
 
-use super::{controller::Controller, gpu::Gpu, surface::Surface};
+use super::{controller::Controller, gpu::Gpu, loader::Tractogram, surface::Surface};
 
 pub struct Renderer {
     gpu: Gpu,
@@ -24,13 +25,16 @@ pub struct Renderer {
 impl Renderer {
     pub async fn new() -> Self {
         let gpu = Gpu::new().await;
-
         let camera = Camera::new(&gpu);
+
+        let tractogram = Tractogram::from_file_dialog()
+            .await
+            .expect("Please choose a Tractogram file");
 
         Self {
             surface: None,
             uv: UvRenderer::new(&gpu),
-            tractogram: TractogramRenderer::new(&gpu, &camera),
+            tractogram: TractogramRenderer::new(&gpu, &camera, &tractogram),
 
             camera,
             gpu,
