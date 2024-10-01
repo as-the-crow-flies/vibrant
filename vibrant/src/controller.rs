@@ -102,7 +102,7 @@ impl Controller {
     pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("load .tck").clicked() {
+                if ui.button("📂 open").clicked() {
                     Tractogram::file_dialog(|tractogram| {
                         Data::set_tractogram(tractogram);
                     });
