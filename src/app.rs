@@ -43,7 +43,8 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let attributes = window::Window::default_attributes().with_title("VIBRANT");
+        let mut attributes = window::Window::default_attributes();
+        attributes = attributes.with_title("VIBRANT");
 
         #[cfg(target_arch = "wasm32")]
         {
