@@ -54,6 +54,8 @@ impl TestFrame {
 
     pub fn view(&self) -> FrameView {
         FrameView {
+            width: self.color.width(),
+            height: self.color.height(),
             color: self.color.create_view(&TextureViewDescriptor {
                 label: Some(type_name::<Self>()),
                 format: Some(Surface::COLOR_FORMAT),
@@ -69,11 +71,21 @@ impl TestFrame {
 }
 
 pub struct FrameView {
+    width: u32,
+    height: u32,
     color: TextureView,
     depth: TextureView,
 }
 
 impl FrameView {
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
     pub fn color(&self) -> &TextureView {
         &self.color
     }
@@ -88,8 +100,10 @@ impl Frame {
         Self { surface, depth }
     }
 
-    pub fn view(&self) -> FrameView {
+    pub fn create_view(&self) -> FrameView {
         FrameView {
+            width: self.surface.texture.width(),
+            height: self.surface.texture.height(),
             color: self.surface.texture.create_view(&TextureViewDescriptor {
                 label: Some(type_name::<Self>()),
                 format: Some(Surface::COLOR_FORMAT),
@@ -148,7 +162,7 @@ impl Surface {
         );
     }
 
-    pub fn frame(&self, gpu: &Gpu) -> Frame {
+    pub fn create_current_frame(&self, gpu: &Gpu) -> Frame {
         let surface = self
             .surface
             .get_current_texture()

@@ -2,6 +2,7 @@ pub mod camera;
 pub mod event;
 
 use camera::Camera;
+use egui_wgpu::winit;
 use event::{Event, MouseButton};
 use glam::Vec2;
 
@@ -94,6 +95,20 @@ impl Controller {
         }
 
         self.camera.zoom(-self.state.scroll.y * 0.05);
+    }
+
+    pub fn ui(&mut self, ctx: &egui::Context) {
+        egui::Window::new("VIBRANT")
+            .resizable(true)
+            .vscroll(true)
+            .default_open(false)
+            .show(ctx, |ui| {
+                ui.label("Label!");
+
+                if ui.button("Button!").clicked() {
+                    println!("boom!")
+                }
+            });
     }
 
     pub fn camera(&self) -> &Camera {

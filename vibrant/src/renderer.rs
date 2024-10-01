@@ -1,11 +1,13 @@
 pub mod camera;
 pub mod tractogram;
+pub mod ui;
 pub mod uv;
 
 use camera::Camera;
 use tractogram::TractogramRenderer;
+use ui::UiRenderer;
 use uv::UvRenderer;
-use wgpu::{CommandEncoderDescriptor, SurfaceTarget};
+use wgpu::SurfaceTarget;
 
 use super::{controller::Controller, gpu::Gpu, loader::Tractogram, surface::Surface};
 
@@ -16,6 +18,7 @@ pub struct Renderer {
     camera: Camera,
     uv: UvRenderer,
     tractogram: TractogramRenderer,
+    ui: UiRenderer,
 }
 
 impl Renderer {
@@ -29,8 +32,10 @@ impl Renderer {
 
         Self {
             surface: None,
+
             uv: UvRenderer::new(&gpu),
             tractogram: TractogramRenderer::new(&gpu, &camera, &tractogram),
+            ui: UiRenderer::new(&gpu),
 
             camera,
             gpu,
@@ -44,30 +49,30 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.surface
             .as_mut()
-            .expect("Surface is not initialized")
+            .unwrap()
             .resize(&self.gpu, width, height);
     }
 
-    pub fn render(&self, controller: &Controller) {
+    pub fn update(&mut self, controller: &Controller) {
         self.camera.update(&self.gpu, controller.camera().mvp());
+    }
 
+    pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
         let frame = self
             .surface
             .as_ref()
-            .expect("Surface is not initialized")
-            .frame(&self.gpu);
+            .unwrap()
+            .create_current_frame(&self.gpu);
 
-        let view = frame.view();
+        let view = frame.create_view();
 
-        let mut cmd = self
-            .gpu
-            .device()
-            .create_command_encoder(&CommandEncoderDescriptor::default());
+        let mut cmd = self.gpu.cmd();
 
         self.uv.render(&mut cmd, &view);
         self.tractogram.render(&mut cmd, &self.camera, &view);
+        self.ui.render(&self.gpu, &mut cmd, &view, ctx, output);
 
-        self.gpu.queue().submit([cmd.finish()]);
+        self.gpu.submit(cmd);
 
         frame.present();
     }

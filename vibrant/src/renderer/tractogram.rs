@@ -127,7 +127,7 @@ impl TractogramRenderer {
             view: frame.depth(),
             depth_ops: Some(Operations {
                 load: LoadOp::Clear(1.0),
-                store: StoreOp::Discard,
+                store: StoreOp::Store,
             }),
             stencil_ops: None,
         };
