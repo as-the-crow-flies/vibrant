@@ -1,5 +1,4 @@
 use glam::Vec3;
-use rfd::AsyncFileDialog;
 use std::{collections::HashMap, fs, io::BufRead, u32};
 
 #[derive(Debug, Default)]
@@ -50,12 +49,28 @@ impl Tractogram {
         Self::from_bytes(fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
     }
 
-    pub async fn from_file_dialog() -> Option<Tractogram> {
-        let file = AsyncFileDialog::new()
-            .add_filter("Tracks file format", &[".tck"])
-            .pick_file()
-            .await?;
+    #[cfg(target_arch = "wasm32")]
+    pub fn file_dialog(callback: impl FnOnce(Tractogram) + 'static) {
+        wasm_bindgen_futures::spawn_local(async move {
+            let file = rfd::AsyncFileDialog::new()
+                .add_filter("Tracks file format", &[".tck"])
+                .pick_file()
+                .await;
 
-        Some(Self::from_bytes(file.read().await))
+            if let Some(file) = file {
+                callback(Self::from_bytes(file.read().await));
+            }
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn file_dialog(callback: impl FnOnce(Tractogram) + 'static) {
+        let file = rfd::FileDialog::new()
+            .add_filter("Tracks file format", &[".tck"])
+            .pick_file();
+
+        if let Some(file) = file {
+            callback(Self::from_bytes(fs::read(file).unwrap()))
+        }
     }
 }

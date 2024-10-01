@@ -1,15 +1,15 @@
 use std::any::type_name;
 
 use wgpu::{
-    include_wgsl, Color, ColorTargetState, ColorWrites, CommandEncoder, CommandEncoderDescriptor,
-    FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
-    PrimitiveState, PrimitiveTopology, RenderPassColorAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, StoreOp, TextureView, VertexState,
+    include_wgsl, Color, ColorTargetState, ColorWrites, CommandEncoder, FragmentState, LoadOp,
+    MultisampleState, Operations, PipelineCompilationOptions, PrimitiveState, PrimitiveTopology,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
+    StoreOp, VertexState,
 };
 
 use crate::{
     gpu::Gpu,
-    surface::{Frame, FrameView, Surface},
+    surface::{FrameView, Surface},
 };
 
 pub struct UvRenderer {

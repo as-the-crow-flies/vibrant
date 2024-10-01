@@ -2,9 +2,10 @@ pub mod camera;
 pub mod event;
 
 use camera::Camera;
-use egui_wgpu::winit;
 use event::{Event, MouseButton};
 use glam::Vec2;
+
+use crate::{data::Data, loader::Tractogram};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ControllerState {
@@ -97,16 +98,18 @@ impl Controller {
         self.camera.zoom(-self.state.scroll.y * 0.05);
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context) {
+    pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {
         egui::Window::new("VIBRANT")
             .resizable(true)
             .vscroll(true)
             .default_open(false)
             .show(ctx, |ui| {
-                ui.label("Label!");
+                ui.label(format!("{:.0} fps ({:.0} ms)", 1.0 / dt, 1000.0 * dt));
 
                 if ui.button("Button!").clicked() {
-                    println!("boom!")
+                    Tractogram::file_dialog(|tractogram| {
+                        Data::set_tractogram(tractogram);
+                    });
                 }
             });
     }

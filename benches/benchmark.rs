@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use futures::executor::block_on;
+use pollster::FutureExt;
 use vibrant::{
     gpu::Gpu,
     loader::Tractogram,
@@ -11,7 +11,7 @@ use vibrant::{
 };
 
 pub fn baseline_benchmark(criterion: &mut Criterion) {
-    let gpu = block_on(Gpu::new());
+    let gpu = Gpu::new().block_on();
 
     let camera = Camera::new(&gpu);
     camera.update(&gpu, get_mvp());

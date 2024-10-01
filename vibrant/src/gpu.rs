@@ -1,8 +1,6 @@
 use std::any::type_name;
 
-use wgpu::{
-    CommandEncoderDescriptor, Limits, PowerPreference, RequestAdapterOptions, SubmissionIndex,
-};
+use wgpu::{CommandEncoderDescriptor, Limits, PowerPreference, RequestAdapterOptions};
 
 pub struct Gpu {
     instance: wgpu::Instance,

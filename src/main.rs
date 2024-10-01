@@ -1,4 +1,4 @@
-use futures::executor::block_on;
+use pollster::FutureExt;
 
 pub mod app;
 
@@ -8,5 +8,5 @@ fn main() {
         .try_init()
         .unwrap();
 
-    block_on(app::run())
+    app::run().block_on();
 }

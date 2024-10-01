@@ -9,6 +9,8 @@ use ui::UiRenderer;
 use uv::UvRenderer;
 use wgpu::SurfaceTarget;
 
+use crate::data::Data;
+
 use super::{controller::Controller, gpu::Gpu, loader::Tractogram, surface::Surface};
 
 pub struct Renderer {
@@ -26,9 +28,7 @@ impl Renderer {
         let gpu = Gpu::new().await;
         let camera = Camera::new(&gpu);
 
-        let tractogram = Tractogram::from_file_dialog()
-            .await
-            .expect("Please choose a Tractogram file");
+        let tractogram = Tractogram::default();
 
         Self {
             surface: None,
@@ -54,15 +54,13 @@ impl Renderer {
     }
 
     pub fn update(&mut self, controller: &Controller) {
+        Data::pop_tractogram(|tractogram| self.tractogram.upload(&self.gpu, tractogram));
+
         self.camera.update(&self.gpu, controller.camera().mvp());
     }
 
     pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
-        let frame = self
-            .surface
-            .as_ref()
-            .unwrap()
-            .create_current_frame(&self.gpu);
+        let frame = self.surface.as_ref().unwrap().get_current_frame();
 
         let view = frame.create_view();
 
@@ -75,5 +73,7 @@ impl Renderer {
         self.gpu.submit(cmd);
 
         frame.present();
+
+        self.gpu.wait();
     }
 }

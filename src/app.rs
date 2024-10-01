@@ -1,5 +1,7 @@
+use log::warn;
 use std::sync::Arc;
 use vibrant::controller::event::MouseButton;
+use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
 
@@ -29,6 +31,45 @@ impl App {
             instant: Instant::now(),
             renderer: Renderer::new().await,
             controller: Controller::new(),
+        }
+    }
+
+    fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
+        let egui = self.egui.as_mut().expect("Egui");
+        let window = self.window.as_ref().expect("Window");
+
+        let consumed_by_egui = egui.on_window_event(window, &event).consumed;
+
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Focused(_) => self.request_redraw(),
+            WindowEvent::Resized(size) => self.renderer.resize(size.width, size.height),
+            WindowEvent::RedrawRequested => {
+                let instant = Instant::now();
+                let duration = instant - self.instant;
+                let dt = duration.as_secs_f32();
+                self.instant = instant;
+
+                let input = egui.take_egui_input(window);
+                let output = egui
+                    .egui_ctx()
+                    .run(input, |ctx| self.controller.ui(ctx, dt));
+                egui.handle_platform_output(&window, output.platform_output.clone());
+
+                self.controller.update(dt);
+
+                self.renderer.update(&self.controller);
+                self.renderer.render(egui.egui_ctx(), output);
+
+                self.request_redraw();
+            }
+            _ => (),
+        }
+
+        if let Some(vibrant_event) = vibrant_event(event) {
+            if !consumed_by_egui {
+                self.controller.event(vibrant_event);
+            }
         }
     }
 
@@ -83,39 +124,7 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        let egui = self.egui.as_mut().expect("Egui");
-        let window = self.window.as_ref().expect("Window");
-
-        let consumed_by_egui = egui.on_window_event(window, &event).consumed;
-
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Focused(_) => self.request_redraw(),
-            WindowEvent::Resized(size) => self.renderer.resize(size.width, size.height),
-            WindowEvent::RedrawRequested => {
-                let instant = Instant::now();
-                let duration = instant - self.instant;
-                let dt = duration.as_secs_f32();
-                self.instant = instant;
-
-                let input = egui.take_egui_input(window);
-                let output = egui.egui_ctx().run(input, |ctx| self.controller.ui(ctx));
-                egui.handle_platform_output(&window, output.platform_output.clone());
-
-                self.controller.update(dt);
-                self.renderer.update(&self.controller);
-                self.renderer.render(egui.egui_ctx(), output);
-
-                self.request_redraw();
-            }
-            _ => (),
-        }
-
-        if let Some(vibrant_event) = vibrant_event(event) {
-            if !consumed_by_egui {
-                self.controller.event(vibrant_event);
-            }
-        }
+        self.event(event_loop, event);
     }
 }
 
@@ -164,5 +173,6 @@ fn vibrant_event(event: WindowEvent) -> Option<Event> {
 pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new().await;
+
     event_loop.run_app(&mut app).unwrap();
 }

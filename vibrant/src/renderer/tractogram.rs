@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, mem::replace};
 
 use wgpu::{
     include_wgsl,
@@ -100,16 +100,8 @@ impl TractogramRenderer {
                     multiview: None,
                     cache: None,
                 }),
-            indices: gpu.device().create_buffer_init(&BufferInitDescriptor {
-                label,
-                contents: bytemuck::cast_slice(&tractogram.indices),
-                usage: BufferUsages::INDEX,
-            }),
-            vertices: gpu.device().create_buffer_init(&BufferInitDescriptor {
-                label,
-                contents: bytemuck::cast_slice(&tractogram.vertices),
-                usage: BufferUsages::VERTEX,
-            }),
+            indices: Self::create_index_buffer(gpu, tractogram),
+            vertices: Self::create_vertex_buffer(gpu, tractogram),
         }
     }
 
@@ -147,5 +139,35 @@ impl TractogramRenderer {
         pass.set_index_buffer(self.indices.slice(..), IndexFormat::Uint32);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.draw_indexed(0..count, 0, 0..1);
+    }
+
+    pub fn upload(&mut self, gpu: &Gpu, tractogram: &Tractogram) {
+        replace(
+            &mut self.indices,
+            Self::create_index_buffer(gpu, tractogram),
+        )
+        .destroy();
+
+        replace(
+            &mut self.vertices,
+            Self::create_vertex_buffer(gpu, tractogram),
+        )
+        .destroy();
+    }
+
+    fn create_index_buffer(gpu: &Gpu, tractogram: &Tractogram) -> Buffer {
+        gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label: Some(type_name::<Self>()),
+            contents: bytemuck::cast_slice(&tractogram.indices),
+            usage: BufferUsages::INDEX,
+        })
+    }
+
+    fn create_vertex_buffer(gpu: &Gpu, tractogram: &Tractogram) -> Buffer {
+        gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label: Some(type_name::<Self>()),
+            contents: bytemuck::cast_slice(&tractogram.vertices),
+            usage: BufferUsages::VERTEX,
+        })
     }
 }

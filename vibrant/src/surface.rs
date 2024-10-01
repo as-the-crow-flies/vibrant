@@ -8,9 +8,9 @@ use wgpu::{
 
 use super::gpu::Gpu;
 
-pub struct Frame {
+pub struct Frame<'a> {
     surface: SurfaceTexture,
-    depth: Texture,
+    depth: &'a Texture,
 }
 
 pub struct TestFrame {
@@ -95,8 +95,8 @@ impl FrameView {
     }
 }
 
-impl Frame {
-    pub fn new(surface: SurfaceTexture, depth: Texture) -> Self {
+impl<'a> Frame<'a> {
+    pub fn new(surface: SurfaceTexture, depth: &'a Texture) -> Self {
         Self { surface, depth }
     }
 
@@ -124,6 +124,7 @@ impl Frame {
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
+    depth: Texture,
     format: TextureFormat,
 }
 
@@ -137,9 +138,15 @@ impl Surface {
             .create_surface(window)
             .expect("Could not create surface");
 
+        let depth = Self::create_depth_texture(gpu, 1, 1);
+
         let format = Self::choose_format(surface.get_capabilities(gpu.adapter()));
 
-        let mut surface = Self { surface, format };
+        let mut surface = Self {
+            surface,
+            depth,
+            format,
+        };
 
         surface.resize(gpu, 1, 1);
 
@@ -160,18 +167,17 @@ impl Surface {
                 view_formats: vec![Self::COLOR_FORMAT],
             },
         );
+
+        self.depth = Self::create_depth_texture(gpu, width, height);
     }
 
-    pub fn create_current_frame(&self, gpu: &Gpu) -> Frame {
+    pub fn get_current_frame(&self) -> Frame {
         let surface = self
             .surface
             .get_current_texture()
             .expect("Could not obtain surface texture");
 
-        let depth =
-            Self::create_depth_texture(gpu, surface.texture.width(), surface.texture.height());
-
-        Frame::new(surface, depth)
+        Frame::new(surface, &self.depth)
     }
 
     pub fn get_current_texture(&self) -> SurfaceTexture {
