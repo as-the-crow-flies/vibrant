@@ -1,7 +1,5 @@
-use log::warn;
 use std::sync::Arc;
 use vibrant::controller::event::MouseButton;
-use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
 
@@ -43,7 +41,10 @@ impl App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Focused(_) => self.request_redraw(),
-            WindowEvent::Resized(size) => self.renderer.resize(size.width, size.height),
+            WindowEvent::Resized(size) => {
+                self.renderer.resize(size.width, size.height);
+                self.request_redraw();
+            }
             WindowEvent::RedrawRequested => {
                 let instant = Instant::now();
                 let duration = instant - self.instant;

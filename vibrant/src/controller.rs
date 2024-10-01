@@ -2,6 +2,7 @@ pub mod camera;
 pub mod event;
 
 use camera::Camera;
+use egui::{FontId, Layout, RichText};
 use event::{Event, MouseButton};
 use glam::Vec2;
 
@@ -99,19 +100,22 @@ impl Controller {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {
-        egui::Window::new("VIBRANT")
-            .resizable(true)
-            .vscroll(true)
-            .default_open(false)
-            .show(ctx, |ui| {
-                ui.label(format!("{:.0} fps ({:.0} ms)", 1.0 / dt, 1000.0 * dt));
-
-                if ui.button("Button!").clicked() {
+        egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("load .tck").clicked() {
                     Tractogram::file_dialog(|tractogram| {
                         Data::set_tractogram(tractogram);
                     });
                 }
+
+                ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        RichText::new(format!("{:3.0} fps ({:3.0} ms)", 1.0 / dt, 1000.0 * dt))
+                            .font(FontId::monospace(12.0)),
+                    );
+                })
             });
+        });
     }
 
     pub fn camera(&self) -> &Camera {
