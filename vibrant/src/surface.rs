@@ -1,9 +1,10 @@
 use std::any::type_name;
 
 use wgpu::{
-    CompositeAlphaMode, Extent3d, PresentMode, SurfaceCapabilities, SurfaceConfiguration,
-    SurfaceTarget, SurfaceTexture, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureView, TextureViewDescriptor,
+    ColorTargetState, ColorWrites, CompareFunction, CompositeAlphaMode, DepthBiasState,
+    DepthStencilState, Extent3d, PresentMode, StencilFaceState, StencilState, SurfaceCapabilities,
+    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 use super::gpu::Gpu;
@@ -33,7 +34,7 @@ impl TestFrame {
                 dimension: TextureDimension::D2,
                 format: Surface::COLOR_FORMAT,
                 usage: TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[Surface::COLOR_FORMAT],
+                view_formats: &[Surface::COLOR_FORMAT, Surface::COLOR_SRGB_FORMAT],
             }),
             depth: gpu.device().create_texture(&TextureDescriptor {
                 label: Some(type_name::<Self>()),
@@ -61,6 +62,11 @@ impl TestFrame {
                 format: Some(Surface::COLOR_FORMAT),
                 ..Default::default()
             }),
+            color_srgb: self.color.create_view(&TextureViewDescriptor {
+                label: Some(type_name::<Self>()),
+                format: Some(Surface::COLOR_SRGB_FORMAT),
+                ..Default::default()
+            }),
             depth: self.depth.create_view(&TextureViewDescriptor {
                 label: Some(type_name::<Self>()),
                 format: Some(Surface::DEPTH_FORMAT),
@@ -74,6 +80,7 @@ pub struct FrameView {
     width: u32,
     height: u32,
     color: TextureView,
+    color_srgb: TextureView,
     depth: TextureView,
 }
 
@@ -88,6 +95,10 @@ impl FrameView {
 
     pub fn color(&self) -> &TextureView {
         &self.color
+    }
+
+    pub fn color_srgb(&self) -> &TextureView {
+        &self.color_srgb
     }
 
     pub fn depth(&self) -> &TextureView {
@@ -107,6 +118,11 @@ impl<'a> Frame<'a> {
             color: self.surface.texture.create_view(&TextureViewDescriptor {
                 label: Some(type_name::<Self>()),
                 format: Some(Surface::COLOR_FORMAT),
+                ..Default::default()
+            }),
+            color_srgb: self.surface.texture.create_view(&TextureViewDescriptor {
+                label: Some(type_name::<Self>()),
+                format: Some(Surface::COLOR_SRGB_FORMAT),
                 ..Default::default()
             }),
             depth: self.depth.create_view(&TextureViewDescriptor {
@@ -129,8 +145,9 @@ pub struct Surface {
 }
 
 impl Surface {
-    pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
-    pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
+    pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
+    pub const COLOR_SRGB_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+    pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth16Unorm;
 
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         let surface = gpu
@@ -164,7 +181,7 @@ impl Surface {
                 present_mode: PresentMode::Fifo,
                 desired_maximum_frame_latency: 2,
                 alpha_mode: CompositeAlphaMode::Auto,
-                view_formats: vec![Self::COLOR_FORMAT],
+                view_formats: vec![Self::COLOR_SRGB_FORMAT],
             },
         );
 
@@ -186,18 +203,38 @@ impl Surface {
             .expect("Could not obtain surface texture")
     }
 
-    fn choose_format(capabilities: SurfaceCapabilities) -> TextureFormat {
-        if capabilities
-            .formats
-            .contains(&TextureFormat::Bgra8UnormSrgb)
-        {
-            return TextureFormat::Bgra8UnormSrgb;
+    pub fn color_target() -> ColorTargetState {
+        ColorTargetState {
+            format: Surface::COLOR_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
         }
-        if capabilities.formats.contains(&TextureFormat::Bgra8Unorm) {
-            return TextureFormat::Bgra8Unorm;
+    }
+
+    pub fn color_srgb_target() -> ColorTargetState {
+        ColorTargetState {
+            format: Surface::COLOR_SRGB_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        }
+    }
+
+    pub fn depth_target() -> DepthStencilState {
+        DepthStencilState {
+            format: Surface::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: CompareFunction::Less,
+            stencil: StencilState::default(),
+            bias: DepthBiasState::default(),
+        }
+    }
+
+    fn choose_format(capabilities: SurfaceCapabilities) -> TextureFormat {
+        if capabilities.formats.contains(&Self::COLOR_FORMAT) {
+            return Self::COLOR_FORMAT;
         }
 
-        panic!("Surface Format BgraUnorm(Srgb) is not available")
+        panic!("Surface Format {:?} is not available", Self::COLOR_FORMAT)
     }
 
     fn create_depth_texture(gpu: &Gpu, width: u32, height: u32) -> Texture {

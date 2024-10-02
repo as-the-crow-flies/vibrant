@@ -37,12 +37,6 @@ impl TractogramRenderer {
                 push_constant_ranges: &[],
             });
 
-        let target = ColorTargetState {
-            format: Surface::COLOR_FORMAT,
-            blend: None,
-            write_mask: ColorWrites::all(),
-        };
-
         Self {
             pipeline: gpu
                 .device()
@@ -57,7 +51,7 @@ impl TractogramRenderer {
                     fragment: Some(FragmentState {
                         module: &module,
                         entry_point: "fragment",
-                        targets: &[Some(target)],
+                        targets: &[Some(Surface::color_srgb_target())],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -66,22 +60,7 @@ impl TractogramRenderer {
                         ..Default::default()
                     },
                     layout: Some(&pipeline_layout),
-                    depth_stencil: Some(DepthStencilState {
-                        format: Surface::DEPTH_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare: CompareFunction::Less,
-                        stencil: StencilState {
-                            front: StencilFaceState::IGNORE,
-                            back: StencilFaceState::IGNORE,
-                            read_mask: 0,
-                            write_mask: 0,
-                        },
-                        bias: DepthBiasState {
-                            constant: 0,
-                            slope_scale: 0.0,
-                            clamp: 0.0,
-                        },
-                    }),
+                    depth_stencil: Some(Surface::depth_target()),
                     multisample: MultisampleState::default(),
                     multiview: None,
                     cache: None,
@@ -92,7 +71,7 @@ impl TractogramRenderer {
 
     pub fn render(&self, cmd: &mut CommandEncoder, camera: &Camera, frame: &FrameView) {
         let color_attachment = RenderPassColorAttachment {
-            view: frame.color(),
+            view: frame.color_srgb(),
             resolve_target: None,
             ops: Operations {
                 load: LoadOp::Load,

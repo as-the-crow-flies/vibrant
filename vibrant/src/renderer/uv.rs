@@ -22,12 +22,6 @@ impl UvRenderer {
             .device()
             .create_shader_module(include_wgsl!("../wgsl/uv.wgsl"));
 
-        let target = ColorTargetState {
-            format: Surface::COLOR_FORMAT,
-            blend: None,
-            write_mask: ColorWrites::all(),
-        };
-
         let pipeline = gpu
             .device()
             .create_render_pipeline(&RenderPipelineDescriptor {
@@ -41,7 +35,7 @@ impl UvRenderer {
                 fragment: Some(FragmentState {
                     module: &module,
                     entry_point: "fragment",
-                    targets: &[Some(target)],
+                    targets: &[Some(Surface::color_srgb_target())],
                     compilation_options: PipelineCompilationOptions::default(),
                 }),
                 primitive: PrimitiveState {
@@ -60,7 +54,7 @@ impl UvRenderer {
 
     pub fn render(&self, cmd: &mut CommandEncoder, frame: &FrameView) {
         let attachment = RenderPassColorAttachment {
-            view: frame.color(),
+            view: frame.color_srgb(),
             resolve_target: None,
             ops: Operations {
                 load: LoadOp::Clear(Color {

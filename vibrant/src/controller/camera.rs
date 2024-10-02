@@ -21,8 +21,8 @@ impl Camera {
             distance: 200.0,
             pan: Vec3::ZERO,
             fov: PI / 4.0,
-            near: 0.1,
-            far: 10000.0,
+            near: 1.0,
+            far: 1000.0,
             aspect: 1.0,
         }
     }
@@ -47,7 +47,7 @@ impl Camera {
 
     pub fn zoom(&mut self, zoom: f32) {
         self.distance =
-            (self.distance + self.distance.sqrt() * zoom).clamp(self.near * 10.0, self.far * 0.1);
+            (self.distance + self.distance.sqrt() * zoom).clamp(self.near, self.far * 0.5);
     }
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
