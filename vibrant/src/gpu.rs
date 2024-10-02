@@ -1,6 +1,9 @@
 use std::any::type_name;
 
-use wgpu::{CommandEncoderDescriptor, Limits, PowerPreference, RequestAdapterOptions};
+use wgpu::{
+    CommandEncoderDescriptor, Limits, PowerPreference, RequestAdapterOptions, ShaderModule,
+    ShaderModuleDescriptor,
+};
 
 pub struct Gpu {
     instance: wgpu::Instance,
@@ -58,6 +61,10 @@ impl Gpu {
 
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
+    }
+
+    pub fn shader(&self, descriptor: ShaderModuleDescriptor) -> ShaderModule {
+        self.device().create_shader_module(descriptor)
     }
 
     pub fn cmd(&self) -> wgpu::CommandEncoder {

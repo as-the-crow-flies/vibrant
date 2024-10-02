@@ -1,15 +1,14 @@
 use std::any::type_name;
 
 use wgpu::{
-    include_wgsl, Color, ColorTargetState, ColorWrites, CommandEncoder, FragmentState, LoadOp,
-    MultisampleState, Operations, PipelineCompilationOptions, PrimitiveState, PrimitiveTopology,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    StoreOp, VertexState,
+    include_wgsl, Color, CommandEncoder, FragmentState, LoadOp, MultisampleState, Operations,
+    PipelineCompilationOptions, PrimitiveState, PrimitiveTopology, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
 };
 
 use crate::{
     gpu::Gpu,
-    surface::{FrameView, Surface},
+    surface::{Frame, Surface},
 };
 
 pub struct UvRenderer {
@@ -20,7 +19,7 @@ impl UvRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         let module = gpu
             .device()
-            .create_shader_module(include_wgsl!("../wgsl/uv.wgsl"));
+            .create_shader_module(include_wgsl!("wgsl/uv.wgsl"));
 
         let pipeline = gpu
             .device()
@@ -52,7 +51,7 @@ impl UvRenderer {
         Self { pipeline }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &FrameView) {
+    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame) {
         let attachment = RenderPassColorAttachment {
             view: frame.color_srgb(),
             resolve_target: None,

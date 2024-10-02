@@ -1,15 +1,16 @@
 pub mod camera;
-pub mod tractogram;
+pub mod tractogram_baseline;
+pub mod tractogram_compute;
 pub mod ui;
 pub mod uv;
 
 use camera::Camera;
-use tractogram::TractogramRenderer;
+use tractogram_baseline::BaselineTractogramRenderer;
 use ui::UiRenderer;
 use uv::UvRenderer;
 use wgpu::SurfaceTarget;
 
-use crate::{buffer::AssetBuffer, loader::AssetLoader};
+use crate::{asset_buffer::AssetBuffer, loader::AssetLoader};
 
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
@@ -20,7 +21,7 @@ pub struct Renderer {
 
     camera: Camera,
     uv: UvRenderer,
-    tractogram: TractogramRenderer,
+    tractogram_baseline: BaselineTractogramRenderer,
     ui: UiRenderer,
 }
 
@@ -33,7 +34,11 @@ impl Renderer {
             surface: None,
 
             uv: UvRenderer::new(&gpu),
-            tractogram: TractogramRenderer::new(&gpu, &camera, assets.tractogram()),
+            tractogram_baseline: BaselineTractogramRenderer::new(
+                &gpu,
+                &camera,
+                assets.tractogram(),
+            ),
             ui: UiRenderer::new(&gpu),
 
             camera,
@@ -60,19 +65,24 @@ impl Renderer {
     }
 
     pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
-        let frame = self.surface.as_ref().unwrap().get_current_frame();
+        let surface_frame = self
+            .surface
+            .as_ref()
+            .expect("Surface was not initialized")
+            .surface_frame(&self.gpu);
 
-        let view = frame.create_view();
+        let frame = surface_frame.frame();
 
         let mut cmd = self.gpu.cmd();
 
-        self.uv.render(&mut cmd, &view);
-        self.tractogram.render(&mut cmd, &self.camera, &view);
-        self.ui.render(&self.gpu, &mut cmd, &view, ctx, output);
+        self.uv.render(&mut cmd, &frame);
+        self.tractogram_baseline
+            .render(&mut cmd, &self.camera, &frame);
+        self.ui.render(&self.gpu, &mut cmd, &frame, ctx, output);
 
         self.gpu.submit(cmd);
 
-        frame.present();
+        surface_frame.present();
 
         self.gpu.wait();
     }

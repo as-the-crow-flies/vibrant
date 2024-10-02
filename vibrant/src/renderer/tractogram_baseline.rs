@@ -1,33 +1,30 @@
 use std::{any::type_name, cell::RefCell, rc::Rc};
 
 use wgpu::{
-    include_wgsl, ColorTargetState, ColorWrites, CommandEncoder, CompareFunction, DepthBiasState,
-    DepthStencilState, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
+    include_wgsl, CommandEncoder, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, StencilFaceState, StencilState, StoreOp, VertexState,
+    RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
 };
 
 use crate::{
-    buffer::tractogram::Tractogram,
+    asset_buffer::tractogram::Tractogram,
     gpu::Gpu,
-    surface::{FrameView, Surface},
+    surface::{Frame, Surface},
 };
 
 use super::camera::Camera;
 
-pub struct TractogramRenderer {
+pub struct BaselineTractogramRenderer {
     tractogram: Rc<RefCell<Tractogram>>,
     pipeline: RenderPipeline,
 }
 
-impl TractogramRenderer {
+impl BaselineTractogramRenderer {
     pub fn new(gpu: &Gpu, camera: &Camera, tractogram: Rc<RefCell<Tractogram>>) -> Self {
         let label = Some(type_name::<Self>());
 
-        let module = gpu
-            .device()
-            .create_shader_module(include_wgsl!("../wgsl/tractogram.wgsl"));
+        let module = gpu.shader(include_wgsl!("wgsl/tractogram_baseline.wgsl"));
 
         let pipeline_layout = gpu
             .device()
@@ -69,7 +66,7 @@ impl TractogramRenderer {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, camera: &Camera, frame: &FrameView) {
+    pub fn render(&self, cmd: &mut CommandEncoder, camera: &Camera, frame: &Frame) {
         let color_attachment = RenderPassColorAttachment {
             view: frame.color_srgb(),
             resolve_target: None,

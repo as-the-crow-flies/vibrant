@@ -1,4 +1,4 @@
-pub mod buffer;
+pub mod asset_buffer;
 pub mod controller;
 pub mod gpu;
 pub mod loader;

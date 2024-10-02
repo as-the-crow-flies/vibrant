@@ -2,7 +2,9 @@ use std::any::type_name;
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BufferUsages, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
+    BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
+    BufferBindingType, BufferUsages, ShaderStages, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexStepMode,
 };
 
 use crate::{gpu::Gpu, loader};
@@ -23,6 +25,35 @@ impl Tractogram {
 
     pub fn count(&self) -> u32 {
         (self.indices.size() / 4) as u32
+    }
+
+    pub fn bind_group_layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            })
     }
 
     pub fn vertex_buffer_layout() -> VertexBufferLayout<'static> {

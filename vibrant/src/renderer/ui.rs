@@ -7,7 +7,7 @@ use wgpu::{
 
 use crate::{
     gpu::Gpu,
-    surface::{FrameView, Surface},
+    surface::{Frame, Surface},
 };
 
 pub struct UiRenderer {
@@ -31,7 +31,7 @@ impl UiRenderer {
         &mut self,
         gpu: &Gpu,
         cmd: &mut CommandEncoder,
-        frame: &FrameView,
+        frame: &Frame,
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {
