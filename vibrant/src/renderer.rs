@@ -9,13 +9,14 @@ use ui::UiRenderer;
 use uv::UvRenderer;
 use wgpu::SurfaceTarget;
 
-use crate::data::Data;
+use crate::{buffer::AssetBuffer, loader::AssetLoader};
 
-use super::{controller::Controller, gpu::Gpu, loader::Tractogram, surface::Surface};
+use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
 pub struct Renderer {
     gpu: Gpu,
     surface: Option<Surface>,
+    assets: AssetBuffer,
 
     camera: Camera,
     uv: UvRenderer,
@@ -24,20 +25,19 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new() -> Self {
-        let gpu = Gpu::new().await;
+    pub fn new(gpu: Gpu) -> Self {
+        let assets = AssetBuffer::new(&gpu);
         let camera = Camera::new(&gpu);
-
-        let tractogram = Tractogram::default();
 
         Self {
             surface: None,
 
             uv: UvRenderer::new(&gpu),
-            tractogram: TractogramRenderer::new(&gpu, &camera, &tractogram),
+            tractogram: TractogramRenderer::new(&gpu, &camera, assets.tractogram()),
             ui: UiRenderer::new(&gpu),
 
             camera,
+            assets,
             gpu,
         }
     }
@@ -54,7 +54,7 @@ impl Renderer {
     }
 
     pub fn update(&mut self, controller: &Controller) {
-        Data::pop_tractogram(|tractogram| self.tractogram.upload(&self.gpu, tractogram));
+        AssetLoader::on_tractogram(|tractogram| self.assets.set_tractogram(&self.gpu, tractogram));
 
         self.camera.update(&self.gpu, controller.camera().mvp());
     }

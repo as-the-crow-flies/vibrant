@@ -1,70 +1,13 @@
 pub mod camera;
 pub mod event;
+pub mod state;
 
 use camera::Camera;
 use egui::{FontId, Layout, RichText};
-use event::{Event, MouseButton};
-use glam::Vec2;
+use event::Event;
+use state::ControllerState;
 
-use crate::{data::Data, loader::Tractogram};
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ControllerState {
-    pressed: bool,
-    left: bool,
-    right: bool,
-    position: Vec2,
-    delta: Vec2,
-    scroll: Vec2,
-    size: Vec2,
-}
-
-impl ControllerState {
-    fn relative_delta(&self) -> Vec2 {
-        self.delta / self.size
-    }
-}
-
-impl ControllerState {
-    fn update(&self, event: Event) -> Self {
-        let default = ControllerState {
-            delta: Vec2::default(),
-            scroll: Vec2::default(),
-            ..self.clone()
-        };
-
-        match event {
-            Event::Resized(size) => ControllerState { size, ..default },
-            Event::MouseMoved(position) => ControllerState {
-                position,
-                delta: position - self.position,
-                ..default
-            },
-            Event::MousePressed(MouseButton::Left) => ControllerState {
-                pressed: true,
-                left: true,
-                ..default
-            },
-            Event::MouseReleased(MouseButton::Left) => ControllerState {
-                pressed: false,
-                left: false,
-                ..default
-            },
-            Event::MousePressed(MouseButton::Right) => ControllerState {
-                pressed: true,
-                right: true,
-                ..default
-            },
-            Event::MouseReleased(MouseButton::Right) => ControllerState {
-                pressed: false,
-                right: false,
-                ..default
-            },
-            Event::MouseWheel(scroll) => ControllerState { scroll, ..default },
-            _ => default,
-        }
-    }
-}
+use crate::{loader::AssetLoader, loader::Tractogram};
 
 pub struct Controller {
     state: ControllerState,
@@ -104,7 +47,7 @@ impl Controller {
             ui.horizontal(|ui| {
                 if ui.button("📂 open").clicked() {
                     Tractogram::file_dialog(|tractogram| {
-                        Data::set_tractogram(tractogram);
+                        AssetLoader::publish_tractogram(tractogram);
                     });
                 }
 

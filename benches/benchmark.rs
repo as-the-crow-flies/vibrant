@@ -1,8 +1,9 @@
-use std::f32::consts::PI;
+use std::{cell::RefCell, f32::consts::PI, rc::Rc};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
 use vibrant::{
+    buffer::AssetBuffer,
     gpu::Gpu,
     loader::Tractogram,
     renderer::{camera::Camera, tractogram::TractogramRenderer},
@@ -17,7 +18,9 @@ pub fn baseline_benchmark(criterion: &mut Criterion) {
     camera.update(&gpu, get_mvp());
 
     let tractogram = Tractogram::from_file("assets/whole_brain1M.tck");
-    let renderer = TractogramRenderer::new(&gpu, &camera, &tractogram);
+    let tractogram = AssetBuffer::new_tractogram(&gpu, &tractogram);
+
+    let renderer = TractogramRenderer::new(&gpu, &camera, tractogram);
 
     criterion.bench_function("baseline render", |bencher| {
         bencher.iter(|| {

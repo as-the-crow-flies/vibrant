@@ -1,32 +1,28 @@
-use std::{any::type_name, mem::replace};
+use std::{any::type_name, cell::RefCell, rc::Rc};
 
 use wgpu::{
-    include_wgsl,
-    util::{BufferInitDescriptor, DeviceExt},
-    Buffer, BufferUsages, ColorTargetState, ColorWrites, CommandEncoder, CompareFunction,
-    DepthBiasState, DepthStencilState, FragmentState, IndexFormat, LoadOp, MultisampleState,
-    Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
-    PrimitiveTopology, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StencilFaceState, StencilState,
-    StoreOp, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    include_wgsl, ColorTargetState, ColorWrites, CommandEncoder, CompareFunction, DepthBiasState,
+    DepthStencilState, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
+    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, StencilFaceState, StencilState, StoreOp, VertexState,
 };
 
 use crate::{
+    buffer::tractogram::Tractogram,
     gpu::Gpu,
-    loader::Tractogram,
     surface::{FrameView, Surface},
 };
 
 use super::camera::Camera;
 
 pub struct TractogramRenderer {
+    tractogram: Rc<RefCell<Tractogram>>,
     pipeline: RenderPipeline,
-    indices: Buffer,
-    vertices: Buffer,
 }
 
 impl TractogramRenderer {
-    pub fn new(gpu: &Gpu, camera: &Camera, tractogram: &Tractogram) -> Self {
+    pub fn new(gpu: &Gpu, camera: &Camera, tractogram: Rc<RefCell<Tractogram>>) -> Self {
         let label = Some(type_name::<Self>());
 
         let module = gpu
@@ -47,16 +43,6 @@ impl TractogramRenderer {
             write_mask: ColorWrites::all(),
         };
 
-        let vertex_buffer_layout = VertexBufferLayout {
-            array_stride: 12,
-            step_mode: VertexStepMode::Vertex,
-            attributes: &[VertexAttribute {
-                format: VertexFormat::Float32x3,
-                offset: 0,
-                shader_location: 0,
-            }],
-        };
-
         Self {
             pipeline: gpu
                 .device()
@@ -65,7 +51,7 @@ impl TractogramRenderer {
                     vertex: VertexState {
                         module: &module,
                         entry_point: "vertex",
-                        buffers: &[vertex_buffer_layout],
+                        buffers: &[Tractogram::vertex_buffer_layout()],
                         compilation_options: PipelineCompilationOptions::default(),
                     },
                     fragment: Some(FragmentState {
@@ -100,8 +86,7 @@ impl TractogramRenderer {
                     multiview: None,
                     cache: None,
                 }),
-            indices: Self::create_index_buffer(gpu, tractogram),
-            vertices: Self::create_vertex_buffer(gpu, tractogram),
+            tractogram,
         }
     }
 
@@ -132,42 +117,16 @@ impl TractogramRenderer {
             occlusion_query_set: None,
         });
 
-        let count = (self.indices.size() / 4) as u32;
+        let tractogram = self.tractogram.borrow();
+
+        if tractogram.count() == 0 {
+            return;
+        }
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &camera.binding, &[]);
-        pass.set_index_buffer(self.indices.slice(..), IndexFormat::Uint32);
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.draw_indexed(0..count, 0, 0..1);
-    }
-
-    pub fn upload(&mut self, gpu: &Gpu, tractogram: &Tractogram) {
-        replace(
-            &mut self.indices,
-            Self::create_index_buffer(gpu, tractogram),
-        )
-        .destroy();
-
-        replace(
-            &mut self.vertices,
-            Self::create_vertex_buffer(gpu, tractogram),
-        )
-        .destroy();
-    }
-
-    fn create_index_buffer(gpu: &Gpu, tractogram: &Tractogram) -> Buffer {
-        gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label: Some(type_name::<Self>()),
-            contents: bytemuck::cast_slice(&tractogram.indices),
-            usage: BufferUsages::INDEX,
-        })
-    }
-
-    fn create_vertex_buffer(gpu: &Gpu, tractogram: &Tractogram) -> Buffer {
-        gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label: Some(type_name::<Self>()),
-            contents: bytemuck::cast_slice(&tractogram.vertices),
-            usage: BufferUsages::VERTEX,
-        })
+        pass.set_index_buffer(tractogram.indices().slice(..), IndexFormat::Uint32);
+        pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
+        pass.draw_indexed(0..tractogram.count(), 0, 0..1);
     }
 }

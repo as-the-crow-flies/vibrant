@@ -1,5 +1,5 @@
+pub mod buffer;
 pub mod controller;
-pub mod data;
 pub mod gpu;
 pub mod loader;
 pub mod renderer;

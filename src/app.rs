@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use vibrant::controller::event::MouseButton;
+use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
 
@@ -22,12 +23,12 @@ struct App {
 }
 
 impl App {
-    async fn new() -> Self {
+    fn new(gpu: Gpu) -> Self {
         Self {
             window: None,
             egui: None,
             instant: Instant::now(),
-            renderer: Renderer::new().await,
+            renderer: Renderer::new(gpu),
             controller: Controller::new(),
         }
     }
@@ -41,10 +42,7 @@ impl App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Focused(_) => self.request_redraw(),
-            WindowEvent::Resized(size) => {
-                self.renderer.resize(size.width, size.height);
-                self.request_redraw();
-            }
+            WindowEvent::Resized(size) => self.renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
                 let instant = Instant::now();
                 let duration = instant - self.instant;
@@ -172,8 +170,18 @@ fn vibrant_event(event: WindowEvent) -> Option<Event> {
 }
 
 pub async fn run() {
+    let gpu = Gpu::new().await;
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App::new().await;
+    let mut app = App::new(gpu);
 
-    event_loop.run_app(&mut app).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        event_loop.run_app(&mut app).unwrap();
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::EventLoopExtWebSys;
+        event_loop.spawn_app(app);
+    }
 }
