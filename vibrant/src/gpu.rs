@@ -1,9 +1,11 @@
-use std::any::type_name;
+use std::{any::type_name, borrow::Cow};
 
 use wgpu::{
-    CommandEncoderDescriptor, Limits, PowerPreference, RequestAdapterOptions, ShaderModule,
-    ShaderModuleDescriptor,
+    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Limits, PipelineLayout,
+    PowerPreference, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource,
 };
+
+use crate::renderer::constants::Constants;
 
 pub struct Gpu {
     instance: wgpu::Instance,
@@ -24,12 +26,20 @@ impl Gpu {
             .await
             .expect("Could not aqcuire GPU Adapter");
 
+        let limits = adapter.limits();
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some(type_name::<Self>()),
                     required_limits: Limits {
-                        max_buffer_size: 1024 * 1024 * 1024,
+                        max_compute_invocations_per_workgroup: limits
+                            .max_compute_invocations_per_workgroup,
+                        max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
+                        max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y,
+                        max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
+                        max_buffer_size: limits.max_buffer_size,
+                        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                         ..Default::default()
                     },
                     ..Default::default()
@@ -51,10 +61,6 @@ impl Gpu {
         &self.instance
     }
 
-    pub fn adapter(&self) -> &wgpu::Adapter {
-        &self.adapter
-    }
-
     pub fn device(&self) -> &wgpu::Device {
         &self.device
     }
@@ -63,8 +69,30 @@ impl Gpu {
         &self.queue
     }
 
-    pub fn shader(&self, descriptor: ShaderModuleDescriptor) -> ShaderModule {
-        self.device().create_shader_module(descriptor)
+    pub fn shader(&self, source: &str, constants: Option<&Constants>) -> ShaderModule {
+        self.device().create_shader_module(ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(Cow::Owned(
+                constants.map(Constants::wgsl).unwrap_or_default() + source,
+            )),
+        })
+    }
+
+    pub fn compute(
+        &self,
+        layout: &PipelineLayout,
+        module: &ShaderModule,
+        entry_point: &str,
+    ) -> ComputePipeline {
+        self.device()
+            .create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: Some(layout),
+                module,
+                entry_point,
+                compilation_options: Default::default(),
+                cache: None,
+            })
     }
 
     pub fn cmd(&self) -> wgpu::CommandEncoder {

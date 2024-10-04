@@ -1,14 +1,14 @@
-use std::{any::type_name, cell::RefCell, rc::Rc};
+use std::any::type_name;
 
 use wgpu::{
-    include_wgsl, CommandEncoder, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
+    CommandEncoder, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
 };
 
 use crate::{
-    asset_buffer::tractogram::Tractogram,
+    asset::tractogram::Tractogram,
     gpu::Gpu,
     surface::{Frame, Surface},
 };
@@ -16,21 +16,20 @@ use crate::{
 use super::camera::Camera;
 
 pub struct BaselineTractogramRenderer {
-    tractogram: Rc<RefCell<Tractogram>>,
     pipeline: RenderPipeline,
 }
 
 impl BaselineTractogramRenderer {
-    pub fn new(gpu: &Gpu, camera: &Camera, tractogram: Rc<RefCell<Tractogram>>) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let module = gpu.shader(include_wgsl!("wgsl/tractogram_baseline.wgsl"));
+        let module = gpu.shader(include_str!("wgsl/tractogram_baseline.wgsl"), None);
 
         let pipeline_layout = gpu
             .device()
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label,
-                bind_group_layouts: &[&camera.layout],
+                bind_group_layouts: &[&Tractogram::layout(gpu), &Camera::layout(gpu)],
                 push_constant_ranges: &[],
             });
 
@@ -62,11 +61,16 @@ impl BaselineTractogramRenderer {
                     multiview: None,
                     cache: None,
                 }),
-            tractogram,
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, camera: &Camera, frame: &Frame) {
+    pub fn render(
+        &self,
+        cmd: &mut CommandEncoder,
+        camera: &Camera,
+        frame: &Frame,
+        tractogram: &Tractogram,
+    ) {
         let color_attachment = RenderPassColorAttachment {
             view: frame.color_srgb(),
             resolve_target: None,
@@ -93,14 +97,9 @@ impl BaselineTractogramRenderer {
             occlusion_query_set: None,
         });
 
-        let tractogram = self.tractogram.borrow();
-
-        if tractogram.count() == 0 {
-            return;
-        }
-
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &camera.binding, &[]);
+        pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(1, camera.binding(), &[]);
         pass.set_index_buffer(tractogram.indices().slice(..), IndexFormat::Uint32);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
         pass.draw_indexed(0..tractogram.count(), 0, 0..1);

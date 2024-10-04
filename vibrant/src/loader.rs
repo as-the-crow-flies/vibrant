@@ -14,14 +14,12 @@ impl AssetLoader {
         QUEUE.lock().unwrap().tractogram = Some(tractogram);
     }
 
-    pub fn on_tractogram(callback: impl FnOnce(&Tractogram)) {
+    pub fn on_tractogram(callback: impl FnOnce(Tractogram)) {
         let mut data = QUEUE.lock().unwrap();
 
-        if let Some(tractogram) = data.tractogram.as_ref() {
+        if let Some(tractogram) = data.tractogram.take() {
             callback(tractogram);
         }
-
-        data.tractogram = None;
     }
 }
 

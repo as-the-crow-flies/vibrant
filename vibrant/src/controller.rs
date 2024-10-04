@@ -23,23 +23,8 @@ impl Controller {
     }
 
     pub fn event(&mut self, event: Event) {
-        if let Event::Resized(size) = event {
-            self.camera.aspect(size);
-        }
-
         self.state = self.state.update(event);
-
-        if self.state.left {
-            let rotation = self.state.relative_delta() * 10.0;
-            self.camera.rotate(-rotation.x, -rotation.y);
-        }
-
-        if self.state.right {
-            let pan = self.state.relative_delta();
-            self.camera.pan(pan.x, -pan.y);
-        }
-
-        self.camera.zoom(-self.state.scroll.y * 0.05);
+        self.camera.update(&self.state);
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {
@@ -63,9 +48,5 @@ impl Controller {
 
     pub fn camera(&self) -> &Camera {
         &self.camera
-    }
-
-    pub fn update(&mut self, dt: f32) {
-        self.camera.update(dt);
     }
 }

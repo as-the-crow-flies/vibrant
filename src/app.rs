@@ -55,8 +55,6 @@ impl App {
                     .run(input, |ctx| self.controller.ui(ctx, dt));
                 egui.handle_platform_output(&window, output.platform_output.clone());
 
-                self.controller.update(dt);
-
                 self.renderer.update(&self.controller);
                 self.renderer.render(egui.egui_ctx(), output);
 

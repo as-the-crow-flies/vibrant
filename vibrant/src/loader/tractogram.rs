@@ -1,13 +1,53 @@
 use glam::Vec3;
 use std::{collections::HashMap, fs, io::BufRead, u32};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+pub struct Bounds {
+    pub min: Vec3,
+    pub max: Vec3,
+}
+
+impl Bounds {
+    pub fn scale(&self) -> f32 {
+        self.min.abs().max_element().max(self.max.max_element())
+    }
+}
+
+impl Bounds {
+    pub fn from_vertices(vertices: &[Vec3]) -> Bounds {
+        vertices.iter().filter(|&vertex| vertex.is_finite()).fold(
+            Bounds {
+                min: Vec3::MAX,
+                max: Vec3::MIN,
+            },
+            |bounds, vertex| Bounds {
+                min: bounds.min.min(*vertex),
+                max: bounds.max.max(*vertex),
+            },
+        )
+    }
+}
+
+#[derive(Debug)]
 pub struct Tractogram {
-    pub vertices: Vec<Vec3>,
-    pub indices: Vec<u32>,
+    vertices: Vec<Vec3>,
+    indices: Vec<u32>,
+    bounds: Bounds,
 }
 
 impl Tractogram {
+    pub fn vertices(&self) -> &[Vec3] {
+        &self.vertices
+    }
+
+    pub fn indices(&self) -> &[u32] {
+        &self.indices
+    }
+
+    pub fn bounds(&self) -> &Bounds {
+        &self.bounds
+    }
+
     pub fn from_bytes(bytes: Vec<u8>) -> Tractogram {
         let header: HashMap<String, String> = bytes
             .lines()
@@ -42,7 +82,13 @@ impl Tractogram {
             })
             .collect();
 
-        Tractogram { vertices, indices }
+        let bounds = Bounds::from_vertices(&vertices);
+
+        Tractogram {
+            vertices,
+            indices,
+            bounds,
+        }
     }
 
     pub fn from_file(path: &str) -> Tractogram {

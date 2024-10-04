@@ -11,9 +11,8 @@ use wgpu::{
 use crate::gpu::Gpu;
 
 pub struct Camera {
-    pub layout: BindGroupLayout,
-    pub binding: BindGroup,
-    pub buffer: Buffer,
+    binding: BindGroup,
+    buffer: Buffer,
 }
 
 impl Camera {
@@ -27,25 +26,9 @@ impl Camera {
             mapped_at_creation: false,
         });
 
-        let layout = gpu
-            .device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label,
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
-            layout: &layout,
+            layout: &Self::layout(gpu),
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: BindingResource::Buffer(wgpu::BufferBinding {
@@ -56,14 +39,31 @@ impl Camera {
             }],
         });
 
-        Self {
-            layout,
-            binding,
-            buffer,
-        }
+        Self { binding, buffer }
+    }
+
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
     }
 
     pub fn update(&self, gpu: &Gpu, mvp: Mat4) {
         gpu.queue().write_buffer(&self.buffer, 0, bytes_of(&mvp));
+    }
+
+    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
     }
 }

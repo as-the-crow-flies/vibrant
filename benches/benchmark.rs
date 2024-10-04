@@ -3,9 +3,9 @@ use std::f32::consts::PI;
 use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
 use vibrant::{
-    asset_buffer::AssetBuffer,
+    asset::tractogram::Tractogram,
     gpu::Gpu,
-    loader::Tractogram,
+    loader,
     renderer::{camera::Camera, tractogram_baseline::BaselineTractogramRenderer},
     surface::Frame,
     Mat4, Vec3,
@@ -17,17 +17,19 @@ pub fn baseline_benchmark(criterion: &mut Criterion) {
     let camera = Camera::new(&gpu);
     camera.update(&gpu, get_mvp());
 
-    let tractogram = Tractogram::from_file("assets/whole_brain1M.tck");
-    let tractogram = AssetBuffer::new_tractogram(&gpu, &tractogram);
+    let tractogram = Tractogram::new(
+        &gpu,
+        &loader::Tractogram::from_file("assets/whole_brain1M.tck"),
+    );
 
-    let renderer = BaselineTractogramRenderer::new(&gpu, &camera, tractogram);
+    let renderer = BaselineTractogramRenderer::new(&gpu);
 
     criterion.bench_function("baseline render", |bencher| {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
             let frame = Frame::test(&gpu, 1024, 1024);
 
-            renderer.render(&mut cmd, &camera, &frame);
+            renderer.render(&mut cmd, &camera, &frame, &tractogram);
 
             gpu.submit(cmd);
             gpu.wait();
@@ -36,7 +38,7 @@ pub fn baseline_benchmark(criterion: &mut Criterion) {
 }
 
 pub fn get_mvp() -> Mat4 {
-    Mat4::perspective_lh(PI / 4.0, 1.0, 1.0, 1000.0) * Mat4::from_translation(Vec3::Z * 200.0)
+    Mat4::perspective_lh(PI / 4.0, 1.0, 0.01, 10.0) * Mat4::from_translation(Vec3::Z * 2.0)
 }
 
 criterion_group!(benches, baseline_benchmark);

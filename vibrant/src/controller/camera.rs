@@ -2,6 +2,8 @@ use std::f32::consts::PI;
 
 use glam::{Mat4, Quat, Vec2, Vec3};
 
+use super::state::ControllerState;
+
 pub struct Camera {
     yaw: f32,
     pitch: f32,
@@ -18,13 +20,29 @@ impl Camera {
         Self {
             yaw: 0.0,
             pitch: 0.0,
-            distance: 200.0,
+            distance: 2.0,
             pan: Vec3::ZERO,
             fov: PI / 4.0,
-            near: 1.0,
-            far: 1000.0,
+            near: 0.01,
+            far: 10.0,
             aspect: 1.0,
         }
+    }
+
+    pub fn update(&mut self, state: &ControllerState) {
+        self.aspect(state.size);
+
+        if state.left {
+            let rotation = state.relative_delta() * 10.0;
+            self.rotate(-rotation.x, -rotation.y);
+        }
+
+        if state.right {
+            let pan = state.relative_delta();
+            self.pan(pan.x, -pan.y);
+        }
+
+        self.zoom(-state.scroll.y * 0.01);
     }
 
     pub fn projection(&self) -> Mat4 {
@@ -46,8 +64,7 @@ impl Camera {
     }
 
     pub fn zoom(&mut self, zoom: f32) {
-        self.distance =
-            (self.distance + self.distance.sqrt() * zoom).clamp(self.near, self.far * 0.5);
+        self.distance = (self.distance + zoom).clamp(self.near, self.far * 0.5);
     }
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
@@ -58,6 +75,4 @@ impl Camera {
     pub fn pan(&mut self, x: f32, y: f32) {
         self.pan += self.rotation().inverse().mul_vec3(Vec3::new(x, y, 0.0)) * self.distance;
     }
-
-    pub fn update(&self, dt: f32) {}
 }
