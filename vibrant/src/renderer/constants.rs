@@ -31,12 +31,8 @@ impl Constants {
         )
     }
 
-    pub fn num_workgroups_volume(&self) -> (u32, u32, u32) {
-        (
-            self.volume_xyz.div_ceil(self.workgroup_xyz),
-            self.volume_xyz.div_ceil(self.workgroup_xyz),
-            self.volume_xyz.div_ceil(self.workgroup_xyz),
-        )
+    pub fn num_workgroups_volume(&self) -> u32 {
+        self.volume_xyz.div_ceil(self.workgroup_xyz)
     }
 
     pub fn wgsl(&self) -> String {

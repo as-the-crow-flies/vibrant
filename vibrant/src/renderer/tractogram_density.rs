@@ -15,6 +15,7 @@ pub struct TractogramDensityRenderer {
     clear_pipeline: ComputePipeline,
     rasterize_pipeline: ComputePipeline,
     copy_pipeline: ComputePipeline,
+    mipmap_pipeline: ComputePipeline,
 }
 
 impl TractogramDensityRenderer {
@@ -62,6 +63,18 @@ impl TractogramDensityRenderer {
                     Some(constants),
                 ),
             ),
+            mipmap_pipeline: gpu.compute(
+                &gpu.device()
+                    .create_pipeline_layout(&PipelineLayoutDescriptor {
+                        label,
+                        bind_group_layouts: &[&Density::layout_mipmap(gpu)],
+                        push_constant_ranges: &[],
+                    }),
+                &gpu.shader(
+                    include_str!("wgsl/tractogram_density_mipmap.wgsl"),
+                    Some(constants),
+                ),
+            ),
         }
     }
 
@@ -80,8 +93,8 @@ impl TractogramDensityRenderer {
 
         pass.set_pipeline(&self.clear_pipeline);
 
-        let (x, y, z) = self.constants.num_workgroups_volume();
-        pass.dispatch_workgroups(x, y, z);
+        let mut size = self.constants.num_workgroups_volume();
+        pass.dispatch_workgroups(size, size, size);
 
         let count = tractogram.count().div_ceil(self.constants.workgroup_x);
 
@@ -90,6 +103,15 @@ impl TractogramDensityRenderer {
 
         pass.set_pipeline(&self.copy_pipeline);
         pass.set_bind_group(0, density.binding_copy(), &[]);
-        pass.dispatch_workgroups(x, y, z);
+        pass.dispatch_workgroups(size, size, size);
+
+        pass.set_pipeline(&self.mipmap_pipeline);
+
+        for binding in density.bindings_mipmap() {
+            pass.set_bind_group(0, &binding, &[]);
+            pass.dispatch_workgroups(size, size, size);
+
+            size /= 2;
+        }
     }
 }

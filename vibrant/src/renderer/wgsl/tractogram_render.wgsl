@@ -28,7 +28,7 @@ fn vertex(vertex: Vertex) -> Fragment
 
 @fragment
 fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
-    let opacity = 1.0 - textureSampleLevel(DENSITY, SAMPLER, fragment.position + 0.5, 0.0).x;
+    let opacity = 1.0 - textureSampleLevel(DENSITY, SAMPLER, fragment.position + 0.5, 5.0).x;
 
     // return vec4<f32>(normalize(fwidth(fragment.position)), 1.0);
     return vec4<f32>(vec3<f32>(opacity), 1.0);

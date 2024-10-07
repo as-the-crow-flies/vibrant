@@ -21,6 +21,7 @@ pub struct Density {
     binding_compute: BindGroup,
     binding_render: BindGroup,
     binding_copy: BindGroup,
+    bindings_mipmap: Vec<BindGroup>,
     size: u32,
 }
 
@@ -39,6 +40,10 @@ impl Density {
         &self.binding_copy
     }
 
+    pub fn bindings_mipmap(&self) -> &[BindGroup] {
+        &self.bindings_mipmap
+    }
+
     pub fn size(&self) -> u32 {
         self.size
     }
@@ -46,6 +51,7 @@ impl Density {
     pub fn new(gpu: &Gpu, exponent: u32) -> Self {
         let label = Some(type_name::<Self>());
         let size = 2u32.pow(exponent);
+        let mip_level_count = exponent - 2;
 
         dbg!(size);
 
@@ -63,23 +69,12 @@ impl Density {
                 height: size,
                 depth_or_array_layers: size,
             },
-            mip_level_count: exponent,
+            mip_level_count,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D3,
             format: Self::TEXTURE_FORMAT,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
             view_formats: &[Self::TEXTURE_FORMAT],
-        });
-
-        let view = texture.create_view(&TextureViewDescriptor {
-            label,
-            format: Some(Self::TEXTURE_FORMAT),
-            dimension: Some(TextureViewDimension::D3),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: Some(1),
-            base_array_layer: 0,
-            array_layer_count: None,
         });
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
@@ -153,7 +148,18 @@ impl Density {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&view),
+                    resource: BindingResource::TextureView(&texture.create_view(
+                        &TextureViewDescriptor {
+                            label,
+                            format: Some(Self::TEXTURE_FORMAT),
+                            dimension: Some(TextureViewDimension::D3),
+                            aspect: TextureAspect::All,
+                            base_mip_level: 0,
+                            mip_level_count: None,
+                            base_array_layer: 0,
+                            array_layer_count: None,
+                        },
+                    )),
                 },
                 BindGroupEntry {
                     binding: 1,
@@ -176,10 +182,67 @@ impl Density {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&view),
+                    resource: BindingResource::TextureView(&texture.create_view(
+                        &TextureViewDescriptor {
+                            label,
+                            format: Some(Self::TEXTURE_FORMAT),
+                            dimension: Some(TextureViewDimension::D3),
+                            aspect: TextureAspect::All,
+                            base_mip_level: 0,
+                            mip_level_count: Some(1),
+                            base_array_layer: 0,
+                            array_layer_count: None,
+                        },
+                    )),
                 },
             ],
         });
+
+        let bindings_mipmap = (0..mip_level_count - 1)
+            .into_iter()
+            .map(|level| {
+                gpu.device().create_bind_group(&BindGroupDescriptor {
+                    label,
+                    layout: &Self::layout_mipmap(gpu),
+                    entries: &[
+                        BindGroupEntry {
+                            binding: 0,
+                            resource: BindingResource::TextureView(&texture.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    format: Some(Self::TEXTURE_FORMAT),
+                                    dimension: Some(TextureViewDimension::D3),
+                                    aspect: TextureAspect::All,
+                                    base_mip_level: level,
+                                    mip_level_count: Some(1),
+                                    base_array_layer: 0,
+                                    array_layer_count: None,
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 1,
+                            resource: BindingResource::Sampler(&sampler),
+                        },
+                        BindGroupEntry {
+                            binding: 2,
+                            resource: BindingResource::TextureView(&texture.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    format: Some(Self::TEXTURE_FORMAT),
+                                    dimension: Some(TextureViewDimension::D3),
+                                    aspect: TextureAspect::All,
+                                    base_mip_level: level + 1,
+                                    mip_level_count: Some(1),
+                                    base_array_layer: 0,
+                                    array_layer_count: None,
+                                },
+                            )),
+                        },
+                    ],
+                })
+            })
+            .collect();
 
         Self {
             buffer,
@@ -189,6 +252,7 @@ impl Density {
             binding_compute,
             binding_render,
             binding_copy,
+            bindings_mipmap,
             size,
         }
     }
@@ -278,6 +342,12 @@ impl Density {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::WriteOnly,
