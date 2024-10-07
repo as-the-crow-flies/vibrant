@@ -1,8 +1,9 @@
 use std::{any::type_name, borrow::Cow};
 
 use wgpu::{
-    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Limits, PipelineLayout,
-    PowerPreference, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource,
+    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Features, Limits,
+    PipelineLayout, PowerPreference, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor,
+    ShaderSource,
 };
 
 use crate::renderer::constants::Constants;
@@ -42,6 +43,7 @@ impl Gpu {
                         max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                         ..Default::default()
                     },
+                    required_features: Features::FLOAT32_FILTERABLE,
                     ..Default::default()
                 },
                 None,
@@ -78,18 +80,13 @@ impl Gpu {
         })
     }
 
-    pub fn compute(
-        &self,
-        layout: &PipelineLayout,
-        module: &ShaderModule,
-        entry_point: &str,
-    ) -> ComputePipeline {
+    pub fn compute(&self, layout: &PipelineLayout, module: &ShaderModule) -> ComputePipeline {
         self.device()
             .create_compute_pipeline(&ComputePipelineDescriptor {
                 label: None,
                 layout: Some(layout),
                 module,
-                entry_point,
+                entry_point: "main",
                 compilation_options: Default::default(),
                 cache: None,
             })

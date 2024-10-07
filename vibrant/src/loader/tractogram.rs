@@ -9,7 +9,7 @@ pub struct Bounds {
 
 impl Bounds {
     pub fn scale(&self) -> f32 {
-        self.min.abs().max_element().max(self.max.max_element())
+        2.0 * self.min.abs().max_element().max(self.max.max_element())
     }
 }
 

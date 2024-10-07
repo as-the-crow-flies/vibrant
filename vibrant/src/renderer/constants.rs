@@ -1,5 +1,6 @@
 use crate::gpu::Gpu;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Constants {
     pub surface_x: u32,
     pub surface_y: u32,
@@ -17,31 +18,24 @@ impl Constants {
             surface_x: surface.0,
             surface_y: surface.1,
             volume_xyz: volume,
-            workgroup_x: limits
-                .max_compute_invocations_per_workgroup
-                .min(limits.max_compute_workgroup_size_x),
-            workgroup_xy: sqrt(limits.max_compute_invocations_per_workgroup)
-                .min(limits.max_compute_workgroup_size_x)
-                .min(limits.max_compute_workgroup_size_y),
-            workgroup_xyz: cbrt(limits.max_compute_invocations_per_workgroup)
-                .min(limits.max_compute_workgroup_size_x)
-                .min(limits.max_compute_workgroup_size_y)
-                .min(limits.max_compute_workgroup_size_z),
+            workgroup_x: limits.max_compute_workgroup_size_x,
+            workgroup_xy: 16,
+            workgroup_xyz: 4,
         }
     }
 
-    pub fn num_workgroups_xy(&self) -> (u32, u32) {
+    pub fn num_workgroups_surface(&self) -> (u32, u32) {
         (
             self.surface_x.div_ceil(self.workgroup_xy),
             self.surface_y.div_ceil(self.workgroup_xy),
         )
     }
 
-    pub fn num_workgroups_xyz(&self) -> (u32, u32, u32) {
+    pub fn num_workgroups_volume(&self) -> (u32, u32, u32) {
         (
-            self.surface_x.div_ceil(self.workgroup_xyz),
-            self.surface_y.div_ceil(self.workgroup_xyz),
-            self.surface_y.div_ceil(self.workgroup_xyz),
+            self.volume_xyz.div_ceil(self.workgroup_xyz),
+            self.volume_xyz.div_ceil(self.workgroup_xyz),
+            self.volume_xyz.div_ceil(self.workgroup_xyz),
         )
     }
 
@@ -54,12 +48,4 @@ impl Constants {
             + &format!("const WORKGROUP_XY: u32 = {:};\n", self.workgroup_xy)
             + &format!("const WORKGROUP_XYZ: u32 = {:};\n\n", self.workgroup_xyz)
     }
-}
-
-fn sqrt(x: u32) -> u32 {
-    (x as f32).sqrt() as u32
-}
-
-fn cbrt(x: u32) -> u32 {
-    (x as f32).powf(1.0 / 3.0) as u32
 }
