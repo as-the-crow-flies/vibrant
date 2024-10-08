@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, ops::Add};
 
 use wgpu::{
     CommandEncoder, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
@@ -75,6 +75,7 @@ impl TractogramRenderer {
         frame: &Frame,
         tractogram: &Tractogram,
         density: &Density,
+        count: u32,
     ) {
         let color_attachment = RenderPassColorAttachment {
             view: frame.color_srgb(),
@@ -108,6 +109,6 @@ impl TractogramRenderer {
         pass.set_bind_group(2, camera.binding(), &[]);
         pass.set_index_buffer(tractogram.indices().slice(..), IndexFormat::Uint32);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw_indexed(0..tractogram.count(), 0, 0..1);
+        pass.draw_indexed(0..count, 0, 0..1);
     }
 }

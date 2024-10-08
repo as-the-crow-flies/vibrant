@@ -8,7 +8,7 @@ use wgpu::{
     BufferDescriptor, BufferUsages, ShaderStages,
 };
 
-use crate::gpu::Gpu;
+use crate::{controller, gpu::Gpu};
 
 pub struct Camera {
     binding: BindGroup,
@@ -21,7 +21,7 @@ impl Camera {
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 64,
+            size: 64 * 3,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -46,8 +46,17 @@ impl Camera {
         &self.binding
     }
 
-    pub fn update(&self, gpu: &Gpu, mvp: Mat4) {
-        gpu.queue().write_buffer(&self.buffer, 0, bytes_of(&mvp));
+    pub fn update(&self, gpu: &Gpu, camera: &controller::camera::Camera) {
+        gpu.queue().write_buffer(
+            &self.buffer,
+            0,
+            &[
+                bytes_of(&camera.transform()),
+                bytes_of(&camera.view()),
+                bytes_of(&camera.projection()),
+            ]
+            .concat(),
+        );
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -56,7 +65,7 @@ impl Camera {
                 label: Some(type_name::<Self>()),
                 entries: &[BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::all(),
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,

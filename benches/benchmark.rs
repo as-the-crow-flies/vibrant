@@ -4,6 +4,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
 use vibrant::{
     asset::tractogram::Tractogram,
+    controller,
     gpu::Gpu,
     loader,
     renderer::{camera::Camera, tractogram_baseline::BaselineTractogramRenderer},
@@ -15,7 +16,7 @@ pub fn baseline_benchmark(criterion: &mut Criterion) {
     let gpu = Gpu::new().block_on();
 
     let camera = Camera::new(&gpu);
-    camera.update(&gpu, get_mvp());
+    camera.update(&gpu, &controller::camera::Camera::new());
 
     let tractogram = Tractogram::new(
         &gpu,
@@ -35,10 +36,6 @@ pub fn baseline_benchmark(criterion: &mut Criterion) {
             gpu.wait();
         })
     });
-}
-
-pub fn get_mvp() -> Mat4 {
-    Mat4::perspective_lh(PI / 4.0, 1.0, 0.01, 10.0) * Mat4::from_translation(Vec3::Z * 2.0)
 }
 
 criterion_group!(benches, baseline_benchmark);

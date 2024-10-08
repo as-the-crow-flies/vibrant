@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use vibrant::controller::event::MouseButton;
 use vibrant::gpu::Gpu;
-use vibrant::Vec2;
+use vibrant::{Vec2, Vec3};
 use web_time::Instant;
 
 use vibrant::controller::{event::Event, Controller};

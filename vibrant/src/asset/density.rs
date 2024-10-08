@@ -96,9 +96,6 @@ impl Density {
         let transform = Mat4::from_translation(Vec3::new(scale / 2.0, scale / 2.0, scale / 2.0))
             * Mat4::from_scale(Vec3::new(scale, scale, scale));
 
-        dbg!(scale);
-        dbg!(transform.transform_point3(Vec3::new(-0.5, 0.0, 0.5)));
-
         let world_to_volume = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::bytes_of(&transform),

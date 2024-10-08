@@ -46,17 +46,20 @@ impl Camera {
     }
 
     pub fn projection(&self) -> Mat4 {
-        Mat4::perspective_lh(self.fov, self.aspect, self.near, self.far)
+        Mat4::perspective_lh(self.fov, self.aspect, self.near, self.far) * self.view()
     }
 
     pub fn rotation(&self) -> Quat {
         Quat::from_rotation_x(self.pitch) * Quat::from_rotation_y(self.yaw)
     }
 
-    pub fn mvp(&self) -> Mat4 {
-        self.projection()
-            * Mat4::from_rotation_translation(self.rotation(), Vec3::Z * self.distance)
+    pub fn view(&self) -> Mat4 {
+        Mat4::from_rotation_translation(self.rotation(), Vec3::Z * self.distance)
             * Mat4::from_translation(self.pan)
+    }
+
+    pub fn transform(&self) -> Mat4 {
+        self.view().inverse()
     }
 
     pub fn aspect(&mut self, size: Vec2) {
