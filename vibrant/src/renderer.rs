@@ -72,9 +72,9 @@ impl Renderer {
     pub fn create_surface(&mut self, window: impl Into<SurfaceTarget<'static>>) {
         self.surface = Some(Surface::new(&self.gpu, window));
 
-        // AssetLoader::publish_tractogram(loader::Tractogram::from_file(
-        //     "assets/whole_brain200k.tck",
-        // ));
+        AssetLoader::publish_tractogram(loader::Tractogram::from_file(
+            "assets/whole_brain200k.tck",
+        ));
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -109,10 +109,8 @@ impl Renderer {
 
         let mut cmd = self.gpu.cmd();
 
-        self.uv.render(&mut cmd, &frame);
-
         if let Some(tractogram) = &self.asset.tractogram {
-            self.count = (self.count + tractogram.count() / 100).min(tractogram.count());
+            self.count = (self.count + tractogram.count() / 1000).min(tractogram.count());
 
             self.tractogram_density.render(
                 &mut cmd,

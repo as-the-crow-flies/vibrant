@@ -4,8 +4,7 @@ struct Camera {
     projection: mat4x4<f32>
 }
 
-@group(0) @binding(0) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
-@group(0) @binding(1) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
+@group(0) @binding(0) var GBUFFER: texture_2d<f32>;
 
 @group(1) @binding(0) var DENSITY: texture_3d<f32>;
 @group(1) @binding(1) var SAMPLER: sampler;
@@ -15,25 +14,25 @@ struct Camera {
 const PI: f32 = 3.1415926535897932;
 const PHI = 1.6180339887498948482045868;
 
-struct Fragment {
-    @builtin(position) clip: vec4<f32>,
-    @location(0) position: vec3<f32>,
-}
-
 @vertex
-fn vertex(@location(0) vertex: vec3<f32>) -> Fragment
+fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32>
 {
-    let position = TRACTOGRAM_TO_WORLD * vec4<f32>(vertex, 1.0);
-    return Fragment(CAMERA.projection * position, position.xyz);
+    return vec4<f32>(2.0 * vec2<f32>(f32((index & 1) == 0), f32((index & 2) == 0)) - 1.0, 0.0, 1.0);
 }
 
 @fragment
-fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
+fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
     let camera = CAMERA.transform[3].xyz;
     let L = vec3<f32>(0.0, 1.0, 0.0);
 
-    let V = normalize(camera - fragment.position);
-    let T = normalize(fwidth(fragment.position));
+    let gbuffer = textureLoad(GBUFFER, vec2<u32>(uv.xy), 0);
+
+    if (all(gbuffer == vec4<f32>(0.0, 0.0, 0.0, 1.0))) { discard; }
+
+    let position = gbuffer.xyz;
+    let T = unpack4x8snorm(bitcast<u32>(gbuffer.w)).xyz;
+
+    let V = normalize(camera - position);
 
     // Stalling et al. 1997
     // Fast Display of Illuminated Field Lines
@@ -43,7 +42,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let I = .4 + .4 * LN + .2 * pow(VR, 16.0);
 
     let N_SAMPLES = 10.0;
-    let CONE_ANGLE = tan(2.0 * PI / N_SAMPLES);
+    let TAN_CONE_ANGLE = tan(2.0 * PI / N_SAMPLES);
     let DIM = f32(textureDimensions(DENSITY).x);
 
     var lighting = 0.0;
@@ -58,9 +57,9 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
         var occlusion = 0.0;
 
-        for (var distance = 0.01; distance < 1.0; distance *= 1.5) {
-            let sample = fragment.position + direction * distance;
-            let level = log2(2.0 * CONE_ANGLE * distance * DIM);
+        for (var distance = 1.0 / DIM; distance < 1.0; distance *= 2.0) {
+            let sample = position + direction * distance;
+            let level = log2(2.0 * TAN_CONE_ANGLE * distance * DIM);
 
             occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample + 0.5, level).x;
         }
