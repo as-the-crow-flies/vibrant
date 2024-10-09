@@ -1,13 +1,7 @@
-struct Camera {
-    transform: mat4x4<f32>,
-    view: mat4x4<f32>,
-    projection: mat4x4<f32>
-}
-
 @group(0) @binding(0) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
 @group(0) @binding(1) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 
-@group(1) @binding(0) var<uniform> CAMERA: Camera;
+@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 struct Vertex {
     @location(0) position: vec3<f32>
@@ -22,7 +16,7 @@ struct Fragment {
 fn vertex(vertex: Vertex) -> Fragment
 {
     let position = TRACTOGRAM_TO_WORLD * vec4<f32>(vertex.position, 1.0);
-    let clip = CAMERA.projection * position;
+    let clip = ENVIRONMENT.camera.projection * position;
     return Fragment(clip, position.xyz);
 }
 

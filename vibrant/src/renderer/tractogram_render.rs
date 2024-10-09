@@ -13,7 +13,7 @@ use crate::{
     surface::{Frame, Surface},
 };
 
-use super::{camera::Camera, constants::Constants};
+use super::{constants::Constants, environment::Environment};
 
 pub struct TractogramRenderer {
     geometry: RenderPipeline,
@@ -25,12 +25,12 @@ impl TractogramRenderer {
         let label = Some(type_name::<Self>());
 
         let geometry_module = gpu.shader(
-            include_str!("wgsl/tractogram_render_geometry.wgsl"),
+            &(Environment::wgsl() + include_str!("wgsl/tractogram_render_geometry.wgsl")),
             Some(constants),
         );
 
         let shading_module = gpu.shader(
-            include_str!("wgsl/tractogram_render_shading.wgsl"),
+            &(Environment::wgsl() + include_str!("wgsl/tractogram_render_shading.wgsl")),
             Some(constants),
         );
 
@@ -62,7 +62,7 @@ impl TractogramRenderer {
                                 label,
                                 bind_group_layouts: &[
                                     &Tractogram::layout(gpu),
-                                    &Camera::layout(gpu),
+                                    &Environment::layout(gpu),
                                 ],
                                 push_constant_ranges: &[],
                             }),
@@ -83,7 +83,7 @@ impl TractogramRenderer {
                                 bind_group_layouts: &[
                                     &Surface::gbuffer_layout(gpu),
                                     &Density::layout_render(gpu),
-                                    &Camera::layout(gpu),
+                                    &Environment::layout(gpu),
                                 ],
                                 push_constant_ranges: &[],
                             }),
@@ -115,20 +115,20 @@ impl TractogramRenderer {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        camera: &Camera,
+        environment: &Environment,
         frame: &Frame,
         tractogram: &Tractogram,
         density: &Density,
         count: u32,
     ) {
-        self.geometry(cmd, camera, frame, tractogram, count);
-        self.shading(cmd, camera, frame, density);
+        self.geometry(cmd, environment, frame, tractogram, count);
+        self.shading(cmd, environment, frame, density);
     }
 
     fn geometry(
         &self,
         cmd: &mut CommandEncoder,
-        camera: &Camera,
+        environment: &Environment,
         frame: &Frame,
         tractogram: &Tractogram,
         count: u32,
@@ -157,13 +157,19 @@ impl TractogramRenderer {
 
         pass.set_pipeline(&self.geometry);
         pass.set_bind_group(0, tractogram.binding(), &[]);
-        pass.set_bind_group(1, camera.binding(), &[]);
+        pass.set_bind_group(1, environment.binding(), &[]);
         pass.set_index_buffer(tractogram.indices().slice(..), IndexFormat::Uint32);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
         pass.draw_indexed(0..count, 0, 0..1);
     }
 
-    fn shading(&self, cmd: &mut CommandEncoder, camera: &Camera, frame: &Frame, density: &Density) {
+    fn shading(
+        &self,
+        cmd: &mut CommandEncoder,
+        environment: &Environment,
+        frame: &Frame,
+        density: &Density,
+    ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -182,7 +188,7 @@ impl TractogramRenderer {
         pass.set_pipeline(&self.shading);
         pass.set_bind_group(0, frame.gbuffer_binding(), &[]);
         pass.set_bind_group(1, density.binding_render(), &[]);
-        pass.set_bind_group(2, camera.binding(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

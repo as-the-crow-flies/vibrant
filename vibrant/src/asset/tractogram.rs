@@ -153,8 +153,6 @@ impl Tractogram {
             Vec3::ZERO,
         );
 
-        dbg!(tractogram.bounds().scale());
-
         let world_to_tractogram = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::bytes_of(&transform),

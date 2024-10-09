@@ -13,7 +13,7 @@ use crate::{
     surface::{Frame, Surface},
 };
 
-use super::camera::Camera;
+use super::environment::Environment;
 
 pub struct BaselineTractogramRenderer {
     pipeline: RenderPipeline,
@@ -23,13 +23,16 @@ impl BaselineTractogramRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let module = gpu.shader(include_str!("wgsl/tractogram_baseline.wgsl"), None);
+        let module = gpu.shader(
+            &(Environment::wgsl() + include_str!("wgsl/tractogram_baseline.wgsl")),
+            None,
+        );
 
         let pipeline_layout = gpu
             .device()
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label,
-                bind_group_layouts: &[&Tractogram::layout(gpu), &Camera::layout(gpu)],
+                bind_group_layouts: &[&Tractogram::layout(gpu), &Environment::layout(gpu)],
                 push_constant_ranges: &[],
             });
 
@@ -67,7 +70,7 @@ impl BaselineTractogramRenderer {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        camera: &Camera,
+        camera: &Environment,
         frame: &Frame,
         tractogram: &Tractogram,
     ) {

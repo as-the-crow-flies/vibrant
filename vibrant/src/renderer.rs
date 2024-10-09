@@ -1,13 +1,13 @@
-pub mod camera;
 pub mod constants;
+pub mod environment;
 pub mod tractogram_baseline;
 pub mod tractogram_density;
 pub mod tractogram_render;
 pub mod ui;
 pub mod uv;
 
-use camera::Camera;
 use constants::Constants;
+use environment::Environment;
 use tractogram_baseline::BaselineTractogramRenderer;
 use tractogram_density::TractogramDensityRenderer;
 use tractogram_render::TractogramRenderer;
@@ -29,9 +29,7 @@ pub struct Renderer {
 
     asset: Asset,
 
-    camera: Camera,
-    uv: UvRenderer,
-    tractogram_baseline: BaselineTractogramRenderer,
+    camera: Environment,
     tractogram_density: TractogramDensityRenderer,
     tractogram_render: TractogramRenderer,
     ui: UiRenderer,
@@ -53,13 +51,11 @@ impl Renderer {
         Self {
             surface: None,
 
-            uv: UvRenderer::new(&gpu),
-            tractogram_baseline: BaselineTractogramRenderer::new(&gpu),
             tractogram_density: TractogramDensityRenderer::new(&gpu, &constants),
             tractogram_render: TractogramRenderer::new(&gpu, &constants),
             ui: UiRenderer::new(&gpu),
 
-            camera: Camera::new(&gpu),
+            camera: Environment::new(&gpu),
             asset,
 
             constants,
@@ -95,7 +91,7 @@ impl Renderer {
             self.count = 0;
         });
 
-        self.camera.update(&self.gpu, controller.camera());
+        self.camera.update(&self.gpu, &controller);
     }
 
     pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
@@ -115,7 +111,6 @@ impl Renderer {
             self.tractogram_density.render(
                 &mut cmd,
                 &self.camera,
-                &frame,
                 tractogram,
                 &self.asset.density,
                 self.count,

@@ -1,10 +1,14 @@
 pub mod camera;
 pub mod event;
+pub mod light;
+pub mod settings;
 pub mod state;
 
 use camera::Camera;
-use egui::{FontId, Layout, RichText};
+use egui::{FontId, Layout, RichText, Slider};
 use event::Event;
+use light::Light;
+use settings::Settings;
 use state::ControllerState;
 
 use crate::{loader::AssetLoader, loader::Tractogram};
@@ -12,6 +16,10 @@ use crate::{loader::AssetLoader, loader::Tractogram};
 pub struct Controller {
     state: ControllerState,
     camera: Camera,
+    light: Light,
+    settings: Settings,
+
+    show_side_panel: bool,
 }
 
 impl Controller {
@@ -19,17 +27,26 @@ impl Controller {
         Self {
             state: ControllerState::default(),
             camera: Camera::new(),
+            light: Light::default(),
+            settings: Settings::new(),
+
+            show_side_panel: false,
         }
     }
 
     pub fn event(&mut self, event: Event) {
         self.state = self.state.update(event);
         self.camera.update(&self.state);
+        self.light.update(&self.state);
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                if ui.button("⚙ settings").clicked() {
+                    self.show_side_panel = !self.show_side_panel;
+                }
+
                 if ui.button("📂 open").clicked() {
                     Tractogram::file_dialog(|tractogram| {
                         AssetLoader::publish_tractogram(tractogram);
@@ -44,9 +61,25 @@ impl Controller {
                 })
             });
         });
+
+        egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
+            ui.add(
+                Slider::new(&mut self.settings.streamline_radius, 0.01..=1.0)
+                    .logarithmic(true)
+                    .text("Streamline Radius"),
+            )
+        });
     }
 
     pub fn camera(&self) -> &Camera {
         &self.camera
+    }
+
+    pub fn light(&self) -> &Light {
+        &self.light
+    }
+
+    pub fn settings(&self) -> &Settings {
+        &self.settings
     }
 }

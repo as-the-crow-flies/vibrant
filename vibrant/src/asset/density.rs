@@ -53,8 +53,6 @@ impl Density {
         let size = 2u32.pow(exponent);
         let mip_level_count = exponent - 2;
 
-        dbg!(size);
-
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
             size: (size * size * size * 4) as u64,

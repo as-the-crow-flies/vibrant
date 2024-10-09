@@ -1,6 +1,6 @@
 use glam::Vec2;
 
-use super::event::{Event, MouseButton};
+use super::event::{Event, Key, MouseButton};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ControllerState {
@@ -11,6 +11,7 @@ pub struct ControllerState {
     pub delta: Vec2,
     pub scroll: Vec2,
     pub size: Vec2,
+    pub shift: bool,
 }
 
 impl ControllerState {
@@ -53,6 +54,14 @@ impl ControllerState {
                 ..default
             },
             Event::MouseWheel(scroll) => ControllerState { scroll, ..default },
+            Event::KeyPressed(Key::Shift) => ControllerState {
+                shift: true,
+                ..default
+            },
+            Event::KeyReleased(Key::Shift) => ControllerState {
+                shift: false,
+                ..default
+            },
             _ => default,
         }
     }

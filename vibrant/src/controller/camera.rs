@@ -32,6 +32,10 @@ impl Camera {
     pub fn update(&mut self, state: &ControllerState) {
         self.aspect(state.size);
 
+        if state.shift {
+            return;
+        }
+
         if state.left {
             let rotation = state.relative_delta() * 10.0;
             self.rotate(-rotation.x, -rotation.y);

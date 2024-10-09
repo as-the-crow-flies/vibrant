@@ -1,12 +1,13 @@
 use std::sync::Arc;
-use vibrant::controller::event::MouseButton;
+use vibrant::controller::event::{Key, MouseButton};
 use vibrant::gpu::Gpu;
-use vibrant::{Vec2, Vec3};
+use vibrant::Vec2;
 use web_time::Instant;
 
 use vibrant::controller::{event::Event, Controller};
 use vibrant::renderer::Renderer;
-use winit::event::MouseScrollDelta;
+use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -105,6 +106,8 @@ impl ApplicationHandler for App {
 
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
+        window.set_maximized(true);
+
         let egui = egui_winit::State::new(
             egui::Context::default(),
             egui::viewport::ViewportId::ROOT,
@@ -163,6 +166,42 @@ fn vibrant_event(event: WindowEvent) -> Option<Event> {
             delta: MouseScrollDelta::PixelDelta(delta),
             phase: _,
         } => Some(Event::MouseWheel(Vec2::new(delta.x as f32, delta.y as f32))),
+        WindowEvent::KeyboardInput {
+            device_id: _,
+            event:
+                KeyEvent {
+                    physical_key: PhysicalKey::Code(code),
+                    logical_key: _,
+                    text: _,
+                    location: _,
+                    state: ElementState::Pressed,
+                    repeat: _,
+                    ..
+                },
+            is_synthetic: _,
+        } => keycode(code).map(|key| Event::KeyPressed(key)),
+        WindowEvent::KeyboardInput {
+            device_id: _,
+            event:
+                KeyEvent {
+                    physical_key: PhysicalKey::Code(code),
+                    logical_key: _,
+                    text: _,
+                    location: _,
+                    state: ElementState::Released,
+                    repeat: _,
+                    ..
+                },
+            is_synthetic: _,
+        } => keycode(code).map(|key| Event::KeyReleased(key)),
+        _ => None,
+    }
+}
+
+fn keycode(code: KeyCode) -> Option<Key> {
+    match code {
+        KeyCode::ShiftLeft => Some(Key::Shift),
+        KeyCode::ShiftRight => Some(Key::Shift),
         _ => None,
     }
 }

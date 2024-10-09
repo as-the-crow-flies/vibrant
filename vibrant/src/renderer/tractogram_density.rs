@@ -5,10 +5,9 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 use crate::{
     asset::{density::Density, tractogram::Tractogram},
     gpu::Gpu,
-    surface::Frame,
 };
 
-use super::{camera::Camera, constants::Constants};
+use super::{constants::Constants, environment::Environment};
 
 pub struct TractogramDensityRenderer {
     constants: Constants,
@@ -43,11 +42,12 @@ impl TractogramDensityRenderer {
                         bind_group_layouts: &[
                             &Density::layout_compute(gpu),
                             &Tractogram::layout_full(gpu),
+                            &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
                     }),
                 &gpu.shader(
-                    include_str!("wgsl/tractogram_density_rasterize.wgsl"),
+                    &(Environment::wgsl() + include_str!("wgsl/tractogram_density_rasterize.wgsl")),
                     Some(constants),
                 ),
             ),
@@ -81,8 +81,7 @@ impl TractogramDensityRenderer {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        camera: &Camera,
-        frame: &Frame,
+        environment: &Environment,
         tractogram: &Tractogram,
         density: &Density,
         count: u32,
@@ -91,6 +90,7 @@ impl TractogramDensityRenderer {
 
         pass.set_bind_group(0, density.binding_compute(), &[]);
         pass.set_bind_group(1, tractogram.binding_full(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
 
         pass.set_pipeline(&self.clear_pipeline);
 
