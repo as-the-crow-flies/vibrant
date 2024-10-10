@@ -4,6 +4,8 @@ pub mod light;
 pub mod settings;
 pub mod state;
 
+use std::collections::VecDeque;
+
 use camera::Camera;
 use egui::{FontId, Layout, RichText, Slider};
 use event::Event;
@@ -64,10 +66,19 @@ impl Controller {
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
             ui.add(
+                Slider::new(&mut self.settings.ambient_occlusion_samples, 8..=100)
+                    .text("Ambient Occlusion Samples"),
+            );
+            ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.01..=1.0)
                     .logarithmic(true)
                     .text("Streamline Radius"),
-            )
+            );
+
+            ui.add(
+                Slider::new(&mut self.settings.direct_light, 0.0..=1.0)
+                    .text("Direct Light vs Ambient Light"),
+            );
         });
     }
 

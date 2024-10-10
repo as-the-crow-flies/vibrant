@@ -48,7 +48,10 @@ impl TractogramRenderer {
                     fragment: Some(FragmentState {
                         module: &geometry_module,
                         entry_point: "fragment",
-                        targets: &[Some(Surface::gbuffer_target())],
+                        targets: &[
+                            Some(Surface::position_target()),
+                            Some(Surface::normal_target()),
+                        ],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -81,7 +84,7 @@ impl TractogramRenderer {
                             .create_pipeline_layout(&PipelineLayoutDescriptor {
                                 label,
                                 bind_group_layouts: &[
-                                    &Surface::gbuffer_layout(gpu),
+                                    &Surface::gbuffer(gpu),
                                     &Density::layout_render(gpu),
                                     &Environment::layout(gpu),
                                 ],
@@ -119,9 +122,8 @@ impl TractogramRenderer {
         frame: &Frame,
         tractogram: &Tractogram,
         density: &Density,
-        count: u32,
     ) {
-        self.geometry(cmd, environment, frame, tractogram, count);
+        self.geometry(cmd, environment, frame, tractogram);
         self.shading(cmd, environment, frame, density);
     }
 
@@ -131,18 +133,27 @@ impl TractogramRenderer {
         environment: &Environment,
         frame: &Frame,
         tractogram: &Tractogram,
-        count: u32,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: frame.gbuffer(),
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color::BLACK),
-                    store: StoreOp::Store,
-                },
-            })],
+            color_attachments: &[
+                Some(RenderPassColorAttachment {
+                    view: frame.position(),
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        store: StoreOp::Store,
+                    },
+                }),
+                Some(RenderPassColorAttachment {
+                    view: frame.normal(),
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        store: StoreOp::Store,
+                    },
+                }),
+            ],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: frame.depth(),
                 depth_ops: Some(Operations {
@@ -158,9 +169,8 @@ impl TractogramRenderer {
         pass.set_pipeline(&self.geometry);
         pass.set_bind_group(0, tractogram.binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_index_buffer(tractogram.indices().slice(..), IndexFormat::Uint32);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw_indexed(0..count, 0, 0..1);
+        pass.draw(0..tractogram.count(), 0..1);
     }
 
     fn shading(
@@ -186,7 +196,7 @@ impl TractogramRenderer {
         });
 
         pass.set_pipeline(&self.shading);
-        pass.set_bind_group(0, frame.gbuffer_binding(), &[]);
+        pass.set_bind_group(0, frame.gbuffer(), &[]);
         pass.set_bind_group(1, density.binding_render(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.draw(0..4, 0..1);

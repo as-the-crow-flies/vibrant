@@ -1,7 +1,8 @@
 use glam::Vec3;
-use std::{collections::HashMap, fs, io::BufRead, u32};
+use itertools::Itertools;
+use std::{collections::HashMap, fs, io::BufRead};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Bounds {
     pub min: Vec3,
     pub max: Vec3,
@@ -28,20 +29,15 @@ impl Bounds {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Tractogram {
     vertices: Vec<Vec3>,
-    indices: Vec<u32>,
     bounds: Bounds,
 }
 
 impl Tractogram {
     pub fn vertices(&self) -> &[Vec3] {
         &self.vertices
-    }
-
-    pub fn indices(&self) -> &[u32] {
-        &self.indices
     }
 
     pub fn bounds(&self) -> &Bounds {
@@ -67,27 +63,32 @@ impl Tractogram {
             .parse()
             .expect("Couldnt parse 'file' entry in .tck header as usize");
 
-        let vertices: Vec<Vec3> = bytemuck::cast_slice(&bytes[offset..]).to_vec();
-
-        let indices: Vec<u32> = vertices
-            .iter()
-            .scan(0u32, |index, vertex| {
-                let result = if vertex.is_finite() { *index } else { u32::MAX };
-
-                if vertex.is_finite() {
-                    *index += 1;
-                }
-
-                return Some(result);
-            })
-            .collect();
+        let vertices: Vec<Vec3> = bytemuck::try_cast_slice(&bytes[offset..])
+            .map(|slice| slice.to_vec())
+            // Fallback to copy when vertices are not aligned properly
+            .unwrap_or_else(|_| bytemuck::cast_slice(&bytes[offset..].to_owned()).to_vec());
 
         let bounds = Bounds::from_vertices(&vertices);
 
+        Tractogram { vertices, bounds }
+    }
+
+    pub fn join(tractograms: Vec<Tractogram>) -> Tractogram {
         Tractogram {
-            vertices,
-            indices,
-            bounds,
+            bounds: tractograms.iter().fold(
+                Bounds {
+                    min: Vec3::MAX,
+                    max: Vec3::MIN,
+                },
+                |bounds, tractogram| Bounds {
+                    min: bounds.min.min(tractogram.bounds.min),
+                    max: bounds.max.max(tractogram.bounds.max),
+                },
+            ),
+            vertices: tractograms
+                .into_iter()
+                .map(|tractogram| tractogram.vertices)
+                .concat(),
         }
     }
 
@@ -111,12 +112,22 @@ impl Tractogram {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn file_dialog(callback: impl FnOnce(Tractogram) + 'static) {
-        let file = rfd::FileDialog::new()
-            .add_filter("Tracks file format", &[".tck"])
-            .pick_file();
+        use itertools::Itertools;
 
-        if let Some(file) = file {
-            callback(Self::from_bytes(fs::read(file).unwrap()))
+        let tractogram: Option<Tractogram> = rfd::FileDialog::new()
+            .add_filter("Tracks file format", &[".tck"])
+            .pick_files()
+            .map(|files| {
+                Tractogram::join(
+                    files
+                        .iter()
+                        .map(|file| Self::from_bytes(fs::read(file).unwrap()))
+                        .collect_vec(),
+                )
+            });
+
+        if let Some(tractogram) = tractogram {
+            callback(tractogram);
         }
     }
 }

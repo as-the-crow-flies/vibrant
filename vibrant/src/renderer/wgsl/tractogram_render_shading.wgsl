@@ -1,4 +1,5 @@
-@group(0) @binding(0) var GBUFFER: texture_2d<f32>;
+@group(0) @binding(0) var POSITION: texture_2d<f32>;
+@group(0) @binding(1) var TANGENT: texture_2d<f32>;
 
 @group(1) @binding(0) var DENSITY: texture_3d<f32>;
 @group(1) @binding(1) var SAMPLER: sampler;
@@ -19,42 +20,50 @@ fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
     let camera = ENVIRONMENT.camera.transform[3].xyz;
     let light = ENVIRONMENT.light;
 
-    let gbuffer = textureLoad(GBUFFER, vec2<u32>(uv.xy), 0);
+    let position = textureLoad(POSITION, vec2<u32>(uv.xy), 0);
+    let tangent = textureLoad(TANGENT, vec2<u32>(uv.xy), 0).xyz * 2.0 - 1.0;
 
-    if (all(gbuffer == vec4<f32>(0.0, 0.0, 0.0, 1.0))) { discard; }
+    if (position.w == 0.0) { discard; }
 
-    let position = gbuffer.xyz;
-    let T = unpack4x8snorm(bitcast<u32>(gbuffer.w)).xyz;
+    let view = normalize(camera - position.xyz);
 
-    let V = normalize(camera - position);
+    // return vec4<f32>(vec3<f32>(textureSampleLevel(DENSITY, SAMPLER, position + 0.5, 0.0).x), 1.0);
+    return vec4<f32>(stalling(position.xyz, tangent, view, light), 1.0);
+}
 
-    // Stalling et al. 1997
-    // Fast Display of Illuminated Field Lines
-    let LN = sqrt(1.0 - pow(dot(light, T), 2.0));
-    let VN = sqrt(1.0 - pow(dot(V, T), 2.0));
-    let VR = LN * VN - dot(light, T) * dot(V, T);
+// Stalling et al. 1997 - Fast Display of Illuminated Field Lines
+fn stalling(position: vec3<f32>, tangent: vec3<f32>, view: vec3<f32>, light: vec3<f32>) -> vec3<f32> {
+    let LN = max(0.0, sqrt(1.0 - pow(dot(light, tangent), 2.0)));
+    let VN = max(0.0, sqrt(1.0 - pow(dot(view, tangent), 2.0)));
+    let VR = LN * VN - dot(light, tangent) * dot(view, tangent);
 
-    let lighting = 0.2 * ambient(position) + 0.8 * direct(position, light) * LN;
+    let lighting = ambient(position) + direct(position, light) * LN;
 
-    return vec4<f32>(vec3<f32>(lighting), 1.0);
-    // return vec4<f32>(lighting, 1.0);
+    return vec3<f32>(lighting);
 }
 
 fn direct(position: vec3<f32>, light: vec3<f32>) -> f32 {
-    let step = (1.0 / f32(textureDimensions(DENSITY).x)) * light;
+    if (ENVIRONMENT.settings.direct_light == 0.0) { return 0.0; }
+
+    let factor = 1.0;
+
+    let step = (factor / f32(textureDimensions(DENSITY).x)) * light;
 
     var occlusion = 0.0;
+    var level = 0.0;
 
     for (var sample = position + 0.5; in_domain(sample); sample += step) {
-        occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, 0.0).x;
+        occlusion += factor * (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
     }
 
-    return 1.0 - occlusion;
+    return ENVIRONMENT.settings.direct_light * max(0.0, 1.0 - occlusion);
 }
 
 fn ambient(position: vec3<f32>) -> f32 {
-    let N_SAMPLES = 10.0;
-    let TAN_CONE_ANGLE = tan(2.0 * PI / N_SAMPLES);
+    if (ENVIRONMENT.settings.direct_light == 1.0) { return 0.0; }
+
+    let N_SAMPLES = f32(ENVIRONMENT.settings.ambient_occlusion_samples);
+    let TAN_CONE_ANGLE = tan(sqrt(4.0 * PI / N_SAMPLES));
     let DIM = f32(textureDimensions(DENSITY).x);
 
     var total_occlusion = 0.0;
@@ -68,18 +77,21 @@ fn ambient(position: vec3<f32>) -> f32 {
         let direction = vec3<f32>(cos(theta), y, sin(theta));
 
         var occlusion = 0.0;
+        var size = 0.0;
 
         for (var distance = 1.0 / DIM; distance < 1.0; distance *= 2.0) {
             let sample = position + direction * distance + 0.5;
-            let level = log2(2.0 * TAN_CONE_ANGLE * distance * DIM);
 
+            if (!in_domain(sample) || occlusion > 0.99) { break; }
+
+            let level = log2(TAN_CONE_ANGLE * distance * DIM);
             occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
         }
 
         total_occlusion += occlusion;
     }
 
-    return 1.0 - (total_occlusion / N_SAMPLES);
+    return (1.0 - ENVIRONMENT.settings.direct_light) * (1.0 - (total_occlusion / N_SAMPLES));
 }
 
 fn in_domain(v: vec3<f32>) -> bool {

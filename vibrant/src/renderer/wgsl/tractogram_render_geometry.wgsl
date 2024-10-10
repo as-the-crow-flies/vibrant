@@ -8,6 +8,11 @@ struct Fragment {
     @location(0) position: vec3<f32>,
 }
 
+struct GBuffer {
+    @location(0) position: vec4<f32>,
+    @location(1) tangent: vec4<f32>,
+}
+
 @vertex
 fn vertex(@location(0) vertex: vec3<f32>) -> Fragment
 {
@@ -16,7 +21,9 @@ fn vertex(@location(0) vertex: vec3<f32>) -> Fragment
 }
 
 @fragment
-fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
-    let tangent = vec4<f32>(normalize(fwidth(fragment.position)), 1.0);
-    return vec4<f32>(fragment.position, bitcast<f32>(pack4x8snorm(tangent)));
+fn fragment(fragment: Fragment) -> GBuffer {
+    return GBuffer(
+        vec4<f32>(fragment.position, 1.0),
+        vec4<f32>(normalize(fwidth(fragment.position)) * 0.5 + 0.5, 1.0)
+    );
 }

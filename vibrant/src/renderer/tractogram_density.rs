@@ -84,7 +84,6 @@ impl TractogramDensityRenderer {
         environment: &Environment,
         tractogram: &Tractogram,
         density: &Density,
-        count: u32,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
@@ -97,8 +96,9 @@ impl TractogramDensityRenderer {
         let mut size = self.constants.num_workgroups_volume();
         pass.dispatch_workgroups(size, size, size);
 
+        let count = tractogram.count().div_ceil(self.constants.workgroup_x);
         pass.set_pipeline(&self.rasterize_pipeline);
-        pass.dispatch_workgroups(count.div_ceil(self.constants.workgroup_x), 1, 1);
+        pass.dispatch_workgroups(count, 1, 1);
 
         pass.set_pipeline(&self.copy_pipeline);
         pass.set_bind_group(0, density.binding_copy(), &[]);

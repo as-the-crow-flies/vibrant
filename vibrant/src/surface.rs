@@ -14,14 +14,16 @@ use super::gpu::Gpu;
 pub struct Surface {
     surface: wgpu::Surface<'static>,
     depth: Texture,
-    gbuffer: Texture,
+    position: Texture,
+    normal: Texture,
 }
 
 impl Surface {
     pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
     pub const COLOR_SRGB_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
     pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth16Unorm;
-    pub const GBUFFER_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+    pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+    pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         let surface = gpu
@@ -36,7 +38,8 @@ impl Surface {
         Self {
             surface,
             depth: Self::create_depth_texture(gpu, width, height),
-            gbuffer: Self::create_gbuffer_texture(gpu, width, height),
+            position: Self::create_position_texture(gpu, width, height),
+            normal: Self::create_normal_texture(gpu, width, height),
         }
     }
 
@@ -51,8 +54,14 @@ impl Surface {
         .destroy();
 
         replace(
-            &mut self.gbuffer,
-            Self::create_gbuffer_texture(gpu, width, height),
+            &mut self.position,
+            Self::create_position_texture(gpu, width, height),
+        )
+        .destroy();
+
+        replace(
+            &mut self.normal,
+            Self::create_normal_texture(gpu, width, height),
         )
         .destroy();
     }
@@ -64,7 +73,13 @@ impl Surface {
             .expect("Could not optain SurfaceTexture");
 
         SurfaceFrame {
-            frame: Frame::new(gpu, &surface_texture.texture, &self.depth, &self.gbuffer),
+            frame: Frame::new(
+                gpu,
+                &surface_texture.texture,
+                &self.depth,
+                &self.position,
+                &self.normal,
+            ),
             surface_texture,
         }
     }
@@ -95,28 +110,48 @@ impl Surface {
         }
     }
 
-    pub fn gbuffer_target() -> ColorTargetState {
+    pub fn position_target() -> ColorTargetState {
         ColorTargetState {
-            format: Surface::GBUFFER_FORMAT,
+            format: Surface::POSITION_FORMAT,
             blend: None,
             write_mask: ColorWrites::all(),
         }
     }
 
-    pub fn gbuffer_layout(gpu: &Gpu) -> BindGroupLayout {
+    pub fn normal_target() -> ColorTargetState {
+        ColorTargetState {
+            format: Surface::NORMAL_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        }
+    }
+
+    pub fn gbuffer(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::all(),
-                    ty: BindingType::Texture {
-                        sample_type: TextureSampleType::Float { filterable: false },
-                        view_dimension: TextureViewDimension::D2,
-                        multisampled: false,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::all(),
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::all(),
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                ],
             })
     }
 
@@ -154,7 +189,7 @@ impl Surface {
         })
     }
 
-    fn create_gbuffer_texture(gpu: &Gpu, width: u32, height: u32) -> Texture {
+    fn create_position_texture(gpu: &Gpu, width: u32, height: u32) -> Texture {
         gpu.device().create_texture(&TextureDescriptor {
             label: Some(type_name::<Self>()),
             size: Extent3d {
@@ -165,9 +200,26 @@ impl Surface {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: Self::GBUFFER_FORMAT,
+            format: Self::POSITION_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[Self::GBUFFER_FORMAT],
+            view_formats: &[Self::POSITION_FORMAT],
+        })
+    }
+
+    fn create_normal_texture(gpu: &Gpu, width: u32, height: u32) -> Texture {
+        gpu.device().create_texture(&TextureDescriptor {
+            label: Some(type_name::<Self>()),
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: Self::NORMAL_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[Self::NORMAL_FORMAT],
         })
     }
 
@@ -206,12 +258,19 @@ pub struct Frame {
     color: TextureView,
     color_srgb: TextureView,
     depth: TextureView,
-    gbuffer: TextureView,
+    position: TextureView,
+    normal: TextureView,
     gbuffer_binding: BindGroup,
 }
 
 impl Frame {
-    pub fn new(gpu: &Gpu, color: &Texture, depth: &Texture, gbuffer: &Texture) -> Self {
+    pub fn new(
+        gpu: &Gpu,
+        color: &Texture,
+        depth: &Texture,
+        position: &Texture,
+        normal: &Texture,
+    ) -> Self {
         let label = Some(type_name::<Self>());
 
         Frame {
@@ -232,24 +291,41 @@ impl Frame {
                 format: Some(Surface::DEPTH_FORMAT),
                 ..Default::default()
             }),
-            gbuffer: gbuffer.create_view(&TextureViewDescriptor {
+            position: position.create_view(&TextureViewDescriptor {
                 label,
-                format: Some(Surface::GBUFFER_FORMAT),
+                format: Some(Surface::POSITION_FORMAT),
+                ..Default::default()
+            }),
+            normal: normal.create_view(&TextureViewDescriptor {
+                label,
+                format: Some(Surface::NORMAL_FORMAT),
                 ..Default::default()
             }),
             gbuffer_binding: gpu.device().create_bind_group(&BindGroupDescriptor {
                 label,
-                layout: &Surface::gbuffer_layout(gpu),
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&gbuffer.create_view(
-                        &TextureViewDescriptor {
-                            label,
-                            format: Some(Surface::GBUFFER_FORMAT),
-                            ..Default::default()
-                        },
-                    )),
-                }],
+                layout: &Surface::gbuffer(gpu),
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&position.create_view(
+                            &TextureViewDescriptor {
+                                label,
+                                format: Some(Surface::POSITION_FORMAT),
+                                ..Default::default()
+                            },
+                        )),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::TextureView(&normal.create_view(
+                            &TextureViewDescriptor {
+                                label,
+                                format: Some(Surface::NORMAL_FORMAT),
+                                ..Default::default()
+                            },
+                        )),
+                    },
+                ],
             }),
         }
     }
@@ -257,9 +333,10 @@ impl Frame {
     pub fn test(gpu: &Gpu, width: u32, height: u32) -> Self {
         let color = Surface::create_color_texture(gpu, width, height);
         let depth = Surface::create_depth_texture(gpu, width, height);
-        let gbuffer = Surface::create_gbuffer_texture(gpu, width, height);
+        let position = Surface::create_position_texture(gpu, width, height);
+        let normal = Surface::create_normal_texture(gpu, width, height);
 
-        Self::new(gpu, &color, &depth, &gbuffer)
+        Self::new(gpu, &color, &depth, &position, &normal)
     }
 
     pub fn width(&self) -> u32 {
@@ -282,11 +359,15 @@ impl Frame {
         &self.depth
     }
 
-    pub fn gbuffer(&self) -> &TextureView {
-        &self.gbuffer
+    pub fn position(&self) -> &TextureView {
+        &self.position
     }
 
-    pub fn gbuffer_binding(&self) -> &BindGroup {
+    pub fn normal(&self) -> &TextureView {
+        &self.normal
+    }
+
+    pub fn gbuffer(&self) -> &BindGroup {
         &self.gbuffer_binding
     }
 }

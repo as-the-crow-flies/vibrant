@@ -18,7 +18,9 @@ impl Environment {
     pub fn wgsl() -> String {
         "
         struct Settings {
-            streamline_radius: f32
+            ambient_occlusion_samples: u32,
+            streamline_radius: f32,
+            direct_light: f32
         }
 
         struct Camera {
@@ -77,7 +79,9 @@ impl Environment {
                 bytes_of(&controller.camera().projection()),
                 bytes_of(&controller.light().direction()),
                 bytes_of(&0u32),
+                bytes_of(&controller.settings().ambient_occlusion_samples),
                 bytes_of(&controller.settings().streamline_radius),
+                bytes_of(&controller.settings().direct_light),
             ]
             .concat(),
         );

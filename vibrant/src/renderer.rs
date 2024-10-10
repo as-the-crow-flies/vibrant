@@ -8,11 +8,9 @@ pub mod uv;
 
 use constants::Constants;
 use environment::Environment;
-use tractogram_baseline::BaselineTractogramRenderer;
 use tractogram_density::TractogramDensityRenderer;
 use tractogram_render::TractogramRenderer;
 use ui::UiRenderer;
-use uv::UvRenderer;
 use wgpu::SurfaceTarget;
 
 use crate::{
@@ -33,12 +31,10 @@ pub struct Renderer {
     tractogram_density: TractogramDensityRenderer,
     tractogram_render: TractogramRenderer,
     ui: UiRenderer,
-
-    count: u32,
 }
 
 impl Renderer {
-    const VOLUME_EXPONENT: u32 = 7;
+    const VOLUME_EXPONENT: u32 = 8;
 
     pub fn new(gpu: Gpu) -> Self {
         let asset = Asset {
@@ -60,17 +56,15 @@ impl Renderer {
 
             constants,
             gpu,
-
-            count: 0,
         }
     }
 
     pub fn create_surface(&mut self, window: impl Into<SurfaceTarget<'static>>) {
         self.surface = Some(Surface::new(&self.gpu, window));
 
-        AssetLoader::publish_tractogram(loader::Tractogram::from_file(
-            "assets/whole_brain200k.tck",
-        ));
+        // AssetLoader::publish_tractogram(loader::Tractogram::from_file(
+        //     "assets/whole_brain200k.tck",
+        // ));
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -88,7 +82,6 @@ impl Renderer {
     pub fn update(&mut self, controller: &Controller) {
         AssetLoader::on_tractogram(|tractogram| {
             self.asset.tractogram = Some(Tractogram::new(&self.gpu, &tractogram));
-            self.count = 0;
         });
 
         self.camera.update(&self.gpu, &controller);
@@ -106,15 +99,8 @@ impl Renderer {
         let mut cmd = self.gpu.cmd();
 
         if let Some(tractogram) = &self.asset.tractogram {
-            self.count = (self.count + tractogram.count() / 1000).min(tractogram.count());
-
-            self.tractogram_density.render(
-                &mut cmd,
-                &self.camera,
-                tractogram,
-                &self.asset.density,
-                self.count,
-            );
+            self.tractogram_density
+                .render(&mut cmd, &self.camera, tractogram, &self.asset.density);
 
             self.tractogram_render.render(
                 &mut cmd,
@@ -122,7 +108,6 @@ impl Renderer {
                 &frame,
                 tractogram,
                 &self.asset.density,
-                self.count,
             );
         }
 

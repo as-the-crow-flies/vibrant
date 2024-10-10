@@ -12,7 +12,6 @@ use crate::{gpu::Gpu, loader};
 
 pub struct Tractogram {
     vertices: Buffer,
-    indices: Buffer,
     world_to_tractogram: Buffer,
     tractogram_to_world: Buffer,
 
@@ -25,10 +24,6 @@ impl Tractogram {
         &self.vertices
     }
 
-    pub fn indices(&self) -> &Buffer {
-        &self.indices
-    }
-
     pub fn binding(&self) -> &BindGroup {
         &self.binding
     }
@@ -38,7 +33,7 @@ impl Tractogram {
     }
 
     pub fn count(&self) -> u32 {
-        (self.indices.size() / 4) as u32
+        (self.vertices.size() / 12) as u32
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -105,16 +100,6 @@ impl Tractogram {
                         },
                         count: None,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                 ],
             })
     }
@@ -138,12 +123,6 @@ impl Tractogram {
             label,
             contents: bytemuck::cast_slice(tractogram.vertices()),
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
-        });
-
-        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(tractogram.indices()),
-            usage: BufferUsages::INDEX | BufferUsages::STORAGE,
         });
 
         let scale = tractogram.bounds().scale();
@@ -216,20 +195,11 @@ impl Tractogram {
                         size: None,
                     }),
                 },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &indices,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
             ],
         });
 
         Self {
             vertices,
-            indices,
             world_to_tractogram,
             tractogram_to_world,
             binding,
@@ -241,6 +211,5 @@ impl Tractogram {
 impl Drop for Tractogram {
     fn drop(&mut self) {
         self.vertices.destroy();
-        self.indices.destroy();
     }
 }

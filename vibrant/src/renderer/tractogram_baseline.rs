@@ -1,7 +1,7 @@
 use std::any::type_name;
 
 use wgpu::{
-    CommandEncoder, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
+    CommandEncoder, FragmentState, LoadOp, MultisampleState, Operations,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
@@ -55,7 +55,6 @@ impl BaselineTractogramRenderer {
                     }),
                     primitive: PrimitiveState {
                         topology: PrimitiveTopology::LineStrip,
-                        strip_index_format: Some(IndexFormat::Uint32),
                         ..Default::default()
                     },
                     layout: Some(&pipeline_layout),
@@ -103,8 +102,7 @@ impl BaselineTractogramRenderer {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, tractogram.binding(), &[]);
         pass.set_bind_group(1, camera.binding(), &[]);
-        pass.set_index_buffer(tractogram.indices().slice(..), IndexFormat::Uint32);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw_indexed(0..tractogram.count(), 0, 0..1);
+        pass.draw(0..tractogram.count(), 0..1);
     }
 }
