@@ -4,8 +4,6 @@ pub mod light;
 pub mod settings;
 pub mod state;
 
-use std::collections::VecDeque;
-
 use camera::Camera;
 use egui::{FontId, Layout, RichText, Slider};
 use event::Event;

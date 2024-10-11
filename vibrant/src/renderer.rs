@@ -62,9 +62,9 @@ impl Renderer {
     pub fn create_surface(&mut self, window: impl Into<SurfaceTarget<'static>>) {
         self.surface = Some(Surface::new(&self.gpu, window));
 
-        // AssetLoader::publish_tractogram(loader::Tractogram::from_file(
-        //     "assets/whole_brain200k.tck",
-        // ));
+        AssetLoader::publish_tractogram(loader::Tractogram::from_file(
+            "assets/whole_brain200k.tck",
+        ));
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
