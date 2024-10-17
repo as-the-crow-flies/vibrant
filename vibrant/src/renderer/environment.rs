@@ -20,13 +20,20 @@ impl Environment {
         struct Settings {
             ambient_occlusion_samples: u32,
             streamline_radius: f32,
-            direct_light: f32
+            direct_light: f32,
+            gradient_factor: f32,
+            opacity_factor: f32,
+            step_size: f32,
+            min_value: f32,
         }
 
         struct Camera {
             transform: mat4x4<f32>,
-            view: mat4x4<f32>,
-            projection: mat4x4<f32>
+            projection: mat4x4<f32>,
+            projection_inverse: mat4x4<f32>,
+            near: f32,
+            far: f32,
+            padding: vec2<f32>
         }
 
         struct Environment {
@@ -44,7 +51,7 @@ impl Environment {
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 64 * 3 + 2 * 16,
+            size: 256,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -75,13 +82,20 @@ impl Environment {
             0,
             &[
                 bytes_of(&controller.camera().transform()),
-                bytes_of(&controller.camera().view()),
                 bytes_of(&controller.camera().projection()),
+                bytes_of(&controller.camera().projection().inverse()),
+                bytes_of(&controller.camera().near()),
+                bytes_of(&controller.camera().far()),
+                bytes_of(&0u64),
                 bytes_of(&controller.light().direction()),
                 bytes_of(&0u32),
                 bytes_of(&controller.settings().ambient_occlusion_samples),
                 bytes_of(&controller.settings().streamline_radius),
                 bytes_of(&controller.settings().direct_light),
+                bytes_of(&controller.settings().gradient_factor),
+                bytes_of(&controller.settings().opacity_factor),
+                bytes_of(&controller.settings().step_size),
+                bytes_of(&controller.settings().min_value),
             ]
             .concat(),
         );

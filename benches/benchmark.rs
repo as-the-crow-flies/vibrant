@@ -33,10 +33,7 @@ pub fn baseline(criterion: &mut Criterion) {
 
     let environment = get_environment(&gpu);
 
-    let tractogram = Tractogram::new(
-        &gpu,
-        &loader::Tractogram::from_file("assets/whole_brain1M.tck"),
-    );
+    let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file("assets/whole_brain1M.tck"));
 
     let renderer = BaselineTractogramRenderer::new(&gpu);
 
@@ -58,10 +55,7 @@ pub fn density(criterion: &mut Criterion) {
 
     let environment = get_environment(&gpu);
 
-    let tractogram = Tractogram::new(
-        &gpu,
-        &loader::Tractogram::from_file("assets/whole_brain1M.tck"),
-    );
+    let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file("assets/whole_brain1M.tck"));
 
     let density = Density::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
@@ -85,10 +79,7 @@ pub fn render(criterion: &mut Criterion) {
 
     let environment = get_environment(&gpu);
 
-    let tractogram = Tractogram::new(
-        &gpu,
-        &loader::Tractogram::from_file("assets/whole_brain1M.tck"),
-    );
+    let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file("assets/whole_brain1M.tck"));
 
     let density = Density::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());

@@ -82,4 +82,12 @@ impl Camera {
     pub fn pan(&mut self, x: f32, y: f32) {
         self.pan += self.rotation().inverse().mul_vec3(Vec3::new(x, y, 0.0)) * self.distance;
     }
+
+    pub fn near(&self) -> f32 {
+        self.near
+    }
+
+    pub fn far(&self) -> f32 {
+        self.far
+    }
 }

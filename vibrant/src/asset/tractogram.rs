@@ -116,7 +116,7 @@ impl Tractogram {
         }
     }
 
-    pub fn new(gpu: &Gpu, tractogram: &loader::Tractogram) -> Self {
+    pub fn new(gpu: &Gpu, tractogram: &loader::Tck) -> Self {
         let label = Some(type_name::<Self>());
 
         let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {

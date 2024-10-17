@@ -30,12 +30,12 @@ impl Bounds {
 }
 
 #[derive(Debug, Default)]
-pub struct Tractogram {
+pub struct Tck {
     vertices: Vec<Vec3>,
     bounds: Bounds,
 }
 
-impl Tractogram {
+impl Tck {
     pub fn vertices(&self) -> &[Vec3] {
         &self.vertices
     }
@@ -44,7 +44,7 @@ impl Tractogram {
         &self.bounds
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Tractogram {
+    pub fn from_bytes(bytes: &[u8]) -> Tck {
         let header: HashMap<String, String> = bytes
             .lines()
             .map(|line| line.unwrap())
@@ -70,11 +70,11 @@ impl Tractogram {
 
         let bounds = Bounds::from_vertices(&vertices);
 
-        Tractogram { vertices, bounds }
+        Tck { vertices, bounds }
     }
 
-    pub fn join(tractograms: Vec<Tractogram>) -> Tractogram {
-        Tractogram {
+    pub fn join(tractograms: Vec<Tck>) -> Tck {
+        Tck {
             bounds: tractograms.iter().fold(
                 Bounds {
                     min: Vec3::MAX,
@@ -92,42 +92,7 @@ impl Tractogram {
         }
     }
 
-    pub fn from_file(path: &str) -> Tractogram {
-        Self::from_bytes(fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    pub fn file_dialog(callback: impl FnOnce(Tractogram) + 'static) {
-        wasm_bindgen_futures::spawn_local(async move {
-            let file = rfd::AsyncFileDialog::new()
-                .add_filter("Tracks file format", &[".tck"])
-                .pick_file()
-                .await;
-
-            if let Some(file) = file {
-                callback(Self::from_bytes(file.read().await));
-            }
-        });
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn file_dialog(callback: impl FnOnce(Tractogram) + 'static) {
-        use itertools::Itertools;
-
-        let tractogram: Option<Tractogram> = rfd::FileDialog::new()
-            .add_filter("Tracks file format", &[".tck"])
-            .pick_files()
-            .map(|files| {
-                Tractogram::join(
-                    files
-                        .iter()
-                        .map(|file| Self::from_bytes(fs::read(file).unwrap()))
-                        .collect_vec(),
-                )
-            });
-
-        if let Some(tractogram) = tractogram {
-            callback(tractogram);
-        }
+    pub fn from_file(path: &str) -> Tck {
+        Self::from_bytes(&fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
     }
 }

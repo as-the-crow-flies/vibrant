@@ -380,3 +380,10 @@ impl Density {
             })
     }
 }
+
+impl Drop for Density {
+    fn drop(&mut self) {
+        self.buffer.destroy();
+        self.texture.destroy();
+    }
+}

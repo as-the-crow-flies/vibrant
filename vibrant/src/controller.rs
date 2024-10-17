@@ -11,7 +11,7 @@ use light::Light;
 use settings::Settings;
 use state::ControllerState;
 
-use crate::{loader::AssetLoader, loader::Tractogram};
+use crate::loader::AssetLoader;
 
 pub struct Controller {
     state: ControllerState,
@@ -48,9 +48,7 @@ impl Controller {
                 }
 
                 if ui.button("📂 open").clicked() {
-                    Tractogram::file_dialog(|tractogram| {
-                        AssetLoader::publish_tractogram(tractogram);
-                    });
+                    AssetLoader::open_file_dialog();
                 }
 
                 ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
@@ -77,6 +75,19 @@ impl Controller {
                 Slider::new(&mut self.settings.direct_light, 0.0..=1.0)
                     .text("Direct Light vs Ambient Light"),
             );
+
+            ui.add(
+                Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Gradient Factor"),
+            );
+
+            ui.add(
+                Slider::new(&mut self.settings.opacity_factor, 0.0001..=2.0)
+                    .logarithmic(true)
+                    .text("Opacity Factor"),
+            );
+
+            ui.add(Slider::new(&mut self.settings.step_size, 0.01..=2.0).text("Step Size"));
+            ui.add(Slider::new(&mut self.settings.min_value, 0.0..=1000.0).text("Min Value"));
         });
     }
 
