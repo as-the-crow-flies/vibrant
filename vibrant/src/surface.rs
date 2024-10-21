@@ -2,17 +2,19 @@ use std::{any::type_name, mem::replace};
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, ColorTargetState, ColorWrites,
-    CompareFunction, CompositeAlphaMode, DepthBiasState, DepthStencilState, Extent3d, PresentMode,
-    ShaderStages, StencilState, SurfaceConfiguration, SurfaceTarget, SurfaceTexture, Texture,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    TextureView, TextureViewDescriptor, TextureViewDimension,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferDescriptor,
+    BufferUsages, ColorTargetState, ColorWrites, CompareFunction, CompositeAlphaMode,
+    DepthBiasState, DepthStencilState, Extent3d, PresentMode, ShaderStages, StencilState,
+    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use super::gpu::Gpu;
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
+    visibility: Buffer,
     depth: Texture,
     position: Texture,
     normal: Texture,
@@ -37,6 +39,7 @@ impl Surface {
 
         Self {
             surface,
+            visibility: Self::create_visibility_buffer(gpu, width, height),
             depth: Self::create_depth_texture(gpu, width, height),
             position: Self::create_position_texture(gpu, width, height),
             normal: Self::create_normal_texture(gpu, width, height),
@@ -50,6 +53,12 @@ impl Surface {
         replace(
             &mut self.depth,
             Self::create_depth_texture(gpu, width, height),
+        )
+        .destroy();
+
+        replace(
+            &mut self.visibility,
+            Self::create_visibility_buffer(gpu, width, height),
         )
         .destroy();
 
@@ -77,6 +86,7 @@ impl Surface {
                 gpu,
                 &surface_texture.texture,
                 &self.depth,
+                &self.visibility,
                 &self.position,
                 &self.normal,
             ),
@@ -124,6 +134,23 @@ impl Surface {
             blend: None,
             write_mask: ColorWrites::all(),
         }
+    }
+
+    pub fn visibility(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
     }
 
     pub fn gbuffer(gpu: &Gpu) -> BindGroupLayout {
@@ -186,6 +213,15 @@ impl Surface {
             format: Self::DEPTH_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[Self::DEPTH_FORMAT],
+        })
+    }
+
+    fn create_visibility_buffer(gpu: &Gpu, width: u32, height: u32) -> Buffer {
+        gpu.device().create_buffer(&BufferDescriptor {
+            label: Some(type_name::<Self>()),
+            size: (width * height * 4) as u64,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
         })
     }
 
@@ -260,7 +296,8 @@ pub struct Frame {
     depth: TextureView,
     position: TextureView,
     normal: TextureView,
-    gbuffer_binding: BindGroup,
+    visibility: BindGroup,
+    gbuffer: BindGroup,
 }
 
 impl Frame {
@@ -268,6 +305,7 @@ impl Frame {
         gpu: &Gpu,
         color: &Texture,
         depth: &Texture,
+        visibility: &Buffer,
         position: &Texture,
         normal: &Texture,
     ) -> Self {
@@ -301,7 +339,19 @@ impl Frame {
                 format: Some(Surface::NORMAL_FORMAT),
                 ..Default::default()
             }),
-            gbuffer_binding: gpu.device().create_bind_group(&BindGroupDescriptor {
+            visibility: gpu.device().create_bind_group(&BindGroupDescriptor {
+                label,
+                layout: &Surface::visibility(gpu),
+                entries: &[BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &visibility,
+                        offset: 0,
+                        size: None,
+                    }),
+                }],
+            }),
+            gbuffer: gpu.device().create_bind_group(&BindGroupDescriptor {
                 label,
                 layout: &Surface::gbuffer(gpu),
                 entries: &[
@@ -333,10 +383,11 @@ impl Frame {
     pub fn test(gpu: &Gpu, width: u32, height: u32) -> Self {
         let color = Surface::create_color_texture(gpu, width, height);
         let depth = Surface::create_depth_texture(gpu, width, height);
+        let visibility = Surface::create_visibility_buffer(gpu, width, height);
         let position = Surface::create_position_texture(gpu, width, height);
         let normal = Surface::create_normal_texture(gpu, width, height);
 
-        Self::new(gpu, &color, &depth, &position, &normal)
+        Self::new(gpu, &color, &depth, &visibility, &position, &normal)
     }
 
     pub fn width(&self) -> u32 {
@@ -367,7 +418,11 @@ impl Frame {
         &self.normal
     }
 
+    pub fn visibility(&self) -> &BindGroup {
+        &self.visibility
+    }
+
     pub fn gbuffer(&self) -> &BindGroup {
-        &self.gbuffer_binding
+        &self.gbuffer
     }
 }

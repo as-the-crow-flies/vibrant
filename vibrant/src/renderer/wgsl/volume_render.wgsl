@@ -33,6 +33,8 @@ fn vertex(@builtin(vertex_index) index: u32) -> Ray
 
 @fragment
 fn fragment(ray: Ray) -> @location(0) vec4<f32> {
+    let rnd = random(ray.position.xy);
+
     let view = normalize(TRANSFORM_INVERSE * vec4<f32>(-ray.direction, 0.0)).xzy;
     let light = normalize(TRANSFORM * vec4<f32>(ENVIRONMENT.light, 0.0)).xyz;
 
@@ -44,16 +46,16 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
 
     let dim = vec3<f32>(textureDimensions(VALUE));
 
-    let x = vec3<f32>(1., 0., 0.) / dim;
-    let y = vec3<f32>(0., 1., 0.) / dim;
-    let z = vec3<f32>(0., 0., 1.) / dim;
+    let x = vec3<f32>(1., 0., 0.) / dim * ENVIRONMENT.settings.grad_size;
+    let y = vec3<f32>(0., 1., 0.) / dim * ENVIRONMENT.settings.grad_size;
+    let z = vec3<f32>(0., 0., 1.) / dim * ENVIRONMENT.settings.grad_size;
 
     let steps = abs(ray.direction * depth * dim);
     let step = ss / maximum(steps);
 
     var color = vec4<f32>(0.0);
 
-    for (var distance = hit.x; distance < hit.y; distance += step) {
+    for (var distance = hit.x + step * rnd; distance < hit.y; distance += step) {
         let sample = ray.origin + ray.direction * distance;
         let value = volume(sample);
 
@@ -65,6 +67,13 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
             volume(sample + z) - volume(sample - z),
             0.0
         )).xyz;
+
+        // let gradient = (TRANSFORM_INVERSE * -(vec4<f32>(
+        //     volume(sample - 2.0 * x) - 8.0 * volume(sample - x) + 8.0 * volume(sample + x) - volume(sample + 2.0 * x),
+        //     volume(sample - 2.0 * y) - 8.0 * volume(sample - y) + 8.0 * volume(sample + y) - volume(sample + 2.0 * y),
+        //     volume(sample - 2.0 * z) - 8.0 * volume(sample - z) + 8.0 * volume(sample + z) - volume(sample + 2.0 * z),
+        //     0.0
+        // ) / 12.0)).xyz;
 
         let gradient_magnitude = length(gradient);
         let normal = gradient / max(1.0, gradient_magnitude);
@@ -137,4 +146,8 @@ fn maximum(v: vec3<f32>) -> f32 {
 
 fn minimum(v: vec3<f32>) -> f32 {
     return min(min(v.x, v.y), v.z);
+}
+
+fn random(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }

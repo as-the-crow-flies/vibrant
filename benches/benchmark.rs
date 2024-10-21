@@ -6,11 +6,9 @@ use vibrant::{
     gpu::Gpu,
     loader,
     renderer::{
-        constants::Constants,
-        environment::{self, Environment},
+        constants::Constants, environment::Environment,
         tractogram_baseline::BaselineTractogramRenderer,
-        tractogram_density::TractogramDensityRenderer,
-        tractogram_render::TractogramRenderer,
+        tractogram_density::TractogramDensityRenderer, tractogram_render::TractogramRenderer,
     },
     surface::Frame,
     Vec2,

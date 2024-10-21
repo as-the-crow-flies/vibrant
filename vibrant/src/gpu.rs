@@ -1,9 +1,10 @@
 use std::{any::type_name, borrow::Cow};
 
 use wgpu::{
-    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Features, Limits,
-    PipelineLayout, PowerPreference, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor,
-    ShaderSource,
+    ColorTargetState, CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor,
+    DepthStencilState, Features, FragmentState, Limits, MultisampleState, PipelineLayout,
+    PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource,
 };
 
 use crate::renderer::constants::Constants;
@@ -80,14 +81,54 @@ impl Gpu {
         })
     }
 
-    pub fn compute(&self, layout: &PipelineLayout, module: &ShaderModule) -> ComputePipeline {
+    pub fn compute(
+        &self,
+        layout: &PipelineLayout,
+        module: &ShaderModule,
+        entry_point: &str,
+    ) -> ComputePipeline {
         self.device()
             .create_compute_pipeline(&ComputePipelineDescriptor {
                 label: None,
                 layout: Some(layout),
                 module,
-                entry_point: "main",
+                entry_point,
                 compilation_options: Default::default(),
+                cache: None,
+            })
+    }
+
+    pub fn quad(
+        &self,
+        layout: &PipelineLayout,
+        module: &ShaderModule,
+        entry_point: &str,
+        color: ColorTargetState,
+        depth: Option<DepthStencilState>,
+    ) -> RenderPipeline {
+        self.device()
+            .create_render_pipeline(&RenderPipelineDescriptor {
+                label: None,
+                layout: Some(layout),
+                vertex: wgpu::VertexState {
+                    module: &self.shader(include_str!("renderer/wgsl/quad.wgsl"), None),
+                    entry_point: "vertex",
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: PrimitiveState {
+                    topology: PrimitiveTopology::TriangleStrip,
+                    ..Default::default()
+                },
+                depth_stencil: depth,
+                multisample: MultisampleState::default(),
+                fragment: Some(FragmentState {
+                    module,
+                    entry_point,
+                    compilation_options: Default::default(),
+                    targets: &[Some(color)],
+                }),
+                multiview: None,
                 cache: None,
             })
     }

@@ -69,7 +69,7 @@ impl BaselineTractogramRenderer {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        camera: &Environment,
+        environment: &Environment,
         frame: &Frame,
         tractogram: &Tractogram,
     ) {
@@ -101,7 +101,7 @@ impl BaselineTractogramRenderer {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, tractogram.binding(), &[]);
-        pass.set_bind_group(1, camera.binding(), &[]);
+        pass.set_bind_group(1, environment.binding(), &[]);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
         pass.draw(0..tractogram.count(), 0..1);
     }

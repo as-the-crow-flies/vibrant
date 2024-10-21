@@ -1,5 +1,6 @@
 pub mod constants;
 pub mod environment;
+pub mod tractogram;
 pub mod tractogram_baseline;
 pub mod tractogram_density;
 pub mod tractogram_render;
@@ -9,6 +10,8 @@ pub mod volume_render;
 
 use constants::Constants;
 use environment::Environment;
+use tractogram::TractogramComputeRenderer;
+use tractogram_baseline::BaselineTractogramRenderer;
 use tractogram_density::TractogramDensityRenderer;
 use tractogram_render::TractogramRenderer;
 use ui::UiRenderer;
@@ -31,7 +34,9 @@ pub struct Renderer {
 
     environment: Environment,
     tractogram_density: TractogramDensityRenderer,
+    tractogram_baseline: BaselineTractogramRenderer,
     tractogram_render: TractogramRenderer,
+    tractogram_compute_renderer: TractogramComputeRenderer,
     volume_render: VolumeRenderer,
     ui: UiRenderer,
 }
@@ -52,7 +57,9 @@ impl Renderer {
             surface: None,
 
             tractogram_density: TractogramDensityRenderer::new(&gpu, &constants),
+            tractogram_baseline: BaselineTractogramRenderer::new(&gpu),
             tractogram_render: TractogramRenderer::new(&gpu, &constants),
+            tractogram_compute_renderer: TractogramComputeRenderer::new(&gpu, &constants),
             volume_render: VolumeRenderer::new(&gpu),
             ui: UiRenderer::new(&gpu),
 
@@ -78,16 +85,21 @@ impl Renderer {
 
         self.tractogram_density = TractogramDensityRenderer::new(&self.gpu, &self.constants);
         self.tractogram_render = TractogramRenderer::new(&self.gpu, &self.constants);
+        self.tractogram_compute_renderer =
+            TractogramComputeRenderer::new(&self.gpu, &self.constants);
     }
 
-    pub fn update(&mut self, controller: &Controller) {
+    pub fn render(
+        &mut self,
+        controller: &Controller,
+        ctx: &egui::Context,
+        output: egui::FullOutput,
+    ) {
         AssetLoader::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(&self.gpu, &tck)));
         AssetLoader::on_nifti(|nifti| self.asset.volume = Some(Volume::new(&self.gpu, &nifti)));
 
         self.environment.update(&self.gpu, &controller);
-    }
 
-    pub fn render(&mut self, ctx: &egui::Context, output: egui::FullOutput) {
         let surface_frame = self
             .surface
             .as_ref()
@@ -106,13 +118,28 @@ impl Renderer {
                 &self.asset.density,
             );
 
-            self.tractogram_render.render(
-                &mut cmd,
-                &self.environment,
-                &frame,
-                tractogram,
-                &self.asset.density,
-            );
+            match controller.settings().renderer {
+                crate::controller::settings::Renderer::Baseline => {
+                    self.tractogram_baseline
+                        .render(&mut cmd, &self.environment, frame, tractogram)
+                }
+                crate::controller::settings::Renderer::Compute => {
+                    self.tractogram_compute_renderer.render(
+                        &mut cmd,
+                        &self.environment,
+                        &frame,
+                        tractogram,
+                        &self.asset.density,
+                    )
+                }
+                crate::controller::settings::Renderer::Regular => self.tractogram_render.render(
+                    &mut cmd,
+                    &self.environment,
+                    &frame,
+                    tractogram,
+                    &self.asset.density,
+                ),
+            };
         }
 
         if let Some(volume) = &self.asset.volume {

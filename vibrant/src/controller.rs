@@ -5,10 +5,10 @@ pub mod settings;
 pub mod state;
 
 use camera::Camera;
-use egui::{FontId, Layout, RichText, Slider};
+use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::Settings;
+use settings::{Renderer, Settings};
 use state::ControllerState;
 
 use crate::loader::AssetLoader;
@@ -61,6 +61,18 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
+            ComboBox::from_label("Renderer")
+                .selected_text(format!("{:?}", self.settings.renderer))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.settings.renderer,
+                        Renderer::Baseline,
+                        "Baseline",
+                    );
+                    ui.selectable_value(&mut self.settings.renderer, Renderer::Compute, "Compute");
+                    ui.selectable_value(&mut self.settings.renderer, Renderer::Regular, "Regular");
+                });
+
             ui.add(
                 Slider::new(&mut self.settings.ambient_occlusion_samples, 8..=100)
                     .text("Ambient Occlusion Samples"),
@@ -86,7 +98,8 @@ impl Controller {
                     .text("Opacity Factor"),
             );
 
-            ui.add(Slider::new(&mut self.settings.step_size, 0.01..=2.0).text("Step Size"));
+            ui.add(Slider::new(&mut self.settings.step_size, 0.01..=1.0).text("Step Size"));
+            ui.add(Slider::new(&mut self.settings.grad_size, 0.01..=10.0).text("Gradient Size"));
             ui.add(Slider::new(&mut self.settings.min_value, 0.0..=1000.0).text("Min Value"));
         });
     }

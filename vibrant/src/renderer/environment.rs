@@ -24,6 +24,7 @@ impl Environment {
             gradient_factor: f32,
             opacity_factor: f32,
             step_size: f32,
+            grad_size: f32,
             min_value: f32,
         }
 
@@ -95,6 +96,7 @@ impl Environment {
                 bytes_of(&controller.settings().gradient_factor),
                 bytes_of(&controller.settings().opacity_factor),
                 bytes_of(&controller.settings().step_size),
+                bytes_of(&controller.settings().grad_size),
                 bytes_of(&controller.settings().min_value),
             ]
             .concat(),

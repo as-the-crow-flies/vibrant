@@ -34,6 +34,7 @@ impl TractogramDensityRenderer {
                     include_str!("wgsl/tractogram_density_clear.wgsl"),
                     Some(constants),
                 ),
+                "main",
             ),
             rasterize_pipeline: gpu.compute(
                 &gpu.device()
@@ -50,6 +51,7 @@ impl TractogramDensityRenderer {
                     &(Environment::wgsl() + include_str!("wgsl/tractogram_density_rasterize.wgsl")),
                     Some(constants),
                 ),
+                "main",
             ),
             copy_pipeline: gpu.compute(
                 &gpu.device()
@@ -62,6 +64,7 @@ impl TractogramDensityRenderer {
                     include_str!("wgsl/tractogram_density_copy.wgsl"),
                     Some(constants),
                 ),
+                "main",
             ),
             mipmap_pipeline: gpu.compute(
                 &gpu.device()
@@ -74,6 +77,7 @@ impl TractogramDensityRenderer {
                     include_str!("wgsl/tractogram_density_mipmap.wgsl"),
                     Some(constants),
                 ),
+                "main",
             ),
         }
     }

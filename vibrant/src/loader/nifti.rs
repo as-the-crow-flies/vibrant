@@ -1,8 +1,8 @@
 use std::{f32::consts::PI, io::Read};
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{cast_slice, Pod, Zeroable};
 use flate2::bufread::GzDecoder;
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3, Vec4};
 use itertools::{Itertools, MinMaxResult};
 
 pub struct Nifti {
@@ -108,27 +108,21 @@ impl NiftiRawHeader {
     }
 
     pub fn transform(&self) -> Mat4 {
-        Mat4::from_scale_rotation_translation(
-            self.size().max_element() / self.size(),
-            self.rotation(),
-            Vec3::ONE * 0.5,
+        let (scale, rotation, translation) = Mat4::from_cols(
+            self.srow_x.into(),
+            self.srow_y.into(),
+            self.srow_z.into(),
+            Vec4::W,
         )
+        .transpose()
+        .inverse()
+        .to_scale_rotation_translation();
 
-        // let (scale, rotation, translation) = Mat4::from_cols(
-        //     self.srow_x.into(),
-        //     self.srow_y.into(),
-        //     self.srow_z.into(),
-        //     Vec4::W,
-        // )
-        // .transpose()
-        // .inverse()
-        // .to_scale_rotation_translation();
-
-        // Mat4::from_scale_rotation_translation(
-        //     scale * self.size().max_element() / self.size(),
-        //     rotation,
-        //     translation / self.size(),
-        // )
+        Mat4::from_scale_rotation_translation(
+            scale * self.size().max_element() / self.size(),
+            rotation * Quat::from_rotation_x(0.5 * PI),
+            translation / self.size(),
+        )
     }
 
     pub fn data(&self, bytes: &[u8]) -> Vec<f32> {
@@ -136,8 +130,12 @@ impl NiftiRawHeader {
 
         match self.datatype {
             2 => data.into_iter().map(|&x| x as f32).collect(),
-            16 => bytemuck::cast_slice::<u8, f32>(data).to_vec(),
-            64 => bytemuck::cast_slice::<u8, f64>(data)
+            4 => cast_slice::<u8, u16>(data)
+                .into_iter()
+                .map(|&x| x as f32)
+                .collect(),
+            16 => cast_slice::<u8, f32>(data).to_vec(),
+            64 => cast_slice::<u8, f64>(data)
                 .into_iter()
                 .map(|&x| x as f32)
                 .collect(),
@@ -157,6 +155,8 @@ impl Nifti {
         let (header, data) = vector.split_at(NiftiRawHeader::SIZE);
         let header: NiftiRawHeader = *bytemuck::from_bytes(header);
         let data = header.data(data);
+
+        dbg!(header);
 
         Self {
             width: header.dim[1] as u32,
@@ -196,11 +196,24 @@ mod test {
 
     #[test]
     fn can_load_nifti_file() {
-        let nifti = Nifti::from_bytes(&fs::read("../assets/T1_ants.nii.gz").unwrap());
+        let nifti = Nifti::from_bytes(
+            &fs::read("../assets/HPC-100307/T1w_acpc_dc_restore_1.25.nii.gz").unwrap(),
+        );
+
+        dbg!(nifti.transform.to_scale_rotation_translation());
 
         dbg!(nifti.transform * Vec4::new(-0.5, -0.5, -0.5, 1.0));
         dbg!(nifti.transform * Vec4::new(0.0, 0.0, 0.0, 1.0));
         dbg!(nifti.transform * Vec4::new(0.5, 0.5, 0.5, 1.0));
-        dbg!(nifti.transform * Vec4::new(1.0, 1.0, 1.0, 1.0));
+
+        dbg!(
+            nifti.transform
+                * Vec4::new(
+                    nifti.width() as f32,
+                    nifti.height() as f32,
+                    nifti.depth() as f32,
+                    1.0
+                )
+        );
     }
 }
