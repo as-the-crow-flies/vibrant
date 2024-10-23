@@ -1,10 +1,14 @@
 use std::{any::type_name, borrow::Cow};
 
+use bytemuck::Pod;
+use futures::channel::oneshot::channel;
 use wgpu::{
-    ColorTargetState, CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor,
-    DepthStencilState, Features, FragmentState, Limits, MultisampleState, PipelineLayout,
-    PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
-    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource,
+    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
+    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, DepthStencilState,
+    Features, FragmentState, Limits, MapMode, MultisampleState, PipelineLayout,
+    PipelineLayoutDescriptor, PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline,
+    RenderPipelineDescriptor, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor,
+    ShaderSource,
 };
 
 use crate::renderer::constants::Constants;
@@ -133,6 +137,15 @@ impl Gpu {
             })
     }
 
+    pub fn pipeline_layout(&self, layouts: &[&BindGroupLayout]) -> PipelineLayout {
+        self.device()
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: layouts,
+                push_constant_ranges: &[],
+            })
+    }
+
     pub fn cmd(&self) -> wgpu::CommandEncoder {
         self.device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -146,5 +159,35 @@ impl Gpu {
 
     pub fn wait(&self) {
         self.device.poll(wgpu::MaintainBase::Wait);
+    }
+
+    pub async fn read<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
+        let result = self.device.create_buffer(&BufferDescriptor {
+            label: Some("read.result"),
+            size: buffer.size(),
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut cmd = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        cmd.copy_buffer_to_buffer(buffer, 0, &result, 0, buffer.size());
+        self.queue.submit([cmd.finish()]);
+
+        let (sender, receiver) = channel();
+        result.slice(..).map_async(MapMode::Read, |x| {
+            let _ = sender.send(x);
+        });
+
+        self.device.poll(wgpu::MaintainBase::Wait);
+
+        receiver
+            .await
+            .expect("communication failed")
+            .expect("buffer reading failed");
+
+        let view = result.slice(..).get_mapped_range();
+        return bytemuck::cast_slice(&view).to_owned();
     }
 }

@@ -12,6 +12,7 @@ rfd = "0.15"
 flate2 = "1.0"
 bytemuck = { version = "1.18", features = ["derive", "min_const_generics"] }
 glam = { version = "0.29", features = ["bytemuck"] }
+futures = "0.3"
 pollster = "0.3"
 itertools = "0.13"
 log = "0.4"

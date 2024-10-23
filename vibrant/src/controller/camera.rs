@@ -20,7 +20,7 @@ impl Camera {
         Self {
             yaw: 0.0,
             pitch: 0.0,
-            distance: 1.0,
+            distance: 0.75,
             pan: Vec3::ZERO,
             fov: PI / 4.0,
             near: 0.01,

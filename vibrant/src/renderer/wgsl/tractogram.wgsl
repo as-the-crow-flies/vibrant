@@ -8,13 +8,13 @@ struct Vertex {
 @group(0) @binding(0) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
 @group(0) @binding(1) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
+@group(0) @binding(3) var<storage, read_write> TRACTOGRAM_INDICES: array<u32>;
 
-@group(1) @binding(0) var DENSITY: texture_3d<f32>;
-@group(1) @binding(1) var SAMPLER: sampler;
+@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(2) @binding(0) var<storage, read_write> VISIBILITY: array<array<atomic<u32>, SURFACE_X>, SURFACE_Y>;
 
-@group(3) @binding(0) var<storage, read_write> VISIBILITY: array<array<atomic<u32>, SURFACE_X>, SURFACE_Y>;
+@group(3) @binding(0) var<storage, read_write> INDIRECT: atomic<u32>;
 
 const U32_MAX: u32 = 4294967295;
 const U16_MAX: u32 = 65535;
@@ -28,7 +28,9 @@ fn clear(@builtin(global_invocation_id) id: vec3<u32>) {
 
 @compute
 @workgroup_size(WORKGROUP_X)
-fn rasterize(@builtin(global_invocation_id) id: vec3<u32>) {
+fn cull(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= arrayLength(&TRACTOGRAM_VERTICES)) { return; }
+
     let start_vertex = get_vertex(id.x);
     let end_vertex = get_vertex(id.x + 1);
 
@@ -36,19 +38,46 @@ fn rasterize(@builtin(global_invocation_id) id: vec3<u32>) {
 
     let start_vertex_world_space = TRACTOGRAM_TO_WORLD * start_vertex;
     let end_vertex_world_space = TRACTOGRAM_TO_WORLD * end_vertex;
+
+    let start = transform(start_vertex_world_space);
+    let end = transform(end_vertex_world_space);
+
+    let delta = end - start;
+
+    let bounds_min = vec3<f32>(0.0);
+    let bounds_max = vec3<f32>(f32(SURFACE_X), f32(SURFACE_Y), 1.0);
+
+    if (
+        all(start >= bounds_min) &&
+        all(end >= bounds_min) &&
+        all(start < bounds_max) &&
+        all(end < bounds_max))
+    {
+        TRACTOGRAM_INDICES[atomicAdd(&INDIRECT, 1u)] = id.x;
+    }
+}
+
+@compute
+@workgroup_size(1)
+fn set_dispatch_count() {
+    atomicStore(&INDIRECT, div_ceil(atomicLoad(&INDIRECT), WORKGROUP_X));
+}
+
+@compute
+@workgroup_size(WORKGROUP_X)
+fn rasterize(@builtin(global_invocation_id) id: vec3<u32>) {
+    let index = TRACTOGRAM_INDICES[id.x];
+    let start_vertex = get_vertex(index);
+    let end_vertex = get_vertex(index + 1u);
+
+    let start_vertex_world_space = TRACTOGRAM_TO_WORLD * start_vertex;
+    let end_vertex_world_space = TRACTOGRAM_TO_WORLD * end_vertex;
+
     let tangent_world_space = abs(normalize(end_vertex_world_space - start_vertex_world_space));
     let tangent_world_space_bits = pack4x8unorm(vec4<f32>(tangent_world_space.x, tangent_world_space.y, 0.0, 0.0));
 
     let start = transform(start_vertex_world_space);
     let end = transform(end_vertex_world_space);
-
-    if (
-        start.x < 0.0 | start.x >= f32(SURFACE_X) |
-        start.y < 0.0 | start.y >= f32(SURFACE_Y) |
-        start.z < 0.0 | start.z >= 1.0
-    ) {
-        return;
-    }
 
     let delta = end - start;
 
@@ -89,4 +118,8 @@ fn transform(vertex: vec4<f32>) -> vec3<f32> {
     let v = ENVIRONMENT.camera.projection * vertex;
     let vt = v.xyz / v.w * 0.5 + 0.5;
     return vec3<f32>(vt.x * f32(SURFACE_X), (1.0 - vt.y) * f32(SURFACE_Y), vt.z);
+}
+
+fn div_ceil(a: u32, b: u32) -> u32 {
+    return (a + b - 1u) / b;
 }

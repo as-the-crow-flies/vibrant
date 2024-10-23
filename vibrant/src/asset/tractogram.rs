@@ -5,7 +5,8 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferUsages, ShaderStages, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
+    BufferDescriptor, BufferUsages, ShaderStages, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexStepMode,
 };
 
 use crate::{gpu::Gpu, loader};
@@ -100,6 +101,16 @@ impl Tractogram {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -123,6 +134,13 @@ impl Tractogram {
             label,
             contents: bytemuck::cast_slice(tractogram.vertices()),
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
+        });
+
+        let indices = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 4 * tractogram.vertices().len().next_multiple_of(256) as u64,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
         });
 
         let scale = tractogram.bounds().scale();
@@ -191,6 +209,14 @@ impl Tractogram {
                     binding: 2,
                     resource: BindingResource::Buffer(BufferBinding {
                         buffer: &vertices,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &indices,
                         offset: 0,
                         size: None,
                     }),

@@ -1,5 +1,9 @@
 pub mod constants;
 pub mod environment;
+pub mod filter;
+pub mod indirect;
+pub mod scan;
+pub mod setting;
 pub mod tractogram;
 pub mod tractogram_baseline;
 pub mod tractogram_density;
@@ -111,17 +115,10 @@ impl Renderer {
         let mut cmd = self.gpu.cmd();
 
         if let Some(tractogram) = &self.asset.tractogram {
-            self.tractogram_density.render(
-                &mut cmd,
-                &self.environment,
-                tractogram,
-                &self.asset.density,
-            );
-
             match controller.settings().renderer {
                 crate::controller::settings::Renderer::Baseline => {
                     self.tractogram_baseline
-                        .render(&mut cmd, &self.environment, frame, tractogram)
+                        .render(&mut cmd, &self.environment, frame, tractogram);
                 }
                 crate::controller::settings::Renderer::Compute => {
                     self.tractogram_compute_renderer.render(
@@ -129,16 +126,23 @@ impl Renderer {
                         &self.environment,
                         &frame,
                         tractogram,
-                        &self.asset.density,
-                    )
+                    );
                 }
-                crate::controller::settings::Renderer::Regular => self.tractogram_render.render(
-                    &mut cmd,
-                    &self.environment,
-                    &frame,
-                    tractogram,
-                    &self.asset.density,
-                ),
+                crate::controller::settings::Renderer::Regular => {
+                    self.tractogram_density.render(
+                        &mut cmd,
+                        &self.environment,
+                        tractogram,
+                        &self.asset.density,
+                    );
+                    self.tractogram_render.render(
+                        &mut cmd,
+                        &self.environment,
+                        &frame,
+                        tractogram,
+                        &self.asset.density,
+                    );
+                }
             };
         }
 
