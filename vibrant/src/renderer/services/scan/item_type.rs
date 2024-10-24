@@ -1,4 +1,4 @@
-use crate::renderer::setting::Setting;
+use crate::renderer::services::setting::Setting;
 
 #[derive(Clone, Copy)]
 pub enum ItemType {

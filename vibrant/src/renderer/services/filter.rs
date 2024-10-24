@@ -83,10 +83,8 @@ mod test {
         BufferUsages,
     };
 
-    use crate::{
-        gpu::Gpu,
-        renderer::filter::{Filter, FilterDescriptor},
-    };
+    use super::{Filter, FilterDescriptor};
+    use crate::gpu::Gpu;
 
     #[test]
     fn filter_allocates_unique_index_for_every_item() {

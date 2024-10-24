@@ -1,25 +1,18 @@
 pub mod constants;
 pub mod environment;
-pub mod filter;
-pub mod indirect;
-pub mod scan;
-pub mod setting;
+pub mod services;
 pub mod tractogram;
-pub mod tractogram_baseline;
-pub mod tractogram_density;
-pub mod tractogram_render;
 pub mod ui;
-pub mod uv;
-pub mod volume_render;
+pub mod volume;
 
 use constants::Constants;
 use environment::Environment;
-use tractogram::TractogramComputeRenderer;
-use tractogram_baseline::BaselineTractogramRenderer;
-use tractogram_density::TractogramDensityRenderer;
-use tractogram_render::TractogramRenderer;
+use tractogram::density::compute::TractogramDensityComputeRenderer;
+use tractogram::full::render::TractogramRenderer;
+use tractogram::line::compute::TractogramLineComputeRenderer;
+use tractogram::line::render::TractogramLineRenderRenderer;
 use ui::UiRenderer;
-use volume_render::VolumeRenderer;
+use volume::compute::VolumeRenderer;
 use wgpu::SurfaceTarget;
 
 use crate::{
@@ -37,10 +30,10 @@ pub struct Renderer {
     asset: Asset,
 
     environment: Environment,
-    tractogram_density: TractogramDensityRenderer,
-    tractogram_baseline: BaselineTractogramRenderer,
+    tractogram_density: TractogramDensityComputeRenderer,
+    tractogram_baseline: TractogramLineRenderRenderer,
     tractogram_render: TractogramRenderer,
-    tractogram_compute_renderer: TractogramComputeRenderer,
+    tractogram_compute_renderer: TractogramLineComputeRenderer,
     volume_render: VolumeRenderer,
     ui: UiRenderer,
 }
@@ -60,10 +53,10 @@ impl Renderer {
         Self {
             surface: None,
 
-            tractogram_density: TractogramDensityRenderer::new(&gpu, &constants),
-            tractogram_baseline: BaselineTractogramRenderer::new(&gpu),
+            tractogram_density: TractogramDensityComputeRenderer::new(&gpu, &constants),
+            tractogram_baseline: TractogramLineRenderRenderer::new(&gpu),
             tractogram_render: TractogramRenderer::new(&gpu, &constants),
-            tractogram_compute_renderer: TractogramComputeRenderer::new(&gpu, &constants),
+            tractogram_compute_renderer: TractogramLineComputeRenderer::new(&gpu, &constants),
             volume_render: VolumeRenderer::new(&gpu),
             ui: UiRenderer::new(&gpu),
 
@@ -87,10 +80,10 @@ impl Renderer {
 
         self.constants = Constants::new(&self.gpu, (width, height), self.asset.density.size());
 
-        self.tractogram_density = TractogramDensityRenderer::new(&self.gpu, &self.constants);
+        self.tractogram_density = TractogramDensityComputeRenderer::new(&self.gpu, &self.constants);
         self.tractogram_render = TractogramRenderer::new(&self.gpu, &self.constants);
         self.tractogram_compute_renderer =
-            TractogramComputeRenderer::new(&self.gpu, &self.constants);
+            TractogramLineComputeRenderer::new(&self.gpu, &self.constants);
     }
 
     pub fn render(

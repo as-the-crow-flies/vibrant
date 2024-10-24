@@ -1,8 +1,7 @@
 use wgpu::*;
 
-use crate::gpu::Gpu;
-
-use super::{super::setting::Setting, filter_binding::FilterBinding};
+use super::filter_binding::FilterBinding;
+use crate::{gpu::Gpu, renderer::services::setting::Setting};
 
 pub struct FilterPipelineDescriptor {
     pub workgroup_size: u32,

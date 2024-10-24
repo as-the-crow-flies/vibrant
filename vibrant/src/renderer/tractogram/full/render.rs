@@ -10,10 +10,9 @@ use wgpu::{
 use crate::{
     asset::{density::Density, tractogram::Tractogram},
     gpu::Gpu,
+    renderer::{constants::Constants, environment::Environment},
     surface::{Frame, Surface},
 };
-
-use super::{constants::Constants, environment::Environment};
 
 pub struct TractogramRenderer {
     geometry: RenderPipeline,
@@ -25,12 +24,12 @@ impl TractogramRenderer {
         let label = Some(type_name::<Self>());
 
         let geometry_module = gpu.shader(
-            &(Environment::wgsl() + include_str!("wgsl/tractogram_render_geometry.wgsl")),
+            &(Environment::wgsl() + include_str!("geometry.wgsl")),
             Some(constants),
         );
 
         let shading_module = gpu.shader(
-            &(Environment::wgsl() + include_str!("wgsl/tractogram_render_shading.wgsl")),
+            &(Environment::wgsl() + include_str!("shading.wgsl")),
             Some(constants),
         );
 

@@ -5,11 +5,10 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 use crate::{
     asset::{density::Density, tractogram::Tractogram},
     gpu::Gpu,
+    renderer::{constants::Constants, environment::Environment},
 };
 
-use super::{constants::Constants, environment::Environment};
-
-pub struct TractogramDensityRenderer {
+pub struct TractogramDensityComputeRenderer {
     constants: Constants,
     clear_pipeline: ComputePipeline,
     rasterize_pipeline: ComputePipeline,
@@ -17,7 +16,7 @@ pub struct TractogramDensityRenderer {
     mipmap_pipeline: ComputePipeline,
 }
 
-impl TractogramDensityRenderer {
+impl TractogramDensityComputeRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -30,10 +29,7 @@ impl TractogramDensityRenderer {
                         bind_group_layouts: &[&Density::layout_compute(gpu)],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(
-                    include_str!("wgsl/tractogram_density_clear.wgsl"),
-                    Some(constants),
-                ),
+                &gpu.shader(include_str!("clear.wgsl"), Some(constants)),
                 "main",
             ),
             rasterize_pipeline: gpu.compute(
@@ -48,7 +44,7 @@ impl TractogramDensityRenderer {
                         push_constant_ranges: &[],
                     }),
                 &gpu.shader(
-                    &(Environment::wgsl() + include_str!("wgsl/tractogram_density_rasterize.wgsl")),
+                    &(Environment::wgsl() + include_str!("rasterize.wgsl")),
                     Some(constants),
                 ),
                 "main",
@@ -60,10 +56,7 @@ impl TractogramDensityRenderer {
                         bind_group_layouts: &[&Density::layout_copy(gpu)],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(
-                    include_str!("wgsl/tractogram_density_copy.wgsl"),
-                    Some(constants),
-                ),
+                &gpu.shader(include_str!("copy.wgsl"), Some(constants)),
                 "main",
             ),
             mipmap_pipeline: gpu.compute(
@@ -73,10 +66,7 @@ impl TractogramDensityRenderer {
                         bind_group_layouts: &[&Density::layout_mipmap(gpu)],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(
-                    include_str!("wgsl/tractogram_density_mipmap.wgsl"),
-                    Some(constants),
-                ),
+                &gpu.shader(include_str!("mipmap.wgsl"), Some(constants)),
                 "main",
             ),
         }

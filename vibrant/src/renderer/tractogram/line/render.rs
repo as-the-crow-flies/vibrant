@@ -10,23 +10,19 @@ use wgpu::{
 use crate::{
     asset::tractogram::Tractogram,
     gpu::Gpu,
+    renderer::environment::Environment,
     surface::{Frame, Surface},
 };
 
-use super::environment::Environment;
-
-pub struct BaselineTractogramRenderer {
+pub struct TractogramLineRenderRenderer {
     pipeline: RenderPipeline,
 }
 
-impl BaselineTractogramRenderer {
+impl TractogramLineRenderRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let module = gpu.shader(
-            &(Environment::wgsl() + include_str!("wgsl/tractogram_baseline.wgsl")),
-            None,
-        );
+        let module = gpu.shader(&(Environment::wgsl() + include_str!("render.wgsl")), None);
 
         let pipeline_layout = gpu
             .device()

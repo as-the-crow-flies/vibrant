@@ -1,8 +1,7 @@
 use wgpu::*;
 
-use crate::gpu::Gpu;
-
 use super::{super::setting::Setting, item_type::ItemType, scan_binding::ScanBinding};
+use crate::gpu::Gpu;
 
 pub struct ApplyPipelineDescriptor {
     pub workgroup_size: u32,

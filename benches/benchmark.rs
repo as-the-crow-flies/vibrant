@@ -8,12 +8,12 @@ use vibrant::{
     renderer::{
         constants::Constants,
         environment::Environment,
-        filter::{Filter, FilterDescriptor},
-        scan::{ItemType, Scan, ScanDescriptor},
-        tractogram::TractogramComputeRenderer,
-        tractogram_baseline::BaselineTractogramRenderer,
-        tractogram_density::TractogramDensityRenderer,
-        tractogram_render::TractogramRenderer,
+        services::filter::{Filter, FilterDescriptor},
+        services::scan::{ItemType, Scan, ScanDescriptor},
+        tractogram::density::compute::TractogramDensityComputeRenderer,
+        tractogram::full::render::TractogramRenderer,
+        tractogram::line::compute::TractogramLineComputeRenderer,
+        tractogram::line::render::TractogramLineRenderRenderer,
     },
     surface::Frame,
     Vec2,
@@ -44,7 +44,7 @@ pub fn baseline(criterion: &mut Criterion) {
 
     let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file(TRACTOGRAM_PATH));
 
-    let renderer = BaselineTractogramRenderer::new(&gpu);
+    let renderer = TractogramLineRenderRenderer::new(&gpu);
 
     criterion.bench_function(stringify!(baseline), |bencher| {
         bencher.iter(|| {
@@ -67,7 +67,7 @@ pub fn compute(criterion: &mut Criterion) {
     let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file(TRACTOGRAM_PATH));
 
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), 9);
-    let renderer = TractogramComputeRenderer::new(&gpu, &constants);
+    let renderer = TractogramLineComputeRenderer::new(&gpu, &constants);
 
     criterion.bench_function(stringify!(compute), |bencher| {
         bencher.iter(|| {
@@ -92,7 +92,7 @@ pub fn density(criterion: &mut Criterion) {
     let density = Density::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
 
-    let renderer = TractogramDensityRenderer::new(&gpu, &constants);
+    let renderer = TractogramDensityComputeRenderer::new(&gpu, &constants);
 
     criterion.bench_function(stringify!(density), |bencher| {
         bencher.iter(|| {
@@ -118,7 +118,7 @@ pub fn render(criterion: &mut Criterion) {
 
     {
         let mut cmd = gpu.cmd();
-        TractogramDensityRenderer::new(&gpu, &constants).render(
+        TractogramDensityComputeRenderer::new(&gpu, &constants).render(
             &mut cmd,
             &environment,
             &tractogram,

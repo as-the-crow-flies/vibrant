@@ -6,12 +6,12 @@ use wgpu::{
     RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
 };
 
-use crate::asset::Volume;
-use crate::surface::{Frame, Surface};
-
-use crate::gpu::Gpu;
-
-use super::environment::Environment;
+use crate::{
+    asset::Volume,
+    gpu::Gpu,
+    renderer::environment::Environment,
+    surface::{Frame, Surface},
+};
 
 pub struct VolumeRenderer {
     pipeline: RenderPipeline,
@@ -20,10 +20,7 @@ pub struct VolumeRenderer {
 impl VolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
-        let module = gpu.shader(
-            &(Environment::wgsl() + include_str!("wgsl/volume_render.wgsl")),
-            None,
-        );
+        let module = gpu.shader(&(Environment::wgsl() + include_str!("compute.wgsl")), None);
 
         Self {
             pipeline: gpu
