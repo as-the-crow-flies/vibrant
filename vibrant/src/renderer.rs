@@ -5,12 +5,9 @@ pub mod tractogram;
 pub mod ui;
 pub mod volume;
 
+use crate::renderer::tractogram::TractogramRenderer;
 use constants::Constants;
 use environment::Environment;
-use tractogram::density::compute::TractogramDensityComputeRenderer;
-use tractogram::full::render::TractogramRenderer;
-use tractogram::line::compute::TractogramLineComputeRenderer;
-use tractogram::line::render::TractogramLineRenderRenderer;
 use ui::UiRenderer;
 use volume::compute::VolumeRenderer;
 use wgpu::SurfaceTarget;
@@ -30,10 +27,7 @@ pub struct Renderer {
     asset: Asset,
 
     environment: Environment,
-    tractogram_density: TractogramDensityComputeRenderer,
-    tractogram_baseline: TractogramLineRenderRenderer,
-    tractogram_render: TractogramRenderer,
-    tractogram_compute_renderer: TractogramLineComputeRenderer,
+    tractogram: TractogramRenderer,
     volume_render: VolumeRenderer,
     ui: UiRenderer,
 }
@@ -53,10 +47,7 @@ impl Renderer {
         Self {
             surface: None,
 
-            tractogram_density: TractogramDensityComputeRenderer::new(&gpu, &constants),
-            tractogram_baseline: TractogramLineRenderRenderer::new(&gpu),
-            tractogram_render: TractogramRenderer::new(&gpu, &constants),
-            tractogram_compute_renderer: TractogramLineComputeRenderer::new(&gpu, &constants),
+            tractogram: TractogramRenderer::new(&gpu, &constants),
             volume_render: VolumeRenderer::new(&gpu),
             ui: UiRenderer::new(&gpu),
 
@@ -79,11 +70,7 @@ impl Renderer {
             .resize(&self.gpu, width, height);
 
         self.constants = Constants::new(&self.gpu, (width, height), self.asset.density.size());
-
-        self.tractogram_density = TractogramDensityComputeRenderer::new(&self.gpu, &self.constants);
-        self.tractogram_render = TractogramRenderer::new(&self.gpu, &self.constants);
-        self.tractogram_compute_renderer =
-            TractogramLineComputeRenderer::new(&self.gpu, &self.constants);
+        self.tractogram = TractogramRenderer::new(&self.gpu, &self.constants)
     }
 
     pub fn render(
@@ -108,35 +95,14 @@ impl Renderer {
         let mut cmd = self.gpu.cmd();
 
         if let Some(tractogram) = &self.asset.tractogram {
-            match controller.settings().renderer {
-                crate::controller::settings::Renderer::Baseline => {
-                    self.tractogram_baseline
-                        .render(&mut cmd, &self.environment, frame, tractogram);
-                }
-                crate::controller::settings::Renderer::Compute => {
-                    self.tractogram_compute_renderer.render(
-                        &mut cmd,
-                        &self.environment,
-                        &frame,
-                        tractogram,
-                    );
-                }
-                crate::controller::settings::Renderer::Regular => {
-                    self.tractogram_density.render(
-                        &mut cmd,
-                        &self.environment,
-                        tractogram,
-                        &self.asset.density,
-                    );
-                    self.tractogram_render.render(
-                        &mut cmd,
-                        &self.environment,
-                        &frame,
-                        tractogram,
-                        &self.asset.density,
-                    );
-                }
-            };
+            self.tractogram.render(
+                &mut cmd,
+                &self.environment,
+                frame,
+                tractogram,
+                &self.asset.density,
+                &controller.settings().renderer,
+            );
         }
 
         if let Some(volume) = &self.asset.volume {

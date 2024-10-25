@@ -81,7 +81,7 @@ fn rasterize(@builtin(global_invocation_id) id: vec3<u32>) {
 
     let delta = end - start;
 
-    let max_distance = min(u32(max(abs(delta.x), abs(delta.y))), 100u); // Safety Measure
+    let max_distance = min(u32(max(abs(delta.x), abs(delta.y))), 200u); // Safety Measure
     let step = delta / f32(max_distance);
 
     var sample = start;

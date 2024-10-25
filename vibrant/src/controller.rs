@@ -66,11 +66,20 @@ impl Controller {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.settings.renderer,
-                        Renderer::Baseline,
-                        "Baseline",
+                        Renderer::LineRender,
+                        "LineRender",
                     );
-                    ui.selectable_value(&mut self.settings.renderer, Renderer::Compute, "Compute");
-                    ui.selectable_value(&mut self.settings.renderer, Renderer::Regular, "Regular");
+                    ui.selectable_value(
+                        &mut self.settings.renderer,
+                        Renderer::LineCompute,
+                        "LineCompute",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.renderer,
+                        Renderer::TubeRender,
+                        "TubeRender",
+                    );
+                    ui.selectable_value(&mut self.settings.renderer, Renderer::Full, "Full");
                 });
 
             ui.add(

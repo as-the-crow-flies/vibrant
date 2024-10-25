@@ -1,24 +1,19 @@
 use std::any::type_name;
 
 use wgpu::{
-    CommandEncoder, FragmentState, LoadOp, MultisampleState, Operations,
-    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
+    FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
+    PrimitiveState, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexAttribute,
+    VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
-use crate::{
-    asset::tractogram::Tractogram,
-    gpu::Gpu,
-    renderer::environment::Environment,
-    surface::{Frame, Surface},
-};
+use crate::{asset::Tractogram, gpu::Gpu, renderer::environment::Environment, surface::Surface};
 
-pub struct TractogramLineRenderRenderer {
+pub struct TractogramTubeRenderRenderer {
     pipeline: RenderPipeline,
 }
 
-impl TractogramLineRenderRenderer {
+impl TractogramTubeRenderRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -29,11 +24,32 @@ impl TractogramLineRenderRenderer {
                 .device()
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label,
+                    layout: Some(
+                        &gpu.pipeline_layout(&[
+                            &Tractogram::layout(gpu),
+                            &Environment::layout(gpu),
+                        ]),
+                    ),
                     vertex: VertexState {
                         module: &module,
                         entry_point: "vertex",
-                        buffers: &[Tractogram::vertex_buffer_layout()],
-                        compilation_options: PipelineCompilationOptions::default(),
+                        buffers: &[VertexBufferLayout {
+                            array_stride: 12,
+                            step_mode: VertexStepMode::Instance,
+                            attributes: &[
+                                VertexAttribute {
+                                    format: VertexFormat::Float32x3,
+                                    offset: 0,
+                                    shader_location: 0,
+                                },
+                                VertexAttribute {
+                                    format: VertexFormat::Float32x3,
+                                    offset: 12,
+                                    shader_location: 1,
+                                },
+                            ],
+                        }],
+                        compilation_options: Default::default(),
                     },
                     fragment: Some(FragmentState {
                         module: &module,
@@ -42,15 +58,9 @@ impl TractogramLineRenderRenderer {
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
-                        topology: PrimitiveTopology::LineStrip,
+                        topology: wgpu::PrimitiveTopology::TriangleStrip,
                         ..Default::default()
                     },
-                    layout: Some(
-                        &gpu.pipeline_layout(&[
-                            &Tractogram::layout(gpu),
-                            &Environment::layout(gpu),
-                        ]),
-                    ),
                     depth_stencil: Some(Surface::depth_target()),
                     multisample: MultisampleState::default(),
                     multiview: None,
@@ -59,11 +69,11 @@ impl TractogramLineRenderRenderer {
         }
     }
 
-    pub fn render(
+    pub(crate) fn render(
         &self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        frame: &Frame,
+        cmd: &mut wgpu::CommandEncoder,
+        env: &Environment,
+        frame: &crate::surface::Frame,
         tractogram: &Tractogram,
     ) {
         let color_attachment = RenderPassColorAttachment {
@@ -94,8 +104,8 @@ impl TractogramLineRenderRenderer {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, tractogram.binding(), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(1, env.binding(), &[]);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw(0..tractogram.count(), 0..1);
+        pass.draw(0..4, 0..tractogram.count() - 1);
     }
 }

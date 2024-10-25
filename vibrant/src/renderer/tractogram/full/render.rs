@@ -14,12 +14,12 @@ use crate::{
     surface::{Frame, Surface},
 };
 
-pub struct TractogramRenderer {
+pub struct TractogramFullRenderer {
     geometry: RenderPipeline,
     shading: RenderPipeline,
 }
 
-impl TractogramRenderer {
+impl TractogramFullRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         let label = Some(type_name::<Self>());
 

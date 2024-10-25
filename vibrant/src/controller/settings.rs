@@ -1,8 +1,9 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Renderer {
-    Baseline,
-    Compute,
-    Regular,
+    LineRender,
+    LineCompute,
+    TubeRender,
+    Full,
 }
 
 pub struct Settings {
@@ -28,7 +29,7 @@ impl Settings {
             step_size: 0.1,
             grad_size: 1.0,
             min_value: 0.0,
-            renderer: Renderer::Regular,
+            renderer: Renderer::Full,
         }
     }
 }

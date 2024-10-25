@@ -11,7 +11,7 @@ use vibrant::{
         services::filter::{Filter, FilterDescriptor},
         services::scan::{ItemType, Scan, ScanDescriptor},
         tractogram::density::compute::TractogramDensityComputeRenderer,
-        tractogram::full::render::TractogramRenderer,
+        tractogram::full::render::TractogramFullRenderer,
         tractogram::line::compute::TractogramLineComputeRenderer,
         tractogram::line::render::TractogramLineRenderRenderer,
     },
@@ -129,7 +129,7 @@ pub fn render(criterion: &mut Criterion) {
         gpu.wait();
     }
 
-    let renderer = TractogramRenderer::new(&gpu, &constants);
+    let renderer = TractogramFullRenderer::new(&gpu, &constants);
 
     criterion.bench_function(stringify!(render), |bencher| {
         bencher.iter(|| {
