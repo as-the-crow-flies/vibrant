@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, f32};
 
 use wgpu::{
     FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
@@ -46,6 +46,11 @@ impl TractogramTubeRenderRenderer {
                                     format: VertexFormat::Float32x3,
                                     offset: 12,
                                     shader_location: 1,
+                                },
+                                VertexAttribute {
+                                    format: VertexFormat::Float32x3,
+                                    offset: 24,
+                                    shader_location: 2,
                                 },
                             ],
                         }],
@@ -106,6 +111,6 @@ impl TractogramTubeRenderRenderer {
         pass.set_bind_group(0, tractogram.binding(), &[]);
         pass.set_bind_group(1, env.binding(), &[]);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw(0..4, 0..tractogram.count() - 1);
+        pass.draw(0..4, 0..tractogram.count() - 2);
     }
 }
