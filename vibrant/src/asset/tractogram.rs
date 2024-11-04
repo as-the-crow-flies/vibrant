@@ -13,9 +13,7 @@ use crate::{gpu::Gpu, loader};
 
 pub struct Tractogram {
     vertices: Buffer,
-    world_to_tractogram: Buffer,
-    tractogram_to_world: Buffer,
-
+    caps: Buffer,
     binding: BindGroup,
     binding_full: BindGroup,
 }
@@ -23,6 +21,10 @@ pub struct Tractogram {
 impl Tractogram {
     pub fn vertices(&self) -> &Buffer {
         &self.vertices
+    }
+
+    pub fn caps(&self) -> &Buffer {
+        &self.caps
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -33,36 +35,28 @@ impl Tractogram {
         &self.binding_full
     }
 
-    pub fn count(&self) -> u32 {
+    pub fn vertex_count(&self) -> u32 {
         (self.vertices.size() / 12) as u32
+    }
+
+    pub fn cap_count(&self) -> u32 {
+        (self.caps.size() / 24) as u32
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::all(),
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
+                    count: None,
+                }],
             })
     }
 
@@ -85,16 +79,6 @@ impl Tractogram {
                         binding: 1,
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
                             min_binding_size: None,
@@ -102,7 +86,7 @@ impl Tractogram {
                         count: None,
                     },
                     BindGroupLayoutEntry {
-                        binding: 3,
+                        binding: 2,
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: false },
@@ -136,6 +120,12 @@ impl Tractogram {
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
         });
 
+        let caps = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(tractogram.caps()),
+            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
+        });
+
         let indices = gpu.device().create_buffer(&BufferDescriptor {
             label,
             size: 4 * tractogram.vertices().len().next_multiple_of(256) as u64,
@@ -150,12 +140,6 @@ impl Tractogram {
             Vec3::ZERO,
         );
 
-        let world_to_tractogram = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::bytes_of(&transform),
-            usage: BufferUsages::UNIFORM,
-        });
-
         let tractogram_to_world = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::bytes_of(&transform.inverse()),
@@ -165,24 +149,14 @@ impl Tractogram {
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &world_to_tractogram,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &tractogram_to_world,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-            ],
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &tractogram_to_world,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
         });
 
         let binding_full = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -192,7 +166,7 @@ impl Tractogram {
                 BindGroupEntry {
                     binding: 0,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &world_to_tractogram,
+                        buffer: &tractogram_to_world,
                         offset: 0,
                         size: None,
                     }),
@@ -200,21 +174,13 @@ impl Tractogram {
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &tractogram_to_world,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::Buffer(BufferBinding {
                         buffer: &vertices,
                         offset: 0,
                         size: None,
                     }),
                 },
                 BindGroupEntry {
-                    binding: 3,
+                    binding: 2,
                     resource: BindingResource::Buffer(BufferBinding {
                         buffer: &indices,
                         offset: 0,
@@ -226,8 +192,7 @@ impl Tractogram {
 
         Self {
             vertices,
-            world_to_tractogram,
-            tractogram_to_world,
+            caps,
             binding,
             binding_full,
         }

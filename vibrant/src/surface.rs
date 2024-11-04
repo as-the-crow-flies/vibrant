@@ -3,9 +3,10 @@ use std::{any::type_name, mem::replace};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferDescriptor,
-    BufferUsages, ColorTargetState, ColorWrites, CompareFunction, CompositeAlphaMode,
-    DepthBiasState, DepthStencilState, Extent3d, PresentMode, ShaderStages, StencilState,
-    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, Texture, TextureDescriptor,
+    BufferUsages, Color, ColorTargetState, ColorWrites, CompareFunction, CompositeAlphaMode,
+    DepthBiasState, DepthStencilState, Extent3d, LoadOp, Operations, PresentMode,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, ShaderStages, StencilState,
+    StoreOp, SurfaceConfiguration, SurfaceTarget, SurfaceTexture, Texture, TextureDescriptor,
     TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureView,
     TextureViewDescriptor, TextureViewDimension,
 };
@@ -18,6 +19,7 @@ pub struct Surface {
     depth: Texture,
     position: Texture,
     normal: Texture,
+    tangent: Texture,
 }
 
 impl Surface {
@@ -43,6 +45,7 @@ impl Surface {
             depth: Self::create_depth_texture(gpu, width, height),
             position: Self::create_position_texture(gpu, width, height),
             normal: Self::create_normal_texture(gpu, width, height),
+            tangent: Self::create_normal_texture(gpu, width, height),
         }
     }
 
@@ -73,6 +76,12 @@ impl Surface {
             Self::create_normal_texture(gpu, width, height),
         )
         .destroy();
+
+        replace(
+            &mut self.tangent,
+            Self::create_normal_texture(gpu, width, height),
+        )
+        .destroy();
     }
 
     pub fn surface_frame(&self, gpu: &Gpu) -> SurfaceFrame {
@@ -89,6 +98,7 @@ impl Surface {
                 &self.visibility,
                 &self.position,
                 &self.normal,
+                &self.tangent,
             ),
             surface_texture,
         }
@@ -136,6 +146,14 @@ impl Surface {
         }
     }
 
+    pub fn tangent_target() -> ColorTargetState {
+        ColorTargetState {
+            format: Surface::NORMAL_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        }
+    }
+
     pub fn visibility(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -170,6 +188,16 @@ impl Surface {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: ShaderStages::all(),
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
                         visibility: ShaderStages::all(),
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Float { filterable: false },
@@ -296,6 +324,7 @@ pub struct Frame {
     depth: TextureView,
     position: TextureView,
     normal: TextureView,
+    tangent: TextureView,
     visibility: BindGroup,
     gbuffer: BindGroup,
 }
@@ -308,6 +337,7 @@ impl Frame {
         visibility: &Buffer,
         position: &Texture,
         normal: &Texture,
+        tangent: &Texture,
     ) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -335,6 +365,11 @@ impl Frame {
                 ..Default::default()
             }),
             normal: normal.create_view(&TextureViewDescriptor {
+                label,
+                format: Some(Surface::NORMAL_FORMAT),
+                ..Default::default()
+            }),
+            tangent: tangent.create_view(&TextureViewDescriptor {
                 label,
                 format: Some(Surface::NORMAL_FORMAT),
                 ..Default::default()
@@ -375,6 +410,16 @@ impl Frame {
                             },
                         )),
                     },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: BindingResource::TextureView(&tangent.create_view(
+                            &TextureViewDescriptor {
+                                label,
+                                format: Some(Surface::NORMAL_FORMAT),
+                                ..Default::default()
+                            },
+                        )),
+                    },
                 ],
             }),
         }
@@ -386,8 +431,17 @@ impl Frame {
         let visibility = Surface::create_visibility_buffer(gpu, width, height);
         let position = Surface::create_position_texture(gpu, width, height);
         let normal = Surface::create_normal_texture(gpu, width, height);
+        let tangent = Surface::create_normal_texture(gpu, width, height);
 
-        Self::new(gpu, &color, &depth, &visibility, &position, &normal)
+        Self::new(
+            gpu,
+            &color,
+            &depth,
+            &visibility,
+            &position,
+            &normal,
+            &tangent,
+        )
     }
 
     pub fn width(&self) -> u32 {
@@ -418,11 +472,55 @@ impl Frame {
         &self.normal
     }
 
+    pub fn tangent(&self) -> &TextureView {
+        &self.tangent
+    }
+
     pub fn visibility(&self) -> &BindGroup {
         &self.visibility
     }
 
     pub fn gbuffer(&self) -> &BindGroup {
         &self.gbuffer
+    }
+
+    pub fn gbuffer_attachment<'a>(&'a self) -> Vec<Option<RenderPassColorAttachment<'a>>> {
+        vec![
+            Some(RenderPassColorAttachment {
+                view: self.position(),
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::TRANSPARENT),
+                    store: StoreOp::Store,
+                },
+            }),
+            Some(RenderPassColorAttachment {
+                view: self.normal(),
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::TRANSPARENT),
+                    store: StoreOp::Store,
+                },
+            }),
+            Some(RenderPassColorAttachment {
+                view: self.tangent(),
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::TRANSPARENT),
+                    store: StoreOp::Store,
+                },
+            }),
+        ]
+    }
+
+    pub fn depth_attachment(&self) -> RenderPassDepthStencilAttachment {
+        RenderPassDepthStencilAttachment {
+            view: self.depth(),
+            depth_ops: Some(Operations {
+                load: LoadOp::Clear(1.0),
+                store: StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }
     }
 }

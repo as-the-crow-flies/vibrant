@@ -102,6 +102,7 @@ impl Renderer {
                 tractogram,
                 &self.asset.density,
                 &controller.settings().renderer,
+                &controller.settings().shader,
             );
         }
 

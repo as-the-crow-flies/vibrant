@@ -8,7 +8,7 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{Renderer, Settings};
+use settings::{Renderer, Settings, Shader};
 use state::ControllerState;
 
 use crate::loader::AssetLoader;
@@ -71,15 +71,24 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.renderer,
-                        Renderer::LineCompute,
-                        "LineCompute",
+                        Renderer::TubeImpostor,
+                        "TubeImpostor",
                     );
                     ui.selectable_value(
                         &mut self.settings.renderer,
-                        Renderer::TubeRender,
-                        "TubeRender",
+                        Renderer::TubeRaycast,
+                        "TubeRaycast",
                     );
-                    ui.selectable_value(&mut self.settings.renderer, Renderer::Full, "Full");
+                });
+
+            ComboBox::from_label("Shader")
+                .selected_text(format!("{:?}", self.settings.shader))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.settings.shader,
+                        Shader::AmbientOcclusion,
+                        "AmbientOcclusion",
+                    );
                 });
 
             ui.add(

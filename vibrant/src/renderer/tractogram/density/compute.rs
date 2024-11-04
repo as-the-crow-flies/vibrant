@@ -90,7 +90,9 @@ impl TractogramDensityComputeRenderer {
         let mut size = self.constants.num_workgroups_volume();
         pass.dispatch_workgroups(size, size, size);
 
-        let count = tractogram.count().div_ceil(self.constants.workgroup_x);
+        let count = tractogram
+            .vertex_count()
+            .div_ceil(self.constants.workgroup_x);
         pass.set_pipeline(&self.rasterize_pipeline);
         pass.dispatch_workgroups(count, 1, 1);
 

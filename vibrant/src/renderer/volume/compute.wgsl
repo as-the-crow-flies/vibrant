@@ -68,13 +68,6 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
             0.0
         )).xyz;
 
-        // let gradient = (TRANSFORM_INVERSE * -(vec4<f32>(
-        //     volume(sample - 2.0 * x) - 8.0 * volume(sample - x) + 8.0 * volume(sample + x) - volume(sample + 2.0 * x),
-        //     volume(sample - 2.0 * y) - 8.0 * volume(sample - y) + 8.0 * volume(sample + y) - volume(sample + 2.0 * y),
-        //     volume(sample - 2.0 * z) - 8.0 * volume(sample - z) + 8.0 * volume(sample + z) - volume(sample + 2.0 * z),
-        //     0.0
-        // ) / 12.0)).xyz;
-
         let gradient_magnitude = length(gradient);
         let normal = gradient / max(1.0, gradient_magnitude);
 

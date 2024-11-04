@@ -1,8 +1,7 @@
 use glam::Vec3;
-use itertools::Itertools;
-use std::{collections::HashMap, fs, io::BufRead};
+use std::{collections::HashMap, fs, io::BufRead, iter};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Bounds {
     pub min: Vec3,
     pub max: Vec3,
@@ -12,9 +11,7 @@ impl Bounds {
     pub fn scale(&self) -> f32 {
         2.0 * self.min.abs().max_element().max(self.max.max_element())
     }
-}
 
-impl Bounds {
     pub fn from_vertices(vertices: &[Vec3]) -> Bounds {
         vertices.iter().filter(|&vertex| vertex.is_finite()).fold(
             Bounds {
@@ -29,15 +26,29 @@ impl Bounds {
     }
 }
 
+impl Default for Bounds {
+    fn default() -> Self {
+        Bounds {
+            min: Vec3::MAX,
+            max: Vec3::MIN,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Tck {
     vertices: Vec<Vec3>,
+    caps: Vec<Vec3>,
     bounds: Bounds,
 }
 
 impl Tck {
     pub fn vertices(&self) -> &[Vec3] {
         &self.vertices
+    }
+
+    pub fn caps(&self) -> &[Vec3] {
+        &self.caps
     }
 
     pub fn bounds(&self) -> &Bounds {
@@ -70,26 +81,40 @@ impl Tck {
 
         let bounds = Bounds::from_vertices(&vertices);
 
-        Tck { vertices, bounds }
+        let cap_indices: Vec<usize> = [0, 1]
+            .into_iter()
+            .chain(
+                vertices
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, vertex)| vertex.is_nan().then_some(index))
+                    .map(|index| [index - 1, index - 2, index + 1, index + 2])
+                    .flatten(),
+            )
+            .collect();
+
+        let caps = cap_indices
+            .iter()
+            .take(cap_indices.len() - 2)
+            .map(|&index| vertices[index])
+            .collect();
+
+        Tck {
+            vertices,
+            caps,
+            bounds,
+        }
     }
 
-    pub fn join(tractograms: Vec<Tck>) -> Tck {
-        Tck {
-            bounds: tractograms.iter().fold(
-                Bounds {
-                    min: Vec3::MAX,
-                    max: Vec3::MIN,
-                },
-                |bounds, tractogram| Bounds {
-                    min: bounds.min.min(tractogram.bounds.min),
-                    max: bounds.max.max(tractogram.bounds.max),
-                },
-            ),
-            vertices: tractograms
-                .into_iter()
-                .map(|tractogram| tractogram.vertices)
-                .concat(),
-        }
+    pub fn join(tcks: Vec<Tck>) -> Tck {
+        tcks.into_iter().fold(Tck::default(), |x, y| Tck {
+            caps: [x.caps, y.caps].concat(),
+            vertices: [x.vertices, y.vertices].concat(),
+            bounds: Bounds {
+                min: y.bounds.min.min(x.bounds.min),
+                max: y.bounds.max.max(x.bounds.max),
+            },
+        })
     }
 
     pub fn from_file(path: &str) -> Tck {

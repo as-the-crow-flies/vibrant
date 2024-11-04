@@ -1,5 +1,6 @@
 @group(0) @binding(0) var POSITION: texture_2d<f32>;
-@group(0) @binding(1) var TANGENT: texture_2d<f32>;
+@group(0) @binding(1) var NORMAL: texture_2d<f32>;
+@group(0) @binding(2) var TANGENT: texture_2d<f32>;
 
 @group(1) @binding(0) var DENSITY: texture_3d<f32>;
 @group(1) @binding(1) var SAMPLER: sampler;
@@ -10,8 +11,7 @@ const PI: f32 = 3.1415926535897932;
 const PHI = 1.6180339887498948482045868;
 
 @vertex
-fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32>
-{
+fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
     return vec4<f32>(2.0 * vec2<f32>(f32((index & 1) == 0), f32((index & 2) == 0)) - 1.0, 0.0, 1.0);
 }
 
@@ -21,14 +21,22 @@ fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
     let light = ENVIRONMENT.light;
 
     let position = textureLoad(POSITION, vec2<u32>(uv.xy), 0);
+    let normal = textureLoad(NORMAL, vec2<u32>(uv.xy), 0);
     let tangent = textureLoad(TANGENT, vec2<u32>(uv.xy), 0).xyz * 2.0 - 1.0;
 
     if (position.w == 0.0) { discard; }
 
     let view = normalize(camera - position.xyz);
 
-    // return vec4<f32>(vec3<f32>(textureSampleLevel(DENSITY, SAMPLER, position + 0.5, 0.0).x), 1.0);
-    return vec4<f32>(stalling(position.xyz, tangent, view, light), 1.0);
+    if (normal.w == 0.0) {
+        return vec4<f32>(stalling(position.xyz, tangent, view, light), 1.0);
+    }
+    else
+    {
+        let lambert = max(0.0, dot(normal.xyz, light));
+        let lighting = ambient(position.xyz) + direct(position.xyz, light) * lambert;
+        return vec4<f32>(vec3<f32>(lighting), 1.0);
+    }
 }
 
 // Stalling et al. 1997 - Fast Display of Illuminated Field Lines
@@ -69,12 +77,7 @@ fn ambient(position: vec3<f32>) -> f32 {
     var total_occlusion = 0.0;
 
     for (var i = 0.0; i < N_SAMPLES; i += 1.0) {
-
-        // Fibonacci Sphere Sampling Pattern
-        let y = i / (N_SAMPLES - 1.0) * 2.0;
-        let radius = sqrt(1.0 - y * y);
-        let theta = PHI * i;
-        let direction = vec3<f32>(cos(theta), y, sin(theta));
+        let direction = fibonacci_sphere(N_SAMPLES, i);
 
         var occlusion = 0.0;
         var size = 0.0;
@@ -96,4 +99,16 @@ fn ambient(position: vec3<f32>) -> f32 {
 
 fn in_domain(v: vec3<f32>) -> bool {
     return all(v >= vec3<f32>(0.0)) && all(v <= vec3<f32>(1.0));
+}
+
+// Fibonacci Sphere Sampling in WGSL
+fn fibonacci_sphere(n: f32, i: f32) -> vec3<f32> {
+    let theta = 2.0 * PI * i / PHI;
+    let z = 1.0 - (2.0 * i + 1.0) / n;
+    let radius = sqrt(1.0 - z * z);
+
+    let x = radius * cos(theta);
+    let y = radius * sin(theta);
+
+    return vec3<f32>(x, y, z);
 }

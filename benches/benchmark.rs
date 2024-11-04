@@ -136,7 +136,7 @@ pub fn render(criterion: &mut Criterion) {
             let mut cmd = gpu.cmd();
             let frame = Frame::test(&gpu, WIDTH, HEIGHT);
 
-            renderer.render(&mut cmd, &environment, &frame, &tractogram, &density);
+            renderer.render(&mut cmd, &environment, &frame, &density);
 
             gpu.submit(cmd);
             gpu.wait();

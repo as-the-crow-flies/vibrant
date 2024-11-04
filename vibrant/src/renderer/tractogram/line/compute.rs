@@ -88,7 +88,9 @@ impl TractogramLineComputeRenderer {
         pass.set_bind_group(2, frame.visibility(), &[]);
         pass.set_bind_group(3, self.indirect.binding(), &[]);
 
-        let count = tractogram.count().div_ceil(self.constants.workgroup_x);
+        let count = tractogram
+            .vertex_count()
+            .div_ceil(self.constants.workgroup_x);
         pass.set_pipeline(&self.cull);
         pass.dispatch_workgroups(count, 1, 1);
 

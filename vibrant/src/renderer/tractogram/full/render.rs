@@ -1,80 +1,34 @@
 use std::any::type_name;
 
 use wgpu::{
-    Color, CommandEncoder, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
+    Color, CommandEncoder, FragmentState, LoadOp, MultisampleState, Operations,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
+    StoreOp, VertexState,
 };
 
 use crate::{
-    asset::{density::Density, tractogram::Tractogram},
+    asset::density::Density,
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
     surface::{Frame, Surface},
 };
 
 pub struct TractogramFullRenderer {
-    geometry: RenderPipeline,
-    shading: RenderPipeline,
+    pipeline: RenderPipeline,
 }
 
 impl TractogramFullRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         let label = Some(type_name::<Self>());
 
-        let geometry_module = gpu.shader(
-            &(Environment::wgsl() + include_str!("geometry.wgsl")),
-            Some(constants),
-        );
-
         let shading_module = gpu.shader(
-            &(Environment::wgsl() + include_str!("shading.wgsl")),
+            &(Environment::wgsl() + include_str!("render.wgsl")),
             Some(constants),
         );
 
         Self {
-            geometry: gpu
-                .device()
-                .create_render_pipeline(&RenderPipelineDescriptor {
-                    label,
-                    vertex: VertexState {
-                        module: &geometry_module,
-                        entry_point: "vertex",
-                        buffers: &[Tractogram::vertex_buffer_layout()],
-                        compilation_options: PipelineCompilationOptions::default(),
-                    },
-                    fragment: Some(FragmentState {
-                        module: &geometry_module,
-                        entry_point: "fragment",
-                        targets: &[
-                            Some(Surface::position_target()),
-                            Some(Surface::normal_target()),
-                        ],
-                        compilation_options: PipelineCompilationOptions::default(),
-                    }),
-                    primitive: PrimitiveState {
-                        topology: PrimitiveTopology::LineStrip,
-                        strip_index_format: Some(IndexFormat::Uint32),
-                        ..Default::default()
-                    },
-                    layout: Some(
-                        &gpu.device()
-                            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                                label,
-                                bind_group_layouts: &[
-                                    &Tractogram::layout(gpu),
-                                    &Environment::layout(gpu),
-                                ],
-                                push_constant_ranges: &[],
-                            }),
-                    ),
-                    depth_stencil: Some(Surface::depth_target()),
-                    multisample: MultisampleState::default(),
-                    multiview: None,
-                    cache: None,
-                }),
-            shading: gpu
+            pipeline: gpu
                 .device()
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label,
@@ -119,64 +73,6 @@ impl TractogramFullRenderer {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &Frame,
-        tractogram: &Tractogram,
-        density: &Density,
-    ) {
-        self.geometry(cmd, environment, frame, tractogram);
-        self.shading(cmd, environment, frame, density);
-    }
-
-    fn geometry(
-        &self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        frame: &Frame,
-        tractogram: &Tractogram,
-    ) {
-        let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            label: Some(type_name::<Self>()),
-            color_attachments: &[
-                Some(RenderPassColorAttachment {
-                    view: frame.position(),
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color::TRANSPARENT),
-                        store: StoreOp::Store,
-                    },
-                }),
-                Some(RenderPassColorAttachment {
-                    view: frame.normal(),
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color::TRANSPARENT),
-                        store: StoreOp::Store,
-                    },
-                }),
-            ],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: frame.depth(),
-                depth_ops: Some(Operations {
-                    load: LoadOp::Clear(1.0),
-                    store: StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-
-        pass.set_pipeline(&self.geometry);
-        pass.set_bind_group(0, tractogram.binding(), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw(0..tractogram.count(), 0..1);
-    }
-
-    fn shading(
-        &self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        frame: &Frame,
         density: &Density,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -194,7 +90,7 @@ impl TractogramFullRenderer {
             occlusion_query_set: None,
         });
 
-        pass.set_pipeline(&self.shading);
+        pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.gbuffer(), &[]);
         pass.set_bind_group(1, density.binding_render(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);

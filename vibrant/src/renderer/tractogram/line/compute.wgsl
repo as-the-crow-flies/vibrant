@@ -5,10 +5,9 @@ struct Vertex {
     z: f32
 }
 
-@group(0) @binding(0) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
-@group(0) @binding(1) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
-@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
-@group(0) @binding(3) var<storage, read_write> TRACTOGRAM_INDICES: array<u32>;
+@group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
+@group(0) @binding(1) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
+@group(0) @binding(2) var<storage, read_write> TRACTOGRAM_INDICES: array<u32>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 

@@ -22,7 +22,7 @@ impl AssetLoader {
                 .await;
 
             if let Some(file) = file {
-                Self::publish_tractogram(Tck::from_bytes(file.read().await));
+                Self::publish_tractogram(Tck::from_bytes(&file.read().await));
             }
         });
     }

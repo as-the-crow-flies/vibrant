@@ -10,9 +10,8 @@ struct Vertex {
 @group(0) @binding(1) var<uniform> WORLD_TO_VOLUME: mat4x4<f32>;
 @group(0) @binding(2) var<uniform> VOLUME_TO_WORLD: mat4x4<f32>;
 
-@group(1) @binding(0) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
-@group(1) @binding(1) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
-@group(1) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
+@group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
+@group(1) @binding(1) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 

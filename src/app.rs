@@ -18,9 +18,9 @@ use winit::{
 struct App {
     window: Option<Arc<window::Window>>,
     egui: Option<egui_winit::State>,
-    instant: Instant,
     renderer: Renderer,
     controller: Controller,
+    fps: Fps<10>,
 }
 
 impl App {
@@ -28,9 +28,9 @@ impl App {
         Self {
             window: None,
             egui: None,
-            instant: Instant::now(),
             renderer: Renderer::new(gpu),
             controller: Controller::new(),
+            fps: Fps::new(),
         }
     }
 
@@ -45,19 +45,16 @@ impl App {
             WindowEvent::Focused(_) => self.request_redraw(),
             WindowEvent::Resized(size) => self.renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                let instant = Instant::now();
-                let duration = instant - self.instant;
-                let dt = duration.as_secs_f32();
-                self.instant = instant;
-
                 let input = egui.take_egui_input(window);
                 let output = egui
                     .egui_ctx()
-                    .run(input, |ctx| self.controller.ui(ctx, dt));
+                    .run(input, |ctx| self.controller.ui(ctx, self.fps.seconds()));
                 egui.handle_platform_output(&window, output.platform_output.clone());
 
+                self.fps.start();
                 self.renderer
                     .render(&self.controller, egui.egui_ctx(), output);
+                self.fps.stop();
 
                 self.request_redraw();
             }
@@ -220,5 +217,34 @@ pub async fn run() {
     {
         use winit::platform::web::EventLoopExtWebSys;
         event_loop.spawn_app(app);
+    }
+}
+
+pub struct Fps<const N: usize> {
+    buffer: [f32; N],
+    index: usize,
+    instant: Instant,
+}
+
+impl<const N: usize> Fps<N> {
+    pub fn new() -> Self {
+        Self {
+            buffer: [0.0; N],
+            index: 0,
+            instant: Instant::now(),
+        }
+    }
+
+    pub fn start(&mut self) {
+        self.instant = Instant::now();
+    }
+
+    pub fn stop(&mut self) {
+        self.buffer[self.index] = (Instant::now() - self.instant).as_secs_f32();
+        self.index = (self.index + 1) % N;
+    }
+
+    pub fn seconds(&self) -> f32 {
+        self.buffer.iter().fold(0.0, |acc, x| acc + x) / N as f32
     }
 }
