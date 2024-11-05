@@ -1,10 +1,13 @@
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
+@group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
+
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 struct Segment {
     @builtin(vertex_index) index: u32,
     @location(0) v0: vec3<f32>,
     @location(1) v1: vec3<f32>,
+    @location(2) v2: vec3<f32>,
 }
 
 struct Fragment {
@@ -46,6 +49,7 @@ fn vertex(segment: Segment) -> Fragment {
 
     let v0 = transform(TRACTOGRAM_TO_WORLD, segment.v0);
     let v1 = transform(TRACTOGRAM_TO_WORLD, segment.v1);
+    let v2 = transform(TRACTOGRAM_TO_WORLD, segment.v2);
 
     let delta = v1 - v0;
     let length = length(delta);
@@ -59,7 +63,9 @@ fn vertex(segment: Segment) -> Fragment {
     let position = v0 + vertex.x * dx + vertex.y * dy - radius * dy + vertex.z * dz;
     let clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
 
-    return Fragment(clip, position, dy, v0, v1, radius);
+    let tangent = normalize(select(v1 - v0, v2 - v1, CUBE[segment.index].y == 1.0 && v2.x < 1E9));
+
+    return Fragment(clip, position, tangent, v0, v1, radius);
 }
 
 @fragment
@@ -79,8 +85,8 @@ fn fragment(fragment: Fragment) -> GBuffer {
 
     return GBuffer(
         vec4<f32>(position, 1.0),
-        vec4<f32>(normal, 1.0),
-        vec4<f32>(fragment.tangent, 1.0),
+        vec4<f32>(0.5 + 0.5 * normal, 1.0),
+        vec4<f32>(0.5 + 0.5 * fragment.tangent, 1.0),
         depth);
 }
 

@@ -1,5 +1,5 @@
 use glam::Vec3;
-use std::{collections::HashMap, fs, io::BufRead, iter};
+use std::{collections::HashMap, fs, io::BufRead};
 
 #[derive(Debug)]
 pub struct Bounds {

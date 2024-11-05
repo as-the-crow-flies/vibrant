@@ -5,7 +5,10 @@
 @group(1) @binding(0) var DENSITY: texture_3d<f32>;
 @group(1) @binding(1) var SAMPLER: sampler;
 
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(2) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
+@group(2) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
+
+@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 const PI: f32 = 3.1415926535897932;
 const PHI = 1.6180339887498948482045868;
@@ -18,36 +21,32 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 @fragment
 fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
     let camera = ENVIRONMENT.camera.transform[3].xyz;
-    let light = ENVIRONMENT.light;
+    let light = normalize(ENVIRONMENT.light);
 
     let position = textureLoad(POSITION, vec2<u32>(uv.xy), 0);
-    let normal = textureLoad(NORMAL, vec2<u32>(uv.xy), 0);
-    let tangent = textureLoad(TANGENT, vec2<u32>(uv.xy), 0).xyz * 2.0 - 1.0;
+    let normal = textureLoad(NORMAL, vec2<u32>(uv.xy), 0) * 2.0 - 1.0;
+    let tangent = textureLoad(TANGENT, vec2<u32>(uv.xy), 0) * 2.0 - 1.0;
 
     if (position.w == 0.0) { discard; }
 
     let view = normalize(camera - position.xyz);
 
-    if (normal.w == 0.0) {
-        return vec4<f32>(stalling(position.xyz, tangent, view, light), 1.0);
-    }
-    else
-    {
-        let lambert = max(0.0, dot(normal.xyz, light));
-        let lighting = ambient(position.xyz) + direct(position.xyz, light) * lambert;
-        return vec4<f32>(vec3<f32>(lighting), 1.0);
-    }
+    let lighting = ambient(position.xyz) + direct(position.xyz, light) *
+        select(lambert(normal.xyz, light), stalling(tangent.xyz, light), normal.w < 0.5);
+
+    let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
+    let color = mix(vec3<f32>(1.0), abs(tangent_object_space.xyz), ENVIRONMENT.settings.gradient_factor);
+
+    return vec4<f32>(color * lighting, 1.0);
+}
+
+fn lambert(normal: vec3<f32>, light: vec3<f32>) -> f32 {
+    return max(0.0, dot(normal, light));
 }
 
 // Stalling et al. 1997 - Fast Display of Illuminated Field Lines
-fn stalling(position: vec3<f32>, tangent: vec3<f32>, view: vec3<f32>, light: vec3<f32>) -> vec3<f32> {
-    let LN = max(0.0, sqrt(1.0 - pow(dot(light, tangent), 2.0)));
-    let VN = max(0.0, sqrt(1.0 - pow(dot(view, tangent), 2.0)));
-    let VR = LN * VN - dot(light, tangent) * dot(view, tangent);
-
-    let lighting = ambient(position) + direct(position, light) * LN;
-
-    return vec3<f32>(lighting);
+fn stalling(tangent: vec3<f32>, light: vec3<f32>) -> f32 {
+    return max(0.0, sqrt(1.0 - pow(dot(light, tangent), 2.0)));
 }
 
 fn direct(position: vec3<f32>, light: vec3<f32>) -> f32 {

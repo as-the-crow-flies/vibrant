@@ -8,7 +8,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::density::Density,
+    asset::{density::Density, Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
     surface::{Frame, Surface},
@@ -23,7 +23,7 @@ impl TractogramFullRenderer {
         let label = Some(type_name::<Self>());
 
         let shading_module = gpu.shader(
-            &(Environment::wgsl() + include_str!("render.wgsl")),
+            &(Environment::wgsl() + include_str!("voxel_cone_tracing.wgsl")),
             Some(constants),
         );
 
@@ -39,6 +39,7 @@ impl TractogramFullRenderer {
                                 bind_group_layouts: &[
                                     &Surface::gbuffer(gpu),
                                     &Density::layout_render(gpu),
+                                    &Tractogram::layout(gpu),
                                     &Environment::layout(gpu),
                                 ],
                                 push_constant_ranges: &[],
@@ -74,6 +75,7 @@ impl TractogramFullRenderer {
         environment: &Environment,
         frame: &Frame,
         density: &Density,
+        tractogram: &Tractogram,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
@@ -93,7 +95,8 @@ impl TractogramFullRenderer {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.gbuffer(), &[]);
         pass.set_bind_group(1, density.binding_render(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(2, tractogram.binding(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

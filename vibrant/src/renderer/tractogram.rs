@@ -1,6 +1,6 @@
 use density::compute::TractogramDensityComputeRenderer;
-use full::render::TractogramFullRenderer;
 use line::{compute::TractogramLineComputeRenderer, render::TractogramLineRenderRenderer};
+use shading::voxel_cone_tracing::TractogramFullRenderer;
 use tube::{impostor::TractogramTubeImpostorRenderer, raycast::TractogramTubeRaycastRenderer};
 use wgpu::CommandEncoder;
 
@@ -14,8 +14,8 @@ use crate::{
 use super::{constants::Constants, environment::Environment};
 
 pub mod density;
-pub mod full;
 pub mod line;
+pub mod shading;
 pub mod tube;
 
 pub struct TractogramRenderer {
@@ -58,7 +58,7 @@ impl TractogramRenderer {
         }
 
         match shader {
-            Shader::AmbientOcclusion => self.full.render(cmd, env, frame, density),
+            Shader::AmbientOcclusion => self.full.render(cmd, env, frame, density, tractogram),
         }
     }
 }

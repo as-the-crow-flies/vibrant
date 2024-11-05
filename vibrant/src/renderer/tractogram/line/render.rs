@@ -2,7 +2,8 @@ use std::any::type_name;
 
 use wgpu::{
     CommandEncoder, FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState,
-    PrimitiveTopology, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
+    PrimitiveTopology, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
 use crate::{
@@ -30,7 +31,15 @@ impl TractogramLineRenderRenderer {
                     vertex: VertexState {
                         module: &module,
                         entry_point: "vertex",
-                        buffers: &[Tractogram::vertex_buffer_layout()],
+                        buffers: &[VertexBufferLayout {
+                            array_stride: 12,
+                            step_mode: VertexStepMode::Vertex,
+                            attributes: &[VertexAttribute {
+                                format: VertexFormat::Float32x3,
+                                offset: 0,
+                                shader_location: 0,
+                            }],
+                        }],
                         compilation_options: PipelineCompilationOptions::default(),
                     },
                     fragment: Some(FragmentState {

@@ -44,6 +44,11 @@ impl TractogramTubeRaycastRenderer {
                                     offset: 12,
                                     shader_location: 1,
                                 },
+                                VertexAttribute {
+                                    format: VertexFormat::Float32x3,
+                                    offset: 24,
+                                    shader_location: 2,
+                                },
                             ],
                         }],
                         compilation_options: Default::default(),
@@ -91,6 +96,6 @@ impl TractogramTubeRaycastRenderer {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw(0..14, 0..tractogram.vertex_count() - 1);
+        pass.draw(0..14, 0..tractogram.vertex_count() - 2);
     }
 }

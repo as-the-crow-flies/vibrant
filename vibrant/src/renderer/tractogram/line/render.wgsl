@@ -1,4 +1,6 @@
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
+@group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
+
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 struct Fragment {

@@ -1,4 +1,6 @@
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
+@group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
+
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 struct Segment {
@@ -81,8 +83,8 @@ fn segment_fragment(fragment: SegmentFragment, @builtin(front_facing) front: boo
 
     return GBuffer(
         vec4<f32>(fragment.position, 1.0),
-        vec4<f32>(normal, 1.0),
-        vec4<f32>(fragment.tangent, 1.0),
+        vec4<f32>(0.5 + 0.5 * normal, 1.0),
+        vec4<f32>(0.5 + 0.5 * fragment.tangent, 1.0),
         depth
     );
 }

@@ -11,9 +11,9 @@ use vibrant::{
         services::filter::{Filter, FilterDescriptor},
         services::scan::{ItemType, Scan, ScanDescriptor},
         tractogram::density::compute::TractogramDensityComputeRenderer,
-        tractogram::full::render::TractogramFullRenderer,
         tractogram::line::compute::TractogramLineComputeRenderer,
         tractogram::line::render::TractogramLineRenderRenderer,
+        tractogram::shading::voxel_cone_tracing::TractogramFullRenderer,
     },
     surface::Frame,
     Vec2,
@@ -136,7 +136,7 @@ pub fn render(criterion: &mut Criterion) {
             let mut cmd = gpu.cmd();
             let frame = Frame::test(&gpu, WIDTH, HEIGHT);
 
-            renderer.render(&mut cmd, &environment, &frame, &density);
+            renderer.render(&mut cmd, &environment, &frame, &density, &tractogram);
 
             gpu.submit(cmd);
             gpu.wait();
