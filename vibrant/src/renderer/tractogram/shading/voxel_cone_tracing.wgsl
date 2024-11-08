@@ -29,9 +29,11 @@ fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
 
     if (position.w == 0.0) { discard; }
 
+    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
+
     let view = normalize(camera - position.xyz);
 
-    let lighting = ambient(position.xyz) + direct(position.xyz, light) *
+    let lighting = ambient(position.xyz, radius) + direct(position.xyz, light, radius) *
         select(lambert(normal.xyz, light), stalling(tangent.xyz, light), normal.w < 0.5);
 
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
@@ -49,29 +51,29 @@ fn stalling(tangent: vec3<f32>, light: vec3<f32>) -> f32 {
     return max(0.0, sqrt(1.0 - pow(dot(light, tangent), 2.0)));
 }
 
-fn direct(position: vec3<f32>, light: vec3<f32>) -> f32 {
+fn direct(position: vec3<f32>, light: vec3<f32>, radius: f32) -> f32 {
     if (ENVIRONMENT.settings.direct_light == 0.0) { return 0.0; }
 
-    let factor = 1.0;
-
-    let step = (factor / f32(textureDimensions(DENSITY).x)) * light;
+    let step = (1.0 / f32(textureDimensions(DENSITY).x)) * light;
+    let start = position + 0.5 + radius * light + 2.0 * random(position.xy) * step;
 
     var occlusion = 0.0;
-    var level = 0.0;
+    var level = 0.5;
 
-    for (var sample = position + 0.5; in_domain(sample); sample += step) {
-        occlusion += factor * (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
+    for (var sample = start; in_domain(sample); sample += step) {
+        occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
     }
 
     return ENVIRONMENT.settings.direct_light * max(0.0, 1.0 - occlusion);
 }
 
-fn ambient(position: vec3<f32>) -> f32 {
+fn ambient(position: vec3<f32>, radius: f32) -> f32 {
     if (ENVIRONMENT.settings.direct_light == 1.0) { return 0.0; }
 
     let N_SAMPLES = f32(ENVIRONMENT.settings.ambient_occlusion_samples);
     let TAN_CONE_ANGLE = tan(sqrt(4.0 * PI / N_SAMPLES));
     let DIM = f32(textureDimensions(DENSITY).x);
+    let distance_start = 1.0 / DIM + radius;
 
     var total_occlusion = 0.0;
 
@@ -81,7 +83,7 @@ fn ambient(position: vec3<f32>) -> f32 {
         var occlusion = 0.0;
         var size = 0.0;
 
-        for (var distance = 1.0 / DIM; distance < 1.0; distance *= 2.0) {
+        for (var distance = distance_start; distance < 1.0; distance *= 2.0) {
             let sample = position + direction * distance + 0.5;
 
             if (!in_domain(sample) || occlusion > 0.99) { break; }
@@ -110,4 +112,8 @@ fn fibonacci_sphere(n: f32, i: f32) -> vec3<f32> {
     let y = radius * sin(theta);
 
     return vec3<f32>(x, y, z);
+}
+
+fn random(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
