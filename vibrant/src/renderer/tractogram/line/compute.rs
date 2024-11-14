@@ -2,12 +2,11 @@ use crate::{
     asset::Tractogram,
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment, services::indirect::Indirect},
-    surface::{Frame, Surface},
+    surface::{buffer::FrameBuffer, visibility::Visibility, Frame},
 };
 use std::any::type_name;
 use wgpu::{
-    CommandEncoder, ComputePassDescriptor, ComputePipeline, LoadOp, Operations,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, StoreOp,
+    CommandEncoder, ComputePassDescriptor, ComputePipeline, RenderPassDescriptor, RenderPipeline,
 };
 
 pub struct TractogramLineComputeRenderer {
@@ -30,14 +29,14 @@ impl TractogramLineComputeRenderer {
         let layout_cull = gpu.pipeline_layout(&[
             &Tractogram::layout_full(gpu),
             &Environment::layout(gpu),
-            &Surface::visibility(gpu),
+            &Visibility::layout(gpu),
             &Indirect::layout(gpu),
         ]);
 
         let layout = gpu.pipeline_layout(&[
             &Tractogram::layout_full(gpu),
             &Environment::layout(gpu),
-            &Surface::visibility(gpu),
+            &Visibility::layout(gpu),
         ]);
 
         Self {
@@ -46,13 +45,7 @@ impl TractogramLineComputeRenderer {
             cull: gpu.compute(&layout_cull, &module, "cull"),
             set_dispatch_count: gpu.compute(&layout_cull, &module, "set_dispatch_count"),
             rasterize: gpu.compute(&layout, &module, "rasterize"),
-            shade: gpu.quad(
-                &layout,
-                &module,
-                "shade",
-                Surface::color_srgb_target(),
-                None,
-            ),
+            shade: gpu.quad(&layout, &module, "shade", FrameBuffer::target_srgb(), None),
             indirect: Indirect::new(gpu, [0, 1, 1]),
         }
     }
@@ -85,7 +78,7 @@ impl TractogramLineComputeRenderer {
 
         pass.set_bind_group(0, tractogram.binding_full(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_bind_group(2, frame.visibility(), &[]);
+        pass.set_bind_group(2, frame.visibility().binding(), &[]);
         pass.set_bind_group(3, self.indirect.binding(), &[]);
 
         let count = tractogram
@@ -112,7 +105,7 @@ impl TractogramLineComputeRenderer {
 
         pass.set_bind_group(0, tractogram.binding_full(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_bind_group(2, frame.visibility(), &[]);
+        pass.set_bind_group(2, frame.visibility().binding(), &[]);
 
         let (x, y) = self.constants.num_workgroups_surface();
         pass.set_pipeline(&self.clear);
@@ -131,14 +124,7 @@ impl TractogramLineComputeRenderer {
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: frame.color_srgb(),
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Load,
-                    store: StoreOp::Store,
-                },
-            })],
+            color_attachments: &[Some(frame.buffer().attachment_srgb())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
@@ -147,7 +133,7 @@ impl TractogramLineComputeRenderer {
         pass.set_pipeline(&self.shade);
         pass.set_bind_group(0, tractogram.binding_full(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_bind_group(2, frame.visibility(), &[]);
+        pass.set_bind_group(2, frame.visibility().binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

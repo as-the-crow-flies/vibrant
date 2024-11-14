@@ -1,16 +1,15 @@
 use std::any::type_name;
 
 use wgpu::{
-    CommandEncoder, FragmentState, LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor,
-    PrimitiveState, PrimitiveTopology, RenderPassColorAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, StoreOp, VertexState,
+    CommandEncoder, FragmentState, MultisampleState, PipelineLayoutDescriptor, PrimitiveState,
+    PrimitiveTopology, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
 use crate::{
     asset::Volume,
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{Frame, Surface},
+    surface::{buffer::FrameBuffer, Frame},
 };
 
 pub struct VolumeRenderer {
@@ -47,7 +46,7 @@ impl VolumeRenderer {
                     fragment: Some(FragmentState {
                         module: &module,
                         entry_point: Some("fragment"),
-                        targets: &[Some(Surface::color_srgb_target())],
+                        targets: &[Some(FrameBuffer::target_srgb())],
                         compilation_options: Default::default(),
                     }),
                     primitive: PrimitiveState {
@@ -69,18 +68,9 @@ impl VolumeRenderer {
         frame: &Frame,
         volume: &Volume,
     ) {
-        let attachment = RenderPassColorAttachment {
-            view: frame.color_srgb(),
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Load,
-                store: StoreOp::Store,
-            },
-        };
-
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(attachment)],
+            color_attachments: &[Some(frame.buffer().attachment_srgb())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,

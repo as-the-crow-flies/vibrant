@@ -8,14 +8,17 @@ use vibrant::{
     renderer::{
         constants::Constants,
         environment::Environment,
-        services::filter::{Filter, FilterDescriptor},
-        services::scan::{ItemType, Scan, ScanDescriptor},
-        tractogram::density::compute::TractogramDensityComputeRenderer,
-        tractogram::line::compute::TractogramLineComputeRenderer,
-        tractogram::line::render::TractogramLineRenderRenderer,
-        tractogram::shading::voxel_cone_tracing::TractogramFullRenderer,
+        services::{
+            filter::{Filter, FilterDescriptor},
+            scan::{ItemType, Scan, ScanDescriptor},
+        },
+        tractogram::{
+            density::compute::TractogramDensityComputeRenderer,
+            line::{compute::TractogramLineComputeRenderer, render::TractogramLineRenderRenderer},
+            shading::voxel_cone_tracing::TractogramFullRenderer,
+        },
     },
-    surface::Frame,
+    surface::{buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, visibility::Visibility, Frame},
     Vec2,
 };
 use wgpu::{
@@ -49,7 +52,12 @@ pub fn baseline(criterion: &mut Criterion) {
     criterion.bench_function(stringify!(baseline), |bencher| {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
-            let frame = Frame::test(&gpu, WIDTH, HEIGHT);
+
+            let frame_buffer = FrameBuffer::new(&FrameBuffer::texture(&gpu, WIDTH, HEIGHT));
+            let visibility = Visibility::new(&gpu, WIDTH, HEIGHT);
+            let depth = Depth::new(&gpu, WIDTH, HEIGHT);
+            let gbuffer = GBuffer::new(&gpu, WIDTH, HEIGHT);
+            let frame = Frame::new(WIDTH, HEIGHT, frame_buffer, &visibility, &depth, &gbuffer);
 
             renderer.render(&mut cmd, &environment, &frame, &tractogram);
 
@@ -72,7 +80,12 @@ pub fn compute(criterion: &mut Criterion) {
     criterion.bench_function(stringify!(compute), |bencher| {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
-            let frame = Frame::test(&gpu, WIDTH, HEIGHT);
+
+            let frame_buffer = FrameBuffer::new(&FrameBuffer::texture(&gpu, WIDTH, HEIGHT));
+            let visibility = Visibility::new(&gpu, WIDTH, HEIGHT);
+            let depth = Depth::new(&gpu, WIDTH, HEIGHT);
+            let gbuffer = GBuffer::new(&gpu, WIDTH, HEIGHT);
+            let frame = Frame::new(WIDTH, HEIGHT, frame_buffer, &visibility, &depth, &gbuffer);
 
             renderer.render(&mut cmd, &environment, &frame, &tractogram);
 
@@ -134,7 +147,12 @@ pub fn render(criterion: &mut Criterion) {
     criterion.bench_function(stringify!(render), |bencher| {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
-            let frame = Frame::test(&gpu, WIDTH, HEIGHT);
+
+            let frame_buffer = FrameBuffer::new(&FrameBuffer::texture(&gpu, WIDTH, HEIGHT));
+            let visibility = Visibility::new(&gpu, WIDTH, HEIGHT);
+            let depth = Depth::new(&gpu, WIDTH, HEIGHT);
+            let gbuffer = GBuffer::new(&gpu, WIDTH, HEIGHT);
+            let frame = Frame::new(WIDTH, HEIGHT, frame_buffer, &visibility, &depth, &gbuffer);
 
             renderer.render(&mut cmd, &environment, &frame, &density, &tractogram);
 

@@ -5,7 +5,12 @@ use wgpu::{
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModule, VertexState,
 };
 
-use crate::{asset::Tractogram, gpu::Gpu, renderer::environment::Environment, surface::Surface};
+use crate::{
+    asset::Tractogram,
+    gpu::Gpu,
+    renderer::environment::Environment,
+    surface::{depth::Depth, gbuffer::GBuffer},
+};
 
 pub struct TractogramTubeImpostorRenderer {
     segment: RenderPipeline,
@@ -33,8 +38,8 @@ impl TractogramTubeImpostorRenderer {
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &frame.gbuffer_attachment(),
-            depth_stencil_attachment: Some(frame.depth_attachment()),
+            color_attachments: &frame.gbuffer().attachments(),
+            depth_stencil_attachment: Some(frame.depth().attachment()),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
@@ -67,18 +72,14 @@ fn render_pipeline(gpu: &Gpu, module: &ShaderModule, entry_point: &str) -> Rende
             fragment: Some(FragmentState {
                 module: &module,
                 entry_point: Some(&format!("{}_fragment", entry_point)),
-                targets: &[
-                    Some(Surface::position_target()),
-                    Some(Surface::normal_target()),
-                    Some(Surface::tangent_target()),
-                ],
+                targets: &GBuffer::targets(),
                 compilation_options: PipelineCompilationOptions::default(),
             }),
             primitive: PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
                 ..Default::default()
             },
-            depth_stencil: Some(Surface::depth_target()),
+            depth_stencil: Some(Depth::state()),
             multisample: MultisampleState::default(),
             multiview: None,
             cache: None,

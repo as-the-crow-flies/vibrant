@@ -1,17 +1,16 @@
 use std::any::type_name;
 
 use wgpu::{
-    Color, CommandEncoder, FragmentState, LoadOp, MultisampleState, Operations,
-    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    StoreOp, VertexState,
+    CommandEncoder, FragmentState, MultisampleState, PipelineCompilationOptions,
+    PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
 use crate::{
     asset::{density::Density, Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
-    surface::{Frame, Surface},
+    surface::{buffer::FrameBuffer, gbuffer::GBuffer, Frame},
 };
 
 pub struct TractogramFullRenderer {
@@ -37,7 +36,7 @@ impl TractogramFullRenderer {
                             .create_pipeline_layout(&PipelineLayoutDescriptor {
                                 label,
                                 bind_group_layouts: &[
-                                    &Surface::gbuffer(gpu),
+                                    &GBuffer::layout(gpu),
                                     &Density::layout_render(gpu),
                                     &Tractogram::layout(gpu),
                                     &Environment::layout(gpu),
@@ -54,7 +53,7 @@ impl TractogramFullRenderer {
                     fragment: Some(FragmentState {
                         module: &shading_module,
                         entry_point: Some("fragment"),
-                        targets: &[Some(Surface::color_srgb_target())],
+                        targets: &[Some(FrameBuffer::target_srgb())],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -79,21 +78,14 @@ impl TractogramFullRenderer {
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: frame.color_srgb(),
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color::BLACK),
-                    store: StoreOp::Store,
-                },
-            })],
+            color_attachments: &[Some(frame.buffer().attachment_srgb())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.gbuffer(), &[]);
+        pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
         pass.set_bind_group(1, density.binding_render(), &[]);
         pass.set_bind_group(2, tractogram.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);

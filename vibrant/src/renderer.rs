@@ -88,7 +88,7 @@ impl Renderer {
             .surface
             .as_ref()
             .expect("Surface was not initialized")
-            .surface_frame(&self.gpu);
+            .surface_frame();
 
         let frame = surface_frame.frame();
 
