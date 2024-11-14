@@ -16,8 +16,6 @@ use crate::gpu::Gpu;
 pub struct Density {
     buffer: Buffer,
     texture: Texture,
-    world_to_volume: Buffer,
-    volume_to_world: Buffer,
     binding_compute: BindGroup,
     binding_render: BindGroup,
     binding_copy: BindGroup,
@@ -242,8 +240,6 @@ impl Density {
         Self {
             buffer,
             texture,
-            world_to_volume,
-            volume_to_world,
             binding_compute,
             binding_render,
             binding_copy,

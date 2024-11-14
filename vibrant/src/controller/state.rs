@@ -62,7 +62,6 @@ impl ControllerState {
                 shift: false,
                 ..default
             },
-            _ => default,
         }
     }
 }

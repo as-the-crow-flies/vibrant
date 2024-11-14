@@ -1,9 +1,8 @@
 @group(0) @binding(0) var VALUE: texture_3d<f32>;
 @group(0) @binding(1) var COLOR: texture_3d<f32>;
-@group(0) @binding(2) var HISTOGRAM: texture_1d<f32>;
-@group(0) @binding(3) var SAMPLER: sampler;
-@group(0) @binding(4) var<uniform> TRANSFORM: mat4x4<f32>;
-@group(0) @binding(5) var<uniform> TRANSFORM_INVERSE: mat4x4<f32>;
+@group(0) @binding(2) var SAMPLER: sampler;
+@group(0) @binding(3) var<uniform> TRANSFORM: mat4x4<f32>;
+@group(0) @binding(4) var<uniform> TRANSFORM_INVERSE: mat4x4<f32>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 

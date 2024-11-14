@@ -1,16 +1,16 @@
 use std::any::type_name;
 
 use wgpu::{
-    FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
-    PrimitiveState, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModule, StoreOp,
-    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModule, VertexState,
 };
 
 use crate::{asset::Tractogram, gpu::Gpu, renderer::environment::Environment, surface::Surface};
 
 pub struct TractogramTubeImpostorRenderer {
     segment: RenderPipeline,
+
+    #[allow(unused)]
     cap: RenderPipeline,
 }
 
@@ -19,53 +19,8 @@ impl TractogramTubeImpostorRenderer {
         let module = gpu.shader(&(Environment::wgsl() + include_str!("impostor.wgsl")), None);
 
         Self {
-            segment: render_pipeline(
-                gpu,
-                &module,
-                "segment",
-                VertexBufferLayout {
-                    array_stride: 12,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 12,
-                            shader_location: 1,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 24,
-                            shader_location: 2,
-                        },
-                    ],
-                },
-            ),
-            cap: render_pipeline(
-                gpu,
-                &module,
-                "cap",
-                VertexBufferLayout {
-                    array_stride: 24,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 12,
-                            shader_location: 1,
-                        },
-                    ],
-                },
-            ),
+            segment: render_pipeline(gpu, &module, "segment"),
+            cap: render_pipeline(gpu, &module, "cap"),
         }
     }
 
@@ -84,11 +39,10 @@ impl TractogramTubeImpostorRenderer {
             occlusion_query_set: None,
         });
 
-        pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(0, tractogram.binding_full(), &[]);
         pass.set_bind_group(1, env.binding(), &[]);
 
         pass.set_pipeline(&self.segment);
-        pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
         pass.draw(0..4, 0..tractogram.vertex_count() - 2);
 
         // pass.set_pipeline(&self.cap);
@@ -97,27 +51,22 @@ impl TractogramTubeImpostorRenderer {
     }
 }
 
-fn render_pipeline(
-    gpu: &Gpu,
-    module: &ShaderModule,
-    entry_point: &str,
-    layout: VertexBufferLayout,
-) -> RenderPipeline {
+fn render_pipeline(gpu: &Gpu, module: &ShaderModule, entry_point: &str) -> RenderPipeline {
     gpu.device()
         .create_render_pipeline(&RenderPipelineDescriptor {
             label: Some(type_name::<TractogramTubeImpostorRenderer>()),
             layout: Some(
-                &gpu.pipeline_layout(&[&Tractogram::layout(gpu), &Environment::layout(gpu)]),
+                &gpu.pipeline_layout(&[&Tractogram::layout_full(gpu), &Environment::layout(gpu)]),
             ),
             vertex: VertexState {
                 module: &module,
-                entry_point: &format!("{}_vertex", entry_point),
-                buffers: &[layout],
+                entry_point: Some(&format!("{}_vertex", entry_point)),
+                buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(FragmentState {
                 module: &module,
-                entry_point: &format!("{}_fragment", entry_point),
+                entry_point: Some(&format!("{}_fragment", entry_point)),
                 targets: &[
                     Some(Surface::position_target()),
                     Some(Surface::normal_target()),

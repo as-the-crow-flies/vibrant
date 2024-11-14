@@ -2,6 +2,7 @@ use std::{any::type_name, borrow::Cow};
 
 use bytemuck::Pod;
 use futures::channel::oneshot::channel;
+use log::info;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
     CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, DepthStencilState,
@@ -15,7 +16,6 @@ use crate::renderer::constants::Constants;
 
 pub struct Gpu {
     instance: wgpu::Instance,
-    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
@@ -31,6 +31,8 @@ impl Gpu {
             })
             .await
             .expect("Could not aqcuire GPU Adapter");
+
+        info!("{:?}", adapter.features());
 
         let limits = adapter.limits();
 
@@ -58,7 +60,6 @@ impl Gpu {
 
         Self {
             instance,
-            adapter,
             device,
             queue,
         }
@@ -96,7 +97,7 @@ impl Gpu {
                 label: None,
                 layout: Some(layout),
                 module,
-                entry_point,
+                entry_point: Some(entry_point),
                 compilation_options: Default::default(),
                 cache: None,
             })
@@ -116,7 +117,7 @@ impl Gpu {
                 layout: Some(layout),
                 vertex: wgpu::VertexState {
                     module: &self.shader(include_str!("renderer/wgsl/quad.wgsl"), None),
-                    entry_point: "vertex",
+                    entry_point: Some("vertex"),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -128,7 +129,7 @@ impl Gpu {
                 multisample: MultisampleState::default(),
                 fragment: Some(FragmentState {
                     module,
-                    entry_point,
+                    entry_point: Some(entry_point),
                     compilation_options: Default::default(),
                     targets: &[Some(color)],
                 }),

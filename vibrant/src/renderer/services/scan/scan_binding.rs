@@ -1,7 +1,6 @@
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, Device,
-    ShaderStages,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, ShaderStages,
 };
 
 use crate::gpu::Gpu;

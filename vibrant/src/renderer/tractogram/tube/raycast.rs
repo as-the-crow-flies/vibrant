@@ -2,8 +2,7 @@ use std::any::type_name;
 
 use wgpu::{
     Face, FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexAttribute,
-    VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
 use crate::{asset::Tractogram, gpu::Gpu, renderer::environment::Environment, surface::Surface};
@@ -21,41 +20,19 @@ impl TractogramTubeRaycastRenderer {
                 .device()
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label: Some(type_name::<TractogramTubeRaycastRenderer>()),
-                    layout: Some(
-                        &gpu.pipeline_layout(&[
-                            &Tractogram::layout(gpu),
-                            &Environment::layout(gpu),
-                        ]),
-                    ),
+                    layout: Some(&gpu.pipeline_layout(&[
+                        &Tractogram::layout_full(gpu),
+                        &Environment::layout(gpu),
+                    ])),
                     vertex: VertexState {
                         module: &module,
-                        entry_point: "vertex",
-                        buffers: &[VertexBufferLayout {
-                            array_stride: 12,
-                            step_mode: VertexStepMode::Instance,
-                            attributes: &[
-                                VertexAttribute {
-                                    format: VertexFormat::Float32x3,
-                                    offset: 0,
-                                    shader_location: 0,
-                                },
-                                VertexAttribute {
-                                    format: VertexFormat::Float32x3,
-                                    offset: 12,
-                                    shader_location: 1,
-                                },
-                                VertexAttribute {
-                                    format: VertexFormat::Float32x3,
-                                    offset: 24,
-                                    shader_location: 2,
-                                },
-                            ],
-                        }],
+                        entry_point: Some("vertex"),
+                        buffers: &[],
                         compilation_options: Default::default(),
                     },
                     fragment: Some(FragmentState {
                         module: &module,
-                        entry_point: "fragment",
+                        entry_point: Some("fragment"),
                         targets: &[
                             Some(Surface::position_target()),
                             Some(Surface::normal_target()),
@@ -91,11 +68,10 @@ impl TractogramTubeRaycastRenderer {
             occlusion_query_set: None,
         });
 
-        pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(0, tractogram.binding_full(), &[]);
         pass.set_bind_group(1, env.binding(), &[]);
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
         pass.draw(0..14, 0..tractogram.vertex_count() - 2);
     }
 }

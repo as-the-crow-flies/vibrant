@@ -40,13 +40,13 @@ impl VolumeRenderer {
                     ),
                     vertex: VertexState {
                         module: &module,
-                        entry_point: "vertex",
+                        entry_point: Some("vertex"),
                         buffers: &[],
                         compilation_options: Default::default(),
                     },
                     fragment: Some(FragmentState {
                         module: &module,
-                        entry_point: "fragment",
+                        entry_point: Some("fragment"),
                         targets: &[Some(Surface::color_srgb_target())],
                         compilation_options: Default::default(),
                     }),

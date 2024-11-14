@@ -1,5 +1,5 @@
 use density::compute::TractogramDensityComputeRenderer;
-use line::{compute::TractogramLineComputeRenderer, render::TractogramLineRenderRenderer};
+use line::render::TractogramLineRenderRenderer;
 use shading::voxel_cone_tracing::TractogramFullRenderer;
 use tube::{impostor::TractogramTubeImpostorRenderer, raycast::TractogramTubeRaycastRenderer};
 use wgpu::CommandEncoder;
@@ -13,6 +13,7 @@ use crate::{
 
 use super::{constants::Constants, environment::Environment};
 
+pub mod culling;
 pub mod density;
 pub mod line;
 pub mod shading;
@@ -20,7 +21,6 @@ pub mod tube;
 
 pub struct TractogramRenderer {
     line_render: TractogramLineRenderRenderer,
-    line_compute: TractogramLineComputeRenderer,
     tube_impostor: TractogramTubeImpostorRenderer,
     tube_raycast: TractogramTubeRaycastRenderer,
     full: TractogramFullRenderer,
@@ -31,7 +31,6 @@ impl TractogramRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         Self {
             line_render: TractogramLineRenderRenderer::new(gpu),
-            line_compute: TractogramLineComputeRenderer::new(gpu, constants),
             tube_impostor: TractogramTubeImpostorRenderer::new(gpu),
             tube_raycast: TractogramTubeRaycastRenderer::new(gpu),
             full: TractogramFullRenderer::new(gpu, constants),

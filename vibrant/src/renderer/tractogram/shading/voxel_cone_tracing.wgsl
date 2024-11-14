@@ -55,7 +55,7 @@ fn direct(position: vec3<f32>, light: vec3<f32>, radius: f32) -> f32 {
     if (ENVIRONMENT.settings.direct_light == 0.0) { return 0.0; }
 
     let step = (1.0 / f32(textureDimensions(DENSITY).x)) * light;
-    let start = position + 0.5 + radius * light + 2.0 * random(position.xy) * step;
+    let start = position + 0.5 + radius * light;
 
     var occlusion = 0.0;
     var level = 0.5;
@@ -112,8 +112,4 @@ fn fibonacci_sphere(n: f32, i: f32) -> vec3<f32> {
     let y = radius * sin(theta);
 
     return vec3<f32>(x, y, z);
-}
-
-fn random(co: vec2<f32>) -> f32 {
-    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }

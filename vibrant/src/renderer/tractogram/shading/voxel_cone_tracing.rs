@@ -47,13 +47,13 @@ impl TractogramFullRenderer {
                     ),
                     vertex: VertexState {
                         module: &shading_module,
-                        entry_point: "vertex",
+                        entry_point: Some("vertex"),
                         buffers: &[],
                         compilation_options: PipelineCompilationOptions::default(),
                     },
                     fragment: Some(FragmentState {
                         module: &shading_module,
-                        entry_point: "fragment",
+                        entry_point: Some("fragment"),
                         targets: &[Some(Surface::color_srgb_target())],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),

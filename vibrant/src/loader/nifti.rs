@@ -99,14 +99,6 @@ impl NiftiRawHeader {
         Vec3::new(self.dim[1] as f32, self.dim[2] as f32, self.dim[3] as f32)
     }
 
-    pub fn rotation(&self) -> Quat {
-        let quatern_a =
-            (1.0 - self.quatern_b.powi(2) - self.quatern_c.powi(2) - self.quatern_d.powi(2)).sqrt();
-
-        Quat::from_xyzw(quatern_a, self.quatern_b, self.quatern_c, self.quatern_d).inverse()
-            * Quat::from_rotation_x(PI / 2.0)
-    }
-
     pub fn transform(&self) -> Mat4 {
         let (scale, rotation, translation) = Mat4::from_cols(
             self.srow_x.into(),

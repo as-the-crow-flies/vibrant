@@ -4,10 +4,10 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt, TextureDataOrder},
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
-    BufferBinding, BufferBindingType, BufferUsages, Extent3d, FilterMode, Sampler,
-    SamplerBindingType, SamplerDescriptor, ShaderStages, Texture, TextureAspect, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureView,
-    TextureViewDescriptor, TextureViewDimension,
+    BufferBinding, BufferBindingType, BufferUsages, Extent3d, FilterMode, SamplerBindingType,
+    SamplerDescriptor, ShaderStages, Texture, TextureAspect, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor,
+    TextureViewDimension,
 };
 
 use crate::{gpu::Gpu, loader::Nifti};
@@ -17,9 +17,6 @@ pub struct Volume {
     value_view: TextureView,
     color: Texture,
     color_view: TextureView,
-    histogram: Texture,
-    histogram_view: TextureView,
-    sampler: Sampler,
     transform: Buffer,
     transform_inverse: Buffer,
     binding: BindGroup,
@@ -28,7 +25,6 @@ pub struct Volume {
 impl Volume {
     pub const VALUE_FORMAT: TextureFormat = TextureFormat::R32Float;
     pub const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
-    pub const HISTOGRAM_FORMAT: TextureFormat = TextureFormat::R32Float;
 
     pub fn new(gpu: &Gpu, nifti: &Nifti) -> Self {
         let label = Some(type_name::<Self>());
@@ -87,37 +83,6 @@ impl Volume {
             array_layer_count: None,
         });
 
-        let histogram = gpu.device().create_texture_with_data(
-            &gpu.queue(),
-            &TextureDescriptor {
-                label,
-                size: Extent3d {
-                    width: 256,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D1,
-                format: Self::HISTOGRAM_FORMAT,
-                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
-                view_formats: &[Self::HISTOGRAM_FORMAT],
-            },
-            TextureDataOrder::default(),
-            nifti.histogram(),
-        );
-
-        let histogram_view = histogram.create_view(&TextureViewDescriptor {
-            label: Some(type_name::<Self>()),
-            format: Some(Self::HISTOGRAM_FORMAT),
-            dimension: Some(TextureViewDimension::D1),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-        });
-
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
             address_mode_u: AddressMode::ClampToEdge,
@@ -155,14 +120,10 @@ impl Volume {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::TextureView(&histogram_view),
-                },
-                BindGroupEntry {
-                    binding: 3,
                     resource: BindingResource::Sampler(&sampler),
                 },
                 BindGroupEntry {
-                    binding: 4,
+                    binding: 3,
                     resource: BindingResource::Buffer(BufferBinding {
                         buffer: &transform,
                         offset: 0,
@@ -170,7 +131,7 @@ impl Volume {
                     }),
                 },
                 BindGroupEntry {
-                    binding: 5,
+                    binding: 4,
                     resource: BindingResource::Buffer(BufferBinding {
                         buffer: &transform_inverse,
                         offset: 0,
@@ -185,9 +146,6 @@ impl Volume {
             value_view,
             color,
             color_view,
-            histogram,
-            histogram_view,
-            sampler,
             transform,
             transform_inverse,
             binding,
@@ -234,21 +192,11 @@ impl Volume {
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D1,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                     BindGroupLayoutEntry {
-                        binding: 4,
+                        binding: 3,
                         visibility: ShaderStages::VERTEX_FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
@@ -258,7 +206,7 @@ impl Volume {
                         count: None,
                     },
                     BindGroupLayoutEntry {
-                        binding: 5,
+                        binding: 4,
                         visibility: ShaderStages::VERTEX_FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,

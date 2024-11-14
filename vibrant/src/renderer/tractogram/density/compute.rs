@@ -103,7 +103,7 @@ impl TractogramDensityComputeRenderer {
         pass.set_pipeline(&self.mipmap_pipeline);
 
         for binding in density.bindings_mipmap() {
-            pass.set_bind_group(0, &binding, &[]);
+            pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(size, size, size);
 
             size /= 2;

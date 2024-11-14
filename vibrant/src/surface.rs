@@ -26,6 +26,7 @@ impl Surface {
     pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
     pub const COLOR_SRGB_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
     pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth16Unorm;
+    pub const DEPTH_HIERARCHY_FORMAT: TextureFormat = TextureFormat::R32Float;
     pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
     pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 

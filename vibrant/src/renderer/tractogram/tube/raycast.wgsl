@@ -1,14 +1,32 @@
+// Used instead of vec3<f32> for padding reasons
+struct Vertex {
+    x: f32,
+    y: f32,
+    z: f32
+}
+
+const CUBE: array<vec3<f32>, 14> = array(
+    vec3<f32>(-1.0, 1.0, 1.0),  // Front-top-left
+    vec3<f32>( 1.0, 1.0, 1.0),  // Front-top-right
+    vec3<f32>(-1.0, 0.0, 1.0),  // Front-bottom-left
+    vec3<f32>( 1.0, 0.0, 1.0),  // Front-bottom-right
+    vec3<f32>( 1.0, 0.0,-1.0),  // Back-bottom-right
+    vec3<f32>( 1.0, 1.0, 1.0),  // Front-top-right
+    vec3<f32>( 1.0, 1.0,-1.0),  // Back-top-right
+    vec3<f32>(-1.0, 1.0, 1.0),  // Front-top-left
+    vec3<f32>(-1.0, 1.0,-1.0),  // Back-top-left
+    vec3<f32>(-1.0, 0.0, 1.0),  // Front-bottom-left
+    vec3<f32>(-1.0, 0.0,-1.0),  // Back-bottom-left
+    vec3<f32>( 1.0, 0.0,-1.0),  // Back-bottom-right
+    vec3<f32>(-1.0, 1.0,-1.0),  // Back-top-left
+    vec3<f32>( 1.0, 1.0,-1.0)   // Back-top-right
+);
+
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
+@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
-
-struct Segment {
-    @builtin(vertex_index) index: u32,
-    @location(0) v0: vec3<f32>,
-    @location(1) v1: vec3<f32>,
-    @location(2) v2: vec3<f32>,
-}
 
 struct Fragment {
     @builtin(position) clip: vec4<f32>,
@@ -27,29 +45,12 @@ struct GBuffer {
 }
 
 @vertex
-fn vertex(segment: Segment) -> Fragment {
-    var CUBE: array<vec3<f32>, 14> = array(
-        vec3<f32>(-1.0, 1.0, 1.0),  // Front-top-left
-        vec3<f32>( 1.0, 1.0, 1.0),  // Front-top-right
-        vec3<f32>(-1.0, 0.0, 1.0),  // Front-bottom-left
-        vec3<f32>( 1.0, 0.0, 1.0),  // Front-bottom-right
-        vec3<f32>( 1.0, 0.0,-1.0),  // Back-bottom-right
-        vec3<f32>( 1.0, 1.0, 1.0),  // Front-top-right
-        vec3<f32>( 1.0, 1.0,-1.0),  // Back-top-right
-        vec3<f32>(-1.0, 1.0, 1.0),  // Front-top-left
-        vec3<f32>(-1.0, 1.0,-1.0),  // Back-top-left
-        vec3<f32>(-1.0, 0.0, 1.0),  // Front-bottom-left
-        vec3<f32>(-1.0, 0.0,-1.0),  // Back-bottom-left
-        vec3<f32>( 1.0, 0.0,-1.0),  // Back-bottom-right
-        vec3<f32>(-1.0, 1.0,-1.0),  // Back-top-left
-        vec3<f32>( 1.0, 1.0,-1.0)   // Back-top-right
-    );
-
+fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> Fragment {
     let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
 
-    let v0 = transform(TRACTOGRAM_TO_WORLD, segment.v0);
-    let v1 = transform(TRACTOGRAM_TO_WORLD, segment.v1);
-    let v2 = transform(TRACTOGRAM_TO_WORLD, segment.v2);
+    let v0 = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 0));
+    let v1 = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 1));
+    let v2 = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 2));
 
     let delta = v1 - v0;
     let length = length(delta);
@@ -58,12 +59,12 @@ fn vertex(segment: Segment) -> Fragment {
     let dx = normalize(cross(dy, vec3<f32>(1.0, 0.0, 0.0)));
     let dz = normalize(cross(dy, dx));
 
-    let vertex = CUBE[segment.index] * vec3<f32>(radius, length + 2.0 * radius, radius);
+    let vertex = CUBE[vertex_index] * vec3<f32>(radius, length + 2.0 * radius, radius);
 
     let position = v0 + vertex.x * dx + vertex.y * dy - radius * dy + vertex.z * dz;
     let clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
 
-    let tangent = normalize(select(v1 - v0, v2 - v1, CUBE[segment.index].y == 1.0 && v2.x < 1E9));
+    let tangent = normalize(select(v1 - v0, v2 - v1, CUBE[vertex_index].y == 1.0 && v2.x < 1E9));
 
     return Fragment(clip, position, tangent, v0, v1, radius);
 }
@@ -137,4 +138,9 @@ fn capsule_normal(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> vec3<f3
     let pa = pos - a;
     let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
     return (pa - h*ba) / r;
+}
+
+fn get_vertex(index: u32) -> vec3<f32> {
+    let v = TRACTOGRAM_VERTICES[index];
+    return vec3<f32>(v.x, v.y, v.z);
 }

@@ -5,8 +5,7 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, ShaderStages, VertexAttribute, VertexBufferLayout,
-    VertexFormat, VertexStepMode,
+    BufferDescriptor, BufferUsages, ShaderStages,
 };
 
 use crate::{gpu::Gpu, loader};
@@ -79,7 +78,7 @@ impl Tractogram {
                 entries: &[
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::COMPUTE,
+                        visibility: ShaderStages::all(),
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -89,7 +88,7 @@ impl Tractogram {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::COMPUTE,
+                        visibility: ShaderStages::all(),
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -99,7 +98,7 @@ impl Tractogram {
                     },
                     BindGroupLayoutEntry {
                         binding: 2,
-                        visibility: ShaderStages::COMPUTE,
+                        visibility: ShaderStages::all(),
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,

@@ -30,7 +30,7 @@ impl TractogramLineRenderRenderer {
                     label,
                     vertex: VertexState {
                         module: &module,
-                        entry_point: "vertex",
+                        entry_point: Some("vertex"),
                         buffers: &[VertexBufferLayout {
                             array_stride: 12,
                             step_mode: VertexStepMode::Vertex,
@@ -44,7 +44,7 @@ impl TractogramLineRenderRenderer {
                     },
                     fragment: Some(FragmentState {
                         module: &module,
-                        entry_point: "fragment",
+                        entry_point: Some("fragment"),
                         targets: &[
                             Some(Surface::position_target()),
                             Some(Surface::normal_target()),

@@ -1,14 +1,15 @@
+// Used instead of vec3<f32> for padding reasons
+struct Vertex {
+    x: f32,
+    y: f32,
+    z: f32
+}
+
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
+@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
-
-struct Segment {
-    @builtin(vertex_index) index: u32,
-    @location(0) v0: vec3<f32>,
-    @location(1) v1: vec3<f32>,
-    @location(2) v2: vec3<f32>,
-}
 
 struct SegmentFragment {
     @builtin(position) clip: vec4<f32>,
@@ -18,12 +19,6 @@ struct SegmentFragment {
     @location(3) bitangent: vec3<f32>,
     @location(4) quad: vec2<f32>,
     @location(5) radius: f32,
-}
-
-struct Cap {
-    @builtin(vertex_index) index: u32,
-    @location(0) v0: vec3<f32>,
-    @location(1) v1: vec3<f32>,
 }
 
 struct CapFragment {
@@ -40,13 +35,13 @@ struct GBuffer {
 }
 
 @vertex
-fn segment_vertex(segment: Segment) -> SegmentFragment {
-    let quad = vec2<f32>(f32((segment.index & 1) == 0), 2.0 * f32((segment.index & 2) == 0) - 1.0);
+fn segment_vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> SegmentFragment {
+    let quad = vec2<f32>(f32((vertex_index & 1) == 0), 2.0 * f32((vertex_index & 2) == 0) - 1.0);
     let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
 
-    let v0 = transform(TRACTOGRAM_TO_WORLD, segment.v0);
-    let v1 = transform(TRACTOGRAM_TO_WORLD, segment.v1);
-    let v2 = transform(TRACTOGRAM_TO_WORLD, segment.v2);
+    let v0 = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 0));
+    let v1 = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 1));
+    let v2 = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 2));
 
     let t0 = normalize(v1 - v0);
     let t1 = normalize(v2 - v1);
@@ -90,12 +85,12 @@ fn segment_fragment(fragment: SegmentFragment, @builtin(front_facing) front: boo
 }
 
 @vertex
-fn cap_vertex(cap: Cap) -> CapFragment {
-    let quad = 2.0 * vec2<f32>(f32((cap.index & 1) == 0), f32((cap.index & 2) == 0)) - 1.0;
+fn cap_vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> CapFragment {
+    let quad = 2.0 * vec2<f32>(f32((vertex_index & 1) == 0), f32((vertex_index & 2) == 0)) - 1.0;
     let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
 
-    let v0_world = TRACTOGRAM_TO_WORLD * vec4<f32>(cap.v0, 1.0);
-    let v1_world = TRACTOGRAM_TO_WORLD * vec4<f32>(cap.v1, 1.0);
+    let v0_world = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 0));
+    let v1_world = transform(TRACTOGRAM_TO_WORLD, get_vertex(instance_index + 1));
 
     let normal = normalize(v0_world - v1_world).xyz;
     let tangent = normalize(cross(normal, vec3<f32>(1.0, 0.0, 0.0)));
@@ -133,4 +128,9 @@ fn slerp(start: vec3<f32>, end: vec3<f32>, percent: f32) -> vec3<f32> {
      let dot = dot(start, end);
      let theta = acos(dot) * percent;
      return start * cos(theta) + normalize(end - start * dot) * sin(theta);
+}
+
+fn get_vertex(index: u32) -> vec3<f32> {
+    let v = TRACTOGRAM_VERTICES[index];
+    return vec3<f32>(v.x, v.y, v.z);
 }
