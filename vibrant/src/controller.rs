@@ -8,7 +8,7 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{Renderer, Settings, Shader};
+use settings::{Geometry, Settings};
 use state::ControllerState;
 
 use crate::loader::AssetLoader;
@@ -61,40 +61,42 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
-            ComboBox::from_label("Renderer")
-                .selected_text(format!("{:?}", self.settings.renderer))
+            ComboBox::from_label("Geometry")
+                .selected_text(format!("{:?}", self.settings.geometry))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
-                        &mut self.settings.renderer,
-                        Renderer::LineRender,
+                        &mut self.settings.geometry,
+                        Geometry::LineRender,
                         "LineRender",
                     );
                     ui.selectable_value(
-                        &mut self.settings.renderer,
-                        Renderer::TubeImpostor,
+                        &mut self.settings.geometry,
+                        Geometry::TubeImpostor,
                         "TubeImpostor",
                     );
                     ui.selectable_value(
-                        &mut self.settings.renderer,
-                        Renderer::TubeRaycast,
+                        &mut self.settings.geometry,
+                        Geometry::TubeRaycast,
                         "TubeRaycast",
                     );
                 });
 
-            ComboBox::from_label("Shader")
-                .selected_text(format!("{:?}", self.settings.shader))
+            ComboBox::from_label("Debug")
+                .selected_text(format!("{:?}", self.settings.debug))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
-                        &mut self.settings.shader,
-                        Shader::AmbientOcclusion,
-                        "AmbientOcclusion",
+                        &mut self.settings.debug,
+                        settings::DebugSetting::Disabled,
+                        "Disabled",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.debug,
+                        settings::DebugSetting::Hierarchy,
+                        "Hierarchy",
                     );
                 });
+            ui.add(Slider::new(&mut self.settings.debug_level, 0.0..=10.0).text("Debug Level"));
 
-            ui.add(
-                Slider::new(&mut self.settings.ambient_occlusion_samples, 8..=100)
-                    .text("Ambient Occlusion Samples"),
-            );
             ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.01..=1.0)
                     .logarithmic(true)

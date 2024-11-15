@@ -1,12 +1,13 @@
 pub mod buffer;
 pub mod depth;
-pub mod depth_hierarchy;
 pub mod gbuffer;
+pub mod hierarchy;
 pub mod visibility;
 
 use buffer::FrameBuffer;
 use depth::Depth;
 use gbuffer::GBuffer;
+use hierarchy::DepthHierarchy;
 use visibility::Visibility;
 use wgpu::{SurfaceTarget, SurfaceTexture};
 
@@ -17,6 +18,7 @@ pub struct Surface {
     visibility: Visibility,
     depth: Depth,
     gbuffer: GBuffer,
+    hierarchy: DepthHierarchy,
 }
 
 impl Surface {
@@ -35,6 +37,7 @@ impl Surface {
             visibility: Visibility::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
             gbuffer: GBuffer::new(gpu, width, height),
+            hierarchy: DepthHierarchy::new(gpu, width / 4, height / 4),
         }
     }
 
@@ -45,17 +48,27 @@ impl Surface {
         self.visibility = Visibility::new(gpu, width, height);
         self.depth = Depth::new(gpu, width, height);
         self.gbuffer = GBuffer::new(gpu, width, height);
+        self.hierarchy = DepthHierarchy::new(gpu, width / 4, height / 4);
     }
 
     pub fn surface_frame(&self) -> SurfaceFrame {
-        SurfaceFrame::new(
-            self.surface
-                .get_current_texture()
-                .expect("Could not optain SurfaceTexture"),
-            &self.visibility,
-            &self.depth,
-            &self.gbuffer,
-        )
+        let surface_texture = self
+            .surface
+            .get_current_texture()
+            .expect("Could not optain SurfaceTexture");
+
+        SurfaceFrame {
+            frame: Frame {
+                width: surface_texture.texture.width(),
+                height: surface_texture.texture.height(),
+                buffer: FrameBuffer::new(&surface_texture.texture),
+                visibility: &self.visibility,
+                depth: &self.depth,
+                gbuffer: &self.gbuffer,
+                hierarchy: &self.hierarchy,
+            },
+            surface_texture,
+        }
     }
 }
 
@@ -65,25 +78,6 @@ pub struct SurfaceFrame<'a> {
 }
 
 impl<'a> SurfaceFrame<'a> {
-    pub fn new(
-        surface_texture: SurfaceTexture,
-        visibility: &'a Visibility,
-        depth: &'a Depth,
-        gbuffer: &'a GBuffer,
-    ) -> Self {
-        Self {
-            frame: Frame::new(
-                surface_texture.texture.width(),
-                surface_texture.texture.height(),
-                FrameBuffer::new(&surface_texture.texture),
-                visibility,
-                depth,
-                gbuffer,
-            ),
-            surface_texture,
-        }
-    }
-
     pub fn present(self) {
         self.surface_texture.present();
     }
@@ -94,54 +88,11 @@ impl<'a> SurfaceFrame<'a> {
 }
 
 pub struct Frame<'a> {
-    width: u32,
-    height: u32,
-    frame_buffer: FrameBuffer,
-    visibility: &'a Visibility,
-    depth: &'a Depth,
-    gbuffer: &'a GBuffer,
-}
-
-impl<'a> Frame<'a> {
-    pub fn new(
-        width: u32,
-        height: u32,
-        frame_buffer: FrameBuffer,
-        visibility: &'a Visibility,
-        depth: &'a Depth,
-        gbuffer: &'a GBuffer,
-    ) -> Self {
-        Frame {
-            width,
-            height,
-            frame_buffer,
-            visibility,
-            depth,
-            gbuffer,
-        }
-    }
-
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    pub fn buffer(&self) -> &FrameBuffer {
-        &self.frame_buffer
-    }
-
-    pub fn visibility(&self) -> &Visibility {
-        &self.visibility
-    }
-
-    pub fn depth(&self) -> &Depth {
-        &self.depth
-    }
-
-    pub fn gbuffer(&self) -> &GBuffer {
-        &self.gbuffer
-    }
+    pub width: u32,
+    pub height: u32,
+    pub buffer: FrameBuffer,
+    pub visibility: &'a Visibility,
+    pub depth: &'a Depth,
+    pub gbuffer: &'a GBuffer,
+    pub hierarchy: &'a DepthHierarchy,
 }

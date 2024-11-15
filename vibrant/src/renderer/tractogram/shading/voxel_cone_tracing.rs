@@ -78,14 +78,14 @@ impl TractogramFullRenderer {
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(frame.buffer().attachment_srgb())],
+            color_attachments: &[Some(frame.buffer.attachment_srgb())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
+        pass.set_bind_group(0, frame.gbuffer.binding(), &[]);
         pass.set_bind_group(1, density.binding_render(), &[]);
         pass.set_bind_group(2, tractogram.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);

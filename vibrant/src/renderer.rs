@@ -1,4 +1,5 @@
 pub mod constants;
+pub mod debug;
 pub mod environment;
 pub mod services;
 pub mod tractogram;
@@ -7,6 +8,7 @@ pub mod volume;
 
 use crate::renderer::tractogram::TractogramRenderer;
 use constants::Constants;
+use debug::DebugRenderer;
 use environment::Environment;
 use ui::UiRenderer;
 use volume::compute::VolumeRenderer;
@@ -29,11 +31,14 @@ pub struct Renderer {
     environment: Environment,
     tractogram: TractogramRenderer,
     volume_render: VolumeRenderer,
+
+    debug: DebugRenderer,
+
     ui: UiRenderer,
 }
 
 impl Renderer {
-    const VOLUME_EXPONENT: u32 = 7;
+    const VOLUME_EXPONENT: u32 = 8;
 
     pub fn new(gpu: Gpu) -> Self {
         let asset = Asset {
@@ -49,6 +54,7 @@ impl Renderer {
 
             tractogram: TractogramRenderer::new(&gpu, &constants),
             volume_render: VolumeRenderer::new(&gpu),
+            debug: DebugRenderer::new(&gpu),
             ui: UiRenderer::new(&gpu),
 
             environment: Environment::new(&gpu),
@@ -101,8 +107,7 @@ impl Renderer {
                 frame,
                 tractogram,
                 &self.asset.density,
-                &controller.settings().renderer,
-                &controller.settings().shader,
+                &controller.settings().geometry,
             );
         }
 
@@ -110,6 +115,9 @@ impl Renderer {
             self.volume_render
                 .render(&mut cmd, &self.environment, frame, volume);
         }
+
+        self.debug
+            .render(&mut cmd, frame, &self.environment, controller.settings());
 
         self.ui.render(&self.gpu, &mut cmd, &frame, ctx, output);
 

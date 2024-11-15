@@ -1,3 +1,4 @@
+use culling::occlusion::TractogramOcclusionRenderer;
 use density::compute::TractogramDensityComputeRenderer;
 use line::render::TractogramLineRenderRenderer;
 use shading::voxel_cone_tracing::TractogramFullRenderer;
@@ -6,7 +7,7 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::{Density, Tractogram},
-    controller::settings::{Renderer, Shader},
+    controller::settings::Geometry,
     gpu::Gpu,
     surface::Frame,
 };
@@ -25,6 +26,7 @@ pub struct TractogramRenderer {
     tube_raycast: TractogramTubeRaycastRenderer,
     full: TractogramFullRenderer,
     density: TractogramDensityComputeRenderer,
+    occlusion: TractogramOcclusionRenderer,
 }
 
 impl TractogramRenderer {
@@ -35,6 +37,7 @@ impl TractogramRenderer {
             tube_raycast: TractogramTubeRaycastRenderer::new(gpu),
             full: TractogramFullRenderer::new(gpu, constants),
             density: TractogramDensityComputeRenderer::new(gpu, constants),
+            occlusion: TractogramOcclusionRenderer::new(gpu, constants),
         }
     }
 
@@ -45,19 +48,17 @@ impl TractogramRenderer {
         frame: &Frame,
         tractogram: &Tractogram,
         density: &Density,
-        renderer: &Renderer,
-        shader: &Shader,
+        renderer: &Geometry,
     ) {
         self.density.render(cmd, env, tractogram, density);
+        self.occlusion.render(cmd, frame, env, density);
 
         match renderer {
-            Renderer::LineRender => self.line_render.render(cmd, env, frame, tractogram),
-            Renderer::TubeImpostor => self.tube_impostor.render(cmd, env, frame, tractogram),
-            Renderer::TubeRaycast => self.tube_raycast.render(cmd, env, frame, tractogram),
+            Geometry::LineRender => self.line_render.render(cmd, env, frame, tractogram),
+            Geometry::TubeImpostor => self.tube_impostor.render(cmd, env, frame, tractogram),
+            Geometry::TubeRaycast => self.tube_raycast.render(cmd, env, frame, tractogram),
         }
 
-        match shader {
-            Shader::AmbientOcclusion => self.full.render(cmd, env, frame, density, tractogram),
-        }
+        self.full.render(cmd, env, frame, density, tractogram)
     }
 }

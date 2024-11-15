@@ -18,12 +18,15 @@ use vibrant::{
             shading::voxel_cone_tracing::TractogramFullRenderer,
         },
     },
-    surface::{buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, visibility::Visibility, Frame},
+    surface::{
+        buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, hierarchy::DepthHierarchy,
+        visibility::Visibility, Frame,
+    },
     Vec2,
 };
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BufferUsages,
+    BufferUsages, Texture,
 };
 
 const WIDTH: u32 = 1920;
@@ -31,6 +34,38 @@ const HEIGHT: u32 = 1080;
 const VOLUME: u32 = 9;
 
 const TRACTOGRAM_PATH: &'static str = "assets/HPC-100307/whole_brain1M.tck";
+
+struct TestSurface {
+    buffer: Texture,
+    visibility: Visibility,
+    depth: Depth,
+    gbuffer: GBuffer,
+    hierarchy: DepthHierarchy,
+}
+
+impl TestSurface {
+    pub fn new(gpu: &Gpu) -> Self {
+        Self {
+            buffer: FrameBuffer::texture(gpu, WIDTH, HEIGHT),
+            visibility: Visibility::new(gpu, WIDTH, HEIGHT),
+            depth: Depth::new(gpu, WIDTH, HEIGHT),
+            gbuffer: GBuffer::new(gpu, WIDTH, HEIGHT),
+            hierarchy: DepthHierarchy::new(gpu, WIDTH, HEIGHT),
+        }
+    }
+
+    pub fn frame<'a>(&'a self) -> Frame<'a> {
+        Frame {
+            width: WIDTH,
+            height: HEIGHT,
+            buffer: FrameBuffer::new(&self.buffer),
+            visibility: &self.visibility,
+            depth: &self.depth,
+            gbuffer: &self.gbuffer,
+            hierarchy: &self.hierarchy,
+        }
+    }
+}
 
 pub fn get_environment(gpu: &Gpu) -> Environment {
     let environment = Environment::new(&gpu);
@@ -53,11 +88,8 @@ pub fn baseline(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            let frame_buffer = FrameBuffer::new(&FrameBuffer::texture(&gpu, WIDTH, HEIGHT));
-            let visibility = Visibility::new(&gpu, WIDTH, HEIGHT);
-            let depth = Depth::new(&gpu, WIDTH, HEIGHT);
-            let gbuffer = GBuffer::new(&gpu, WIDTH, HEIGHT);
-            let frame = Frame::new(WIDTH, HEIGHT, frame_buffer, &visibility, &depth, &gbuffer);
+            let surface = TestSurface::new(&gpu);
+            let frame = surface.frame();
 
             renderer.render(&mut cmd, &environment, &frame, &tractogram);
 
@@ -81,11 +113,8 @@ pub fn compute(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            let frame_buffer = FrameBuffer::new(&FrameBuffer::texture(&gpu, WIDTH, HEIGHT));
-            let visibility = Visibility::new(&gpu, WIDTH, HEIGHT);
-            let depth = Depth::new(&gpu, WIDTH, HEIGHT);
-            let gbuffer = GBuffer::new(&gpu, WIDTH, HEIGHT);
-            let frame = Frame::new(WIDTH, HEIGHT, frame_buffer, &visibility, &depth, &gbuffer);
+            let surface = TestSurface::new(&gpu);
+            let frame = surface.frame();
 
             renderer.render(&mut cmd, &environment, &frame, &tractogram);
 
@@ -148,11 +177,8 @@ pub fn render(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            let frame_buffer = FrameBuffer::new(&FrameBuffer::texture(&gpu, WIDTH, HEIGHT));
-            let visibility = Visibility::new(&gpu, WIDTH, HEIGHT);
-            let depth = Depth::new(&gpu, WIDTH, HEIGHT);
-            let gbuffer = GBuffer::new(&gpu, WIDTH, HEIGHT);
-            let frame = Frame::new(WIDTH, HEIGHT, frame_buffer, &visibility, &depth, &gbuffer);
+            let surface = TestSurface::new(&gpu);
+            let frame = surface.frame();
 
             renderer.render(&mut cmd, &environment, &frame, &density, &tractogram);
 

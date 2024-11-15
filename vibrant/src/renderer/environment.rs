@@ -26,6 +26,7 @@ impl Environment {
             step_size: f32,
             grad_size: f32,
             min_value: f32,
+            debug_level: f32,
         }
 
         struct Camera {
@@ -52,7 +53,7 @@ impl Environment {
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 256,
+            size: 272,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -98,6 +99,7 @@ impl Environment {
                 bytes_of(&controller.settings().step_size),
                 bytes_of(&controller.settings().grad_size),
                 bytes_of(&controller.settings().min_value),
+                bytes_of(&controller.settings().debug_level),
             ]
             .concat(),
         );

@@ -35,7 +35,7 @@ impl UiRenderer {
         let (device, queue) = (gpu.device(), gpu.queue());
 
         let screen = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [frame.width(), frame.height()],
+            size_in_pixels: [frame.width, frame.height],
             pixels_per_point: output.pixels_per_point,
         };
 
@@ -50,8 +50,8 @@ impl UiRenderer {
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
                 label: Some(type_name::<Self>()),
-                color_attachments: &[Some(frame.buffer().attachment())],
-                depth_stencil_attachment: Some(frame.depth().attachment()),
+                color_attachments: &[Some(frame.buffer.attachment())],
+                depth_stencil_attachment: Some(frame.depth.attachment()),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             })

@@ -63,8 +63,8 @@ impl TractogramTubeRaycastRenderer {
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &frame.gbuffer().attachments(),
-            depth_stencil_attachment: Some(frame.depth().attachment()),
+            color_attachments: &frame.gbuffer.attachments(),
+            depth_stencil_attachment: Some(frame.depth.attachment()),
             timestamp_writes: None,
             occlusion_query_set: None,
         });

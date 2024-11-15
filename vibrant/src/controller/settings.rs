@@ -1,13 +1,14 @@
 #[derive(Debug, PartialEq, Eq)]
-pub enum Renderer {
+pub enum Geometry {
     LineRender,
     TubeImpostor,
     TubeRaycast,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Shader {
-    AmbientOcclusion,
+pub enum DebugSetting {
+    Disabled,
+    Hierarchy,
 }
 
 pub struct Settings {
@@ -19,8 +20,9 @@ pub struct Settings {
     pub step_size: f32,
     pub grad_size: f32,
     pub min_value: f32,
-    pub renderer: Renderer,
-    pub shader: Shader,
+    pub debug_level: f32,
+    pub geometry: Geometry,
+    pub debug: DebugSetting,
 }
 
 impl Settings {
@@ -34,8 +36,9 @@ impl Settings {
             step_size: 0.1,
             grad_size: 1.0,
             min_value: 0.0,
-            renderer: Renderer::LineRender,
-            shader: Shader::AmbientOcclusion,
+            debug_level: 0.0,
+            geometry: Geometry::LineRender,
+            debug: DebugSetting::Disabled,
         }
     }
 }
