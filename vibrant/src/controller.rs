@@ -71,31 +71,10 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.geometry,
-                        Geometry::TubeImpostor,
-                        "TubeImpostor",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.geometry,
                         Geometry::TubeRaycast,
                         "TubeRaycast",
                     );
                 });
-
-            ComboBox::from_label("Debug")
-                .selected_text(format!("{:?}", self.settings.debug))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.settings.debug,
-                        settings::DebugSetting::Disabled,
-                        "Disabled",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.debug,
-                        settings::DebugSetting::Hierarchy,
-                        "Hierarchy",
-                    );
-                });
-            ui.add(Slider::new(&mut self.settings.debug_level, 0.0..=10.0).text("Debug Level"));
 
             ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.01..=1.0)
@@ -109,20 +88,10 @@ impl Controller {
             );
 
             ui.add(
-                Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Gradient Factor"),
+                Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Tangent Coloring"),
             );
 
             ui.add(Slider::new(&mut self.settings.cull_level, 0.0..=1.0).text("Cull Level"));
-
-            ui.add(
-                Slider::new(&mut self.settings.opacity_factor, 0.0001..=2.0)
-                    .logarithmic(true)
-                    .text("Opacity Factor"),
-            );
-
-            ui.add(Slider::new(&mut self.settings.step_size, 0.01..=1.0).text("Step Size"));
-            ui.add(Slider::new(&mut self.settings.grad_size, 0.01..=10.0).text("Gradient Size"));
-            ui.add(Slider::new(&mut self.settings.min_value, 0.0..=1000.0).text("Min Value"));
         });
     }
 

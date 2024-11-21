@@ -38,7 +38,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    const VOLUME_EXPONENT: u32 = 7;
+    const VOLUME_EXPONENT: u32 = 8;
 
     pub fn new(gpu: Gpu) -> Self {
         let asset = Asset {

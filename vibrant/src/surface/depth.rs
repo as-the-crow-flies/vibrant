@@ -14,7 +14,7 @@ pub struct Depth {
 }
 
 impl Depth {
-    pub const FORMAT: TextureFormat = TextureFormat::Depth16Unorm;
+    pub const FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());

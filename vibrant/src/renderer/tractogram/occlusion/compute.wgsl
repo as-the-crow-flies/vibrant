@@ -7,7 +7,8 @@
 @compute
 @workgroup_size(WORKGROUP_XYZ, WORKGROUP_XYZ, WORKGROUP_XYZ)
 fn compute(@builtin(global_invocation_id) voxel: vec3<u32>) {
-    let one_over_dim = 1.0 / f32(VOLUME_XYZ);
+    let dim = f32(VOLUME_XYZ);
+    let one_over_dim = 1.0 / dim;
     let half = vec3<f32>(0.5);
 
     var result = textureLoad(SRC, voxel, 0).x;
@@ -20,9 +21,10 @@ fn compute(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let distance = length(delta);
     let direction = normalize(delta);
 
-    let sample = textureSampleLevel(SRC, SAMPLER, position + direction * STEP + half, 0.0).x;
-
-    if (STEP < distance) { result += sample; }
+    if (STEP < distance) {
+        let coordinate = position + direction * STEP + half;
+        result += textureSampleLevel(SRC, SAMPLER, coordinate, 0.0).x;
+    }
 
     textureStore(DST, voxel, vec4<f32>(vec3<f32>(result), 1.0));
 }

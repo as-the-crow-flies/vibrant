@@ -17,8 +17,7 @@ pub struct TractogramOcclusionComputeRenderer {
 
 impl TractogramOcclusionComputeRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
-        let n_powers_of_two = constants.volume_xyz.ilog2();
-        let powers_of_two = (1..=n_powers_of_two)
+        let steps = (0..=constants.volume_xyz.ilog2())
             .map(|i| 2u32.pow(i) as f32 / constants.volume_xyz as f32)
             .collect_vec();
 
@@ -61,7 +60,7 @@ impl TractogramOcclusionComputeRenderer {
                 ),
                 "compute",
             ),
-            push: Push::new(gpu, &powers_of_two),
+            push: Push::new(gpu, &steps),
         }
     }
 
@@ -78,7 +77,7 @@ impl TractogramOcclusionComputeRenderer {
         self.filter(cmd, environment, occlusion, tractogram);
     }
 
-    fn copy(&self, cmd: &mut CommandEncoder, density: &Density, occlusion: &Occlusion) {
+    pub fn copy(&self, cmd: &mut CommandEncoder, density: &Density, occlusion: &Occlusion) {
         let src = density.texture().binding();
         let dst = if self.push.len() % 2 == 0 {
             occlusion.ping().binding_write()
@@ -95,7 +94,12 @@ impl TractogramOcclusionComputeRenderer {
         pass.dispatch_workgroups(size, size, size);
     }
 
-    fn trace(&self, cmd: &mut CommandEncoder, environment: &Environment, occlusion: &Occlusion) {
+    pub fn trace(
+        &self,
+        cmd: &mut CommandEncoder,
+        environment: &Environment,
+        occlusion: &Occlusion,
+    ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
         let size = self.constants.num_workgroups_volume();
 
@@ -128,7 +132,7 @@ impl TractogramOcclusionComputeRenderer {
         }
     }
 
-    fn filter(
+    pub fn filter(
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,

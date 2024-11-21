@@ -1,18 +1,21 @@
 use std::{any::type_name, f32::consts::PI};
 
+use bytemuck::bytes_of;
 use glam::{Mat4, Quat, Vec3};
+
 use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
+    BufferUsages, CommandEncoder, ShaderStages,
 };
 
 use crate::{gpu::Gpu, loader};
 
 pub struct Tractogram {
     vertices: Buffer,
+    indices: Buffer,
     caps: Buffer,
     binding: BindGroup,
     binding_full: BindGroup,
@@ -183,6 +186,13 @@ impl Tractogram {
     pub fn new(gpu: &Gpu, tractogram: &loader::Tck) -> Self {
         let label = Some(type_name::<Self>());
 
+        let indices = tractogram
+            .vertices()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
+            .collect_vec();
+
         let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(tractogram.vertices()),
@@ -195,11 +205,10 @@ impl Tractogram {
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
         });
 
-        let indices = gpu.device().create_buffer(&BufferDescriptor {
+        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            size: 4 * tractogram.vertices().len().next_multiple_of(256) as u64,
+            contents: bytemuck::cast_slice(&indices),
             usage: BufferUsages::STORAGE,
-            mapped_at_creation: false,
         });
 
         let scale = tractogram.bounds().scale();
@@ -323,12 +332,13 @@ impl Tractogram {
         });
 
         Self {
+            count: TractogramCount::new(gpu, (indices.size() / 4) as u32),
             vertices,
+            indices,
             caps,
             binding,
             binding_full,
             binding_full_write,
-            count: TractogramCount::new(gpu),
         }
     }
 }
@@ -336,6 +346,7 @@ impl Tractogram {
 impl Drop for Tractogram {
     fn drop(&mut self) {
         self.vertices.destroy();
+        self.indices.destroy();
     }
 }
 
@@ -345,14 +356,13 @@ pub struct TractogramCount {
 }
 
 impl TractogramCount {
-    pub fn new(gpu: &Gpu) -> Self {
+    pub fn new(gpu: &Gpu, count: u32) -> Self {
         let label = Some(type_name::<Self>());
 
-        let buffer = gpu.device().create_buffer(&BufferDescriptor {
+        let buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            size: 4,
+            contents: bytes_of(&count),
             usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
-            mapped_at_creation: false,
         });
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
