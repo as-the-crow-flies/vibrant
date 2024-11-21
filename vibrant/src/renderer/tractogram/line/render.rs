@@ -1,9 +1,11 @@
 use std::any::type_name;
 
+use bytemuck::bytes_of;
 use wgpu::{
-    CommandEncoder, FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState,
-    PrimitiveTopology, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    util::{BufferInitDescriptor, DeviceExt},
+    Buffer, BufferUsages, CommandEncoder, FragmentState, MultisampleState,
+    PipelineCompilationOptions, PrimitiveState, PrimitiveTopology, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
 use crate::{
@@ -15,6 +17,7 @@ use crate::{
 
 pub struct TractogramLineRenderRenderer {
     pipeline: RenderPipeline,
+    indirect: Buffer,
 }
 
 impl TractogramLineRenderRenderer {
@@ -31,15 +34,7 @@ impl TractogramLineRenderRenderer {
                     vertex: VertexState {
                         module: &module,
                         entry_point: Some("vertex"),
-                        buffers: &[VertexBufferLayout {
-                            array_stride: 12,
-                            step_mode: VertexStepMode::Vertex,
-                            attributes: &[VertexAttribute {
-                                format: VertexFormat::Float32x3,
-                                offset: 0,
-                                shader_location: 0,
-                            }],
-                        }],
+                        buffers: &[],
                         compilation_options: PipelineCompilationOptions::default(),
                     },
                     fragment: Some(FragmentState {
@@ -52,17 +47,20 @@ impl TractogramLineRenderRenderer {
                         topology: PrimitiveTopology::LineStrip,
                         ..Default::default()
                     },
-                    layout: Some(
-                        &gpu.pipeline_layout(&[
-                            &Tractogram::layout(gpu),
-                            &Environment::layout(gpu),
-                        ]),
-                    ),
+                    layout: Some(&gpu.pipeline_layout(&[
+                        &Tractogram::layout_full(gpu),
+                        &Environment::layout(gpu),
+                    ])),
                     depth_stencil: Some(Depth::state()),
                     multisample: MultisampleState::default(),
                     multiview: None,
                     cache: None,
                 }),
+            indirect: gpu.device().create_buffer_init(&BufferInitDescriptor {
+                label,
+                contents: bytes_of(&[2u32, 0, 0, 0]),
+                usage: BufferUsages::COPY_DST | BufferUsages::INDIRECT,
+            }),
         }
     }
 
@@ -73,6 +71,8 @@ impl TractogramLineRenderRenderer {
         frame: &Frame,
         tractogram: &Tractogram,
     ) {
+        cmd.copy_buffer_to_buffer(&tractogram.count().buffer(), 0, &self.indirect, 4, 4);
+
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
             color_attachments: &frame.gbuffer.attachments(),
@@ -82,9 +82,8 @@ impl TractogramLineRenderRenderer {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(0, tractogram.binding_full(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_vertex_buffer(0, tractogram.vertices().slice(..));
-        pass.draw(0..tractogram.vertex_count(), 0..1);
+        pass.draw_indirect(&self.indirect, 0);
     }
 }

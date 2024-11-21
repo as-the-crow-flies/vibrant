@@ -3,17 +3,16 @@ use std::any::type_name;
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayoutDescriptor};
 
 use crate::{
-    asset::{density::Density, tractogram::Tractogram},
+    asset::{density::Density, scalar::ScalarTexture, tractogram::Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
 };
 
 pub struct TractogramDensityComputeRenderer {
     constants: Constants,
-    clear_pipeline: ComputePipeline,
-    rasterize_pipeline: ComputePipeline,
-    copy_pipeline: ComputePipeline,
-    mipmap_pipeline: ComputePipeline,
+    rasterize: ComputePipeline,
+    copy: ComputePipeline,
+    mipmap: ComputePipeline,
 }
 
 impl TractogramDensityComputeRenderer {
@@ -22,22 +21,12 @@ impl TractogramDensityComputeRenderer {
 
         Self {
             constants: constants.clone(),
-            clear_pipeline: gpu.compute(
-                &gpu.device()
-                    .create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label,
-                        bind_group_layouts: &[&Density::layout_compute(gpu)],
-                        push_constant_ranges: &[],
-                    }),
-                &gpu.shader(include_str!("clear.wgsl"), Some(constants)),
-                "main",
-            ),
-            rasterize_pipeline: gpu.compute(
+            rasterize: gpu.compute(
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
                         bind_group_layouts: &[
-                            &Density::layout_compute(gpu),
+                            &Density::layout(gpu),
                             &Tractogram::layout_full(gpu),
                             &Environment::layout(gpu),
                         ],
@@ -49,21 +38,24 @@ impl TractogramDensityComputeRenderer {
                 ),
                 "main",
             ),
-            copy_pipeline: gpu.compute(
+            copy: gpu.compute(
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
-                        bind_group_layouts: &[&Density::layout_copy(gpu)],
+                        bind_group_layouts: &[
+                            &Density::layout(gpu),
+                            &ScalarTexture::layout_write(gpu),
+                        ],
                         push_constant_ranges: &[],
                     }),
                 &gpu.shader(include_str!("copy.wgsl"), Some(constants)),
                 "main",
             ),
-            mipmap_pipeline: gpu.compute(
+            mipmap: gpu.compute(
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
-                        bind_group_layouts: &[&Density::layout_mipmap(gpu)],
+                        bind_group_layouts: &[&ScalarTexture::layout_mipmap(gpu)],
                         push_constant_ranges: &[],
                     }),
                 &gpu.shader(include_str!("mipmap.wgsl"), Some(constants)),
@@ -79,30 +71,29 @@ impl TractogramDensityComputeRenderer {
         tractogram: &Tractogram,
         density: &Density,
     ) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        cmd.clear_buffer(density.buffer(), 0, None);
 
-        pass.set_bind_group(0, density.binding_compute(), &[]);
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut size = self.constants.num_workgroups_volume();
+
+        pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, tractogram.binding_full(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
-
-        pass.set_pipeline(&self.clear_pipeline);
-
-        let mut size = self.constants.num_workgroups_volume();
-        pass.dispatch_workgroups(size, size, size);
 
         let count = tractogram
             .vertex_count()
             .div_ceil(self.constants.workgroup_x);
-        pass.set_pipeline(&self.rasterize_pipeline);
+        pass.set_pipeline(&self.rasterize);
         pass.dispatch_workgroups(count, 1, 1);
 
-        pass.set_pipeline(&self.copy_pipeline);
-        pass.set_bind_group(0, density.binding_copy(), &[]);
+        pass.set_pipeline(&self.copy);
+        pass.set_bind_group(0, density.binding(), &[]);
+        pass.set_bind_group(1, density.texture().binding_write(), &[]);
         pass.dispatch_workgroups(size, size, size);
 
-        pass.set_pipeline(&self.mipmap_pipeline);
+        pass.set_pipeline(&self.mipmap);
 
-        for binding in density.bindings_mipmap() {
+        for binding in density.texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(size, size, size);
 

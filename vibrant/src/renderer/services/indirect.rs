@@ -10,13 +10,13 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
-pub struct Indirect {
+pub struct ComputeIndirect {
     binding: BindGroup,
     indirect: Buffer,
     clear: Buffer,
 }
 
-impl Indirect {
+impl ComputeIndirect {
     pub fn new(gpu: &Gpu, clear: [u32; 3]) -> Self {
         let label = Some(type_name::<Self>());
 

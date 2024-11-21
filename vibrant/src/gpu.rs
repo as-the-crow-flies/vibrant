@@ -2,7 +2,6 @@ use std::{any::type_name, borrow::Cow};
 
 use bytemuck::Pod;
 use futures::channel::oneshot::channel;
-use log::info;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
     CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, DepthStencilState,
@@ -31,8 +30,6 @@ impl Gpu {
             })
             .await
             .expect("Could not aqcuire GPU Adapter");
-
-        info!("{:?}", adapter.features());
 
         let limits = adapter.limits();
 

@@ -8,14 +8,10 @@ use vibrant::{
     renderer::{
         constants::Constants,
         environment::Environment,
-        services::{
-            filter::{Filter, FilterDescriptor},
-            scan::{ItemType, Scan, ScanDescriptor},
-        },
         tractogram::{
-            density::compute::TractogramDensityComputeRenderer,
+            density::TractogramDensityComputeRenderer,
             line::{compute::TractogramLineComputeRenderer, render::TractogramLineRenderRenderer},
-            shading::voxel_cone_tracing::TractogramFullRenderer,
+            shading::TractogramFullRenderer,
         },
     },
     surface::{
@@ -24,10 +20,7 @@ use vibrant::{
     },
     Vec2,
 };
-use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
-    BufferUsages, Texture,
-};
+use wgpu::Texture;
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
@@ -188,65 +181,5 @@ pub fn render(criterion: &mut Criterion) {
     });
 }
 
-const DATA_SIZE: u32 = 64 * 1024 * 1024;
-
-pub fn scan(criterion: &mut Criterion) {
-    let gpu = Gpu::new().block_on();
-    let array: Vec<u32> = (0..DATA_SIZE).into_iter().map(|_| 1u32).collect();
-
-    let buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(&array),
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-    });
-
-    let scan = Scan::new(
-        &gpu,
-        &ScanDescriptor {
-            scan: &buffer,
-            item_type: ItemType::U32,
-            items_per_thread: 16,
-        },
-    );
-
-    criterion.bench_function(stringify!(scan), |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-            scan.compute(&mut cmd);
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-pub fn filter(criterion: &mut Criterion) {
-    let gpu = Gpu::new().block_on();
-    let array: Vec<u32> = (0..DATA_SIZE).into_iter().map(|_| 1u32).collect();
-
-    let buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(&array),
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-    });
-
-    let filter = Filter::new(
-        &gpu,
-        &FilterDescriptor {
-            buffer: &buffer,
-            workgroup_size: 256,
-            items_per_thread: 16,
-        },
-    );
-
-    criterion.bench_function(stringify!(filter), |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-            filter.compute(&mut cmd);
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-criterion_group!(benches, baseline, compute, density, render, scan, filter);
+criterion_group!(benches, baseline, compute, density, render);
 criterion_main!(benches);

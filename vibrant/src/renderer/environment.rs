@@ -27,6 +27,7 @@ impl Environment {
             grad_size: f32,
             min_value: f32,
             debug_level: f32,
+            cull_level: f32
         }
 
         struct Camera {
@@ -100,6 +101,7 @@ impl Environment {
                 bytes_of(&controller.settings().grad_size),
                 bytes_of(&controller.settings().min_value),
                 bytes_of(&controller.settings().debug_level),
+                bytes_of(&controller.settings().cull_level),
             ]
             .concat(),
         );

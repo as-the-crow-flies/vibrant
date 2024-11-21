@@ -7,7 +7,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{density::Density, Tractogram},
+    asset::{density::Density, scalar::ScalarTexture, Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
     surface::{buffer::FrameBuffer, gbuffer::GBuffer, Frame},
@@ -37,7 +37,7 @@ impl TractogramFullRenderer {
                                 label,
                                 bind_group_layouts: &[
                                     &GBuffer::layout(gpu),
-                                    &Density::layout_render(gpu),
+                                    &ScalarTexture::layout(gpu),
                                     &Tractogram::layout(gpu),
                                     &Environment::layout(gpu),
                                 ],
@@ -86,7 +86,7 @@ impl TractogramFullRenderer {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.gbuffer.binding(), &[]);
-        pass.set_bind_group(1, density.binding_render(), &[]);
+        pass.set_bind_group(1, density.texture().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..4, 0..1);

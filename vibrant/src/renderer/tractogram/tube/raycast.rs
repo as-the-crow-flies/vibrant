@@ -1,8 +1,10 @@
 use std::any::type_name;
 
+use bytemuck::bytes_of;
 use wgpu::{
-    Face, FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
+    util::{BufferInitDescriptor, DeviceExt},
+    Buffer, BufferUsages, Face, FragmentState, MultisampleState, PipelineCompilationOptions,
+    PrimitiveState, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
 use crate::{
@@ -14,17 +16,19 @@ use crate::{
 
 pub struct TractogramTubeRaycastRenderer {
     pipeline: RenderPipeline,
+    indirect: Buffer,
 }
 
 impl TractogramTubeRaycastRenderer {
     pub fn new(gpu: &Gpu) -> Self {
+        let label = Some(type_name::<TractogramTubeRaycastRenderer>());
         let module = gpu.shader(&(Environment::wgsl() + include_str!("raycast.wgsl")), None);
 
         Self {
             pipeline: gpu
                 .device()
                 .create_render_pipeline(&RenderPipelineDescriptor {
-                    label: Some(type_name::<TractogramTubeRaycastRenderer>()),
+                    label,
                     layout: Some(&gpu.pipeline_layout(&[
                         &Tractogram::layout_full(gpu),
                         &Environment::layout(gpu),
@@ -51,6 +55,11 @@ impl TractogramTubeRaycastRenderer {
                     multiview: None,
                     cache: None,
                 }),
+            indirect: gpu.device().create_buffer_init(&BufferInitDescriptor {
+                label,
+                contents: bytes_of(&[14u32, 0, 0, 0]),
+                usage: BufferUsages::INDIRECT | BufferUsages::COPY_DST,
+            }),
         }
     }
 
@@ -61,6 +70,8 @@ impl TractogramTubeRaycastRenderer {
         frame: &crate::surface::Frame,
         tractogram: &Tractogram,
     ) {
+        cmd.copy_buffer_to_buffer(tractogram.count().buffer(), 0, &self.indirect, 4, 4);
+
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
             color_attachments: &frame.gbuffer.attachments(),
@@ -73,6 +84,6 @@ impl TractogramTubeRaycastRenderer {
         pass.set_bind_group(1, env.binding(), &[]);
 
         pass.set_pipeline(&self.pipeline);
-        pass.draw(0..14, 0..tractogram.vertex_count() - 2);
+        pass.draw_indirect(&self.indirect, 0);
     }
 }

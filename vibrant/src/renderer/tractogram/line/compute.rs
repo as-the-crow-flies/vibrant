@@ -1,7 +1,9 @@
 use crate::{
     asset::Tractogram,
     gpu::Gpu,
-    renderer::{constants::Constants, environment::Environment, services::indirect::Indirect},
+    renderer::{
+        constants::Constants, environment::Environment, services::indirect::ComputeIndirect,
+    },
     surface::{buffer::FrameBuffer, visibility::Visibility, Frame},
 };
 use std::any::type_name;
@@ -16,7 +18,7 @@ pub struct TractogramLineComputeRenderer {
     set_dispatch_count: ComputePipeline,
     rasterize: ComputePipeline,
     shade: RenderPipeline,
-    indirect: Indirect,
+    indirect: ComputeIndirect,
 }
 
 impl TractogramLineComputeRenderer {
@@ -30,7 +32,7 @@ impl TractogramLineComputeRenderer {
             &Tractogram::layout_full(gpu),
             &Environment::layout(gpu),
             &Visibility::layout(gpu),
-            &Indirect::layout(gpu),
+            &ComputeIndirect::layout(gpu),
         ]);
 
         let layout = gpu.pipeline_layout(&[
@@ -46,7 +48,7 @@ impl TractogramLineComputeRenderer {
             set_dispatch_count: gpu.compute(&layout_cull, &module, "set_dispatch_count"),
             rasterize: gpu.compute(&layout, &module, "rasterize"),
             shade: gpu.quad(&layout, &module, "shade", FrameBuffer::target_srgb(), None),
-            indirect: Indirect::new(gpu, [0, 1, 1]),
+            indirect: ComputeIndirect::new(gpu, [0, 1, 1]),
         }
     }
 

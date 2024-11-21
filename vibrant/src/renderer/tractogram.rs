@@ -1,12 +1,12 @@
-use culling::occlusion::TractogramOcclusionRenderer;
-use density::compute::TractogramDensityComputeRenderer;
+use density::TractogramDensityComputeRenderer;
 use line::render::TractogramLineRenderRenderer;
-use shading::voxel_cone_tracing::TractogramFullRenderer;
+use occlusion::TractogramOcclusionComputeRenderer;
+use shading::TractogramFullRenderer;
 use tube::{impostor::TractogramTubeImpostorRenderer, raycast::TractogramTubeRaycastRenderer};
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::{Density, Tractogram},
+    asset::{occlusion::Occlusion, Density, Tractogram},
     controller::settings::Geometry,
     gpu::Gpu,
     surface::Frame,
@@ -14,9 +14,9 @@ use crate::{
 
 use super::{constants::Constants, environment::Environment};
 
-pub mod culling;
 pub mod density;
 pub mod line;
+pub mod occlusion;
 pub mod shading;
 pub mod tube;
 
@@ -26,7 +26,7 @@ pub struct TractogramRenderer {
     tube_raycast: TractogramTubeRaycastRenderer,
     full: TractogramFullRenderer,
     density: TractogramDensityComputeRenderer,
-    occlusion: TractogramOcclusionRenderer,
+    occlusion: TractogramOcclusionComputeRenderer,
 }
 
 impl TractogramRenderer {
@@ -37,7 +37,7 @@ impl TractogramRenderer {
             tube_raycast: TractogramTubeRaycastRenderer::new(gpu),
             full: TractogramFullRenderer::new(gpu, constants),
             density: TractogramDensityComputeRenderer::new(gpu, constants),
-            occlusion: TractogramOcclusionRenderer::new(gpu, constants),
+            occlusion: TractogramOcclusionComputeRenderer::new(gpu, constants),
         }
     }
 
@@ -48,10 +48,12 @@ impl TractogramRenderer {
         frame: &Frame,
         tractogram: &Tractogram,
         density: &Density,
+        occlusion: &Occlusion,
         renderer: &Geometry,
     ) {
         self.density.render(cmd, env, tractogram, density);
-        self.occlusion.render(cmd, frame, env, density);
+        self.occlusion
+            .render(cmd, env, density, occlusion, tractogram);
 
         match renderer {
             Geometry::LineRender => self.line_render.render(cmd, env, frame, tractogram),

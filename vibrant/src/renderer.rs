@@ -6,7 +6,7 @@ pub mod tractogram;
 pub mod ui;
 pub mod volume;
 
-use crate::renderer::tractogram::TractogramRenderer;
+use crate::{asset::occlusion::Occlusion, renderer::tractogram::TractogramRenderer};
 use constants::Constants;
 use debug::DebugRenderer;
 use environment::Environment;
@@ -38,13 +38,14 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    const VOLUME_EXPONENT: u32 = 8;
+    const VOLUME_EXPONENT: u32 = 7;
 
     pub fn new(gpu: Gpu) -> Self {
         let asset = Asset {
             tractogram: None,
             volume: None,
             density: Density::new(&gpu, Self::VOLUME_EXPONENT),
+            occlusion: Occlusion::new(&gpu, Self::VOLUME_EXPONENT),
         };
 
         let constants = Constants::new(&gpu, (1, 1), asset.density.size());
@@ -107,6 +108,7 @@ impl Renderer {
                 frame,
                 tractogram,
                 &self.asset.density,
+                &self.asset.occlusion,
                 &controller.settings().geometry,
             );
         }
@@ -124,7 +126,5 @@ impl Renderer {
         self.gpu.submit(cmd);
 
         surface_frame.present();
-
-        self.gpu.wait();
     }
 }

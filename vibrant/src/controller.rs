@@ -112,6 +112,8 @@ impl Controller {
                 Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Gradient Factor"),
             );
 
+            ui.add(Slider::new(&mut self.settings.cull_level, 0.0..=10.0).text("Cull Level"));
+
             ui.add(
                 Slider::new(&mut self.settings.opacity_factor, 0.0001..=2.0)
                     .logarithmic(true)
