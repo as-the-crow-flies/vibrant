@@ -38,7 +38,7 @@ impl Settings {
             grad_size: 1.0,
             min_value: 0.0,
             debug_level: 0.0,
-            cull_level: 4.0,
+            cull_level: 2.0,
             geometry: Geometry::LineRender,
             debug: DebugSetting::Disabled,
         }

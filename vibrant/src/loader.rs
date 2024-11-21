@@ -16,10 +16,7 @@ impl AssetLoader {
     #[cfg(target_arch = "wasm32")]
     pub fn open_file_dialog() {
         wasm_bindgen_futures::spawn_local(async move {
-            let file = rfd::AsyncFileDialog::new()
-                .add_filter("Tracks file format", &[".tck"])
-                .pick_file()
-                .await;
+            let file = rfd::AsyncFileDialog::new().pick_file().await;
 
             if let Some(file) = file {
                 Self::publish_tractogram(Tck::from_bytes(&file.read().await));
@@ -31,9 +28,7 @@ impl AssetLoader {
     pub fn open_file_dialog() {
         use std::{ffi::OsStr, fs};
 
-        let files = rfd::FileDialog::new()
-            .add_filter("Tracks file format", &[".tck"])
-            .pick_files();
+        let files = rfd::FileDialog::new().pick_files();
 
         if let Some(files) = files {
             let tractograms: Vec<Tck> = files

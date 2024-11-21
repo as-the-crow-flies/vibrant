@@ -10,19 +10,31 @@ use crate::{
 pub struct TractogramOcclusionComputeRenderer {
     constants: Constants,
     push: Push,
+    copy: ComputePipeline,
     compute: ComputePipeline,
     filter: ComputePipeline,
 }
 
 impl TractogramOcclusionComputeRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
-        let n_powers_of_two = constants.volume_xyz.ilog2() + 1;
-        let powers_of_two = (0..=n_powers_of_two)
+        let n_powers_of_two = constants.volume_xyz.ilog2();
+        let powers_of_two = (1..=n_powers_of_two)
             .map(|i| 2u32.pow(i) as f32 / constants.volume_xyz as f32)
             .collect_vec();
 
         Self {
             constants: constants.clone(),
+            copy: gpu.compute(
+                &gpu.pipeline_layout(&[
+                    &ScalarTexture::layout(gpu),
+                    &ScalarTexture::layout_write(gpu),
+                ]),
+                &gpu.shader(
+                    &(Environment::wgsl() + include_str!("copy.wgsl")),
+                    Some(&constants),
+                ),
+                "compute",
+            ),
             compute: gpu.compute(
                 &gpu.pipeline_layout(&[
                     &ScalarTexture::layout(gpu),
@@ -61,17 +73,29 @@ impl TractogramOcclusionComputeRenderer {
         occlusion: &Occlusion,
         tractogram: &Tractogram,
     ) {
-        self.trace(cmd, environment, density, occlusion);
+        self.copy(cmd, density, occlusion);
+        self.trace(cmd, environment, occlusion);
         self.filter(cmd, environment, occlusion, tractogram);
     }
 
-    fn trace(
-        &self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        density: &Density,
-        occlusion: &Occlusion,
-    ) {
+    fn copy(&self, cmd: &mut CommandEncoder, density: &Density, occlusion: &Occlusion) {
+        let src = density.texture().binding();
+        let dst = if self.push.len() % 2 == 0 {
+            occlusion.ping().binding_write()
+        } else {
+            occlusion.pong().binding_write()
+        };
+
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        let size = self.constants.num_workgroups_volume();
+
+        pass.set_pipeline(&self.copy);
+        pass.set_bind_group(0, src, &[]);
+        pass.set_bind_group(1, dst, &[]);
+        pass.dispatch_workgroups(size, size, size);
+    }
+
+    fn trace(&self, cmd: &mut CommandEncoder, environment: &Environment, occlusion: &Occlusion) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
         let size = self.constants.num_workgroups_volume();
 
@@ -82,9 +106,7 @@ impl TractogramOcclusionComputeRenderer {
         for index in 0..self.push.len() {
             let even_index = index % 2 == 0;
 
-            let src = if index == 0 {
-                density.texture().binding()
-            } else if even_length == even_index {
+            let src = if even_length == even_index {
                 occlusion.ping().binding()
             } else {
                 occlusion.pong().binding()
