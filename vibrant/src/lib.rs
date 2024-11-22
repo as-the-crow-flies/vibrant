@@ -1,7 +1,7 @@
 pub mod asset;
 pub mod controller;
+pub mod file;
 pub mod gpu;
-pub mod loader;
 pub mod renderer;
 pub mod surface;
 

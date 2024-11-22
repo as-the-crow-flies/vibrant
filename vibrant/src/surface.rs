@@ -9,7 +9,7 @@ use depth::Depth;
 use gbuffer::GBuffer;
 use hierarchy::DepthHierarchy;
 use visibility::Visibility;
-use wgpu::{SurfaceTarget, SurfaceTexture};
+use wgpu::{SurfaceTarget, SurfaceTexture, Texture};
 
 use super::gpu::Gpu;
 
@@ -52,38 +52,42 @@ impl Surface {
     }
 
     pub fn surface_frame(&self) -> SurfaceFrame {
-        let surface_texture = self
+        let texture = self
             .surface
             .get_current_texture()
             .expect("Could not optain SurfaceTexture");
 
         SurfaceFrame {
             frame: Frame {
-                width: surface_texture.texture.width(),
-                height: surface_texture.texture.height(),
-                buffer: FrameBuffer::new(&surface_texture.texture),
+                width: texture.texture.width(),
+                height: texture.texture.height(),
+                buffer: FrameBuffer::new(&texture.texture),
                 visibility: &self.visibility,
                 depth: &self.depth,
                 gbuffer: &self.gbuffer,
                 hierarchy: &self.hierarchy,
             },
-            surface_texture,
+            texture,
         }
     }
 }
 
 pub struct SurfaceFrame<'a> {
-    surface_texture: SurfaceTexture,
+    texture: SurfaceTexture,
     frame: Frame<'a>,
 }
 
 impl<'a> SurfaceFrame<'a> {
     pub fn present(self) {
-        self.surface_texture.present();
+        self.texture.present();
     }
 
     pub fn frame(&self) -> &Frame {
         &self.frame
+    }
+
+    pub fn texture(&self) -> &Texture {
+        &self.texture.texture
     }
 }
 

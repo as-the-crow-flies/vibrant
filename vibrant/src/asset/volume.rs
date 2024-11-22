@@ -10,7 +10,7 @@ use wgpu::{
     TextureViewDimension,
 };
 
-use crate::{gpu::Gpu, loader::Nifti};
+use crate::{file::Nifti, gpu::Gpu};
 
 pub struct Volume {
     value: Texture,

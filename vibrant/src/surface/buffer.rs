@@ -36,7 +36,7 @@ impl FrameBuffer {
 
     pub fn configuration(width: u32, height: u32) -> SurfaceConfiguration {
         SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
             format: Self::FORMAT,
             width,
             height,
@@ -79,7 +79,7 @@ impl FrameBuffer {
             view: &self.view_srgb,
             resolve_target: None,
             ops: Operations {
-                load: LoadOp::Clear(Color::BLACK),
+                load: LoadOp::Clear(Color::TRANSPARENT),
                 store: StoreOp::Store,
             },
         }

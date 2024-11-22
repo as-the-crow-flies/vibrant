@@ -11,7 +11,7 @@ use wgpu::{
     BufferUsages, CommandEncoder, ShaderStages,
 };
 
-use crate::{gpu::Gpu, loader};
+use crate::{file, gpu::Gpu};
 
 pub struct Tractogram {
     vertices: Buffer,
@@ -183,7 +183,7 @@ impl Tractogram {
             })
     }
 
-    pub fn new(gpu: &Gpu, tractogram: &loader::Tck) -> Self {
+    pub fn new(gpu: &Gpu, tractogram: &file::Tck) -> Self {
         let label = Some(type_name::<Self>());
 
         let indices = tractogram

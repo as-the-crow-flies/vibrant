@@ -11,7 +11,7 @@ use light::Light;
 use settings::{Geometry, Settings};
 use state::ControllerState;
 
-use crate::loader::AssetLoader;
+use crate::file::File;
 
 pub struct Controller {
     state: ControllerState,
@@ -48,7 +48,11 @@ impl Controller {
                 }
 
                 if ui.button("📂 open").clicked() {
-                    AssetLoader::open_file_dialog();
+                    File::load();
+                }
+
+                if ui.button("📷 screenshot").clicked() {
+                    File::save();
                 }
 
                 ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {

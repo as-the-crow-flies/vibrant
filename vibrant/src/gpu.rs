@@ -1,14 +1,15 @@
-use std::{any::type_name, borrow::Cow};
+use std::{any::type_name, borrow::Cow, path::PathBuf};
 
 use bytemuck::Pod;
 use futures::channel::oneshot::channel;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
     CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, DepthStencilState,
-    Features, FragmentState, Limits, MapMode, MultisampleState, PipelineLayout,
-    PipelineLayoutDescriptor, PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor,
-    ShaderSource,
+    Extent3d, Features, FragmentState, ImageCopyBuffer, ImageCopyTexture, ImageDataLayout, Limits,
+    MapMode, MultisampleState, Origin3d, PipelineLayout, PipelineLayoutDescriptor, PowerPreference,
+    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, Texture,
+    TextureAspect,
 };
 
 use crate::renderer::constants::Constants;
@@ -159,7 +160,7 @@ impl Gpu {
         self.device.poll(wgpu::MaintainBase::Wait);
     }
 
-    pub async fn read<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
+    pub async fn read_buffer<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
         let result = self.device.create_buffer(&BufferDescriptor {
             label: Some("read.result"),
             size: buffer.size(),
@@ -173,8 +174,12 @@ impl Gpu {
         cmd.copy_buffer_to_buffer(buffer, 0, &result, 0, buffer.size());
         self.queue.submit([cmd.finish()]);
 
+        return self.read(&result).await;
+    }
+
+    pub async fn read<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
         let (sender, receiver) = channel();
-        result.slice(..).map_async(MapMode::Read, |x| {
+        buffer.slice(..).map_async(MapMode::Read, |x| {
             let _ = sender.send(x);
         });
 
@@ -185,7 +190,67 @@ impl Gpu {
             .expect("communication failed")
             .expect("buffer reading failed");
 
-        let view = result.slice(..).get_mapped_range();
+        let view = buffer.slice(..).get_mapped_range();
         return bytemuck::cast_slice(&view).to_owned();
+    }
+
+    pub async fn save(&self, path: PathBuf, texture: &Texture) {
+        let pixel = 4;
+        let width = (texture.width() / 64) * 64;
+        let height = texture.height();
+
+        let result = self.device.create_buffer(&BufferDescriptor {
+            label: Some("read.result"),
+            size: (width * height * pixel) as u64,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut cmd = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        cmd.copy_texture_to_buffer(
+            ImageCopyTexture {
+                texture,
+                mip_level: 0,
+                origin: Origin3d {
+                    x: (texture.width() - width) / 2, // Center Crop
+                    y: 0,
+                    z: 0,
+                },
+                aspect: TextureAspect::All,
+            },
+            ImageCopyBuffer {
+                buffer: &result,
+                layout: ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(width * pixel), // Must be multiple of 256
+                    rows_per_image: None,
+                },
+            },
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit([cmd.finish()]);
+
+        let buffer = self.read(&result).await;
+
+        let file = std::fs::File::create(path).unwrap();
+        let writer = &mut std::io::BufWriter::new(file);
+        let mut enc = png::Encoder::new(writer, width, height);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
+        enc.set_source_chromaticities(png::SourceChromaticities::new(
+            (0.31270, 0.32900),
+            (0.64000, 0.33000),
+            (0.30000, 0.60000),
+            (0.15000, 0.06000),
+        ));
+        let mut writer = enc.write_header().unwrap();
+        writer.write_image_data(&buffer).unwrap();
     }
 }

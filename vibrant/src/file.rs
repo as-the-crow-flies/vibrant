@@ -4,17 +4,21 @@ pub mod tck;
 pub use nifti::*;
 pub use tck::*;
 
-use std::sync::{LazyLock, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{LazyLock, Mutex},
+};
 
 #[derive(Default)]
-pub struct AssetLoader {
+pub struct File {
     pub tractogram: Option<Tck>,
     pub nifti: Option<Nifti>,
+    pub save: Option<PathBuf>,
 }
 
-impl AssetLoader {
+impl File {
     #[cfg(target_arch = "wasm32")]
-    pub fn open_file_dialog() {
+    pub fn load() {
         wasm_bindgen_futures::spawn_local(async move {
             let file = rfd::AsyncFileDialog::new().pick_file().await;
 
@@ -25,7 +29,7 @@ impl AssetLoader {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn open_file_dialog() {
+    pub fn load() {
         use std::{ffi::OsStr, fs};
 
         let files = rfd::FileDialog::new().pick_files();
@@ -52,6 +56,15 @@ impl AssetLoader {
         }
     }
 
+    pub fn save() {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_file_name("screenshot.png")
+            .save_file()
+        {
+            Self::publish_save_path(path);
+        }
+    }
+
     pub fn on_tck(callback: impl FnOnce(Tck)) {
         let mut data = QUEUE.lock().unwrap();
 
@@ -68,6 +81,18 @@ impl AssetLoader {
         }
     }
 
+    pub fn about_to_save() -> bool {
+        QUEUE.lock().unwrap().save.is_some()
+    }
+
+    pub fn on_save(callback: impl FnOnce(PathBuf)) {
+        let mut data = QUEUE.lock().unwrap();
+
+        if let Some(save) = data.save.take() {
+            callback(save);
+        }
+    }
+
     fn publish_tractogram(tractogram: Tck) {
         QUEUE.lock().unwrap().tractogram = Some(tractogram);
     }
@@ -75,6 +100,10 @@ impl AssetLoader {
     fn publish_nifti(nifti: Nifti) {
         QUEUE.lock().unwrap().nifti = Some(nifti);
     }
+
+    fn publish_save_path(path: PathBuf) {
+        QUEUE.lock().unwrap().save = Some(path);
+    }
 }
 
-static QUEUE: LazyLock<Mutex<AssetLoader>> = LazyLock::new(|| Mutex::new(AssetLoader::default()));
+static QUEUE: LazyLock<Mutex<File>> = LazyLock::new(|| Mutex::new(File::default()));

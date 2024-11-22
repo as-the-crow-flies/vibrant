@@ -1,5 +1,4 @@
 pub mod constants;
-pub mod debug;
 pub mod environment;
 pub mod services;
 pub mod tractogram;
@@ -8,15 +7,15 @@ pub mod volume;
 
 use crate::{asset::occlusion::Occlusion, renderer::tractogram::TractogramRenderer};
 use constants::Constants;
-use debug::DebugRenderer;
 use environment::Environment;
+use pollster::FutureExt;
 use ui::UiRenderer;
 use volume::compute::VolumeRenderer;
 use wgpu::SurfaceTarget;
 
 use crate::{
     asset::{density::Density, Asset, Tractogram, Volume},
-    loader::AssetLoader,
+    file::File,
 };
 
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
@@ -31,8 +30,6 @@ pub struct Renderer {
     environment: Environment,
     tractogram: TractogramRenderer,
     volume_render: VolumeRenderer,
-
-    debug: DebugRenderer,
 
     ui: UiRenderer,
 }
@@ -55,7 +52,6 @@ impl Renderer {
 
             tractogram: TractogramRenderer::new(&gpu, &constants),
             volume_render: VolumeRenderer::new(&gpu),
-            debug: DebugRenderer::new(&gpu),
             ui: UiRenderer::new(&gpu),
 
             environment: Environment::new(&gpu),
@@ -86,8 +82,8 @@ impl Renderer {
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {
-        AssetLoader::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(&self.gpu, &tck)));
-        AssetLoader::on_nifti(|nifti| self.asset.volume = Some(Volume::new(&self.gpu, &nifti)));
+        File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(&self.gpu, &tck)));
+        File::on_nifti(|nifti| self.asset.volume = Some(Volume::new(&self.gpu, &nifti)));
 
         self.environment.update(&self.gpu, &controller);
 
@@ -118,12 +114,13 @@ impl Renderer {
                 .render(&mut cmd, &self.environment, frame, volume);
         }
 
-        self.debug
-            .render(&mut cmd, frame, &self.environment, controller.settings());
-
-        self.ui.render(&self.gpu, &mut cmd, &frame, ctx, output);
+        if !File::about_to_save() {
+            self.ui.render(&self.gpu, &mut cmd, &frame, ctx, output);
+        }
 
         self.gpu.submit(cmd);
+
+        File::on_save(|path| self.gpu.save(path, surface_frame.texture()).block_on());
 
         surface_frame.present();
     }

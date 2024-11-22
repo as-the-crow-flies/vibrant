@@ -3,8 +3,8 @@ use pollster::FutureExt;
 use vibrant::{
     asset::{density::Density, tractogram::Tractogram},
     controller::{event::Event, Controller},
+    file,
     gpu::Gpu,
-    loader,
     renderer::{
         constants::Constants,
         environment::Environment,
@@ -73,7 +73,7 @@ pub fn baseline(criterion: &mut Criterion) {
 
     let environment = get_environment(&gpu);
 
-    let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = Tractogram::new(&gpu, &file::Tck::from_file(TRACTOGRAM_PATH));
 
     let renderer = TractogramLineRenderRenderer::new(&gpu);
 
@@ -97,7 +97,7 @@ pub fn compute(criterion: &mut Criterion) {
 
     let environment = get_environment(&gpu);
 
-    let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = Tractogram::new(&gpu, &file::Tck::from_file(TRACTOGRAM_PATH));
 
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), 9);
     let renderer = TractogramLineComputeRenderer::new(&gpu, &constants);
@@ -122,7 +122,7 @@ pub fn density(criterion: &mut Criterion) {
 
     let environment = get_environment(&gpu);
 
-    let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = Tractogram::new(&gpu, &file::Tck::from_file(TRACTOGRAM_PATH));
 
     let density = Density::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
@@ -146,7 +146,7 @@ pub fn render(criterion: &mut Criterion) {
 
     let environment = get_environment(&gpu);
 
-    let tractogram = Tractogram::new(&gpu, &loader::Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = Tractogram::new(&gpu, &file::Tck::from_file(TRACTOGRAM_PATH));
 
     let density = Density::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
