@@ -105,7 +105,7 @@ impl Renderer {
                 tractogram,
                 &self.asset.density,
                 &self.asset.occlusion,
-                &controller.settings().geometry,
+                controller.settings(),
             );
         }
 

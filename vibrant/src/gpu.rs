@@ -2,6 +2,7 @@ use std::{any::type_name, borrow::Cow, path::PathBuf};
 
 use bytemuck::Pod;
 use futures::channel::oneshot::channel;
+use itertools::Itertools;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
     CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, DepthStencilState,
@@ -9,7 +10,7 @@ use wgpu::{
     MapMode, MultisampleState, Origin3d, PipelineLayout, PipelineLayoutDescriptor, PowerPreference,
     PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
     RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, Texture,
-    TextureAspect,
+    TextureAspect, TextureFormat,
 };
 
 use crate::renderer::constants::Constants;
@@ -195,6 +196,8 @@ impl Gpu {
     }
 
     pub async fn save(&self, path: PathBuf, texture: &Texture) {
+        assert!(texture.format() == TextureFormat::Bgra8Unorm);
+
         let pixel = 4;
         let width = (texture.width() / 64) * 64;
         let height = texture.height();
@@ -236,14 +239,19 @@ impl Gpu {
         );
         self.queue.submit([cmd.finish()]);
 
-        let buffer = self.read(&result).await;
+        let buffer = self
+            .read(&result)
+            .await
+            .into_iter()
+            .tuples()
+            .flat_map(|(b, g, r, a)| [r, g, b, a])
+            .collect_vec();
 
         let file = std::fs::File::create(path).unwrap();
         let writer = &mut std::io::BufWriter::new(file);
         let mut enc = png::Encoder::new(writer, width, height);
         enc.set_color(png::ColorType::Rgba);
         enc.set_depth(png::BitDepth::Eight);
-        enc.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
         enc.set_source_chromaticities(png::SourceChromaticities::new(
             (0.31270, 0.32900),
             (0.64000, 0.33000),

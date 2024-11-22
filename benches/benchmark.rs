@@ -9,15 +9,11 @@ use vibrant::{
         constants::Constants,
         environment::Environment,
         tractogram::{
-            density::TractogramDensityComputeRenderer,
-            line::{compute::TractogramLineComputeRenderer, render::TractogramLineRenderRenderer},
-            shading::TractogramFullRenderer,
+            density::TractogramDensityComputeRenderer, line::render::TractogramLineGeometry,
+            shading::tracing::TractogramTracingShading,
         },
     },
-    surface::{
-        buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, hierarchy::DepthHierarchy,
-        visibility::Visibility, Frame,
-    },
+    surface::{buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, visibility::Visibility, Frame},
     Vec2,
 };
 use wgpu::Texture;
@@ -33,7 +29,6 @@ struct TestSurface {
     visibility: Visibility,
     depth: Depth,
     gbuffer: GBuffer,
-    hierarchy: DepthHierarchy,
 }
 
 impl TestSurface {
@@ -43,7 +38,6 @@ impl TestSurface {
             visibility: Visibility::new(gpu, WIDTH, HEIGHT),
             depth: Depth::new(gpu, WIDTH, HEIGHT),
             gbuffer: GBuffer::new(gpu, WIDTH, HEIGHT),
-            hierarchy: DepthHierarchy::new(gpu, WIDTH, HEIGHT),
         }
     }
 
@@ -55,7 +49,6 @@ impl TestSurface {
             visibility: &self.visibility,
             depth: &self.depth,
             gbuffer: &self.gbuffer,
-            hierarchy: &self.hierarchy,
         }
     }
 }
@@ -75,7 +68,7 @@ pub fn baseline(criterion: &mut Criterion) {
 
     let tractogram = Tractogram::new(&gpu, &file::Tck::from_file(TRACTOGRAM_PATH));
 
-    let renderer = TractogramLineRenderRenderer::new(&gpu);
+    let renderer = TractogramLineGeometry::new(&gpu);
 
     criterion.bench_function(stringify!(baseline), |bencher| {
         bencher.iter(|| {
@@ -84,32 +77,13 @@ pub fn baseline(criterion: &mut Criterion) {
             let surface = TestSurface::new(&gpu);
             let frame = surface.frame();
 
-            renderer.render(&mut cmd, &environment, &frame, &tractogram);
-
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-pub fn compute(criterion: &mut Criterion) {
-    let gpu = Gpu::new().block_on();
-
-    let environment = get_environment(&gpu);
-
-    let tractogram = Tractogram::new(&gpu, &file::Tck::from_file(TRACTOGRAM_PATH));
-
-    let constants = Constants::new(&gpu, (WIDTH, HEIGHT), 9);
-    let renderer = TractogramLineComputeRenderer::new(&gpu, &constants);
-
-    criterion.bench_function(stringify!(compute), |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-
-            let surface = TestSurface::new(&gpu);
-            let frame = surface.frame();
-
-            renderer.render(&mut cmd, &environment, &frame, &tractogram);
+            renderer.render(
+                &mut cmd,
+                &environment,
+                &frame,
+                &tractogram,
+                &tractogram.filter_default(),
+            );
 
             gpu.submit(cmd);
             gpu.wait();
@@ -164,7 +138,7 @@ pub fn render(criterion: &mut Criterion) {
         gpu.wait();
     }
 
-    let renderer = TractogramFullRenderer::new(&gpu, &constants);
+    let renderer = TractogramTracingShading::new(&gpu, &constants);
 
     criterion.bench_function(stringify!(render), |bencher| {
         bencher.iter(|| {
@@ -181,5 +155,5 @@ pub fn render(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, baseline, compute, density, render);
+criterion_group!(benches, baseline, density, render);
 criterion_main!(benches);

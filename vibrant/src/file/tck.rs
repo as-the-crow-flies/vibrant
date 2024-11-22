@@ -38,17 +38,12 @@ impl Default for Bounds {
 #[derive(Debug, Default)]
 pub struct Tck {
     vertices: Vec<Vec3>,
-    caps: Vec<Vec3>,
     bounds: Bounds,
 }
 
 impl Tck {
     pub fn vertices(&self) -> &[Vec3] {
         &self.vertices
-    }
-
-    pub fn caps(&self) -> &[Vec3] {
-        &self.caps
     }
 
     pub fn bounds(&self) -> &Bounds {
@@ -81,34 +76,11 @@ impl Tck {
 
         let bounds = Bounds::from_vertices(&vertices);
 
-        let cap_indices: Vec<usize> = [0, 1]
-            .into_iter()
-            .chain(
-                vertices
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, vertex)| vertex.is_nan().then_some(index))
-                    .map(|index| [index - 1, index - 2, index + 1, index + 2])
-                    .flatten(),
-            )
-            .collect();
-
-        let caps = cap_indices
-            .iter()
-            .take(cap_indices.len() - 2)
-            .map(|&index| vertices[index])
-            .collect();
-
-        Tck {
-            vertices,
-            caps,
-            bounds,
-        }
+        Tck { vertices, bounds }
     }
 
     pub fn join(tcks: Vec<Tck>) -> Tck {
         tcks.into_iter().fold(Tck::default(), |x, y| Tck {
-            caps: [x.caps, y.caps].concat(),
             vertices: [x.vertices, y.vertices].concat(),
             bounds: Bounds {
                 min: y.bounds.min.min(x.bounds.min),

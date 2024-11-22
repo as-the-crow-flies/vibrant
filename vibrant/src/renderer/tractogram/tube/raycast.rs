@@ -8,20 +8,20 @@ use wgpu::{
 };
 
 use crate::{
-    asset::Tractogram,
+    asset::{filter::Filter, Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{depth::Depth, gbuffer::GBuffer},
 };
 
-pub struct TractogramTubeRaycastRenderer {
+pub struct TractogramTubeGeometry {
     pipeline: RenderPipeline,
     indirect: Buffer,
 }
 
-impl TractogramTubeRaycastRenderer {
+impl TractogramTubeGeometry {
     pub fn new(gpu: &Gpu) -> Self {
-        let label = Some(type_name::<TractogramTubeRaycastRenderer>());
+        let label = Some(type_name::<TractogramTubeGeometry>());
         let module = gpu.shader(&(Environment::wgsl() + include_str!("raycast.wgsl")), None);
 
         Self {
@@ -30,7 +30,8 @@ impl TractogramTubeRaycastRenderer {
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label,
                     layout: Some(&gpu.pipeline_layout(&[
-                        &Tractogram::layout_full(gpu),
+                        &Tractogram::layout(gpu),
+                        &Filter::layout_read(gpu),
                         &Environment::layout(gpu),
                     ])),
                     vertex: VertexState {
@@ -69,8 +70,9 @@ impl TractogramTubeRaycastRenderer {
         env: &Environment,
         frame: &crate::surface::Frame,
         tractogram: &Tractogram,
+        filter: &Filter,
     ) {
-        cmd.copy_buffer_to_buffer(tractogram.count().buffer(), 0, &self.indirect, 4, 4);
+        cmd.copy_buffer_to_buffer(filter.count(), 0, &self.indirect, 4, 4);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
@@ -80,8 +82,9 @@ impl TractogramTubeRaycastRenderer {
             occlusion_query_set: None,
         });
 
-        pass.set_bind_group(0, tractogram.binding_full(), &[]);
-        pass.set_bind_group(1, env.binding(), &[]);
+        pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(1, filter.binding_read(), &[]);
+        pass.set_bind_group(2, env.binding(), &[]);
 
         pass.set_pipeline(&self.pipeline);
         pass.draw_indirect(&self.indirect, 0);

@@ -1,14 +1,19 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Geometry {
-    LineRender,
-    TubeImpostor,
-    TubeRaycast,
+    Line,
+    Tube,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum DebugSetting {
-    Disabled,
-    Hierarchy,
+pub enum Shading {
+    Tracing,
+    Simple,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Culling {
+    On,
+    Off,
 }
 
 pub struct Settings {
@@ -23,7 +28,8 @@ pub struct Settings {
     pub debug_level: f32,
     pub cull_level: f32,
     pub geometry: Geometry,
-    pub debug: DebugSetting,
+    pub shading: Shading,
+    pub culling: Culling,
 }
 
 impl Settings {
@@ -39,8 +45,9 @@ impl Settings {
             min_value: 0.0,
             debug_level: 0.0,
             cull_level: 1.0,
-            geometry: Geometry::LineRender,
-            debug: DebugSetting::Disabled,
+            geometry: Geometry::Tube,
+            shading: Shading::Tracing,
+            culling: Culling::On,
         }
     }
 }

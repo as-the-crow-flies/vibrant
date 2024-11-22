@@ -56,6 +56,7 @@ impl File {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save() {
         if let Some(path) = rfd::FileDialog::new()
             .set_file_name("screenshot.png")
@@ -63,6 +64,11 @@ impl File {
         {
             Self::publish_save_path(path);
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn save() {
+        todo!()
     }
 
     pub fn on_tck(callback: impl FnOnce(Tck)) {

@@ -1,13 +1,13 @@
 use density::TractogramDensityComputeRenderer;
-use line::render::TractogramLineRenderRenderer;
+use line::render::TractogramLineGeometry;
 use occlusion::TractogramOcclusionComputeRenderer;
-use shading::TractogramFullRenderer;
-use tube::{impostor::TractogramTubeImpostorRenderer, raycast::TractogramTubeRaycastRenderer};
+use shading::{simple::TractogramSimpleShading, tracing::TractogramTracingShading};
+use tube::raycast::TractogramTubeGeometry;
 use wgpu::CommandEncoder;
 
 use crate::{
     asset::{occlusion::Occlusion, Density, Tractogram},
-    controller::settings::Geometry,
+    controller::settings::{Culling, Geometry, Settings, Shading},
     gpu::Gpu,
     surface::Frame,
 };
@@ -21,10 +21,10 @@ pub mod shading;
 pub mod tube;
 
 pub struct TractogramRenderer {
-    line_render: TractogramLineRenderRenderer,
-    tube_impostor: TractogramTubeImpostorRenderer,
-    tube_raycast: TractogramTubeRaycastRenderer,
-    full: TractogramFullRenderer,
+    line_geometry: TractogramLineGeometry,
+    tube_geometry: TractogramTubeGeometry,
+    tracing_shading: TractogramTracingShading,
+    simple_shading: TractogramSimpleShading,
     density: TractogramDensityComputeRenderer,
     occlusion: TractogramOcclusionComputeRenderer,
 }
@@ -32,10 +32,10 @@ pub struct TractogramRenderer {
 impl TractogramRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         Self {
-            line_render: TractogramLineRenderRenderer::new(gpu),
-            tube_impostor: TractogramTubeImpostorRenderer::new(gpu),
-            tube_raycast: TractogramTubeRaycastRenderer::new(gpu),
-            full: TractogramFullRenderer::new(gpu, constants),
+            line_geometry: TractogramLineGeometry::new(gpu),
+            tube_geometry: TractogramTubeGeometry::new(gpu),
+            tracing_shading: TractogramTracingShading::new(gpu, constants),
+            simple_shading: TractogramSimpleShading::new(gpu),
             density: TractogramDensityComputeRenderer::new(gpu, constants),
             occlusion: TractogramOcclusionComputeRenderer::new(gpu, constants),
         }
@@ -49,18 +49,37 @@ impl TractogramRenderer {
         tractogram: &Tractogram,
         density: &Density,
         occlusion: &Occlusion,
-        renderer: &Geometry,
+        settings: &Settings,
     ) {
-        self.density.render(cmd, env, tractogram, density);
-        self.occlusion
-            .render(cmd, env, density, occlusion, tractogram);
+        if settings.shading == Shading::Tracing {
+            self.density.render(cmd, env, tractogram, density);
 
-        match renderer {
-            Geometry::LineRender => self.line_render.render(cmd, env, frame, tractogram),
-            Geometry::TubeImpostor => self.tube_impostor.render(cmd, env, frame, tractogram),
-            Geometry::TubeRaycast => self.tube_raycast.render(cmd, env, frame, tractogram),
+            if settings.culling == Culling::On {
+                self.occlusion
+                    .render(cmd, env, density, occlusion, tractogram);
+            }
         }
 
-        self.full.render(cmd, env, frame, density, tractogram)
+        let filter = if settings.shading == Shading::Tracing && settings.culling == Culling::On {
+            tractogram.filter_culling()
+        } else {
+            tractogram.filter_default()
+        };
+
+        match settings.geometry {
+            Geometry::Line => self
+                .line_geometry
+                .render(cmd, env, frame, tractogram, filter),
+            Geometry::Tube => self
+                .tube_geometry
+                .render(cmd, env, frame, tractogram, filter),
+        }
+
+        match settings.shading {
+            Shading::Tracing => self
+                .tracing_shading
+                .render(cmd, env, frame, density, tractogram),
+            Shading::Simple => self.simple_shading.render(cmd, frame, tractogram),
+        }
     }
 }

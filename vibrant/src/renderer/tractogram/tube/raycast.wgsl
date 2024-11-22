@@ -27,9 +27,10 @@ const U32_MAX: u32 = 4294967295;
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
 @group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
-@group(0) @binding(3) var<storage> TRACTOGRAM_INDICES: array<u32>;
 
-@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(1) @binding(0) var<storage> TRACTOGRAM_INDICES: array<u32>;
+
+@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 struct Fragment {
     @builtin(position) clip: vec4<f32>,
@@ -56,14 +57,14 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
     let v2 = transform(TRACTOGRAM_TO_WORLD, get_vertex(index + 2));
 
     let delta = v1 - v0;
-    let length = length(delta);
+    let distance = length(delta);
 
-    let dy = delta / length;
+    let dy = delta / distance;
     let dx = normalize(cross(dy, vec3<f32>(1.0, 0.0, 0.0)));
     let dz = normalize(cross(dy, dx));
 
     let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
-    let vertex = CUBE[vertex_index] * vec3<f32>(radius, length + 2.0 * radius, radius);
+    let vertex = CUBE[vertex_index] * vec3<f32>(radius, distance + 2.0 * radius, radius);
 
     let position = v0 + vertex.x * dx + vertex.y * dy - radius * dy + vertex.z * dz;
     let clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);

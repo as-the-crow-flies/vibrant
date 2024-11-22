@@ -2,7 +2,7 @@ use itertools::Itertools;
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::{occlusion::Occlusion, scalar::ScalarTexture, Density, Tractogram, TractogramCount},
+    asset::{filter::Filter, occlusion::Occlusion, scalar::ScalarTexture, Density, Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment, services::push::Push},
 };
@@ -56,9 +56,9 @@ impl TractogramOcclusionComputeRenderer {
             filter: gpu.compute(
                 &gpu.pipeline_layout(&[
                     &ScalarTexture::layout(gpu),
-                    &Tractogram::layout_full_write(gpu),
+                    &Tractogram::layout(gpu),
                     &Environment::layout(gpu),
-                    &TractogramCount::layout(gpu),
+                    &Filter::layout_write(gpu),
                 ]),
                 &gpu.shader(
                     &(Environment::wgsl() + include_str!("filter.wgsl")),
@@ -160,7 +160,7 @@ impl TractogramOcclusionComputeRenderer {
         occlusion: &Occlusion,
         tractogram: &Tractogram,
     ) {
-        tractogram.count().clear(cmd);
+        tractogram.filter_culling().clear(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
@@ -171,9 +171,9 @@ impl TractogramOcclusionComputeRenderer {
 
         pass.set_pipeline(&self.filter);
         pass.set_bind_group(0, occlusion.binding(), &[]);
-        pass.set_bind_group(1, tractogram.binding_full_write(), &[]);
+        pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
-        pass.set_bind_group(3, tractogram.count().binding(), &[]);
+        pass.set_bind_group(3, tractogram.filter_culling().binding_write(), &[]);
         pass.dispatch_workgroups(count, 1, 1);
     }
 }

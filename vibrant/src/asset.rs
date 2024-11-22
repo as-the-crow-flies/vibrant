@@ -1,4 +1,5 @@
 pub mod density;
+pub mod filter;
 pub mod occlusion;
 pub mod scalar;
 pub mod tractogram;

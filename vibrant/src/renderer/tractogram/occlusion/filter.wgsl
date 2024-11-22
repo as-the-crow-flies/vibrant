@@ -11,11 +11,11 @@ struct Vertex {
 @group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(1) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
 @group(1) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
-@group(1) @binding(3) var<storage, read_write> TRACTOGRAM_INDICES: array<u32>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-@group(3) @binding(0) var<storage, read_write> OFFSET: atomic<u32>;
+@group(3) @binding(0) var<storage, read_write> TRACTOGRAM_INDICES: array<u32>;
+@group(3) @binding(1) var<storage, read_write> OFFSET: atomic<u32>;
 
 var<workgroup> WORKGROUP: array<u32, ITEMS_PER_WORKGROUP>;
 var<workgroup> WORKGROUP_OFFSET: u32;

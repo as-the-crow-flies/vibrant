@@ -1,13 +1,11 @@
 pub mod buffer;
 pub mod depth;
 pub mod gbuffer;
-pub mod hierarchy;
 pub mod visibility;
 
 use buffer::FrameBuffer;
 use depth::Depth;
 use gbuffer::GBuffer;
-use hierarchy::DepthHierarchy;
 use visibility::Visibility;
 use wgpu::{SurfaceTarget, SurfaceTexture, Texture};
 
@@ -18,7 +16,6 @@ pub struct Surface {
     visibility: Visibility,
     depth: Depth,
     gbuffer: GBuffer,
-    hierarchy: DepthHierarchy,
 }
 
 impl Surface {
@@ -37,7 +34,6 @@ impl Surface {
             visibility: Visibility::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
             gbuffer: GBuffer::new(gpu, width, height),
-            hierarchy: DepthHierarchy::new(gpu, width / 4, height / 4),
         }
     }
 
@@ -48,7 +44,6 @@ impl Surface {
         self.visibility = Visibility::new(gpu, width, height);
         self.depth = Depth::new(gpu, width, height);
         self.gbuffer = GBuffer::new(gpu, width, height);
-        self.hierarchy = DepthHierarchy::new(gpu, width / 4, height / 4);
     }
 
     pub fn surface_frame(&self) -> SurfaceFrame {
@@ -65,7 +60,6 @@ impl Surface {
                 visibility: &self.visibility,
                 depth: &self.depth,
                 gbuffer: &self.gbuffer,
-                hierarchy: &self.hierarchy,
             },
             texture,
         }
@@ -98,5 +92,4 @@ pub struct Frame<'a> {
     pub visibility: &'a Visibility,
     pub depth: &'a Depth,
     pub gbuffer: &'a GBuffer,
-    pub hierarchy: &'a DepthHierarchy,
 }

@@ -9,18 +9,18 @@ use wgpu::{
 };
 
 use crate::{
-    asset::tractogram::Tractogram,
+    asset::{filter::Filter, tractogram::Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{depth::Depth, gbuffer::GBuffer, Frame},
 };
 
-pub struct TractogramLineRenderRenderer {
+pub struct TractogramLineGeometry {
     pipeline: RenderPipeline,
     indirect: Buffer,
 }
 
-impl TractogramLineRenderRenderer {
+impl TractogramLineGeometry {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -48,7 +48,8 @@ impl TractogramLineRenderRenderer {
                         ..Default::default()
                     },
                     layout: Some(&gpu.pipeline_layout(&[
-                        &Tractogram::layout_full(gpu),
+                        &Tractogram::layout(gpu),
+                        &Filter::layout_read(gpu),
                         &Environment::layout(gpu),
                     ])),
                     depth_stencil: Some(Depth::state()),
@@ -70,8 +71,9 @@ impl TractogramLineRenderRenderer {
         environment: &Environment,
         frame: &Frame,
         tractogram: &Tractogram,
+        filter: &Filter,
     ) {
-        cmd.copy_buffer_to_buffer(&tractogram.count().buffer(), 0, &self.indirect, 4, 4);
+        cmd.copy_buffer_to_buffer(&filter.count(), 0, &self.indirect, 4, 4);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
@@ -82,8 +84,9 @@ impl TractogramLineRenderRenderer {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, tractogram.binding_full(), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(1, filter.binding_read(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
         pass.draw_indirect(&self.indirect, 0);
     }
 }

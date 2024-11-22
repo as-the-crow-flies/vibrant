@@ -27,7 +27,7 @@ impl TractogramDensityComputeRenderer {
                         label,
                         bind_group_layouts: &[
                             &Density::layout(gpu),
-                            &Tractogram::layout_full(gpu),
+                            &Tractogram::layout(gpu),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -77,7 +77,7 @@ impl TractogramDensityComputeRenderer {
         let mut size = self.constants.num_workgroups_volume();
 
         pass.set_bind_group(0, density.binding(), &[]);
-        pass.set_bind_group(1, tractogram.binding_full(), &[]);
+        pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
 
         let count = tractogram

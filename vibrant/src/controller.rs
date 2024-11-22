@@ -8,7 +8,7 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{Geometry, Settings};
+use settings::{Culling, Geometry, Settings, Shading};
 use state::ControllerState;
 
 use crate::file::File;
@@ -68,16 +68,22 @@ impl Controller {
             ComboBox::from_label("Geometry")
                 .selected_text(format!("{:?}", self.settings.geometry))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.settings.geometry,
-                        Geometry::LineRender,
-                        "LineRender",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.geometry,
-                        Geometry::TubeRaycast,
-                        "TubeRaycast",
-                    );
+                    ui.selectable_value(&mut self.settings.geometry, Geometry::Line, "Line");
+                    ui.selectable_value(&mut self.settings.geometry, Geometry::Tube, "Tube");
+                });
+
+            ComboBox::from_label("Shading")
+                .selected_text(format!("{:?}", self.settings.shading))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.settings.shading, Shading::Tracing, "Tracing");
+                    ui.selectable_value(&mut self.settings.shading, Shading::Simple, "Simple");
+                });
+
+            ComboBox::from_label("Culling")
+                .selected_text(format!("{:?}", self.settings.culling))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.settings.culling, Culling::On, "On");
+                    ui.selectable_value(&mut self.settings.culling, Culling::Off, "Off");
                 });
 
             ui.add(
