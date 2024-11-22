@@ -12,6 +12,7 @@ pub struct TractogramOcclusionComputeRenderer {
     push: Push,
     copy: ComputePipeline,
     compute: ComputePipeline,
+    mipmap: ComputePipeline,
     filter: ComputePipeline,
 }
 
@@ -47,6 +48,11 @@ impl TractogramOcclusionComputeRenderer {
                 ),
                 "compute",
             ),
+            mipmap: gpu.compute(
+                &gpu.pipeline_layout(&[&ScalarTexture::layout_mipmap(gpu)]),
+                &gpu.shader(include_str!("mipmap.wgsl"), Some(constants)),
+                "main",
+            ),
             filter: gpu.compute(
                 &gpu.pipeline_layout(&[
                     &ScalarTexture::layout(gpu),
@@ -74,6 +80,7 @@ impl TractogramOcclusionComputeRenderer {
     ) {
         self.copy(cmd, density, occlusion);
         self.trace(cmd, environment, occlusion);
+        self.mipmap(cmd, occlusion);
         self.filter(cmd, environment, occlusion, tractogram);
     }
 
@@ -129,6 +136,20 @@ impl TractogramOcclusionComputeRenderer {
             self.push.apply(&mut pass, 3, index);
 
             pass.dispatch_workgroups(size, size, size);
+        }
+    }
+
+    pub fn mipmap(&self, cmd: &mut CommandEncoder, occlusion: &Occlusion) {
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut size = self.constants.num_workgroups_volume();
+
+        pass.set_pipeline(&self.mipmap);
+
+        for binding in occlusion.bindings_mipmap() {
+            pass.set_bind_group(0, binding, &[]);
+            pass.dispatch_workgroups(size, size, size);
+
+            size /= 2;
         }
     }
 

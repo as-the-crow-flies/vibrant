@@ -77,7 +77,7 @@ impl Controller {
                 });
 
             ui.add(
-                Slider::new(&mut self.settings.streamline_radius, 0.01..=1.0)
+                Slider::new(&mut self.settings.streamline_radius, 0.1..=0.5)
                     .logarithmic(true)
                     .text("Streamline Radius"),
             );
@@ -90,8 +90,6 @@ impl Controller {
             ui.add(
                 Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Tangent Coloring"),
             );
-
-            ui.add(Slider::new(&mut self.settings.cull_level, 0.0..=1.0).text("Cull Level"));
         });
     }
 

@@ -6,6 +6,7 @@ struct Vertex {
 }
 
 @group(0) @binding(0) var OCCLUSION: texture_3d<f32>;
+@group(0) @binding(1) var SAMPLER: sampler;
 
 @group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(1) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
@@ -31,8 +32,8 @@ fn compute(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocati
     let local_0 = 2u * local + 0u;
     let local_1 = 2u * local + 1u;
 
-    let keep_0 = should_keep_index(global_0);
-    let keep_1 = should_keep_index(global_1);
+    let keep_0 = should_keep_segment(global_0);
+    let keep_1 = should_keep_segment(global_1);
 
     WORKGROUP[local_0] = u32(keep_0);
     WORKGROUP[local_1] = u32(keep_1);
@@ -57,7 +58,7 @@ fn compute(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocati
     if (keep_1) { TRACTOGRAM_INDICES[index_1] = global_1; }
 }
 
-fn should_keep_index(index: u32) -> bool {
+fn should_keep_segment(index: u32) -> bool {
     let v0 = get_vertex(index);
     let v1 = get_vertex(index + 1);
 
@@ -66,17 +67,14 @@ fn should_keep_index(index: u32) -> bool {
     let v0_world = TRACTOGRAM_TO_WORLD * v0;
     let v1_world = TRACTOGRAM_TO_WORLD * v1;
 
-    let vmin = world_to_texture(min(v0_world.xyz, v1_world.xyz));
-    let vmax = world_to_texture(max(v0_world.xyz, v1_world.xyz));
+    let vmin = min(v0_world.xyz, v1_world.xyz);
+    let vmax = max(v0_world.xyz, v1_world.xyz);
+    let vdim = vmax - vmin;
 
-    let vmin_keep = textureLoad(OCCLUSION, vmin, 0).x < ENVIRONMENT.settings.cull_level;
-    let vmax_keep = textureLoad(OCCLUSION, vmax, 0).x < ENVIRONMENT.settings.cull_level;
+    let centroid = 0.5 * (vmin + vmax);
+    let level = max(0.0, log2(max(max(vdim.x, vdim.y), vdim.z) * f32(VOLUME_XYZ)));
 
-    return vmin_keep && vmax_keep;
-}
-
-fn world_to_texture(v: vec3<f32>) -> vec3<u32> {
-    return vec3<u32>((v + 0.5) * vec3<f32>(textureDimensions(OCCLUSION)));
+    return textureSampleLevel(OCCLUSION, SAMPLER, centroid + 0.5, level).x < ENVIRONMENT.settings.cull_level;
 }
 
 fn get_vertex(index: u32) -> vec4<f32> {

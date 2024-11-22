@@ -46,7 +46,7 @@ impl Camera {
             self.pan(pan.x, -pan.y);
         }
 
-        self.zoom(-state.scroll.y * 0.01);
+        self.zoom(-0.1 * state.scroll.y);
     }
 
     pub fn projection(&self) -> Mat4 {

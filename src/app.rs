@@ -162,7 +162,15 @@ fn vibrant_event(event: WindowEvent) -> Option<Event> {
             device_id: _,
             delta: MouseScrollDelta::PixelDelta(delta),
             phase: _,
-        } => Some(Event::MouseWheel(Vec2::new(delta.x as f32, delta.y as f32))),
+        } => Some(Event::MouseWheel(Vec2::new(
+            0.01 * delta.x as f32,
+            0.01 * delta.y as f32,
+        ))),
+        WindowEvent::MouseWheel {
+            device_id: _,
+            delta: MouseScrollDelta::LineDelta(x, y),
+            phase: _,
+        } => Some(Event::MouseWheel(Vec2::new(x, -y))),
         WindowEvent::KeyboardInput {
             device_id: _,
             event:

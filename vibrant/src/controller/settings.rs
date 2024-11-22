@@ -30,15 +30,15 @@ impl Settings {
     pub fn new() -> Self {
         Self {
             ambient_occlusion_samples: 20,
-            streamline_radius: 0.2,
-            direct_light: 0.0,
+            streamline_radius: 0.15,
+            direct_light: 0.25,
             gradient_factor: 1.0,
             opacity_factor: 0.0035,
             step_size: 0.1,
             grad_size: 1.0,
             min_value: 0.0,
             debug_level: 0.0,
-            cull_level: 2.0,
+            cull_level: 1.0,
             geometry: Geometry::LineRender,
             debug: DebugSetting::Disabled,
         }
