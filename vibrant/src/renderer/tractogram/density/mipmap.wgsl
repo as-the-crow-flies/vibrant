@@ -6,6 +6,5 @@
 @workgroup_size(WORKGROUP_XYZ, WORKGROUP_XYZ, WORKGROUP_XYZ)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let sample = (2.0 * vec3<f32>(voxel) + 1.0) / vec3<f32>(textureDimensions(SOURCE));
-
     textureStore(DESTINATION, voxel, textureSampleLevel(SOURCE, SAMPLER, sample, 0.0));
 }

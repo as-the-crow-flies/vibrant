@@ -9,7 +9,7 @@ use vibrant::{
         constants::Constants,
         environment::Environment,
         tractogram::{
-            density::TractogramDensityComputeRenderer, line::render::TractogramLineGeometry,
+            density::TractogramDensityCompute, line::render::TractogramLineGeometry,
             shading::tracing::TractogramTracingShading,
         },
     },
@@ -101,7 +101,7 @@ pub fn density(criterion: &mut Criterion) {
     let density = Density::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
 
-    let renderer = TractogramDensityComputeRenderer::new(&gpu, &constants);
+    let renderer = TractogramDensityCompute::new(&gpu, &constants);
 
     criterion.bench_function(stringify!(density), |bencher| {
         bencher.iter(|| {
@@ -127,7 +127,7 @@ pub fn render(criterion: &mut Criterion) {
 
     {
         let mut cmd = gpu.cmd();
-        TractogramDensityComputeRenderer::new(&gpu, &constants).render(
+        TractogramDensityCompute::new(&gpu, &constants).render(
             &mut cmd,
             &environment,
             &tractogram,

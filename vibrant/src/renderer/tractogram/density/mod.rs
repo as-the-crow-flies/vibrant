@@ -8,14 +8,14 @@ use crate::{
     renderer::{constants::Constants, environment::Environment},
 };
 
-pub struct TractogramDensityComputeRenderer {
+pub struct TractogramDensityCompute {
     constants: Constants,
     rasterize: ComputePipeline,
     copy: ComputePipeline,
     mipmap: ComputePipeline,
 }
 
-impl TractogramDensityComputeRenderer {
+impl TractogramDensityCompute {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         let label = Some(type_name::<Self>());
 

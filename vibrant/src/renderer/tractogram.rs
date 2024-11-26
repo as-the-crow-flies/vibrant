@@ -1,7 +1,10 @@
-use density::TractogramDensityComputeRenderer;
+use density::TractogramDensityCompute;
 use line::render::TractogramLineGeometry;
-use occlusion::TractogramOcclusionComputeRenderer;
-use shading::{simple::TractogramSimpleShading, tracing::TractogramTracingShading};
+use occlusion::TractogramOcclusionCompute;
+use shading::{
+    density::TractogramDensityShading, simple::TractogramSimpleShading,
+    tracing::TractogramTracingShading,
+};
 use tube::raycast::TractogramTubeGeometry;
 use wgpu::CommandEncoder;
 
@@ -25,8 +28,9 @@ pub struct TractogramRenderer {
     tube_geometry: TractogramTubeGeometry,
     tracing_shading: TractogramTracingShading,
     simple_shading: TractogramSimpleShading,
-    density: TractogramDensityComputeRenderer,
-    occlusion: TractogramOcclusionComputeRenderer,
+    density_shading: TractogramDensityShading,
+    density_compute: TractogramDensityCompute,
+    occlusion_compute: TractogramOcclusionCompute,
 }
 
 impl TractogramRenderer {
@@ -36,50 +40,61 @@ impl TractogramRenderer {
             tube_geometry: TractogramTubeGeometry::new(gpu),
             tracing_shading: TractogramTracingShading::new(gpu, constants),
             simple_shading: TractogramSimpleShading::new(gpu),
-            density: TractogramDensityComputeRenderer::new(gpu, constants),
-            occlusion: TractogramOcclusionComputeRenderer::new(gpu, constants),
+            density_shading: TractogramDensityShading::new(gpu, constants),
+            density_compute: TractogramDensityCompute::new(gpu, constants),
+            occlusion_compute: TractogramOcclusionCompute::new(gpu, constants),
         }
     }
 
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        env: &Environment,
+        environment: &Environment,
         frame: &Frame,
         tractogram: &Tractogram,
         density: &Density,
         occlusion: &Occlusion,
         settings: &Settings,
     ) {
-        if settings.shading == Shading::Tracing {
-            self.density.render(cmd, env, tractogram, density);
+        if settings.shading != Shading::Simple {
+            self.density_compute
+                .render(cmd, environment, tractogram, density);
 
-            if settings.culling == Culling::On {
-                self.occlusion
-                    .render(cmd, env, density, occlusion, tractogram);
+            if settings.shading != Shading::Density && settings.culling == Culling::On {
+                self.occlusion_compute
+                    .render(cmd, environment, density, occlusion, tractogram);
             }
         }
 
-        let filter = if settings.shading == Shading::Tracing && settings.culling == Culling::On {
-            tractogram.filter_culling()
-        } else {
-            tractogram.filter_default()
-        };
+        if settings.shading != Shading::Density {
+            let filter = if settings.shading == Shading::Tracing && settings.culling == Culling::On
+            {
+                tractogram.filter_culling()
+            } else {
+                tractogram.filter_default()
+            };
 
-        match settings.geometry {
-            Geometry::Line => self
-                .line_geometry
-                .render(cmd, env, frame, tractogram, filter),
-            Geometry::Tube => self
-                .tube_geometry
-                .render(cmd, env, frame, tractogram, filter),
+            match settings.geometry {
+                Geometry::Line => {
+                    self.line_geometry
+                        .render(cmd, environment, frame, tractogram, filter)
+                }
+                Geometry::Tube => {
+                    self.tube_geometry
+                        .render(cmd, environment, frame, tractogram, filter)
+                }
+            }
         }
 
         match settings.shading {
-            Shading::Tracing => self
-                .tracing_shading
-                .render(cmd, env, frame, density, tractogram),
+            Shading::Tracing => {
+                self.tracing_shading
+                    .render(cmd, environment, frame, density, tractogram)
+            }
             Shading::Simple => self.simple_shading.render(cmd, frame, tractogram),
+            Shading::Density => self
+                .density_shading
+                .render(cmd, frame, environment, density),
         }
     }
 }

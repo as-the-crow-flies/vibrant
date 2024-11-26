@@ -7,7 +7,7 @@ use crate::{
     renderer::{constants::Constants, environment::Environment, services::push::Push},
 };
 
-pub struct TractogramOcclusionComputeRenderer {
+pub struct TractogramOcclusionCompute {
     constants: Constants,
     push: Push,
     copy: ComputePipeline,
@@ -16,7 +16,7 @@ pub struct TractogramOcclusionComputeRenderer {
     filter: ComputePipeline,
 }
 
-impl TractogramOcclusionComputeRenderer {
+impl TractogramOcclusionCompute {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         let steps = (0..=constants.volume_xyz.ilog2())
             .map(|i| 2u32.pow(i) as f32 / constants.volume_xyz as f32)

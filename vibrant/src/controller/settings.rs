@@ -8,6 +8,7 @@ pub enum Geometry {
 pub enum Shading {
     Tracing,
     Simple,
+    Density,
 }
 
 #[derive(Debug, PartialEq, Eq)]

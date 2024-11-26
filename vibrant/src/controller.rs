@@ -77,6 +77,7 @@ impl Controller {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.settings.shading, Shading::Tracing, "Tracing");
                     ui.selectable_value(&mut self.settings.shading, Shading::Simple, "Simple");
+                    ui.selectable_value(&mut self.settings.shading, Shading::Density, "Density");
                 });
 
             ComboBox::from_label("Culling")
