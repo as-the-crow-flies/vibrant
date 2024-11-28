@@ -22,7 +22,7 @@ pub struct TractogramTubeGeometry {
 impl TractogramTubeGeometry {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<TractogramTubeGeometry>());
-        let module = gpu.shader(&(Environment::wgsl() + include_str!("raycast.wgsl")), None);
+        let module = gpu.shader(&(Environment::wgsl() + include_str!("tube.wgsl")), None);
 
         Self {
             pipeline: gpu
@@ -64,7 +64,7 @@ impl TractogramTubeGeometry {
         }
     }
 
-    pub(crate) fn render(
+    pub fn render(
         &self,
         cmd: &mut wgpu::CommandEncoder,
         env: &Environment,

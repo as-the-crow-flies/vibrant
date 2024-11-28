@@ -1,9 +1,10 @@
 use std::any::type_name;
 
 use wgpu::{
-    Color, ColorTargetState, ColorWrites, CompositeAlphaMode, LoadOp, Operations, PresentMode,
-    RenderPassColorAttachment, StoreOp, SurfaceConfiguration, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    BlendState, Color, ColorTargetState, ColorWrites, CompositeAlphaMode, LoadOp, Operations,
+    PresentMode, RenderPassColorAttachment, StoreOp, SurfaceConfiguration, Texture,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor,
 };
 
 use crate::gpu::Gpu;
@@ -58,7 +59,7 @@ impl FrameBuffer {
     pub fn target_srgb() -> ColorTargetState {
         ColorTargetState {
             format: Self::FORMAT_SRGB,
-            blend: None,
+            blend: Some(BlendState::ALPHA_BLENDING),
             write_mask: ColorWrites::all(),
         }
     }
@@ -79,7 +80,12 @@ impl FrameBuffer {
             view: &self.view_srgb,
             resolve_target: None,
             ops: Operations {
-                load: LoadOp::Clear(Color::TRANSPARENT),
+                load: LoadOp::Clear(Color {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 1.0,
+                    a: 0.0,
+                }),
                 store: StoreOp::Store,
             },
         }
@@ -97,7 +103,7 @@ impl FrameBuffer {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: Self::FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
             view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
         })
     }

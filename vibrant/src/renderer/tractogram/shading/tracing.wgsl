@@ -37,9 +37,11 @@ fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
         select(lambert(normal.xyz, light), stalling(tangent.xyz, light), normal.w < 0.5);
 
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
-    let color = mix(vec3<f32>(1.0), abs(tangent_object_space.xyz), ENVIRONMENT.settings.gradient_factor);
 
-    return vec4<f32>(color * lighting, 1.0);
+    let color = mix(vec3<f32>(1.0), abs(tangent_object_space.xyz), ENVIRONMENT.settings.gradient_factor);
+    let illumination = mix(1.0, lighting, ENVIRONMENT.settings.shading_level);
+
+    return vec4<f32>(color * illumination, 1.0);
 }
 
 fn lambert(normal: vec3<f32>, light: vec3<f32>) -> f32 {

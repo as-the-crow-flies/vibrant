@@ -26,7 +26,7 @@ impl Environment {
             step_size: f32,
             grad_size: f32,
             min_value: f32,
-            debug_level: f32,
+            shading_level: f32,
             cull_level: f32
         }
 
@@ -100,7 +100,7 @@ impl Environment {
                 bytes_of(&controller.settings().step_size),
                 bytes_of(&controller.settings().grad_size),
                 bytes_of(&controller.settings().min_value),
-                bytes_of(&controller.settings().debug_level),
+                bytes_of(&controller.settings().shading_level),
                 bytes_of(&controller.settings().cull_level),
             ]
             .concat(),

@@ -1,19 +1,16 @@
 pub mod buffer;
 pub mod depth;
 pub mod gbuffer;
-pub mod visibility;
 
 use buffer::FrameBuffer;
 use depth::Depth;
 use gbuffer::GBuffer;
-use visibility::Visibility;
 use wgpu::{SurfaceTarget, SurfaceTexture, Texture};
 
 use super::gpu::Gpu;
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
-    visibility: Visibility,
     depth: Depth,
     gbuffer: GBuffer,
 }
@@ -31,7 +28,6 @@ impl Surface {
 
         Self {
             surface,
-            visibility: Visibility::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
             gbuffer: GBuffer::new(gpu, width, height),
         }
@@ -40,8 +36,6 @@ impl Surface {
     pub fn resize(&mut self, gpu: &Gpu, width: u32, height: u32) {
         self.surface
             .configure(gpu.device(), &FrameBuffer::configuration(width, height));
-
-        self.visibility = Visibility::new(gpu, width, height);
         self.depth = Depth::new(gpu, width, height);
         self.gbuffer = GBuffer::new(gpu, width, height);
     }
@@ -57,7 +51,6 @@ impl Surface {
                 width: texture.texture.width(),
                 height: texture.texture.height(),
                 buffer: FrameBuffer::new(&texture.texture),
-                visibility: &self.visibility,
                 depth: &self.depth,
                 gbuffer: &self.gbuffer,
             },
@@ -89,7 +82,6 @@ pub struct Frame<'a> {
     pub width: u32,
     pub height: u32,
     pub buffer: FrameBuffer,
-    pub visibility: &'a Visibility,
     pub depth: &'a Depth,
     pub gbuffer: &'a GBuffer,
 }

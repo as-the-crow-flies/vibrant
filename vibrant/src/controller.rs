@@ -78,6 +78,12 @@ impl Controller {
                     ui.selectable_value(&mut self.settings.shading, Shading::Tracing, "Tracing");
                     ui.selectable_value(&mut self.settings.shading, Shading::Simple, "Simple");
                     ui.selectable_value(&mut self.settings.shading, Shading::Density, "Density");
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        Shading::Occlusion,
+                        "Occlusion",
+                    );
+                    ui.selectable_value(&mut self.settings.shading, Shading::GBuffer, "GBuffer");
                 });
 
             ComboBox::from_label("Culling")
@@ -99,8 +105,14 @@ impl Controller {
             );
 
             ui.add(
+                Slider::new(&mut self.settings.shading_level, 0.0..=2.0).text("Shading Strength"),
+            );
+
+            ui.add(
                 Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Tangent Coloring"),
             );
+
+            ui.add(Slider::new(&mut self.settings.cull_level, 1.0..=10.0).text("Cull Level"));
         });
     }
 
