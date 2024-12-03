@@ -45,8 +45,6 @@ impl Tractogram {
     pub fn new(gpu: &Gpu, tractogram: &file::Tck) -> Self {
         let label = Some(type_name::<Self>());
 
-        dbg!(tractogram.vertices().len());
-
         let indices = tractogram
             .vertices()
             .iter()

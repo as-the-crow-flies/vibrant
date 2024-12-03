@@ -29,8 +29,8 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let normal_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(normal.xyz, 0.0));
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
 
-    let boundary = 0.4;
-    let slope = 0.2;
+    let boundary = 1.0/3.0;
+    let slope = 0.3;
     let func = fragment.ndc.x - slope * fragment.ndc.y;
 
     if (func < -boundary)

@@ -95,36 +95,51 @@ pub fn get_environment(gpu: &Gpu) -> Environment {
     return environment;
 }
 
-pub fn get_whole_brain_tractogram(gpu: &Gpu) -> Tractogram {
+pub fn get_whole_brain_tractogram_200k(gpu: &Gpu) -> Tractogram {
     Tractogram::new(
         gpu,
-        &Tck::from_file("assets/HPC-100307/whole_brain200k.tck"),
+        &Tck::from_file("assets/HCP-100307/whole_brain200k.tck"),
     )
+}
+
+pub fn get_whole_brain_tractogram_1m(gpu: &Gpu) -> Tractogram {
+    Tractogram::new(gpu, &Tck::from_file("assets/HCP-100307/whole_brain1M.tck"))
 }
 
 pub fn get_cst_tractogram(gpu: &Gpu) -> Tractogram {
     Tractogram::new(
         gpu,
         &Tck::join(vec![
-            Tck::from_file("assets/HPC-100307/TOM_trackings/AF_left.tck"),
-            Tck::from_file("assets/HPC-100307/TOM_trackings/AF_right.tck"),
-            Tck::from_file("assets/HPC-100307/TOM_trackings/ATR_left.tck"),
-            Tck::from_file("assets/HPC-100307/TOM_trackings/ATR_right.tck"),
-            Tck::from_file("assets/HPC-100307/TOM_trackings/CST_left.tck"),
-            Tck::from_file("assets/HPC-100307/TOM_trackings/CST_right.tck"),
-            Tck::from_file("assets/HPC-100307/TOM_trackings/FPT_left.tck"),
-            Tck::from_file("assets/HPC-100307/TOM_trackings/FPT_right.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/AF_left.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/AF_right.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/ATR_left.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/ATR_right.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/CST_left.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/CST_right.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/FPT_left.tck"),
+            Tck::from_file("assets/HCP-100307/TOM_trackings/FPT_right.tck"),
         ]),
     )
 }
 
-pub fn baseline_line_brain(criterion: &mut Criterion) {
+pub fn baseline_line_brain_200k(criterion: &mut Criterion) {
     let gpu = Gpu::new().block_on();
     baseline(
         criterion,
-        stringify!(baseline_line_brain),
+        stringify!(baseline_line_brain_200k),
         &gpu,
-        &get_whole_brain_tractogram(&gpu),
+        &get_whole_brain_tractogram_200k(&gpu),
+        &TractogramLineGeometry::new(&gpu),
+    );
+}
+
+pub fn baseline_line_brain_1m(criterion: &mut Criterion) {
+    let gpu = Gpu::new().block_on();
+    baseline(
+        criterion,
+        stringify!(baseline_line_brain_1m),
+        &gpu,
+        &get_whole_brain_tractogram_1m(&gpu),
         &TractogramLineGeometry::new(&gpu),
     );
 }
@@ -140,13 +155,24 @@ pub fn baseline_line_cst(criterion: &mut Criterion) {
     );
 }
 
-pub fn baseline_tube_brain(criterion: &mut Criterion) {
+pub fn baseline_tube_brain_200k(criterion: &mut Criterion) {
     let gpu = Gpu::new().block_on();
     baseline(
         criterion,
-        stringify!(baseline_tube_brain),
+        stringify!(baseline_tube_brain_200k),
         &gpu,
-        &get_whole_brain_tractogram(&gpu),
+        &get_whole_brain_tractogram_200k(&gpu),
+        &TractogramTubeGeometry::new(&gpu),
+    );
+}
+
+pub fn baseline_tube_brain_1m(criterion: &mut Criterion) {
+    let gpu = Gpu::new().block_on();
+    baseline(
+        criterion,
+        stringify!(baseline_tube_brain_1m),
+        &gpu,
+        &get_whole_brain_tractogram_1m(&gpu),
         &TractogramTubeGeometry::new(&gpu),
     );
 }
@@ -162,13 +188,24 @@ pub fn baseline_tube_cst(criterion: &mut Criterion) {
     );
 }
 
-pub fn shading_line_brain(criterion: &mut Criterion) {
+pub fn shading_line_brain_200k(criterion: &mut Criterion) {
     let gpu = Gpu::new().block_on();
     shading(
         criterion,
-        stringify!(shading_line_brain),
+        stringify!(shading_line_brain_200k),
         &gpu,
-        &get_whole_brain_tractogram(&gpu),
+        &get_whole_brain_tractogram_200k(&gpu),
+        &TractogramLineGeometry::new(&gpu),
+    );
+}
+
+pub fn shading_line_brain_1m(criterion: &mut Criterion) {
+    let gpu = Gpu::new().block_on();
+    shading(
+        criterion,
+        stringify!(shading_line_brain_1m),
+        &gpu,
+        &get_whole_brain_tractogram_1m(&gpu),
         &TractogramLineGeometry::new(&gpu),
     );
 }
@@ -184,13 +221,24 @@ pub fn shading_line_cst(criterion: &mut Criterion) {
     );
 }
 
-pub fn shading_tube_brain(criterion: &mut Criterion) {
+pub fn shading_tube_brain_200k(criterion: &mut Criterion) {
     let gpu = Gpu::new().block_on();
     shading(
         criterion,
-        stringify!(shading_tube_brain),
+        stringify!(shading_tube_brain_200k),
         &gpu,
-        &get_whole_brain_tractogram(&gpu),
+        &get_whole_brain_tractogram_200k(&gpu),
+        &TractogramTubeGeometry::new(&gpu),
+    );
+}
+
+pub fn shading_tube_brain_1m(criterion: &mut Criterion) {
+    let gpu = Gpu::new().block_on();
+    shading(
+        criterion,
+        stringify!(shading_tube_brain_1m),
+        &gpu,
+        &get_whole_brain_tractogram_1m(&gpu),
         &TractogramTubeGeometry::new(&gpu),
     );
 }
@@ -200,50 +248,6 @@ pub fn shading_tube_cst(criterion: &mut Criterion) {
     shading(
         criterion,
         stringify!(shading_tube_cst),
-        &gpu,
-        &get_cst_tractogram(&gpu),
-        &TractogramTubeGeometry::new(&gpu),
-    );
-}
-
-pub fn shading_and_culling_line_brain(criterion: &mut Criterion) {
-    let gpu = Gpu::new().block_on();
-    shading_and_culling(
-        criterion,
-        stringify!(shading_and_culling_line_brain),
-        &gpu,
-        &get_whole_brain_tractogram(&gpu),
-        &TractogramLineGeometry::new(&gpu),
-    );
-}
-
-pub fn shading_and_culling_line_cst(criterion: &mut Criterion) {
-    let gpu = Gpu::new().block_on();
-    shading_and_culling(
-        criterion,
-        stringify!(shading_and_culling_line_cst),
-        &gpu,
-        &get_cst_tractogram(&gpu),
-        &TractogramLineGeometry::new(&gpu),
-    );
-}
-
-pub fn shading_and_culling_tube_brain(criterion: &mut Criterion) {
-    let gpu = Gpu::new().block_on();
-    shading_and_culling(
-        criterion,
-        stringify!(shading_and_culling_tube_brain),
-        &gpu,
-        &get_whole_brain_tractogram(&gpu),
-        &TractogramTubeGeometry::new(&gpu),
-    );
-}
-
-pub fn shading_and_culling_tube_cst(criterion: &mut Criterion) {
-    let gpu = Gpu::new().block_on();
-    shading_and_culling(
-        criterion,
-        stringify!(shading_and_culling_tube_cst),
         &gpu,
         &get_cst_tractogram(&gpu),
         &TractogramTubeGeometry::new(&gpu),
@@ -299,51 +303,6 @@ pub fn shading(
     let surface = TestSurface::new(gpu);
 
     let density = Density::new(&gpu, VOLUME);
-    let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
-
-    let density_compute = TractogramDensityCompute::new(&gpu, &constants);
-    let tracing_shading = TractogramTracingShading::new(gpu, &constants);
-
-    criterion.bench_function(id, |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-            let frame = surface.frame();
-
-            density_compute.render(&mut cmd, &environment, tractogram, &density);
-
-            geometry.render(
-                &mut cmd,
-                &environment,
-                &frame,
-                &tractogram,
-                &tractogram.filter_default(),
-            );
-
-            tracing_shading.render(&mut cmd, &environment, &frame, &density, tractogram);
-
-            gpu.submit(cmd);
-            gpu.wait();
-        });
-    });
-
-    gpu.save(
-        format!("target/criterion/{}.png", id).into(),
-        &surface.buffer,
-    )
-    .block_on();
-}
-
-pub fn shading_and_culling(
-    criterion: &mut Criterion,
-    id: &str,
-    gpu: &Gpu,
-    tractogram: &Tractogram,
-    geometry: &impl TractogramGeometry,
-) {
-    let environment = get_environment(&gpu);
-    let surface = TestSurface::new(gpu);
-
-    let density = Density::new(&gpu, VOLUME);
     let occlusion = Occlusion::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
 
@@ -383,17 +342,17 @@ pub fn shading_and_culling(
 
 criterion_group!(
     benches,
-    baseline_line_brain,
+    baseline_line_brain_200k,
+    baseline_line_brain_1m,
     baseline_line_cst,
-    baseline_tube_brain,
+    baseline_tube_brain_200k,
+    baseline_tube_brain_1m,
     baseline_tube_cst,
-    shading_line_brain,
+    shading_line_brain_200k,
+    shading_line_brain_1m,
     shading_line_cst,
-    shading_tube_brain,
+    shading_tube_brain_200k,
+    shading_tube_brain_1m,
     shading_tube_cst,
-    shading_and_culling_line_brain,
-    shading_and_culling_line_cst,
-    shading_and_culling_tube_brain,
-    shading_and_culling_tube_cst
 );
 criterion_main!(benches);
