@@ -5,7 +5,7 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferUsages, CommandEncoder, ShaderStages,
+    BufferUsages, CommandEncoder, ComputePass, ComputePipeline, ShaderStages,
 };
 
 use crate::gpu::Gpu;
@@ -14,11 +14,15 @@ pub struct Filter {
     indices: Buffer,
     count: Buffer,
     workgroup_count: Buffer,
+    workgroup_count_2: Buffer,
     read: BindGroup,
     write: BindGroup,
+    copy: ComputePipeline,
 }
 
 impl Filter {
+    pub const WORKGROUP_COUNT: usize = 256;
+
     pub fn new(gpu: &Gpu, indices: &[u32]) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -30,7 +34,13 @@ impl Filter {
 
         let workgroup_count = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytes_of(&indices.len().div_ceil(256)),
+            contents: bytes_of(&indices.len().div_ceil(Self::WORKGROUP_COUNT)),
+            usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
+        });
+
+        let workgroup_count_2 = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytes_of(&indices.len().div_ceil(Self::WORKGROUP_COUNT * 2)),
             usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
@@ -91,20 +101,42 @@ impl Filter {
                         size: None,
                     }),
                 },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &workgroup_count_2,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
             ],
         });
+
+        let copy = gpu.compute(
+            &gpu.pipeline_layout(&[&Filter::layout_write(gpu)]),
+            &gpu.shader(include_str!("copy.wgsl"), None),
+            "compute",
+        );
 
         Self {
             count,
             workgroup_count,
+            workgroup_count_2,
             indices,
             read,
             write,
+            copy,
         }
     }
 
     pub fn clear(&self, cmd: &mut CommandEncoder) {
         cmd.clear_buffer(&self.count, 0, None);
+    }
+
+    pub fn copy(&self, pass: &mut ComputePass) {
+        pass.set_pipeline(&self.copy);
+        pass.set_bind_group(0, self.binding_write(), &[]);
+        pass.dispatch_workgroups(1, 1, 1);
     }
 
     pub fn count(&self) -> &Buffer {
@@ -113,6 +145,10 @@ impl Filter {
 
     pub fn workgroup_count(&self) -> &Buffer {
         &self.workgroup_count
+    }
+
+    pub fn workgroup_count_2(&self) -> &Buffer {
+        &self.workgroup_count_2
     }
 
     pub fn binding_read(&self) -> &BindGroup {
@@ -187,6 +223,16 @@ impl Filter {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -196,5 +242,7 @@ impl Drop for Filter {
     fn drop(&mut self) {
         self.indices.destroy();
         self.count.destroy();
+        self.workgroup_count.destroy();
+        self.workgroup_count_2.destroy();
     }
 }

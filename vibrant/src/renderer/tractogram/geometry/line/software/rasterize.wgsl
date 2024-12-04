@@ -37,35 +37,44 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let start = transform(v0);
     let end = transform(v1);
 
-    let delta = end - start;
+    let bounds_min = vec2<f32>(0.0);
+    let bounds_max = vec2<f32>(f32(SURFACE_X), f32(SURFACE_Y));
 
-    let total_distance = min(length(delta.xy), 100.0); // Safety Feature :D
-    let direction = delta / total_distance;
-    let distance_between_voxel_boundaries = 1.0 / abs(direction.xy);
+    if (start.z > 0.0 && start.z < 1.0 && end.z > 0.0 && end.z < 1.0 &&
+        (
+            (all(start.xy >= bounds_min) && all(start.xy < bounds_max)) ||
+            (all(  end.xy >= bounds_min) && all(  end.xy < bounds_max)))
+        )
+    {
+        let delta = end - start;
 
-    var distance_left = total_distance;
-    var distance_to_next_voxel_boundary = one_if_zero(fract(sign(-direction.xy) * fract(start.xy))) * distance_between_voxel_boundaries;
+        let total_distance = length(delta.xy);
+        let direction = delta / total_distance;
+        let distance_between_voxel_boundaries = 1.0 / abs(direction.xy);
 
-    while (distance_left > 0.0) {
-        let increment = min(minimum(distance_to_next_voxel_boundary), distance_left);
-        let alpha = min(length(increment * direction), 1.0);
+        var distance_left = total_distance;
+        var distance_to_next_voxel_boundary = one_if_zero(fract(sign(-direction.xy) * fract(start.xy))) * distance_between_voxel_boundaries;
 
-        let sample = end.xyz - distance_left * direction;
+        while (distance_left > 0.0) {
+            let increment = min(minimum(distance_to_next_voxel_boundary), distance_left);
+            let sample = end.xyz - distance_left * direction;
+            let alpha = min(length(increment * direction), 1.0);
 
-        let depth = u64(sample.z * f32(U32_MAX));
-        let payload = u64(pack4x8unorm(vec4<f32>(tangent, alpha)));
-        let visibility = depth << 32u | payload;
+            let depth = u64(sample.z * f32(U32_MAX));
+            let payload = u64(pack4x8unorm(vec4<f32>(tangent, alpha)));
+            let visibility = depth << 32u | payload;
 
-        atomicMin(&KBUFFER[u32(sample.y)][u32(sample.x)], visibility);
+            atomicMin(&KBUFFER[u32(sample.y)][u32(sample.x)], visibility);
 
-        // Update Distances
-        distance_to_next_voxel_boundary = select(
-            distance_to_next_voxel_boundary - increment,
-            distance_between_voxel_boundaries,
-            distance_to_next_voxel_boundary == vec2<f32>(increment)
-        );
+            // Update Distances
+            distance_to_next_voxel_boundary = select(
+                distance_to_next_voxel_boundary - increment,
+                distance_between_voxel_boundaries,
+                distance_to_next_voxel_boundary == vec2<f32>(increment)
+            );
 
-        distance_left -= increment;
+            distance_left -= increment;
+        }
     }
 }
 
