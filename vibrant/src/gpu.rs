@@ -4,13 +4,11 @@ use bytemuck::Pod;
 use futures::channel::oneshot::channel;
 use itertools::Itertools;
 use wgpu::{
-    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
-    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, DepthStencilState,
-    Extent3d, Features, FragmentState, ImageCopyBuffer, ImageCopyTexture, ImageDataLayout, Limits,
-    MapMode, MultisampleState, Origin3d, PipelineLayout, PipelineLayoutDescriptor, PowerPreference,
-    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
-    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, Texture,
-    TextureAspect, TextureFormat,
+    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
+    ComputePipeline, ComputePipelineDescriptor, Extent3d, Features, ImageCopyBuffer,
+    ImageCopyTexture, ImageDataLayout, Limits, MapMode, Origin3d, PipelineLayout,
+    PipelineLayoutDescriptor, PowerPreference, RequestAdapterOptions, ShaderModule,
+    ShaderModuleDescriptor, ShaderSource, Texture, TextureAspect, TextureFormat,
 };
 
 use crate::renderer::constants::Constants;
@@ -49,7 +47,10 @@ impl Gpu {
                         max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                         ..Default::default()
                     },
-                    required_features: Features::FLOAT32_FILTERABLE,
+                    required_features: Features::empty()
+                        | Features::FLOAT32_FILTERABLE
+                        | Features::SHADER_INT64
+                        | Features::SHADER_INT64_ATOMIC_MIN_MAX,
                     ..Default::default()
                 },
                 None,
@@ -98,41 +99,6 @@ impl Gpu {
                 module,
                 entry_point: Some(entry_point),
                 compilation_options: Default::default(),
-                cache: None,
-            })
-    }
-
-    pub fn quad(
-        &self,
-        layout: &PipelineLayout,
-        module: &ShaderModule,
-        entry_point: &str,
-        color: ColorTargetState,
-        depth: Option<DepthStencilState>,
-    ) -> RenderPipeline {
-        self.device()
-            .create_render_pipeline(&RenderPipelineDescriptor {
-                label: None,
-                layout: Some(layout),
-                vertex: wgpu::VertexState {
-                    module: &self.shader(include_str!("renderer/wgsl/quad.wgsl"), None),
-                    entry_point: Some("vertex"),
-                    compilation_options: Default::default(),
-                    buffers: &[],
-                },
-                primitive: PrimitiveState {
-                    topology: PrimitiveTopology::TriangleStrip,
-                    ..Default::default()
-                },
-                depth_stencil: depth,
-                multisample: MultisampleState::default(),
-                fragment: Some(FragmentState {
-                    module,
-                    entry_point: Some(entry_point),
-                    compilation_options: Default::default(),
-                    targets: &[Some(color)],
-                }),
-                multiview: None,
                 cache: None,
             })
     }

@@ -15,12 +15,12 @@ use crate::{
     surface::{depth::Depth, gbuffer::GBuffer, Frame},
 };
 
-pub struct TractogramLineGeometry {
+pub struct TractogramLineHardwareGeometry {
     pipeline: RenderPipeline,
     indirect: Buffer,
 }
 
-impl TractogramLineGeometry {
+impl TractogramLineHardwareGeometry {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 

@@ -13,6 +13,7 @@ use crate::gpu::Gpu;
 pub struct Filter {
     indices: Buffer,
     count: Buffer,
+    workgroup_count: Buffer,
     read: BindGroup,
     write: BindGroup,
 }
@@ -24,6 +25,12 @@ impl Filter {
         let count = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytes_of(&indices.len()),
+            usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
+        });
+
+        let workgroup_count = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytes_of(&indices.len().div_ceil(256)),
             usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
@@ -76,11 +83,20 @@ impl Filter {
                         size: None,
                     }),
                 },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &workgroup_count,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
             ],
         });
 
         Self {
             count,
+            workgroup_count,
             indices,
             read,
             write,
@@ -93,6 +109,10 @@ impl Filter {
 
     pub fn count(&self) -> &Buffer {
         &self.count
+    }
+
+    pub fn workgroup_count(&self) -> &Buffer {
+        &self.workgroup_count
     }
 
     pub fn binding_read(&self) -> &BindGroup {
@@ -149,6 +169,16 @@ impl Filter {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: false },

@@ -1,9 +1,13 @@
 use std::any::type_name;
 
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayoutDescriptor};
+use wgpu::{
+    util::{BufferInitDescriptor, DeviceExt},
+    Buffer, BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline,
+    PipelineLayoutDescriptor,
+};
 
 use crate::{
-    asset::{density::Density, scalar::ScalarTexture, tractogram::Tractogram},
+    asset::{density::Density, filter::Filter, scalar::ScalarTexture, tractogram::Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
 };
@@ -13,6 +17,7 @@ pub struct TractogramDensityAddCompute {
     rasterize: ComputePipeline,
     copy: ComputePipeline,
     mipmap: ComputePipeline,
+    indirect: Buffer,
 }
 
 impl TractogramDensityAddCompute {
@@ -28,6 +33,7 @@ impl TractogramDensityAddCompute {
                         bind_group_layouts: &[
                             &Density::layout(gpu),
                             &Tractogram::layout(gpu),
+                            &Filter::layout_read(gpu),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -61,6 +67,11 @@ impl TractogramDensityAddCompute {
                 &gpu.shader(include_str!("mipmap.wgsl"), Some(constants)),
                 "main",
             ),
+            indirect: gpu.device().create_buffer_init(&BufferInitDescriptor {
+                label,
+                contents: bytemuck::cast_slice(&[0u32, 1, 1]),
+                usage: BufferUsages::INDIRECT | BufferUsages::COPY_DST,
+            }),
         }
     }
 
@@ -72,19 +83,24 @@ impl TractogramDensityAddCompute {
         density: &Density,
     ) {
         cmd.clear_buffer(density.buffer(), 0, None);
+        cmd.copy_buffer_to_buffer(
+            tractogram.filter_default().workgroup_count(),
+            0,
+            &self.indirect,
+            0,
+            4,
+        );
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
         let mut size = self.constants.num_workgroups_volume();
 
         pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(2, tractogram.filter_default().binding_read(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
 
-        let count = tractogram
-            .vertex_count()
-            .div_ceil(self.constants.workgroup_x);
         pass.set_pipeline(&self.rasterize);
-        pass.dispatch_workgroups(count, 1, 1);
+        pass.dispatch_workgroups_indirect(&self.indirect, 0);
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, density.binding(), &[]);

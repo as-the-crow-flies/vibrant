@@ -14,23 +14,27 @@ struct Vertex {
 @group(1) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
 @group(1) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
 
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(2) @binding(0) var<storage> TRACTOGRAM_INDICES: array<u32>;
+
+@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 const PI: f32 = 3.14159265358979323846264338327950288;
 const U32_MAX: u32 = 4294967295;
 
 fn get_vertex(index: u32) -> vec4<f32> {
     let v = TRACTOGRAM_VERTICES[index];
-    return vec4<f32>(v.x, v.y, v.z, f32(v.x < 1E9));
+    return vec4<f32>(v.x, v.y, v.z, 1.0);
 }
 
 @compute
 @workgroup_size(WORKGROUP_X)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    let start_vertex = get_vertex(id.x);
-    let end_vertex = get_vertex(id.x + 1);
+    if (id.x >= arrayLength(&TRACTOGRAM_INDICES)) { return; }
 
-    if (start_vertex.w == 0 || end_vertex.w == 0) { return; }
+    let index = TRACTOGRAM_INDICES[id.x];
+
+    let start_vertex = get_vertex(index);
+    let end_vertex = get_vertex(index + 1);
 
     let transform = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
 

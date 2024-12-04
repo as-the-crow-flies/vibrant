@@ -18,11 +18,11 @@ fn vertex(@builtin(vertex_index) index: u32) -> Fragment {
 
 @fragment
 fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
-    let voxel = vec2<u32>(fragment.clip.xy);
+    let pixel = vec2<u32>(fragment.clip.xy);
 
-    let position = textureLoad(POSITION, voxel, 0);
-    let normal = textureLoad(NORMAL, voxel, 0) * 2.0 - 1.0;
-    let tangent = textureLoad(TANGENT, voxel, 0) * 2.0 - 1.0;
+    let position = textureLoad(POSITION, pixel, 0);
+    let normal = textureLoad(NORMAL, pixel, 0) * 2.0 - 1.0;
+    let tangent = textureLoad(TANGENT, pixel, 0) * 2.0 - 1.0;
 
     if (position.w == 0.0) { discard; }
 

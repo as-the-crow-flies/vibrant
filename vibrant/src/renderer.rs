@@ -45,7 +45,7 @@ impl Renderer {
             occlusion: Occlusion::new(&gpu, Self::VOLUME_EXPONENT),
         };
 
-        let constants = Constants::new(&gpu, (1, 1), asset.density.size());
+        let constants = Constants::new((1, 1), asset.density.size());
 
         Self {
             surface: None,
@@ -72,7 +72,7 @@ impl Renderer {
             .unwrap()
             .resize(&self.gpu, width, height);
 
-        self.constants = Constants::new(&self.gpu, (width, height), self.asset.density.size());
+        self.constants = Constants::new((width, height), self.asset.density.size());
         self.tractogram = TractogramRenderer::new(&self.gpu, &self.constants)
     }
 

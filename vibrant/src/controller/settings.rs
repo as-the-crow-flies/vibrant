@@ -6,7 +6,8 @@ pub enum DensitySetting {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GeometrySetting {
-    Line,
+    LineHardware,
+    LineSoftware,
     Tube,
 }
 
@@ -55,9 +56,9 @@ impl Settings {
             min_value: 0.0,
             shading_level: 1.0,
             cull_level: 1.0,
-            geometry: GeometrySetting::Tube,
-            shading: ShadingSetting::Tracing,
-            culling: CullingSetting::On,
+            geometry: GeometrySetting::LineSoftware,
+            shading: ShadingSetting::GBuffer,
+            culling: CullingSetting::Off,
             density: DensitySetting::Add,
         }
     }

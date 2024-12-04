@@ -1,5 +1,8 @@
 use density::{add::TractogramDensityAddCompute, or::TractogramDensityOrCompute};
-use geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry};
+use geometry::{
+    line::{hardware::TractogramLineHardwareGeometry, software::TractogramLineSoftwareGeometry},
+    tube::TractogramTubeGeometry,
+};
 use occlusion::TractogramOcclusionCompute;
 use shading::{
     gbuffer::TractogramGBufferShading, simple::TractogramSimpleShading,
@@ -24,7 +27,8 @@ pub mod occlusion;
 pub mod shading;
 
 pub struct TractogramRenderer {
-    line_geometry: TractogramLineGeometry,
+    line_hardware_geometry: TractogramLineHardwareGeometry,
+    line_software_geometry: TractogramLineSoftwareGeometry,
     tube_geometry: TractogramTubeGeometry,
     tracing_shading: TractogramTracingShading,
     simple_shading: TractogramSimpleShading,
@@ -38,7 +42,8 @@ pub struct TractogramRenderer {
 impl TractogramRenderer {
     pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
         Self {
-            line_geometry: TractogramLineGeometry::new(gpu),
+            line_hardware_geometry: TractogramLineHardwareGeometry::new(gpu),
+            line_software_geometry: TractogramLineSoftwareGeometry::new(gpu, constants),
             tube_geometry: TractogramTubeGeometry::new(gpu),
             tracing_shading: TractogramTracingShading::new(gpu, constants),
             simple_shading: TractogramSimpleShading::new(gpu),
@@ -88,9 +93,13 @@ impl TractogramRenderer {
             };
 
             match settings.geometry {
-                GeometrySetting::Line => {
-                    self.line_geometry
+                GeometrySetting::LineHardware => {
+                    self.line_hardware_geometry
                         .render(cmd, environment, frame, tractogram, filter)
+                }
+                GeometrySetting::LineSoftware => {
+                    self.line_software_geometry
+                        .render(cmd, frame, environment, tractogram, filter);
                 }
                 GeometrySetting::Tube => {
                     self.tube_geometry

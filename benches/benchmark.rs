@@ -10,12 +10,14 @@ use vibrant::{
         environment::Environment,
         tractogram::{
             density::add::TractogramDensityAddCompute,
-            geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry},
+            geometry::{
+                line::hardware::TractogramLineHardwareGeometry, tube::TractogramTubeGeometry,
+            },
             occlusion::TractogramOcclusionCompute,
             shading::{simple::TractogramSimpleShading, tracing::TractogramTracingShading},
         },
     },
-    surface::{buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, Frame},
+    surface::{buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, kbuffer::KBuffer, Frame},
     Vec2,
 };
 use wgpu::{CommandEncoder, Texture};
@@ -28,6 +30,7 @@ struct TestSurface {
     buffer: Texture,
     depth: Depth,
     gbuffer: GBuffer,
+    kbuffer: KBuffer,
 }
 
 impl TestSurface {
@@ -36,6 +39,7 @@ impl TestSurface {
             buffer: FrameBuffer::texture(gpu, WIDTH, HEIGHT),
             depth: Depth::new(gpu, WIDTH, HEIGHT),
             gbuffer: GBuffer::new(gpu, WIDTH, HEIGHT),
+            kbuffer: KBuffer::new(gpu, WIDTH, HEIGHT),
         }
     }
 
@@ -46,6 +50,7 @@ impl TestSurface {
             buffer: FrameBuffer::new(&self.buffer),
             depth: &self.depth,
             gbuffer: &self.gbuffer,
+            kbuffer: &self.kbuffer,
         }
     }
 }
@@ -61,7 +66,7 @@ pub trait TractogramGeometry {
     );
 }
 
-impl TractogramGeometry for TractogramLineGeometry {
+impl TractogramGeometry for TractogramLineHardwareGeometry {
     fn render(
         &self,
         cmd: &mut CommandEncoder,
@@ -70,7 +75,7 @@ impl TractogramGeometry for TractogramLineGeometry {
         tractogram: &Tractogram,
         filter: &Filter,
     ) {
-        TractogramLineGeometry::render(&self, cmd, environment, frame, tractogram, filter);
+        TractogramLineHardwareGeometry::render(&self, cmd, environment, frame, tractogram, filter);
     }
 }
 
@@ -129,7 +134,7 @@ pub fn baseline_line_brain_200k(criterion: &mut Criterion) {
         stringify!(baseline_line_brain_200k),
         &gpu,
         &get_whole_brain_tractogram_200k(&gpu),
-        &TractogramLineGeometry::new(&gpu),
+        &TractogramLineHardwareGeometry::new(&gpu),
     );
 }
 
@@ -140,7 +145,7 @@ pub fn baseline_line_brain_1m(criterion: &mut Criterion) {
         stringify!(baseline_line_brain_1m),
         &gpu,
         &get_whole_brain_tractogram_1m(&gpu),
-        &TractogramLineGeometry::new(&gpu),
+        &TractogramLineHardwareGeometry::new(&gpu),
     );
 }
 
@@ -151,7 +156,7 @@ pub fn baseline_line_cst(criterion: &mut Criterion) {
         stringify!(baseline_line_cst),
         &gpu,
         &get_cst_tractogram(&gpu),
-        &TractogramLineGeometry::new(&gpu),
+        &TractogramLineHardwareGeometry::new(&gpu),
     );
 }
 
@@ -195,7 +200,7 @@ pub fn shading_line_brain_200k(criterion: &mut Criterion) {
         stringify!(shading_line_brain_200k),
         &gpu,
         &get_whole_brain_tractogram_200k(&gpu),
-        &TractogramLineGeometry::new(&gpu),
+        &TractogramLineHardwareGeometry::new(&gpu),
     );
 }
 
@@ -206,7 +211,7 @@ pub fn shading_line_brain_1m(criterion: &mut Criterion) {
         stringify!(shading_line_brain_1m),
         &gpu,
         &get_whole_brain_tractogram_1m(&gpu),
-        &TractogramLineGeometry::new(&gpu),
+        &TractogramLineHardwareGeometry::new(&gpu),
     );
 }
 
@@ -217,7 +222,7 @@ pub fn shading_line_cst(criterion: &mut Criterion) {
         stringify!(shading_line_cst),
         &gpu,
         &get_cst_tractogram(&gpu),
-        &TractogramLineGeometry::new(&gpu),
+        &TractogramLineHardwareGeometry::new(&gpu),
     );
 }
 
@@ -304,7 +309,7 @@ pub fn shading(
 
     let density = Density::new(&gpu, VOLUME);
     let occlusion = Occlusion::new(&gpu, VOLUME);
-    let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
+    let constants = Constants::new((WIDTH, HEIGHT), density.size());
 
     let density_compute = TractogramDensityAddCompute::new(&gpu, &constants);
     let occlusion_compute = TractogramOcclusionCompute::new(gpu, &constants);

@@ -75,7 +75,16 @@ impl Controller {
             ComboBox::from_label("Geometry")
                 .selected_text(format!("{:?}", self.settings.geometry))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Line, "Line");
+                    ui.selectable_value(
+                        &mut self.settings.geometry,
+                        GeometrySetting::LineHardware,
+                        "LineHardware",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.geometry,
+                        GeometrySetting::LineSoftware,
+                        "LineSoftware",
+                    );
                     ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Tube, "Tube");
                 });
 

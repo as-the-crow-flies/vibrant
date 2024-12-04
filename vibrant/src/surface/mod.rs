@@ -1,10 +1,12 @@
 pub mod buffer;
 pub mod depth;
 pub mod gbuffer;
+pub mod kbuffer;
 
 use buffer::FrameBuffer;
 use depth::Depth;
 use gbuffer::GBuffer;
+use kbuffer::KBuffer;
 use wgpu::{SurfaceTarget, SurfaceTexture, Texture};
 
 use super::gpu::Gpu;
@@ -13,6 +15,7 @@ pub struct Surface {
     surface: wgpu::Surface<'static>,
     depth: Depth,
     gbuffer: GBuffer,
+    kbuffer: KBuffer,
 }
 
 impl Surface {
@@ -30,6 +33,7 @@ impl Surface {
             surface,
             depth: Depth::new(gpu, width, height),
             gbuffer: GBuffer::new(gpu, width, height),
+            kbuffer: KBuffer::new(gpu, width, height),
         }
     }
 
@@ -38,6 +42,7 @@ impl Surface {
             .configure(gpu.device(), &FrameBuffer::configuration(width, height));
         self.depth = Depth::new(gpu, width, height);
         self.gbuffer = GBuffer::new(gpu, width, height);
+        self.kbuffer = KBuffer::new(gpu, width, height);
     }
 
     pub fn surface_frame(&self) -> SurfaceFrame {
@@ -53,6 +58,7 @@ impl Surface {
                 buffer: FrameBuffer::new(&texture.texture),
                 depth: &self.depth,
                 gbuffer: &self.gbuffer,
+                kbuffer: &self.kbuffer,
             },
             texture,
         }
@@ -84,4 +90,5 @@ pub struct Frame<'a> {
     pub buffer: FrameBuffer,
     pub depth: &'a Depth,
     pub gbuffer: &'a GBuffer,
+    pub kbuffer: &'a KBuffer,
 }
