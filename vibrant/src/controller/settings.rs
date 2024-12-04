@@ -1,11 +1,17 @@
 #[derive(Debug, PartialEq, Eq)]
-pub enum Geometry {
+pub enum DensitySetting {
+    Add,
+    Or,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GeometrySetting {
     Line,
     Tube,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Shading {
+pub enum ShadingSetting {
     Tracing,
     Simple,
     Density,
@@ -14,7 +20,7 @@ pub enum Shading {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Culling {
+pub enum CullingSetting {
     On,
     Off,
 }
@@ -30,9 +36,10 @@ pub struct Settings {
     pub min_value: f32,
     pub shading_level: f32,
     pub cull_level: f32,
-    pub geometry: Geometry,
-    pub shading: Shading,
-    pub culling: Culling,
+    pub geometry: GeometrySetting,
+    pub shading: ShadingSetting,
+    pub culling: CullingSetting,
+    pub density: DensitySetting,
 }
 
 impl Settings {
@@ -48,9 +55,10 @@ impl Settings {
             min_value: 0.0,
             shading_level: 1.0,
             cull_level: 1.0,
-            geometry: Geometry::Tube,
-            shading: Shading::Tracing,
-            culling: Culling::On,
+            geometry: GeometrySetting::Tube,
+            shading: ShadingSetting::Tracing,
+            culling: CullingSetting::On,
+            density: DensitySetting::Add,
         }
     }
 }

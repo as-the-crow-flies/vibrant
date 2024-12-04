@@ -8,7 +8,7 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{Culling, Geometry, Settings, Shading};
+use settings::{CullingSetting, DensitySetting, GeometrySetting, Settings, ShadingSetting};
 use state::ControllerState;
 
 use crate::file::File;
@@ -65,36 +65,59 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
+            ComboBox::from_label("Density")
+                .selected_text(format!("{:?}", self.settings.density))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.settings.density, DensitySetting::Add, "Add");
+                    ui.selectable_value(&mut self.settings.density, DensitySetting::Or, "Or");
+                });
+
             ComboBox::from_label("Geometry")
                 .selected_text(format!("{:?}", self.settings.geometry))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.geometry, Geometry::Line, "Line");
-                    ui.selectable_value(&mut self.settings.geometry, Geometry::Tube, "Tube");
+                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Line, "Line");
+                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Tube, "Tube");
                 });
 
             ComboBox::from_label("Shading")
                 .selected_text(format!("{:?}", self.settings.shading))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.shading, Shading::Tracing, "Tracing");
-                    ui.selectable_value(&mut self.settings.shading, Shading::Simple, "Simple");
-                    ui.selectable_value(&mut self.settings.shading, Shading::Density, "Density");
                     ui.selectable_value(
                         &mut self.settings.shading,
-                        Shading::Occlusion,
+                        ShadingSetting::Tracing,
+                        "Tracing",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        ShadingSetting::Simple,
+                        "Simple",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        ShadingSetting::Density,
+                        "Density",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        ShadingSetting::Occlusion,
                         "Occlusion",
                     );
-                    ui.selectable_value(&mut self.settings.shading, Shading::GBuffer, "GBuffer");
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        ShadingSetting::GBuffer,
+                        "GBuffer",
+                    );
                 });
 
             ComboBox::from_label("Culling")
                 .selected_text(format!("{:?}", self.settings.culling))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.culling, Culling::On, "On");
-                    ui.selectable_value(&mut self.settings.culling, Culling::Off, "Off");
+                    ui.selectable_value(&mut self.settings.culling, CullingSetting::On, "On");
+                    ui.selectable_value(&mut self.settings.culling, CullingSetting::Off, "Off");
                 });
 
             ui.add(
-                Slider::new(&mut self.settings.streamline_radius, 0.1..=0.5)
+                Slider::new(&mut self.settings.streamline_radius, 0.01..=0.5)
                     .logarithmic(true)
                     .text("Streamline Radius"),
             );

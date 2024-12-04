@@ -1,4 +1,4 @@
-use density::TractogramDensityCompute;
+use density::{add::TractogramDensityAddCompute, or::TractogramDensityOrCompute};
 use geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry};
 use occlusion::TractogramOcclusionCompute;
 use shading::{
@@ -9,7 +9,9 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::{occlusion::Occlusion, Density, Tractogram},
-    controller::settings::{Culling, Geometry, Settings, Shading},
+    controller::settings::{
+        CullingSetting, DensitySetting, GeometrySetting, Settings, ShadingSetting,
+    },
     gpu::Gpu,
     surface::Frame,
 };
@@ -28,7 +30,8 @@ pub struct TractogramRenderer {
     simple_shading: TractogramSimpleShading,
     volume_shading: TractogramDensityShading,
     gbuffer_shading: TractogramGBufferShading,
-    density_compute: TractogramDensityCompute,
+    density_add_compute: TractogramDensityAddCompute,
+    density_or_compute: TractogramDensityOrCompute,
     occlusion_compute: TractogramOcclusionCompute,
 }
 
@@ -41,7 +44,8 @@ impl TractogramRenderer {
             simple_shading: TractogramSimpleShading::new(gpu),
             volume_shading: TractogramDensityShading::new(gpu, constants),
             gbuffer_shading: TractogramGBufferShading::new(gpu),
-            density_compute: TractogramDensityCompute::new(gpu, constants),
+            density_add_compute: TractogramDensityAddCompute::new(gpu, constants),
+            density_or_compute: TractogramDensityOrCompute::new(gpu, constants),
             occlusion_compute: TractogramOcclusionCompute::new(gpu, constants),
         }
     }
@@ -56,27 +60,39 @@ impl TractogramRenderer {
         occlusion: &Occlusion,
         settings: &Settings,
     ) {
-        if settings.shading != Shading::Simple {
-            self.density_compute
-                .render(cmd, environment, tractogram, density);
+        if settings.shading != ShadingSetting::Simple {
+            match settings.density {
+                DensitySetting::Add => {
+                    self.density_add_compute
+                        .render(cmd, environment, tractogram, density)
+                }
+                DensitySetting::Or => {
+                    self.density_or_compute
+                        .render(cmd, environment, tractogram, density)
+                }
+            };
 
             self.occlusion_compute
                 .render(cmd, environment, density, occlusion, tractogram);
         }
 
-        if settings.shading != Shading::Density || settings.shading != Shading::Occlusion {
-            let filter = if settings.culling == Culling::On && settings.shading != Shading::Simple {
+        if settings.shading != ShadingSetting::Density
+            && settings.shading != ShadingSetting::Occlusion
+        {
+            let filter = if settings.culling == CullingSetting::On
+                && settings.shading != ShadingSetting::Simple
+            {
                 tractogram.filter_culling()
             } else {
                 tractogram.filter_default()
             };
 
             match settings.geometry {
-                Geometry::Line => {
+                GeometrySetting::Line => {
                     self.line_geometry
                         .render(cmd, environment, frame, tractogram, filter)
                 }
-                Geometry::Tube => {
+                GeometrySetting::Tube => {
                     self.tube_geometry
                         .render(cmd, environment, frame, tractogram, filter)
                 }
@@ -84,20 +100,20 @@ impl TractogramRenderer {
         }
 
         match settings.shading {
-            Shading::Tracing => {
+            ShadingSetting::Tracing => {
                 self.tracing_shading
                     .render(cmd, environment, frame, density, tractogram)
             }
-            Shading::Simple => self.simple_shading.render(cmd, frame, tractogram),
-            Shading::Density => {
+            ShadingSetting::Simple => self.simple_shading.render(cmd, frame, tractogram),
+            ShadingSetting::Density => {
                 self.volume_shading
                     .render(cmd, frame, environment, density.texture())
             }
-            Shading::Occlusion => {
+            ShadingSetting::Occlusion => {
                 self.volume_shading
                     .render(cmd, frame, environment, occlusion.ping())
             }
-            Shading::GBuffer => self.gbuffer_shading.render(cmd, frame, tractogram),
+            ShadingSetting::GBuffer => self.gbuffer_shading.render(cmd, frame, tractogram),
         }
     }
 }

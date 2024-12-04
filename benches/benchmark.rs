@@ -9,7 +9,7 @@ use vibrant::{
         constants::Constants,
         environment::Environment,
         tractogram::{
-            density::TractogramDensityCompute,
+            density::add::TractogramDensityAddCompute,
             geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry},
             occlusion::TractogramOcclusionCompute,
             shading::{simple::TractogramSimpleShading, tracing::TractogramTracingShading},
@@ -306,7 +306,7 @@ pub fn shading(
     let occlusion = Occlusion::new(&gpu, VOLUME);
     let constants = Constants::new(&gpu, (WIDTH, HEIGHT), density.size());
 
-    let density_compute = TractogramDensityCompute::new(&gpu, &constants);
+    let density_compute = TractogramDensityAddCompute::new(&gpu, &constants);
     let occlusion_compute = TractogramOcclusionCompute::new(gpu, &constants);
     let tracing_shading = TractogramTracingShading::new(gpu, &constants);
 

@@ -84,11 +84,3 @@ fn minimum(v: vec3<f32>) -> f32 {
 fn maximum(v: vec3<f32>) -> f32 {
     return max(max(v.x, v.y), v.z);
 }
-
-fn capsule(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>) -> f32
-{
-  let pa = p - a;
-  let ba = b - a;
-  let h = clamp(dot(pa,ba) / dot(ba,ba), 0.0, 1.0);
-  return length(pa - ba*h);
-}
