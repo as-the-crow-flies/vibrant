@@ -49,6 +49,7 @@ impl Gpu {
                     },
                     required_features: Features::empty()
                         | Features::FLOAT32_FILTERABLE
+                        | Features::SUBGROUP
                         | Features::SHADER_INT64
                         | Features::SHADER_INT64_ATOMIC_MIN_MAX,
                     ..Default::default()

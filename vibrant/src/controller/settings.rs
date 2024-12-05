@@ -56,9 +56,9 @@ impl Settings {
             min_value: 0.0,
             shading_level: 1.0,
             cull_level: 1.0,
-            geometry: GeometrySetting::Tube,
+            geometry: GeometrySetting::LineSoftware,
             shading: ShadingSetting::Tracing,
-            culling: CullingSetting::On,
+            culling: CullingSetting::Off,
             density: DensitySetting::Add,
         }
     }

@@ -36,7 +36,7 @@ fn fragment(fragment: Fragment) -> GBuffer {
     return GBuffer(
         vec4<f32>(fragment.position, 1.0),
         vec4<f32>(0.0),
-        vec4<f32>(normalize(fwidth(fragment.position)) * 0.5 + 0.5, 1.0)
+        vec4<f32>(abs(normalize(fwidth(fragment.position))), 1.0)
     );
 }
 

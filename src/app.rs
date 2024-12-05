@@ -20,7 +20,7 @@ struct App {
     egui: Option<egui_winit::State>,
     renderer: Renderer,
     controller: Controller,
-    fps: Fps<10>,
+    fps: Fps<8>,
 }
 
 impl App {

@@ -26,7 +26,7 @@ fn fragment(fragment: Fragment) -> GBuffer {
 
     let visibility = KBUFFER[pixel.y][pixel.x];
 
-    let payload = unpack4x8unorm(u32(visibility & u64(U32_MAX)));
+    let payload = unpack4x8unorm(u32(visibility));
     let depth = f32(u32(visibility >> 32u)) / f32(U32_MAX);
 
     if (depth == 1.0) { return GBuffer(); }
@@ -36,7 +36,7 @@ fn fragment(fragment: Fragment) -> GBuffer {
 
     return GBuffer(
         vec4<f32>(position.xyz / position.w, 1.0),
-        vec4<f32>(vec3<f32>(0.0), 1.0),
-        vec4<f32>(payload.xyz * 0.5 + 0.5, 1.0)
+        vec4<f32>(vec3<f32>(10.0 * payload.w), 1.0),
+        vec4<f32>(payload.xyz, 1.0)
     );
 }

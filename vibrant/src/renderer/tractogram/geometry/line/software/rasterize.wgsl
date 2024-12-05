@@ -12,6 +12,7 @@ struct Vertex {
 @group(1) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
 
 @group(2) @binding(0) var<storage> TRACTOGRAM_INDICES: array<u32>;
+@group(2) @binding(1) var<storage> TRACTOGRAM_INDICES_COUNT: u32;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -24,10 +25,13 @@ fn get_vertex(index: u32) -> vec4<f32> {
 
 @compute
 @workgroup_size(WORKGROUP_X)
-fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    if (id.x >= arrayLength(&TRACTOGRAM_INDICES)) { return; }
+fn main(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(subgroup_invocation_id) subgroup_id: u32,
+    @builtin(subgroup_size) subgroup_size: u32) {
+    if (global_id.x >= TRACTOGRAM_INDICES_COUNT) { return; }
 
-    let index = TRACTOGRAM_INDICES[id.x];
+    let index = TRACTOGRAM_INDICES[global_id.x];
 
     let v0 = TRACTOGRAM_TO_WORLD * get_vertex(index);
     let v1 = TRACTOGRAM_TO_WORLD * get_vertex(index + 1);
@@ -47,35 +51,66 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         )
     {
         let delta = end - start;
+        let steps = maximum(abs(delta.xy));
+        let step = delta / steps;
+                                                                            //  0   1   2   3
+        let work_generated = u32(steps) + 1u;                               //  8   2   7   5
+        let work_offset = subgroupExclusiveAdd(work_generated);             //  0   8   10  17
+        let work_total = subgroupAdd(work_generated);                       //  22
 
-        let total_distance = length(delta.xy);
-        let direction = delta / total_distance;
-        let distance_between_voxel_boundaries = 1.0 / abs(direction.xy);
+        let thread_total = work_total / subgroup_size +                     //  6   6   5   5
+            u32(subgroup_id < (work_total % subgroup_size));
 
-        var distance_left = total_distance;
-        var distance_to_next_voxel_boundary = one_if_zero(fract(sign(-direction.xy) * fract(start.xy))) * distance_between_voxel_boundaries;
+        var thread_offset = subgroupExclusiveAdd(thread_total);             //  0   6   12  17
+        var thread_max = thread_offset + thread_total;                      //  6   12  17  22
+        var work_index = binary_search(work_offset, thread_offset);         //  0   0   2   3
 
-        while (distance_left > 0.0) {
-            let increment = min(minimum(distance_to_next_voxel_boundary), distance_left);
-            let sample = end.xyz - distance_left * direction;
-            let alpha = min(length(increment * direction), 1.0);
+        // Loop Variables
+        var work_offset_ = subgroupShuffle(work_offset, work_index);
+        var start_ = subgroupShuffle(start, work_index);
+        var step_ = subgroupShuffle(step, work_index);
+        var payload_ = u64(pack4x8unorm(vec4<f32>(subgroupShuffle(tangent, work_index), 1.0)));
+
+        for (; thread_offset<thread_max; thread_offset++) {
+            let offset = thread_offset - work_offset_;
+            let sample = start_ + step_ * f32(offset);
 
             let depth = u64(sample.z * f32(U32_MAX));
-            let payload = u64(pack4x8unorm(vec4<f32>(tangent, alpha)));
-            let visibility = depth << 32u | payload;
+            let visibility = depth << 32u | payload_;
 
             atomicMin(&KBUFFER[u32(sample.y)][u32(sample.x)], visibility);
 
-            // Update Distances
-            distance_to_next_voxel_boundary = select(
-                distance_to_next_voxel_boundary - increment,
-                distance_between_voxel_boundaries,
-                distance_to_next_voxel_boundary == vec2<f32>(increment)
-            );
+            // Increment Primitive if necessary
+            if (offset == subgroupShuffle(work_generated, work_index) - 1) {
+                work_index++;
 
-            distance_left -= increment;
+                work_offset_ = subgroupShuffle(work_offset, work_index);
+                start_ = subgroupShuffle(start, work_index);
+                step_ = subgroupShuffle(step, work_index);
+                payload_ = u64(pack4x8unorm(vec4<f32>(subgroupShuffle(tangent, work_index), 1.0)));
+            }
         }
     }
+}
+
+fn binary_search(a: u32, k: u32) -> u32 {
+    var low = 0u;
+    var high = 31u;
+    var ans = 32u;
+
+    while (low <= high) {
+        let mid = low + (high - low) / 2;
+
+        if (subgroupShuffle(a, mid) <= k) {
+            low = mid+1u;
+        }
+        else {
+            ans = mid;
+            high = mid - 1u;
+        }
+    }
+
+    return ans - 1u;
 }
 
 fn transform(vertex: vec4<f32>) -> vec3<f32> {
@@ -84,8 +119,8 @@ fn transform(vertex: vec4<f32>) -> vec3<f32> {
     return vec3<f32>(vt.x * f32(SURFACE_X), (1.0 - vt.y) * f32(SURFACE_Y), vt.z);
 }
 
-fn one_if_zero(v: vec2<f32>) -> vec2<f32> {
-    return v + vec2<f32>(v == vec2<f32>(0.0));
+fn maximum(v: vec2<f32>) -> f32 {
+    return max(v.x, v.y);
 }
 
 fn minimum(v: vec2<f32>) -> f32 {

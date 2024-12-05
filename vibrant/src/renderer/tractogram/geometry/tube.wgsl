@@ -69,7 +69,7 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
     let position = v0 + vertex.x * dx + vertex.y * dy - radius * dy + vertex.z * dz;
     let clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
 
-    let tangent = normalize(select(v1 - v0, v2 - v1, CUBE[vertex_index].y == 1.0 && v2.x < 1E9));
+    let tangent = abs(normalize(select(v1 - v0, v2 - v1, CUBE[vertex_index].y == 1.0 && v2.x < 1E9)));
 
     return Fragment(clip, position, tangent, v0, v1, radius);
 }
@@ -92,7 +92,7 @@ fn fragment(fragment: Fragment) -> GBuffer {
     return GBuffer(
         vec4<f32>(position, 1.0),
         vec4<f32>(0.5 + 0.5 * normal, 1.0),
-        vec4<f32>(0.5 + 0.5 * fragment.tangent, 1.0),
+        vec4<f32>(fragment.tangent, 1.0),
         depth);
 }
 

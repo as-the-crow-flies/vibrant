@@ -21,7 +21,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub const WORKGROUP_COUNT: usize = 256;
+    pub const WORKGROUP_SIZE: usize = 256;
 
     pub fn new(gpu: &Gpu, indices: &[u32]) -> Self {
         let label = Some(type_name::<Self>());
@@ -34,13 +34,13 @@ impl Filter {
 
         let workgroup_count = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytes_of(&indices.len().div_ceil(Self::WORKGROUP_COUNT)),
+            contents: bytes_of(&(indices.len().div_ceil(Self::WORKGROUP_SIZE) as u32)),
             usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
         let workgroup_count_2 = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytes_of(&indices.len().div_ceil(Self::WORKGROUP_COUNT * 2)),
+            contents: bytes_of(&(indices.len().div_ceil(Self::WORKGROUP_SIZE * 2) as u32)),
             usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
