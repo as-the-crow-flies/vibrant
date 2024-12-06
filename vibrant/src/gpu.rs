@@ -79,10 +79,18 @@ impl Gpu {
     }
 
     pub fn shader(&self, source: &str, constants: Option<&Constants>) -> ShaderModule {
+        let enable_f16 = self
+            .device()
+            .features()
+            .contains(Features::SHADER_F16)
+            .then_some("enable f16;\n".to_string());
+
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
             source: ShaderSource::Wgsl(Cow::Owned(
-                constants.map(Constants::wgsl).unwrap_or_default() + source,
+                enable_f16.unwrap_or_default()
+                    + &constants.map(Constants::wgsl).unwrap_or_default()
+                    + source,
             )),
         })
     }

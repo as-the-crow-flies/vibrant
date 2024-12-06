@@ -13,7 +13,7 @@ pub struct TractogramOcclusionCompute {
     copy: ComputePipeline,
     compute: ComputePipeline,
     mipmap: ComputePipeline,
-    filter: ComputePipeline,
+    cull: ComputePipeline,
 }
 
 impl TractogramOcclusionCompute {
@@ -53,7 +53,7 @@ impl TractogramOcclusionCompute {
                 &gpu.shader(include_str!("mipmap.wgsl"), Some(constants)),
                 "main",
             ),
-            filter: gpu.compute(
+            cull: gpu.compute(
                 &gpu.pipeline_layout(&[
                     &ScalarTexture::layout(gpu),
                     &Tractogram::layout(gpu),
@@ -61,7 +61,7 @@ impl TractogramOcclusionCompute {
                     &Filter::layout_write(gpu),
                 ]),
                 &gpu.shader(
-                    &(Environment::wgsl() + include_str!("filter.wgsl")),
+                    &(Environment::wgsl() + include_str!("cull.wgsl")),
                     Some(&constants),
                 ),
                 "compute",
@@ -169,7 +169,7 @@ impl TractogramOcclusionCompute {
             .div_ceil(self.constants.workgroup_x)
             .div_ceil(2); // Two segments are handles per thread
 
-        pass.set_pipeline(&self.filter);
+        pass.set_pipeline(&self.cull);
         pass.set_bind_group(0, occlusion.binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);

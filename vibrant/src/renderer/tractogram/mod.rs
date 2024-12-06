@@ -12,9 +12,7 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::{occlusion::Occlusion, Density, Tractogram},
-    controller::settings::{
-        CullingSetting, DensitySetting, GeometrySetting, Settings, ShadingSetting,
-    },
+    controller::settings::{DensitySetting, GeometrySetting, Settings, ShadingSetting},
     gpu::Gpu,
     surface::Frame,
 };
@@ -84,9 +82,7 @@ impl TractogramRenderer {
         if settings.shading != ShadingSetting::Density
             && settings.shading != ShadingSetting::Occlusion
         {
-            let filter = if settings.culling == CullingSetting::On
-                && settings.shading != ShadingSetting::Simple
-            {
+            let filter = if settings.culling && settings.shading != ShadingSetting::Simple {
                 tractogram.filter_culling()
             } else {
                 tractogram.filter_default()

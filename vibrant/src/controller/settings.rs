@@ -20,12 +20,6 @@ pub enum ShadingSetting {
     GBuffer,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum CullingSetting {
-    On,
-    Off,
-}
-
 pub struct Settings {
     pub ambient_occlusion_samples: u32,
     pub streamline_radius: f32,
@@ -37,9 +31,10 @@ pub struct Settings {
     pub min_value: f32,
     pub shading_level: f32,
     pub cull_level: f32,
+    pub balancing: bool,
     pub geometry: GeometrySetting,
     pub shading: ShadingSetting,
-    pub culling: CullingSetting,
+    pub culling: bool,
     pub density: DensitySetting,
 }
 
@@ -55,10 +50,11 @@ impl Settings {
             grad_size: 1.0,
             min_value: 0.0,
             shading_level: 1.0,
-            cull_level: 1.0,
+            cull_level: 256.0,
+            balancing: true,
             geometry: GeometrySetting::LineSoftware,
-            shading: ShadingSetting::Tracing,
-            culling: CullingSetting::Off,
+            shading: ShadingSetting::GBuffer,
+            culling: true,
             density: DensitySetting::Add,
         }
     }

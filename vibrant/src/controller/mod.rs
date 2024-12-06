@@ -8,7 +8,7 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{CullingSetting, DensitySetting, GeometrySetting, Settings, ShadingSetting};
+use settings::{DensitySetting, GeometrySetting, Settings, ShadingSetting};
 use state::ControllerState;
 
 use crate::file::File;
@@ -118,12 +118,8 @@ impl Controller {
                     );
                 });
 
-            ComboBox::from_label("Culling")
-                .selected_text(format!("{:?}", self.settings.culling))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.culling, CullingSetting::On, "On");
-                    ui.selectable_value(&mut self.settings.culling, CullingSetting::Off, "Off");
-                });
+            ui.checkbox(&mut self.settings.culling, "Culling");
+            ui.checkbox(&mut self.settings.balancing, "Balancing");
 
             ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.01..=0.5)
@@ -144,7 +140,7 @@ impl Controller {
                 Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Tangent Coloring"),
             );
 
-            ui.add(Slider::new(&mut self.settings.cull_level, 1.0..=10.0).text("Cull Level"));
+            ui.add(Slider::new(&mut self.settings.cull_level, 1.0..=256.0).text("Cull Level"));
         });
     }
 

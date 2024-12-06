@@ -83,6 +83,7 @@ impl TractogramDensityOrCompute {
         let count = tractogram
             .vertex_count()
             .div_ceil(self.constants.workgroup_x);
+
         pass.set_pipeline(&self.rasterize);
         pass.dispatch_workgroups(count, 1, 1);
 

@@ -27,7 +27,8 @@ impl Environment {
             grad_size: f32,
             min_value: f32,
             shading_level: f32,
-            cull_level: f32
+            cull_level: f32,
+            balancing: u32
         }
 
         struct Camera {
@@ -102,6 +103,7 @@ impl Environment {
                 bytes_of(&controller.settings().min_value),
                 bytes_of(&controller.settings().shading_level),
                 bytes_of(&controller.settings().cull_level),
+                bytes_of(&(controller.settings().balancing as u32)),
             ]
             .concat(),
         );

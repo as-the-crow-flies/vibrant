@@ -26,8 +26,11 @@ const ITEMS_PER_WORKGROUP: u32 = 2u * WORKGROUP_X;
 @compute
 @workgroup_size(WORKGROUP_X)
 fn compute(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) local: u32) {
-    let global_0 = 2u * id.x + 0u;
-    let global_1 = 2u * id.x + 1u;
+
+    let global = id.x;
+
+    let global_0 = 2u * global + 0u;
+    let global_1 = 2u * global + 1u;
 
     let local_0 = 2u * local + 0u;
     let local_1 = 2u * local + 1u;
@@ -66,6 +69,27 @@ fn should_keep_segment(index: u32) -> bool {
 
     let v0_world = TRACTOGRAM_TO_WORLD * v0;
     let v1_world = TRACTOGRAM_TO_WORLD * v1;
+
+    var v0_screen = ENVIRONMENT.camera.projection * v0_world;
+        v0_screen /= v0_screen.w;
+    var v1_screen = ENVIRONMENT.camera.projection * v1_world;
+        v1_screen /= v1_screen.w;
+
+    let bounds_min = vec2<f32>(-1.0);
+    let bounds_max = vec2<f32>( 1.0);
+
+    if (
+        v0_screen.z <= 0.0 ||
+        v0_screen.z >= 1.0 ||
+        v1_screen.z <= 0.0 ||
+        v1_screen.z >= 1.0 ||
+        (
+            (any(v0_screen.xy <= bounds_min) || any(v0_screen.xy >= bounds_max)) &&
+            (any(v1_screen.xy <= bounds_min) || any(v1_screen.xy >= bounds_max)))
+        )
+    {
+        return false;
+    }
 
     let vmin = min(v0_world.xyz, v1_world.xyz);
     let vmax = max(v0_world.xyz, v1_world.xyz);
