@@ -36,7 +36,7 @@ fn main(
     let v0_world = TRACTOGRAM_TO_WORLD * get_vertex(index);
     let v1_world = TRACTOGRAM_TO_WORLD * get_vertex(index + 1);
 
-    let tangent_world = abs(normalize(v1_world.xyz - v0_world.xyz));
+    let tangent = abs(normalize(v1_world.xyz - v0_world.xyz));
 
     let start = transform(v0_world);
     let end = transform(v1_world);
@@ -48,53 +48,43 @@ fn main(
     let step = delta / steps;
 
     if (bool(ENVIRONMENT.settings.balancing)) {                             //  0   1   2   3  <- Thread Id
-        let primitive_size = u32(steps);                                    //  8   2   7   5
-        let work_offset = subgroupExclusiveAdd(primitive_size);             //  0   8   10  17
-        let work_total = subgroupAdd(primitive_size);                       //  22
+        let size = u32(steps);                                              //  8   2   7   5
+        let offset = subgroupExclusiveAdd(size);                            //  0   8   10  17
+        let total = subgroupBroadcast(offset + size, subgroup_size - 1);    //  22
 
-        let thread_total = work_total / subgroup_size +                     //  6   6   5   5
-            u32(subgroup_id < (work_total % subgroup_size));
+        let thread_min = total / subgroup_size;
+        let thread_mod = total % subgroup_size;
 
-        var thread_offset = subgroupExclusiveAdd(thread_total);             //  0   6   12  17
-        var work_index = search(subgroup_size, work_offset, thread_offset); //  0   0   2   3
-
-        var thread_offset_max = thread_offset + thread_total;               //  6   12  17  22
-
-        // Loop Variables
-        var work_offset_ = subgroupShuffle(work_offset, work_index);
-        var start_ = subgroupShuffle(start, work_index);
-        var step_ = subgroupShuffle(step, work_index);
-        var tangent_world_ = subgroupShuffle(tangent_world, work_index);
-        var primitive_size_ = subgroupShuffle(primitive_size, work_index);
+        let thread_total = thread_min + u32(subgroup_id < thread_mod);                  //  6   6   5   5
+        var thread_offset = subgroup_id * thread_min + min(subgroup_id, thread_mod);    //  0   6   12  17
+        var thread_index = search(subgroup_size, offset, thread_offset);                //  0   0   2   3
+        var thread_offset_max = thread_offset + thread_total;                           //  6   12  17  22
 
         for (; thread_offset<thread_offset_max; thread_offset++) {
-            let primitive_offset = thread_offset - work_offset_;
+            let offset_ = subgroupShuffle(offset, thread_index);
+            let start_ = subgroupShuffle(start, thread_index);
+            let step_ = subgroupShuffle(step, thread_index);
+            let tangent_ = subgroupShuffle(tangent, thread_index);
+            let size_ = subgroupShuffle(size, thread_index);
+
+            let primitive_offset = thread_offset - offset_;
             let fragment = start_ + step_ * f32(primitive_offset);
 
             let depth = u64(fragment.z * f32(U32_MAX)) << 32u;
-            let payload = u64(pack4x8unorm(vec4<f32>(tangent_world_, 0.002 * f32(thread_total))));
+            let payload = u64(pack4x8unorm(vec4<f32>(tangent_, 0.0)));
 
             let pixel = &KBUFFER[u32(fragment.y)][u32(fragment.x)];
 
             atomicMin(pixel, depth | payload);
 
-            // Increment Primitive if necessary
-            if (primitive_offset == primitive_size_ - 1) {
-                work_index++;
-
-                work_offset_ = subgroupShuffle(work_offset, work_index);
-                start_ = subgroupShuffle(start, work_index);
-                step_ = subgroupShuffle(step, work_index);
-                tangent_world_ = subgroupShuffle(tangent_world, work_index);
-                primitive_size_ = subgroupShuffle(primitive_size, work_index);
-            }
+            if (primitive_offset >= size_ - 1) { thread_index++; }
         }
     } else {
         for (var offset = 0.0; offset <= steps; offset += 1.0) {
             let fragment = start + step * offset;
 
             let depth = u64(fragment.z * f32(U32_MAX)) << 32u;
-            let payload = u64(pack4x8unorm(vec4<f32>(tangent_world, 0.002 * steps)));
+            let payload = u64(pack4x8unorm(vec4<f32>(tangent, 0.0)));
 
             let pixel = &KBUFFER[u32(fragment.y)][u32(fragment.x)];
 

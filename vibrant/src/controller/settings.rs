@@ -51,9 +51,9 @@ impl Settings {
             min_value: 0.0,
             shading_level: 1.0,
             cull_level: 256.0,
-            balancing: true,
+            balancing: false,
             geometry: GeometrySetting::LineSoftware,
-            shading: ShadingSetting::GBuffer,
+            shading: ShadingSetting::Tracing,
             culling: true,
             density: DensitySetting::Add,
         }

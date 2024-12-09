@@ -29,22 +29,22 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let normal_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(normal.xyz, 0.0));
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
 
-    return vec4<f32>(vec3<f32>(textureLoad(NORMAL, pixel, 0).x) * vec3<f32>(1.0, 0.0, 1.0), 1.0);
+    // return vec4<f32>(vec3<f32>(textureLoad(NORMAL, pixel, 0).x) * vec3<f32>(1.0, 0.0, 1.0), 1.0);
 
-    // let boundary = 1.0/3.0;
-    // let slope = 0.3;
-    // let func = fragment.ndc.x - slope * fragment.ndc.y;
+    let boundary = 1.0/3.0;
+    let slope = 0.3;
+    let func = fragment.ndc.x - slope * fragment.ndc.y;
 
-    // if (func < -boundary)
-    // {
-    //     return vec4<f32>(position.xyz, 1.0);
-    // }
-    // else if (func < boundary)
-    // {
-    //     return vec4<f32>(abs(normal_object_space.xyz), 1.0);
-    // }
-    // else
-    // {
-    //     return vec4<f32>(abs(tangent_object_space.xyz), 1.0);
-    // }
+    if (func < -boundary)
+    {
+        return vec4<f32>(position.xyz, 1.0);
+    }
+    else if (func < boundary)
+    {
+        return vec4<f32>(abs(normal_object_space.xyz), 1.0);
+    }
+    else
+    {
+        return vec4<f32>(abs(tangent_object_space.xyz), 1.0);
+    }
 }
