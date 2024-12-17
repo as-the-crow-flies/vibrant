@@ -90,6 +90,11 @@ impl Controller {
                         ShadingSetting::GBuffer,
                         "GBuffer",
                     );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        ShadingSetting::Tracing,
+                        "Tracing",
+                    );
                 });
 
             ui.add(
@@ -97,6 +102,8 @@ impl Controller {
                     .logarithmic(true)
                     .text("Streamline Radius"),
             );
+
+            ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
         });
     }
 

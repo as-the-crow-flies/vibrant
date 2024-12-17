@@ -19,6 +19,7 @@ impl Environment {
         "
         struct Settings {
             streamline_radius: f32,
+            direct_light: f32,
         }
 
         struct Camera {
@@ -84,6 +85,7 @@ impl Environment {
                 bytes_of(&controller.light().direction()),
                 bytes_of(&0u32),
                 bytes_of(&controller.settings().streamline_radius),
+                bytes_of(&controller.settings().direct_light),
             ]
             .concat(),
         );

@@ -38,10 +38,7 @@ fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
 
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
 
-    let color = mix(vec3<f32>(1.0), abs(tangent_object_space.xyz), ENVIRONMENT.settings.gradient_factor);
-    let illumination = mix(1.0, lighting, ENVIRONMENT.settings.shading_level);
-
-    return vec4<f32>(color * illumination, 1.0);
+    return vec4<f32>(abs(tangent_object_space.xyz) * lighting, 1.0);
 }
 
 fn lambert(normal: vec3<f32>, light: vec3<f32>) -> f32 {
@@ -72,7 +69,7 @@ fn direct(position: vec3<f32>, light: vec3<f32>, radius: f32) -> f32 {
 fn ambient(position: vec3<f32>, radius: f32) -> f32 {
     if (ENVIRONMENT.settings.direct_light == 1.0) { return 0.0; }
 
-    let N_SAMPLES = f32(ENVIRONMENT.settings.ambient_occlusion_samples);
+    let N_SAMPLES = 20.0;
     let TAN_CONE_ANGLE = tan(sqrt(4.0 * PI / N_SAMPLES));
     let DIM = f32(textureDimensions(DENSITY).x);
     let distance_start = 1.0 / DIM + radius;

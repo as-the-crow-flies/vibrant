@@ -1,10 +1,3 @@
-// Used instead of vec3<f32> for padding reasons
-struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32
-}
-
 const CUBE: array<vec3<f32>, 14> = array(
     vec3<f32>(-1.0, 1.0, 1.0),  // Front-top-left
     vec3<f32>( 1.0, 1.0, 1.0),  // Front-top-right
@@ -26,7 +19,7 @@ const U32_MAX: u32 = 4294967295;
 
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
-@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
+@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<vec4<f32>>;
 
 @group(1) @binding(0) var<storage> TRACTOGRAM_INDICES: array<u32>;
 
@@ -52,9 +45,9 @@ struct GBuffer {
 fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> Fragment {
     let index = TRACTOGRAM_INDICES[instance_index];
 
-    let v0 = transform(TRACTOGRAM_TO_WORLD, get_vertex(index + 0));
-    let v1 = transform(TRACTOGRAM_TO_WORLD, get_vertex(index + 1));
-    let v2 = transform(TRACTOGRAM_TO_WORLD, get_vertex(index + 2));
+    let v0 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 0]);
+    let v1 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 1]);
+    let v2 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 2]);
 
     let delta = v1 - v0;
     let distance = length(delta);
@@ -96,8 +89,8 @@ fn fragment(fragment: Fragment) -> GBuffer {
         depth);
 }
 
-fn transform(mat: mat4x4<f32>, vec: vec3<f32>) -> vec3<f32> {
-    return (mat * vec4<f32>(vec, 1.0)).xyz;
+fn transform(mat: mat4x4<f32>, vec: vec4<f32>) -> vec3<f32> {
+    return (mat * vec).xyz;
 }
 
 // https://iquilezles.org/articles/intersectors
@@ -143,9 +136,4 @@ fn capsule_normal(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> vec3<f3
     let pa = pos - a;
     let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
     return (pa - h*ba) / r;
-}
-
-fn get_vertex(index: u32) -> vec3<f32> {
-    let v = TRACTOGRAM_VERTICES[index];
-    return vec3<f32>(v.x, v.y, v.z);
 }

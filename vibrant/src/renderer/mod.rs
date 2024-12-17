@@ -3,7 +3,7 @@ pub mod services;
 pub mod tractogram;
 pub mod ui;
 
-use crate::renderer::tractogram::TractogramRenderer;
+use crate::{asset::density::Density, renderer::tractogram::TractogramRenderer};
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
@@ -30,7 +30,10 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(gpu: Gpu) -> Self {
-        let asset = Asset { tractogram: None };
+        let asset = Asset {
+            tractogram: None,
+            density: Density::new(&gpu),
+        };
 
         Self {
             surface: None,
@@ -75,6 +78,7 @@ impl Renderer {
                 &mut cmd,
                 &self.environment,
                 surface.buffer(),
+                &self.asset.density,
                 tractogram,
                 controller.settings(),
             );

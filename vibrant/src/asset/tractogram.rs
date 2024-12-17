@@ -1,6 +1,6 @@
 use std::{any::type_name, f32::consts::PI};
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3, Vec4};
 
 use itertools::Itertools;
 use wgpu::{
@@ -52,9 +52,15 @@ impl Tractogram {
             .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
             .collect_vec();
 
+        let vertices = tractogram
+            .vertices()
+            .iter()
+            .map(|v| Vec4::new(v.x, v.y, v.z, 1.0))
+            .collect_vec();
+
         let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytemuck::cast_slice(tractogram.vertices()),
+            contents: bytemuck::cast_slice(&vertices),
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
         });
 

@@ -140,6 +140,10 @@ impl Filter {
         pass.dispatch_workgroups(1, 1, 1);
     }
 
+    pub fn copy_workgroup_count(&self, cmd: &mut CommandEncoder, buffer: &Buffer) {
+        cmd.copy_buffer_to_buffer(self.workgroup_count(), 0, &buffer, 0, 4);
+    }
+
     pub fn count(&self) -> &Buffer {
         &self.count
     }

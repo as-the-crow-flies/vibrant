@@ -1,20 +1,20 @@
 pub mod color;
-pub mod density;
 pub mod depth;
 pub mod gbuffer;
 pub mod kbuffer;
+pub mod occlusion;
 
 use color::Color;
-use density::Density;
 use depth::Depth;
 use gbuffer::GBuffer;
 use kbuffer::KBuffer;
+use occlusion::Occlusion;
 use wgpu::{
     CommandEncoder, CompositeAlphaMode, Extent3d, ImageCopyTexture, Origin3d, PresentMode,
     SurfaceConfiguration, SurfaceTarget, TextureAspect, TextureUsages,
 };
 
-use crate::constants::{COARSE_DEPTH, TILE_SIZE};
+use crate::constants::{OCCLUSION_DEPTH, TILE_SIZE};
 
 use super::gpu::Gpu;
 
@@ -23,7 +23,7 @@ pub struct SurfaceBuffer {
     height: u32,
     color: Color,
     depth: Depth,
-    density: Density,
+    occlusion: Occlusion,
     gbuffer: GBuffer,
     kbuffer: KBuffer,
 }
@@ -33,11 +33,11 @@ impl SurfaceBuffer {
         Self {
             width,
             height,
-            density: Density::new(
+            occlusion: Occlusion::new(
                 gpu,
                 width.div_ceil(TILE_SIZE),
                 height.div_ceil(TILE_SIZE),
-                COARSE_DEPTH,
+                OCCLUSION_DEPTH,
             ),
             color: Color::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
@@ -62,8 +62,8 @@ impl SurfaceBuffer {
         &self.depth
     }
 
-    pub fn density(&self) -> &Density {
-        &self.density
+    pub fn density(&self) -> &Occlusion {
+        &self.occlusion
     }
 
     pub fn gbuffer(&self) -> &GBuffer {

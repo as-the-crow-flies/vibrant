@@ -2,27 +2,27 @@ use std::any::type_name;
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, Buffer, BufferBinding, BufferBindingType,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
     BufferDescriptor, BufferUsages, ShaderStages,
 };
 
-use crate::{asset::scalar::ScalarTexture, gpu::Gpu};
+use crate::{constants::DENSITY_SIZE, gpu::Gpu};
+
+use super::scalar::ScalarTexture;
 
 pub struct Density {
-    texture: ScalarTexture,
     buffer: Buffer,
     binding: BindGroup,
+    texture: ScalarTexture,
 }
 
 impl Density {
-    pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
-
-        let texture = ScalarTexture::new(gpu, width, height, depth);
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: (width * height * depth * 4) as u64,
+            size: (DENSITY_SIZE * DENSITY_SIZE * DENSITY_SIZE * 4) as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -41,18 +41,10 @@ impl Density {
         });
 
         Self {
-            texture,
             buffer,
             binding,
+            texture: ScalarTexture::new(gpu, DENSITY_SIZE, DENSITY_SIZE, DENSITY_SIZE),
         }
-    }
-
-    pub fn texture(&self) -> &ScalarTexture {
-        &self.texture
-    }
-
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -62,7 +54,7 @@ impl Density {
                 entries: &[BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
+                    ty: BindingType::Buffer {
                         ty: BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
                         min_binding_size: None,
@@ -70,6 +62,18 @@ impl Density {
                     count: None,
                 }],
             })
+    }
+
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
+    }
+
+    pub fn buffer(&self) -> &Buffer {
+        &self.buffer
+    }
+
+    pub fn texture(&self) -> &ScalarTexture {
+        &self.texture
     }
 }
 

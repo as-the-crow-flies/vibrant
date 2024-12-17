@@ -1,13 +1,6 @@
-// Used instead of vec3<f32> for padding reasons
-struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32
-}
-
 @group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(0) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
-@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<Vertex>;
+@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<vec4<f32>>;
 
 @group(1) @binding(0) var<storage> TRACTOGRAM_INDICES: array<u32>;
 
@@ -27,7 +20,7 @@ struct GBuffer {
 @vertex
 fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> Fragment {
     let index = TRACTOGRAM_INDICES[instance_index];
-    let position = TRACTOGRAM_TO_WORLD * get_vertex(index + vertex_index);
+    let position = TRACTOGRAM_TO_WORLD * TRACTOGRAM_VERTICES[index + vertex_index];
     return Fragment(ENVIRONMENT.camera.projection * position, position);
 }
 
@@ -41,9 +34,4 @@ fn fragment(fragment: Fragment) -> GBuffer {
         vec4<f32>(vec3<f32>(ndc * 0.5 + 0.5), 0.0),
         vec4<f32>(abs(normalize(fwidth(fragment.position.xyz))), 1.0)
     );
-}
-
-fn get_vertex(index: u32) -> vec4<f32> {
-    let v = TRACTOGRAM_VERTICES[index];
-    return vec4<f32>(v.x, v.y, v.z, 1.0);
 }
