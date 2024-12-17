@@ -8,7 +8,7 @@ use wgpu::{
 use crate::{
     asset::scalar::ScalarTexture,
     gpu::Gpu,
-    renderer::{constants::Constants, environment::Environment},
+    renderer::environment::Environment,
     surface::{color::Color, SurfaceBuffer},
 };
 
@@ -17,13 +17,10 @@ pub struct TractogramDensityShading {
 }
 
 impl TractogramDensityShading {
-    pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shader = gpu.shader(
-            &(Environment::wgsl() + include_str!("volume.wgsl")),
-            Some(constants),
-        );
+        let shader = gpu.shader(&(Environment::wgsl() + include_str!("volume.wgsl")));
 
         Self {
             pipeline: gpu

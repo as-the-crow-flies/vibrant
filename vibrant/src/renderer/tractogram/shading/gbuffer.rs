@@ -7,7 +7,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::Tractogram,
+    asset::tractogram::Tractogram,
     gpu::Gpu,
     surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
 };
@@ -20,7 +20,7 @@ impl TractogramGBufferShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shading_module = gpu.shader(include_str!("gbuffer.wgsl"), None);
+        let shading_module = gpu.shader(include_str!("gbuffer.wgsl"));
 
         Self {
             pipeline: gpu

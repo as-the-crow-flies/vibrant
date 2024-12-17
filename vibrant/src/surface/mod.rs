@@ -1,9 +1,11 @@
 pub mod color;
+pub mod density;
 pub mod depth;
 pub mod gbuffer;
 pub mod kbuffer;
 
 use color::Color;
+use density::Density;
 use depth::Depth;
 use gbuffer::GBuffer;
 use kbuffer::KBuffer;
@@ -12,6 +14,8 @@ use wgpu::{
     SurfaceConfiguration, SurfaceTarget, TextureAspect, TextureUsages,
 };
 
+use crate::constants::{COARSE_DEPTH, TILE_SIZE};
+
 use super::gpu::Gpu;
 
 pub struct SurfaceBuffer {
@@ -19,6 +23,7 @@ pub struct SurfaceBuffer {
     height: u32,
     color: Color,
     depth: Depth,
+    density: Density,
     gbuffer: GBuffer,
     kbuffer: KBuffer,
 }
@@ -28,6 +33,12 @@ impl SurfaceBuffer {
         Self {
             width,
             height,
+            density: Density::new(
+                gpu,
+                width.div_ceil(TILE_SIZE),
+                height.div_ceil(TILE_SIZE),
+                COARSE_DEPTH,
+            ),
             color: Color::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
             gbuffer: GBuffer::new(gpu, width, height),
@@ -49,6 +60,10 @@ impl SurfaceBuffer {
 
     pub fn depth(&self) -> &Depth {
         &self.depth
+    }
+
+    pub fn density(&self) -> &Density {
+        &self.density
     }
 
     pub fn gbuffer(&self) -> &GBuffer {

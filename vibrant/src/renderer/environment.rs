@@ -18,17 +18,7 @@ impl Environment {
     pub fn wgsl() -> String {
         "
         struct Settings {
-            ambient_occlusion_samples: u32,
             streamline_radius: f32,
-            direct_light: f32,
-            gradient_factor: f32,
-            opacity_factor: f32,
-            step_size: f32,
-            grad_size: f32,
-            min_value: f32,
-            shading_level: f32,
-            cull_level: f32,
-            balancing: u32
         }
 
         struct Camera {
@@ -55,7 +45,7 @@ impl Environment {
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 272,
+            size: 256,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -93,17 +83,7 @@ impl Environment {
                 bytes_of(&0u64),
                 bytes_of(&controller.light().direction()),
                 bytes_of(&0u32),
-                bytes_of(&controller.settings().ambient_occlusion_samples),
                 bytes_of(&controller.settings().streamline_radius),
-                bytes_of(&controller.settings().direct_light),
-                bytes_of(&controller.settings().gradient_factor),
-                bytes_of(&controller.settings().opacity_factor),
-                bytes_of(&controller.settings().step_size),
-                bytes_of(&controller.settings().grad_size),
-                bytes_of(&controller.settings().min_value),
-                bytes_of(&controller.settings().shading_level),
-                bytes_of(&controller.settings().cull_level),
-                bytes_of(&(controller.settings().balancing as u32)),
             ]
             .concat(),
         );

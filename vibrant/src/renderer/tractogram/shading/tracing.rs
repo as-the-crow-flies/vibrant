@@ -7,9 +7,9 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{density::Density, scalar::ScalarTexture, Tractogram},
+    asset::{scalar::ScalarTexture, tractogram::Tractogram},
     gpu::Gpu,
-    renderer::{constants::Constants, environment::Environment},
+    renderer::environment::Environment,
     surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
 };
 
@@ -18,13 +18,10 @@ pub struct TractogramTracingShading {
 }
 
 impl TractogramTracingShading {
-    pub fn new(gpu: &Gpu, constants: &Constants) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shading_module = gpu.shader(
-            &(Environment::wgsl() + include_str!("tracing.wgsl")),
-            Some(constants),
-        );
+        let shading_module = gpu.shader(&(Environment::wgsl() + include_str!("tracing.wgsl")));
 
         Self {
             pipeline: gpu
@@ -73,7 +70,7 @@ impl TractogramTracingShading {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &SurfaceBuffer,
-        density: &Density,
+        density: &ScalarTexture,
         tractogram: &Tractogram,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -86,7 +83,7 @@ impl TractogramTracingShading {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
-        pass.set_bind_group(1, density.texture().binding(), &[]);
+        pass.set_bind_group(1, density.binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..4, 0..1);

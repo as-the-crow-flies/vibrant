@@ -20,17 +20,17 @@ pub struct ScalarTexture {
 impl ScalarTexture {
     const TEXTURE_FORMAT: TextureFormat = TextureFormat::R32Float;
 
-    pub fn new(gpu: &Gpu, exponent: u32) -> Self {
+    pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32) -> Self {
         let label = Some(type_name::<Self>());
-        let size = 2u32.pow(exponent);
-        let mip_level_count = exponent - 2;
+
+        let mip_level_count = width.min(height).min(depth).ilog2().max(1);
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
             label,
             size: Extent3d {
-                width: size,
-                height: size,
-                depth_or_array_layers: size,
+                width,
+                height,
+                depth_or_array_layers: depth,
             },
             mip_level_count,
             sample_count: 1,
@@ -51,11 +51,7 @@ impl ScalarTexture {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: (exponent + 1) as f32,
-            compare: None,
-            anisotropy_clamp: 1,
-            border_color: None,
+            ..Default::default()
         });
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {

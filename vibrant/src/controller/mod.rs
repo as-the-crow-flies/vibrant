@@ -73,11 +73,7 @@ impl Controller {
                         GeometrySetting::LineHardware,
                         "LineHardware",
                     );
-                    ui.selectable_value(
-                        &mut self.settings.geometry,
-                        GeometrySetting::LineSoftware,
-                        "LineSoftware",
-                    );
+
                     ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Tube, "Tube");
                 });
 
@@ -86,23 +82,8 @@ impl Controller {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.settings.shading,
-                        ShadingSetting::Tracing,
-                        "Tracing",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
                         ShadingSetting::Simple,
                         "Simple",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Density,
-                        "Density",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Occlusion,
-                        "Occlusion",
                     );
                     ui.selectable_value(
                         &mut self.settings.shading,
@@ -111,29 +92,11 @@ impl Controller {
                     );
                 });
 
-            ui.checkbox(&mut self.settings.culling, "Culling");
-            ui.checkbox(&mut self.settings.balancing, "Balancing");
-
             ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.01..=0.5)
                     .logarithmic(true)
                     .text("Streamline Radius"),
             );
-
-            ui.add(
-                Slider::new(&mut self.settings.direct_light, 0.0..=1.0)
-                    .text("Direct Light vs Ambient Light"),
-            );
-
-            ui.add(
-                Slider::new(&mut self.settings.shading_level, 0.0..=2.0).text("Shading Strength"),
-            );
-
-            ui.add(
-                Slider::new(&mut self.settings.gradient_factor, 0.0..=1.0).text("Tangent Coloring"),
-            );
-
-            ui.add(Slider::new(&mut self.settings.cull_level, 1.0..=256.0).text("Cull Level"));
         });
     }
 

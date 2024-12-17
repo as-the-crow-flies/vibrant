@@ -1,20 +1,16 @@
-pub mod constants;
 pub mod environment;
 pub mod services;
 pub mod tractogram;
 pub mod ui;
-pub mod volume;
 
-use crate::{asset::occlusion::Occlusion, renderer::tractogram::TractogramRenderer};
-use constants::Constants;
+use crate::renderer::tractogram::TractogramRenderer;
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
-use volume::compute::VolumeRenderer;
 use wgpu::SurfaceTarget;
 
 use crate::{
-    asset::{density::Density, Asset, Tractogram, Volume},
+    asset::{tractogram::Tractogram, Asset},
     file::File,
 };
 
@@ -23,41 +19,28 @@ use super::{controller::Controller, gpu::Gpu, surface::Surface};
 pub struct Renderer {
     gpu: Gpu,
     surface: Option<Surface>,
-    constants: Constants,
 
     asset: Asset,
 
     environment: Environment,
     tractogram: TractogramRenderer,
-    volume_render: VolumeRenderer,
 
     ui: UiRenderer,
 }
 
 impl Renderer {
-    const VOLUME_EXPONENT: u32 = 7;
-
     pub fn new(gpu: Gpu) -> Self {
-        let asset = Asset {
-            tractogram: None,
-            volume: None,
-            density: Density::new(&gpu, Self::VOLUME_EXPONENT),
-            occlusion: Occlusion::new(&gpu, Self::VOLUME_EXPONENT),
-        };
-
-        let constants = Constants::new((1, 1), asset.density.size());
+        let asset = Asset { tractogram: None };
 
         Self {
             surface: None,
 
-            tractogram: TractogramRenderer::new(&gpu, &constants),
-            volume_render: VolumeRenderer::new(&gpu),
+            tractogram: TractogramRenderer::new(&gpu),
             ui: UiRenderer::new(&gpu),
 
             environment: Environment::new(&gpu),
             asset,
 
-            constants,
             gpu,
         }
     }
@@ -71,9 +54,6 @@ impl Renderer {
             .as_mut()
             .unwrap()
             .resize(&self.gpu, width, height);
-
-        self.constants = Constants::new((width, height), self.asset.density.size());
-        self.tractogram = TractogramRenderer::new(&self.gpu, &self.constants)
     }
 
     pub fn render(
@@ -83,7 +63,6 @@ impl Renderer {
         output: egui::FullOutput,
     ) {
         File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(&self.gpu, &tck)));
-        File::on_nifti(|nifti| self.asset.volume = Some(Volume::new(&self.gpu, &nifti)));
 
         self.environment.update(&self.gpu, &controller);
 
@@ -97,15 +76,8 @@ impl Renderer {
                 &self.environment,
                 surface.buffer(),
                 tractogram,
-                &self.asset.density,
-                &self.asset.occlusion,
                 controller.settings(),
             );
-        }
-
-        if let Some(volume) = &self.asset.volume {
-            self.volume_render
-                .render(&mut cmd, &self.environment, surface.buffer(), volume);
         }
 
         if !File::about_to_save() {
@@ -113,12 +85,12 @@ impl Renderer {
                 .render(&self.gpu, &mut cmd, surface.buffer(), ctx, output);
         }
 
+        surface.present(&self.gpu, cmd);
+
         File::on_save(|path| {
             self.gpu
                 .save(path, surface.buffer().color().texture())
                 .block_on()
         });
-
-        surface.present(&self.gpu, cmd);
     }
 }

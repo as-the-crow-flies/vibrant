@@ -11,8 +11,6 @@ use wgpu::{
     ShaderModuleDescriptor, ShaderSource, Texture, TextureAspect, TextureFormat,
 };
 
-use crate::renderer::constants::Constants;
-
 pub struct Gpu {
     instance: wgpu::Instance,
     device: wgpu::Device,
@@ -78,20 +76,10 @@ impl Gpu {
         &self.queue
     }
 
-    pub fn shader(&self, source: &str, constants: Option<&Constants>) -> ShaderModule {
-        let enable_f16 = self
-            .device()
-            .features()
-            .contains(Features::SHADER_F16)
-            .then_some("enable f16;\n".to_string());
-
+    pub fn shader(&self, source: &str) -> ShaderModule {
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(
-                enable_f16.unwrap_or_default()
-                    + &constants.map(Constants::wgsl).unwrap_or_default()
-                    + source,
-            )),
+            source: ShaderSource::Wgsl(Cow::Borrowed(source)),
         })
     }
 
