@@ -12,7 +12,7 @@ use crate::{
     asset::{filter::Filter, tractogram::Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{depth::Depth, gbuffer::GBuffer, Frame},
+    surface::{depth::Depth, gbuffer::GBuffer, SurfaceBuffer},
 };
 
 pub struct TractogramLineHardwareGeometry {
@@ -69,7 +69,7 @@ impl TractogramLineHardwareGeometry {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         tractogram: &Tractogram,
         filter: &Filter,
     ) {
@@ -77,8 +77,8 @@ impl TractogramLineHardwareGeometry {
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &frame.gbuffer.attachments(),
-            depth_stencil_attachment: Some(frame.depth.attachment()),
+            color_attachments: &frame.gbuffer().attachments(),
+            depth_stencil_attachment: Some(frame.depth().attachment()),
             timestamp_writes: None,
             occlusion_query_set: None,
         });

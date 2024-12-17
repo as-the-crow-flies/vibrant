@@ -9,7 +9,7 @@ use wgpu::{
 use crate::{
     asset::Tractogram,
     gpu::Gpu,
-    surface::{buffer::FrameBuffer, gbuffer::GBuffer, Frame},
+    surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
 };
 
 pub struct TractogramGBufferShading {
@@ -47,7 +47,7 @@ impl TractogramGBufferShading {
                     fragment: Some(FragmentState {
                         module: &shading_module,
                         entry_point: Some("fragment"),
-                        targets: &[Some(FrameBuffer::target_srgb())],
+                        targets: &[Some(Color::target())],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -62,17 +62,17 @@ impl TractogramGBufferShading {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, tractogram: &Tractogram) {
+    pub fn render(&self, cmd: &mut CommandEncoder, frame: &SurfaceBuffer, tractogram: &Tractogram) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(frame.buffer.attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.gbuffer.binding(), &[]);
+        pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.draw(0..4, 0..1);
     }

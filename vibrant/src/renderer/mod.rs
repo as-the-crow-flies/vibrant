@@ -87,13 +87,7 @@ impl Renderer {
 
         self.environment.update(&self.gpu, &controller);
 
-        let surface_frame = self
-            .surface
-            .as_ref()
-            .expect("Surface was not initialized")
-            .surface_frame();
-
-        let frame = surface_frame.frame();
+        let surface = self.surface.as_ref().expect("Surface was not initialized");
 
         let mut cmd = self.gpu.cmd();
 
@@ -101,7 +95,7 @@ impl Renderer {
             self.tractogram.render(
                 &mut cmd,
                 &self.environment,
-                frame,
+                surface.buffer(),
                 tractogram,
                 &self.asset.density,
                 &self.asset.occlusion,
@@ -111,17 +105,20 @@ impl Renderer {
 
         if let Some(volume) = &self.asset.volume {
             self.volume_render
-                .render(&mut cmd, &self.environment, frame, volume);
+                .render(&mut cmd, &self.environment, surface.buffer(), volume);
         }
 
         if !File::about_to_save() {
-            self.ui.render(&self.gpu, &mut cmd, &frame, ctx, output);
+            self.ui
+                .render(&self.gpu, &mut cmd, surface.buffer(), ctx, output);
         }
 
-        self.gpu.submit(cmd);
+        File::on_save(|path| {
+            self.gpu
+                .save(path, surface.buffer().color().texture())
+                .block_on()
+        });
 
-        File::on_save(|path| self.gpu.save(path, surface_frame.texture()).block_on());
-
-        surface_frame.present();
+        surface.present(&self.gpu, cmd);
     }
 }

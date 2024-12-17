@@ -25,6 +25,7 @@ impl TractogramOcclusionCompute {
         Self {
             constants: constants.clone(),
             copy: gpu.compute(
+                "Occlusion::Copy",
                 &gpu.pipeline_layout(&[
                     &ScalarTexture::layout(gpu),
                     &ScalarTexture::layout_write(gpu),
@@ -36,6 +37,7 @@ impl TractogramOcclusionCompute {
                 "compute",
             ),
             compute: gpu.compute(
+                "Occlusion::Compute",
                 &gpu.pipeline_layout(&[
                     &ScalarTexture::layout(gpu),
                     &ScalarTexture::layout_write(gpu),
@@ -49,11 +51,13 @@ impl TractogramOcclusionCompute {
                 "compute",
             ),
             mipmap: gpu.compute(
+                "Occlusion::MipMap",
                 &gpu.pipeline_layout(&[&ScalarTexture::layout_mipmap(gpu)]),
                 &gpu.shader(include_str!("mipmap.wgsl"), Some(constants)),
                 "main",
             ),
             cull: gpu.compute(
+                "Occlusion::Cull",
                 &gpu.pipeline_layout(&[
                     &ScalarTexture::layout(gpu),
                     &Tractogram::layout(gpu),

@@ -20,6 +20,7 @@ struct App {
     egui: Option<egui_winit::State>,
     renderer: Renderer,
     controller: Controller,
+    focused: bool,
     fps: Fps<8>,
 }
 
@@ -30,6 +31,7 @@ impl App {
             egui: None,
             renderer: Renderer::new(gpu),
             controller: Controller::new(),
+            focused: true,
             fps: Fps::new(),
         }
     }
@@ -42,7 +44,13 @@ impl App {
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Focused(_) => self.request_redraw(),
+            WindowEvent::Focused(focused) => {
+                self.focused = focused;
+
+                if focused {
+                    self.request_redraw()
+                }
+            }
             WindowEvent::Resized(size) => self.renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
                 let input = egui.take_egui_input(window);
@@ -56,7 +64,9 @@ impl App {
                     .render(&self.controller, egui.egui_ctx(), output);
                 self.fps.stop();
 
-                self.request_redraw();
+                if self.focused {
+                    self.request_redraw();
+                }
             }
             _ => (),
         }

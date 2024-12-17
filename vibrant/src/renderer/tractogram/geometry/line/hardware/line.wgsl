@@ -15,7 +15,7 @@ struct Vertex {
 
 struct Fragment {
     @builtin(position) clip: vec4<f32>,
-    @location(0) position: vec3<f32>,
+    @location(0) position: vec4<f32>,
 }
 
 struct GBuffer {
@@ -28,15 +28,18 @@ struct GBuffer {
 fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> Fragment {
     let index = TRACTOGRAM_INDICES[instance_index];
     let position = TRACTOGRAM_TO_WORLD * get_vertex(index + vertex_index);
-    return Fragment(ENVIRONMENT.camera.projection * position, position.xyz);
+    return Fragment(ENVIRONMENT.camera.projection * position, position);
 }
 
 @fragment
 fn fragment(fragment: Fragment) -> GBuffer {
+    let clip = ENVIRONMENT.camera.projection * fragment.position;
+    let ndc = clip.xyz / clip.w;
+
     return GBuffer(
-        vec4<f32>(fragment.position, 1.0),
-        vec4<f32>(0.0),
-        vec4<f32>(abs(normalize(fwidth(fragment.position))), 1.0)
+        vec4<f32>(fragment.position.xyz, 1.0),
+        vec4<f32>(vec3<f32>(ndc * 0.5 + 0.5), 0.0),
+        vec4<f32>(abs(normalize(fwidth(fragment.position.xyz))), 1.0)
     );
 }
 

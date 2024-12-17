@@ -97,13 +97,14 @@ impl Gpu {
 
     pub fn compute(
         &self,
+        label: &str,
         layout: &PipelineLayout,
         module: &ShaderModule,
         entry_point: &str,
     ) -> ComputePipeline {
         self.device()
             .create_compute_pipeline(&ComputePipelineDescriptor {
-                label: None,
+                label: Some(label),
                 layout: Some(layout),
                 module,
                 entry_point: Some(entry_point),

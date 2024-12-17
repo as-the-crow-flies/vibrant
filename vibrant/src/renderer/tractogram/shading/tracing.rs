@@ -10,7 +10,7 @@ use crate::{
     asset::{density::Density, scalar::ScalarTexture, Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
-    surface::{buffer::FrameBuffer, gbuffer::GBuffer, Frame},
+    surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
 };
 
 pub struct TractogramTracingShading {
@@ -53,7 +53,7 @@ impl TractogramTracingShading {
                     fragment: Some(FragmentState {
                         module: &shading_module,
                         entry_point: Some("fragment"),
-                        targets: &[Some(FrameBuffer::target_srgb())],
+                        targets: &[Some(Color::target_srgb())],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -72,20 +72,20 @@ impl TractogramTracingShading {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         density: &Density,
         tractogram: &Tractogram,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(frame.buffer.attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment_srgb())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.gbuffer.binding(), &[]);
+        pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
         pass.set_bind_group(1, density.texture().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);

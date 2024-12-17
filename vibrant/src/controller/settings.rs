@@ -1,10 +1,4 @@
 #[derive(Debug, PartialEq, Eq)]
-pub enum DensitySetting {
-    Add,
-    Or,
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub enum GeometrySetting {
     LineHardware,
     LineSoftware,
@@ -35,7 +29,6 @@ pub struct Settings {
     pub geometry: GeometrySetting,
     pub shading: ShadingSetting,
     pub culling: bool,
-    pub density: DensitySetting,
 }
 
 impl Settings {
@@ -50,12 +43,11 @@ impl Settings {
             grad_size: 1.0,
             min_value: 0.0,
             shading_level: 1.0,
-            cull_level: 256.0,
+            cull_level: 10.0,
             balancing: false,
-            geometry: GeometrySetting::LineSoftware,
+            geometry: GeometrySetting::LineHardware,
             shading: ShadingSetting::Tracing,
             culling: true,
-            density: DensitySetting::Add,
         }
     }
 }

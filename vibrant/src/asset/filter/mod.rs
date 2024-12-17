@@ -113,6 +113,7 @@ impl Filter {
         });
 
         let copy = gpu.compute(
+            "Filter::Copy",
             &gpu.pipeline_layout(&[&Filter::layout_write(gpu)]),
             &gpu.shader(include_str!("copy.wgsl"), None),
             "compute",

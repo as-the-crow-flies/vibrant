@@ -12,7 +12,7 @@ use crate::{
     asset::{filter::Filter, Tractogram},
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
-    surface::{gbuffer::GBuffer, kbuffer::KBuffer, Frame},
+    surface::{gbuffer::GBuffer, kbuffer::KBuffer, SurfaceBuffer},
 };
 
 pub struct TractogramLineSoftwareGeometry {
@@ -34,11 +34,13 @@ impl TractogramLineSoftwareGeometry {
 
         Self {
             clear: gpu.compute(
+                "KBuffer::Clear",
                 &gpu.pipeline_layout(&[&KBuffer::layout_write(gpu)]),
                 &gpu.shader(include_str!("clear.wgsl"), Some(constants)),
                 "compute",
             ),
             rasterize: gpu.compute(
+                "Line::Rasterize",
                 &gpu.pipeline_layout(&[
                     &KBuffer::layout_write(gpu),
                     &Tractogram::layout(gpu),
@@ -94,7 +96,7 @@ impl TractogramLineSoftwareGeometry {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         environment: &Environment,
         tractogram: &Tractogram,
         filter: &Filter,
@@ -106,7 +108,7 @@ impl TractogramLineSoftwareGeometry {
     fn rasterize(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         environment: &Environment,
         tractogram: &Tractogram,
         filter: &Filter,
@@ -117,7 +119,7 @@ impl TractogramLineSoftwareGeometry {
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
-        pass.set_bind_group(0, frame.kbuffer.binding_write(), &[]);
+        pass.set_bind_group(0, frame.kbuffer().binding_write(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.set_bind_group(2, filter.binding_read(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
@@ -129,15 +131,15 @@ impl TractogramLineSoftwareGeometry {
         pass.dispatch_workgroups_indirect(&self.indirect, 0);
     }
 
-    fn copy(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
+    fn copy(&self, cmd: &mut CommandEncoder, frame: &SurfaceBuffer, environment: &Environment) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &frame.gbuffer.attachments(),
+            color_attachments: &frame.gbuffer().attachments(),
             ..Default::default()
         });
 
         pass.set_pipeline(&self.copy);
-        pass.set_bind_group(0, frame.kbuffer.binding_read(), &[]);
+        pass.set_bind_group(0, frame.kbuffer().binding_read(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }

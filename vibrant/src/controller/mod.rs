@@ -8,7 +8,7 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{DensitySetting, GeometrySetting, Settings, ShadingSetting};
+use settings::{GeometrySetting, Settings, ShadingSetting};
 use state::ControllerState;
 
 use crate::file::File;
@@ -65,13 +65,6 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
-            ComboBox::from_label("Density")
-                .selected_text(format!("{:?}", self.settings.density))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.density, DensitySetting::Add, "Add");
-                    ui.selectable_value(&mut self.settings.density, DensitySetting::Or, "Or");
-                });
-
             ComboBox::from_label("Geometry")
                 .selected_text(format!("{:?}", self.settings.geometry))
                 .show_ui(ui, |ui| {

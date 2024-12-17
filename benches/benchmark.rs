@@ -9,7 +9,7 @@ use vibrant::{
         constants::Constants,
         environment::Environment,
         tractogram::{
-            density::add::TractogramDensityAddCompute,
+            density::TractogramDensityAddCompute,
             geometry::{
                 line::hardware::TractogramLineHardwareGeometry, tube::TractogramTubeGeometry,
             },
@@ -17,50 +17,21 @@ use vibrant::{
             shading::{simple::TractogramSimpleShading, tracing::TractogramTracingShading},
         },
     },
-    surface::{buffer::FrameBuffer, depth::Depth, gbuffer::GBuffer, kbuffer::KBuffer, Frame},
+    surface::SurfaceBuffer,
     Vec2,
 };
-use wgpu::{CommandEncoder, Texture};
+use wgpu::CommandEncoder;
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
 const VOLUME: u32 = 7;
-
-struct TestSurface {
-    buffer: Texture,
-    depth: Depth,
-    gbuffer: GBuffer,
-    kbuffer: KBuffer,
-}
-
-impl TestSurface {
-    pub fn new(gpu: &Gpu) -> Self {
-        Self {
-            buffer: FrameBuffer::texture(gpu, WIDTH, HEIGHT),
-            depth: Depth::new(gpu, WIDTH, HEIGHT),
-            gbuffer: GBuffer::new(gpu, WIDTH, HEIGHT),
-            kbuffer: KBuffer::new(gpu, WIDTH, HEIGHT),
-        }
-    }
-
-    pub fn frame<'a>(&'a self) -> Frame<'a> {
-        Frame {
-            width: WIDTH,
-            height: HEIGHT,
-            buffer: FrameBuffer::new(&self.buffer),
-            depth: &self.depth,
-            gbuffer: &self.gbuffer,
-            kbuffer: &self.kbuffer,
-        }
-    }
-}
 
 pub trait TractogramGeometry {
     fn render(
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         tractogram: &Tractogram,
         filter: &Filter,
     );
@@ -71,7 +42,7 @@ impl TractogramGeometry for TractogramLineHardwareGeometry {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         tractogram: &Tractogram,
         filter: &Filter,
     ) {
@@ -84,7 +55,7 @@ impl TractogramGeometry for TractogramTubeGeometry {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         tractogram: &Tractogram,
         filter: &Filter,
     ) {
@@ -267,23 +238,22 @@ pub fn baseline(
     geometry: &impl TractogramGeometry,
 ) {
     let environment = get_environment(gpu);
-    let surface = TestSurface::new(gpu);
+    let surface = SurfaceBuffer::new(gpu, WIDTH, HEIGHT);
     let simple_shading = TractogramSimpleShading::new(gpu);
 
     criterion.bench_function(id, |bencher| {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
-            let frame = surface.frame();
 
             geometry.render(
                 &mut cmd,
                 &environment,
-                &frame,
+                &surface,
                 &tractogram,
                 &tractogram.filter_default(),
             );
 
-            simple_shading.render(&mut cmd, &frame, tractogram);
+            simple_shading.render(&mut cmd, &surface, tractogram);
 
             gpu.submit(cmd);
             gpu.wait();
@@ -292,7 +262,7 @@ pub fn baseline(
 
     gpu.save(
         format!("target/criterion/{}.png", id).into(),
-        &surface.buffer,
+        &surface.color().texture(),
     )
     .block_on();
 }
@@ -305,7 +275,7 @@ pub fn shading(
     geometry: &impl TractogramGeometry,
 ) {
     let environment = get_environment(&gpu);
-    let surface = TestSurface::new(gpu);
+    let surface = SurfaceBuffer::new(gpu, WIDTH, HEIGHT);
 
     let density = Density::new(&gpu, VOLUME);
     let occlusion = Occlusion::new(&gpu, VOLUME);
@@ -318,7 +288,6 @@ pub fn shading(
     criterion.bench_function(id, |bencher| {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
-            let frame = surface.frame();
 
             density_compute.render(&mut cmd, &environment, tractogram, &density);
             occlusion_compute.render(&mut cmd, &environment, &density, &occlusion, tractogram);
@@ -326,12 +295,12 @@ pub fn shading(
             geometry.render(
                 &mut cmd,
                 &environment,
-                &frame,
+                &surface,
                 &tractogram,
                 &tractogram.filter_culling(),
             );
 
-            tracing_shading.render(&mut cmd, &environment, &frame, &density, tractogram);
+            tracing_shading.render(&mut cmd, &environment, &surface, &density, tractogram);
 
             gpu.submit(cmd);
             gpu.wait();
@@ -340,7 +309,7 @@ pub fn shading(
 
     gpu.save(
         format!("target/criterion/{}.png", id).into(),
-        &surface.buffer,
+        &surface.color().texture(),
     )
     .block_on();
 }

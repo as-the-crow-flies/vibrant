@@ -4,7 +4,7 @@ use wgpu::{CommandEncoder, RenderPassDescriptor};
 
 use crate::{
     gpu::Gpu,
-    surface::{buffer::FrameBuffer, depth::Depth, Frame},
+    surface::{color::Color, depth::Depth, SurfaceBuffer},
 };
 
 pub struct UiRenderer {
@@ -16,7 +16,7 @@ impl UiRenderer {
         Self {
             egui: egui_wgpu::Renderer::new(
                 gpu.device(),
-                FrameBuffer::FORMAT,
+                Color::FORMAT,
                 Some(Depth::FORMAT),
                 1,
                 false,
@@ -28,14 +28,14 @@ impl UiRenderer {
         &mut self,
         gpu: &Gpu,
         cmd: &mut CommandEncoder,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {
         let (device, queue) = (gpu.device(), gpu.queue());
 
         let screen = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [frame.width, frame.height],
+            size_in_pixels: [frame.width(), frame.height()],
             pixels_per_point: output.pixels_per_point,
         };
 
@@ -50,8 +50,8 @@ impl UiRenderer {
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
                 label: Some(type_name::<Self>()),
-                color_attachments: &[Some(frame.buffer.attachment())],
-                depth_stencil_attachment: Some(frame.depth.attachment()),
+                color_attachments: &[Some(frame.color().attachment())],
+                depth_stencil_attachment: Some(frame.depth().attachment()),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             })

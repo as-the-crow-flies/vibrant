@@ -9,7 +9,7 @@ use crate::{
     asset::scalar::ScalarTexture,
     gpu::Gpu,
     renderer::{constants::Constants, environment::Environment},
-    surface::{buffer::FrameBuffer, Frame},
+    surface::{color::Color, SurfaceBuffer},
 };
 
 pub struct TractogramDensityShading {
@@ -47,7 +47,7 @@ impl TractogramDensityShading {
                     fragment: Some(FragmentState {
                         module: &shader,
                         entry_point: Some("fragment"),
-                        targets: &[Some(FrameBuffer::target_srgb())],
+                        targets: &[Some(Color::target_srgb())],
                         compilation_options: Default::default(),
                     }),
                     multisample: Default::default(),
@@ -61,12 +61,12 @@ impl TractogramDensityShading {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &Frame,
+        frame: &SurfaceBuffer,
         environment: &Environment,
         scalar: &ScalarTexture,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.buffer.attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment_srgb())],
             ..Default::default()
         });
 

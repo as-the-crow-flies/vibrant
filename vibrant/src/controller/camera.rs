@@ -47,6 +47,9 @@ impl Camera {
         }
 
         self.zoom(-0.1 * state.scroll.y);
+
+        self.near = (self.distance - 0.5).max(0.01);
+        self.far = self.distance + 0.5;
     }
 
     pub fn projection(&self) -> Mat4 {
@@ -71,7 +74,7 @@ impl Camera {
     }
 
     pub fn zoom(&mut self, zoom: f32) {
-        self.distance = (self.distance + zoom).clamp(self.near, self.far * 0.5);
+        self.distance = (self.distance + zoom).clamp(0.01, 5.0);
     }
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {

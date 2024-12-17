@@ -24,12 +24,14 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let normal = textureLoad(NORMAL, pixel, 0) * 2.0 - 1.0;
     let tangent = textureLoad(TANGENT, pixel, 0);
 
-    if (position.w == 0.0) { discard; }
+    if (position.w == 0.0) {
+        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    }
 
     let normal_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(normal.xyz, 0.0));
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
 
-    // return vec4<f32>(vec3<f32>(textureLoad(NORMAL, pixel, 0).x) * vec3<f32>(1.0, 0.0, 1.0), 1.0);
+    // return vec4<f32>(textureLoad(NORMAL, pixel, 0).xyz, 1.0);
 
     let boundary = 1.0/3.0;
     let slope = 0.3;

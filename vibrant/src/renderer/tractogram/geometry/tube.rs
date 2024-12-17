@@ -11,7 +11,7 @@ use crate::{
     asset::{filter::Filter, Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{depth::Depth, gbuffer::GBuffer},
+    surface::{depth::Depth, gbuffer::GBuffer, SurfaceBuffer},
 };
 
 pub struct TractogramTubeGeometry {
@@ -68,7 +68,7 @@ impl TractogramTubeGeometry {
         &self,
         cmd: &mut wgpu::CommandEncoder,
         env: &Environment,
-        frame: &crate::surface::Frame,
+        frame: &SurfaceBuffer,
         tractogram: &Tractogram,
         filter: &Filter,
     ) {
@@ -76,8 +76,8 @@ impl TractogramTubeGeometry {
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &frame.gbuffer.attachments(),
-            depth_stencil_attachment: Some(frame.depth.attachment()),
+            color_attachments: &frame.gbuffer().attachments(),
+            depth_stencil_attachment: Some(frame.depth().attachment()),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
