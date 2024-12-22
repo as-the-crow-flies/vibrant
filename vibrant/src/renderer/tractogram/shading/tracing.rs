@@ -7,7 +7,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{density::Density, scalar::ScalarTexture, tractogram::Tractogram},
+    asset::{scalar::ScalarTexture, tractogram::Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
@@ -70,7 +70,6 @@ impl TractogramTracingShading {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &SurfaceBuffer,
-        density: &Density,
         tractogram: &Tractogram,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -83,7 +82,7 @@ impl TractogramTracingShading {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
-        pass.set_bind_group(1, density.texture().binding(), &[]);
+        pass.set_bind_group(1, frame.density().texture().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..4, 0..1);

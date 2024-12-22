@@ -10,10 +10,14 @@ use event::Event;
 use light::Light;
 use settings::{GeometrySetting, Settings, ShadingSetting};
 use state::ControllerState;
+use winit::dpi::PhysicalSize;
 
 use crate::file::File;
 
 pub struct Controller {
+    width: u32,
+    height: u32,
+    volume: u32,
     state: ControllerState,
     camera: Camera,
     light: Light,
@@ -25,6 +29,9 @@ pub struct Controller {
 impl Controller {
     pub fn new() -> Self {
         Self {
+            width: 1920,
+            height: 1080,
+            volume: 128,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -97,6 +104,18 @@ impl Controller {
                     );
                 });
 
+            ComboBox::from_label("Volume Resolution")
+                .selected_text(format!("{:?}", self.volume))
+                .show_ui(ui, |ui| {
+                    for power in 5u32..9 {
+                        ui.selectable_value(
+                            &mut self.volume,
+                            2u32.pow(power),
+                            format!("{}", 2u32.pow(power)),
+                        );
+                    }
+                });
+
             ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.01..=0.5)
                     .logarithmic(true)
@@ -105,6 +124,18 @@ impl Controller {
 
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
         });
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn volume(&self) -> u32 {
+        self.volume
     }
 
     pub fn camera(&self) -> &Camera {
@@ -117,5 +148,10 @@ impl Controller {
 
     pub fn settings(&self) -> &Settings {
         &self.settings
+    }
+
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        self.width = size.width;
+        self.height = size.height;
     }
 }

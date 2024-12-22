@@ -11,7 +11,7 @@ use shading::{
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::{density::Density, tractogram::Tractogram},
+    asset::tractogram::Tractogram,
     controller::settings::{GeometrySetting, Settings, ShadingSetting},
     gpu::Gpu,
     surface::SurfaceBuffer,
@@ -45,12 +45,11 @@ impl TractogramRenderer {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         buffer: &SurfaceBuffer,
-        density: &Density,
         tractogram: &Tractogram,
         settings: &Settings,
     ) {
         self.density_compute
-            .render(cmd, environment, tractogram, density);
+            .render(cmd, environment, tractogram, buffer.density());
 
         match settings.geometry {
             GeometrySetting::LineHardware => self.line_hardware_geometry.render(
@@ -74,7 +73,7 @@ impl TractogramRenderer {
             ShadingSetting::GBuffer => self.gbuffer_shading.render(cmd, buffer, tractogram),
             ShadingSetting::Tracing => {
                 self.tracing_shading
-                    .render(cmd, environment, buffer, density, tractogram)
+                    .render(cmd, environment, buffer, tractogram)
             }
         }
     }

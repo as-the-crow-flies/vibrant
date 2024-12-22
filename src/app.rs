@@ -16,9 +16,10 @@ use winit::{
 };
 
 struct App {
+    gpu: Gpu,
     window: Option<Arc<window::Window>>,
     egui: Option<egui_winit::State>,
-    renderer: Renderer,
+    renderer: Option<Renderer>,
     controller: Controller,
     focused: bool,
     fps: Fps<8>,
@@ -27,9 +28,10 @@ struct App {
 impl App {
     fn new(gpu: Gpu) -> Self {
         Self {
+            gpu,
             window: None,
             egui: None,
-            renderer: Renderer::new(gpu),
+            renderer: None,
             controller: Controller::new(),
             focused: true,
             fps: Fps::new(),
@@ -39,6 +41,7 @@ impl App {
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
         let egui = self.egui.as_mut().expect("Egui");
         let window = self.window.as_ref().expect("Window");
+        let renderer = self.renderer.as_mut().expect("Renderer");
 
         let consumed_by_egui = egui.on_window_event(window, &event).consumed;
 
@@ -51,7 +54,7 @@ impl App {
                     self.request_redraw()
                 }
             }
-            WindowEvent::Resized(size) => self.renderer.resize(size.width, size.height),
+            WindowEvent::Resized(size) => self.controller.resize(size),
             WindowEvent::RedrawRequested => {
                 let input = egui.take_egui_input(window);
                 let output = egui
@@ -60,8 +63,7 @@ impl App {
                 egui.handle_platform_output(&window, output.platform_output.clone());
 
                 self.fps.start();
-                self.renderer
-                    .render(&self.controller, egui.egui_ctx(), output);
+                renderer.render(&self.gpu, &self.controller, egui.egui_ctx(), output);
                 self.fps.stop();
 
                 if self.focused {
@@ -112,6 +114,7 @@ impl ApplicationHandler for App {
         }
 
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
+        let renderer = Renderer::new(&self.gpu, Arc::clone(&window));
 
         window.set_maximized(true);
 
@@ -124,9 +127,8 @@ impl ApplicationHandler for App {
             None,
         );
 
-        self.renderer.create_surface(Arc::clone(&window));
-
         self.window = Some(window);
+        self.renderer = Some(renderer);
         self.egui = Some(egui);
     }
 
@@ -222,9 +224,8 @@ fn keycode(code: KeyCode) -> Option<Key> {
 }
 
 pub async fn run() {
-    let gpu = Gpu::new().await;
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App::new(gpu);
+    let mut app = App::new(Gpu::new().await);
 
     #[cfg(not(target_arch = "wasm32"))]
     {

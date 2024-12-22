@@ -7,10 +7,10 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{density::Density, filter::Filter, scalar::ScalarTexture, tractogram::Tractogram},
-    constants::DENSITY_SIZE,
+    asset::{filter::Filter, scalar::ScalarTexture, tractogram::Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
+    surface::density::Density,
 };
 
 pub struct TractogramDensityAddCompute {
@@ -81,7 +81,8 @@ impl TractogramDensityAddCompute {
         tractogram: &Tractogram,
         density: &Density,
     ) {
-        cmd.clear_buffer(density.buffer(), 0, None);
+        density.clear(cmd);
+
         cmd.copy_buffer_to_buffer(
             tractogram.filter_default().workgroup_count(),
             0,
@@ -90,9 +91,14 @@ impl TractogramDensityAddCompute {
             4,
         );
 
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("Density"),
+            ..Default::default()
+        });
 
-        let mut size = DENSITY_SIZE.div_ceil(8);
+        let mut width = density.texture().width().div_ceil(8);
+        let mut height = density.texture().height().div_ceil(8);
+        let mut depth = density.texture().depth().div_ceil(8);
 
         pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
@@ -105,15 +111,17 @@ impl TractogramDensityAddCompute {
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, density.texture().binding_write(), &[]);
-        pass.dispatch_workgroups(size, size, size);
+        pass.dispatch_workgroups(width, height, depth);
 
         pass.set_pipeline(&self.mipmap);
 
         for binding in density.texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
-            pass.dispatch_workgroups(size, size, size);
+            pass.dispatch_workgroups(width, height, depth);
 
-            size /= 2;
+            width /= 2;
+            height /= 2;
+            depth /= 2;
         }
     }
 }

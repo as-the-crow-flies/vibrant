@@ -7,7 +7,7 @@ use wgpu::{
     BufferDescriptor, BufferUsages, ShaderStages,
 };
 
-use crate::{controller::Controller, gpu::Gpu};
+use crate::{controller::Controller, gpu::Gpu, surface::Surface};
 
 pub struct Environment {
     binding: BindGroup,
@@ -28,13 +28,16 @@ impl Environment {
             projection_inverse: mat4x4<f32>,
             near: f32,
             far: f32,
-            padding: vec2<f32>
         }
 
         struct Environment {
+            surface: vec2<u32>,
+            surface_: vec2<u32>,
+            volume: vec3<u32>,
+            volume_: u32,
             camera: Camera,
             light: vec3<f32>,
-            padding: u32,
+            light_: f32,
             settings: Settings
         }
         "
@@ -46,7 +49,7 @@ impl Environment {
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 256,
+            size: 512,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -71,11 +74,13 @@ impl Environment {
         &self.binding
     }
 
-    pub fn update(&self, gpu: &Gpu, controller: &Controller) {
+    pub fn update(&self, gpu: &Gpu, controller: &Controller, surface: &Surface) {
         gpu.queue().write_buffer(
             &self.buffer,
             0,
             &[
+                bytes_of(&[surface.width(), surface.height(), 0, 0]),
+                bytes_of(&[surface.volume(), surface.volume(), surface.volume(), 0]),
                 bytes_of(&controller.camera().transform()),
                 bytes_of(&controller.camera().projection()),
                 bytes_of(&controller.camera().projection().inverse()),

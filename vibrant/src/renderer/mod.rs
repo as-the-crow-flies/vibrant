@@ -3,7 +3,7 @@ pub mod services;
 pub mod tractogram;
 pub mod ui;
 
-use crate::{asset::density::Density, renderer::tractogram::TractogramRenderer};
+use crate::renderer::tractogram::TractogramRenderer;
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
@@ -17,83 +17,63 @@ use crate::{
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
 pub struct Renderer {
-    gpu: Gpu,
-    surface: Option<Surface>,
-
-    asset: Asset,
-
-    environment: Environment,
+    surface: Surface,
     tractogram: TractogramRenderer,
-
     ui: UiRenderer,
+    environment: Environment,
+    asset: Asset,
 }
 
 impl Renderer {
-    pub fn new(gpu: Gpu) -> Self {
-        let asset = Asset {
-            tractogram: None,
-            density: Density::new(&gpu),
-        };
-
+    pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         Self {
-            surface: None,
+            surface: Surface::new(gpu, window),
+            tractogram: TractogramRenderer::new(gpu),
+            ui: UiRenderer::new(gpu),
 
-            tractogram: TractogramRenderer::new(&gpu),
-            ui: UiRenderer::new(&gpu),
-
-            environment: Environment::new(&gpu),
-            asset,
-
-            gpu,
+            environment: Environment::new(gpu),
+            asset: Asset { tractogram: None },
         }
-    }
-
-    pub fn create_surface(&mut self, window: impl Into<SurfaceTarget<'static>>) {
-        self.surface = Some(Surface::new(&self.gpu, window));
-    }
-
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.surface
-            .as_mut()
-            .unwrap()
-            .resize(&self.gpu, width, height);
     }
 
     pub fn render(
         &mut self,
+        gpu: &Gpu,
         controller: &Controller,
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {
-        File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(&self.gpu, &tck)));
+        File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(gpu, &tck)));
 
-        self.environment.update(&self.gpu, &controller);
+        let surface = self.surface.maybe_resize(
+            gpu,
+            controller.width(),
+            controller.height(),
+            controller.volume(),
+        );
 
-        let surface = self.surface.as_ref().expect("Surface was not initialized");
+        self.environment.update(gpu, &controller, &surface);
 
-        let mut cmd = self.gpu.cmd();
+        let mut cmd = gpu.cmd();
 
         if let Some(tractogram) = &self.asset.tractogram {
             self.tractogram.render(
                 &mut cmd,
                 &self.environment,
                 surface.buffer(),
-                &self.asset.density,
                 tractogram,
                 controller.settings(),
             );
         }
 
         if !File::about_to_save() {
-            self.ui
-                .render(&self.gpu, &mut cmd, surface.buffer(), ctx, output);
+            self.ui.render(gpu, &mut cmd, surface.buffer(), ctx, output);
         }
 
-        surface.present(&self.gpu, cmd);
+        surface.present(gpu, cmd);
 
         File::on_save(|path| {
-            self.gpu
-                .save(path, surface.buffer().color().texture())
+            gpu.save(path, surface.buffer().color().texture())
                 .block_on()
         });
     }

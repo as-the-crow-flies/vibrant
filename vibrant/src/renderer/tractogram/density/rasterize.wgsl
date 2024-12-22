@@ -1,6 +1,4 @@
-const DIM: u32 = 256;
-
-@group(0) @binding(0) var<storage, read_write> VOLUME: array<array<array<atomic<u32>, DIM>, DIM>, DIM>;
+@group(0) @binding(0) var<storage, read_write> VOLUME: array<atomic<u32>>;
 
 @group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(1) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
@@ -18,14 +16,18 @@ const U32_MAX: u32 = 4294967295;
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if (id.x >= arrayLength(&TRACTOGRAM_INDICES)) { return; }
 
-    let index = TRACTOGRAM_INDICES[id.x];
+    let dim = ENVIRONMENT.volume.x;
+    let stride = vec3<u32>(dim * dim, dim, 1);
+
+    let v0_index = TRACTOGRAM_INDICES[id.x];
+    let v1_index = v0_index + 1;
 
     // Compute Area, relative to voxel size in range 0..U32_MAX
-    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(f32(DIM) * ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
+    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(f32(dim) * ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
     let area = PI * radius * radius * f32(U32_MAX);
 
-    let v0 = ((TRACTOGRAM_TO_WORLD * TRACTOGRAM_VERTICES[index + 0u]).xyz + 0.5) * f32(DIM);
-    let v1 = ((TRACTOGRAM_TO_WORLD * TRACTOGRAM_VERTICES[index + 1u]).xyz + 0.5) * f32(DIM);
+    let v0 = ((TRACTOGRAM_TO_WORLD * TRACTOGRAM_VERTICES[v0_index]).xyz + 0.5) * f32(dim);
+    let v1 = ((TRACTOGRAM_TO_WORLD * TRACTOGRAM_VERTICES[v1_index]).xyz + 0.5) * f32(dim);
 
     let delta = v1 - v0;
     let total_distance = length(delta);
@@ -40,13 +42,15 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
         // Contribute Cylinder Volume Fraction to Voxel
         let voxel = vec3<u32>(v1.xyz - distance_left * direction);
+        let index = dot(voxel, stride);
+
         let volume = u32(area * increment);
 
-        let original = atomicAdd(&VOLUME[voxel.z][voxel.y][voxel.x], volume);
+        let original = atomicAdd(&VOLUME[index], volume);
 
         // Prevent U32 Overflow
         if (original + volume < original) {
-            atomicStore(&VOLUME[voxel.z][voxel.y][voxel.x], U32_MAX);
+            atomicStore(&VOLUME[index], U32_MAX);
         }
 
         // Update Distances

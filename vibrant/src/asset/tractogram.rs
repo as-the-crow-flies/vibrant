@@ -42,29 +42,23 @@ impl Tractogram {
         &self.filter_culling
     }
 
-    pub fn new(gpu: &Gpu, tractogram: &file::Tck) -> Self {
+    pub fn new(gpu: &Gpu, tck: &file::Tck) -> Self {
         let label = Some(type_name::<Self>());
 
-        let indices = tractogram
+        let indices = tck
             .vertices()
             .iter()
             .enumerate()
             .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
             .collect_vec();
 
-        let vertices = tractogram
+        let vertices = tck
             .vertices()
             .iter()
             .map(|v| Vec4::new(v.x, v.y, v.z, 1.0))
             .collect_vec();
 
-        let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&vertices),
-            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
-        });
-
-        let scale = tractogram.bounds().scale();
+        let scale = tck.bounds().scale();
         let transform = Mat4::from_scale_rotation_translation(
             Vec3::new(scale, scale, scale),
             Quat::from_rotation_x(0.5 * PI),
@@ -81,6 +75,12 @@ impl Tractogram {
             label,
             contents: bytemuck::bytes_of(&transform.inverse()),
             usage: BufferUsages::UNIFORM,
+        });
+
+        let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&vertices),
+            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
         });
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {

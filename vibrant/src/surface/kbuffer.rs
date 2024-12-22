@@ -15,8 +15,8 @@ pub struct KBuffer {
 }
 
 impl KBuffer {
-    pub const LAYERS: u32 = 8;
-    const STRIDE: u32 = 8;
+    pub const LAYERS: u32 = 32;
+    const STRIDE: u32 = 4;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());

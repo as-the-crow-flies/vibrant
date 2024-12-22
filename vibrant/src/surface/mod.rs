@@ -1,44 +1,43 @@
 pub mod color;
+pub mod density;
 pub mod depth;
 pub mod gbuffer;
 pub mod kbuffer;
-pub mod occlusion;
 
 use color::Color;
+use density::Density;
 use depth::Depth;
 use gbuffer::GBuffer;
 use kbuffer::KBuffer;
-use occlusion::Occlusion;
 use wgpu::{
     CommandEncoder, CompositeAlphaMode, Extent3d, ImageCopyTexture, Origin3d, PresentMode,
     SurfaceConfiguration, SurfaceTarget, TextureAspect, TextureUsages,
 };
 
-use crate::constants::{OCCLUSION_DEPTH, TILE_SIZE};
+use crate::asset::scalar::ScalarTexture;
 
 use super::gpu::Gpu;
 
 pub struct SurfaceBuffer {
     width: u32,
     height: u32,
+    volume: u32,
     color: Color,
     depth: Depth,
-    occlusion: Occlusion,
+    density: Density,
+    occlusion: ScalarTexture,
     gbuffer: GBuffer,
     kbuffer: KBuffer,
 }
 
 impl SurfaceBuffer {
-    pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
+    pub fn new(gpu: &Gpu, width: u32, height: u32, volume: u32) -> Self {
         Self {
             width,
             height,
-            occlusion: Occlusion::new(
-                gpu,
-                width.div_ceil(TILE_SIZE),
-                height.div_ceil(TILE_SIZE),
-                OCCLUSION_DEPTH,
-            ),
+            volume,
+            density: Density::new(gpu, volume, volume, volume),
+            occlusion: ScalarTexture::new(gpu, volume, volume, volume),
             color: Color::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
             gbuffer: GBuffer::new(gpu, width, height),
@@ -54,6 +53,10 @@ impl SurfaceBuffer {
         self.height
     }
 
+    pub fn volume(&self) -> u32 {
+        self.volume
+    }
+
     pub fn color(&self) -> &Color {
         &self.color
     }
@@ -62,7 +65,11 @@ impl SurfaceBuffer {
         &self.depth
     }
 
-    pub fn density(&self) -> &Occlusion {
+    pub fn density(&self) -> &Density {
+        &self.density
+    }
+
+    pub fn occlusion(&self) -> &ScalarTexture {
         &self.occlusion
     }
 
@@ -76,6 +83,9 @@ impl SurfaceBuffer {
 }
 
 pub struct Surface {
+    width: u32,
+    height: u32,
+    volume: u32,
     surface: wgpu::Surface<'static>,
     buffer: SurfaceBuffer,
 }
@@ -87,18 +97,35 @@ impl Surface {
             .create_surface(window)
             .expect("Could not create surface");
 
-        surface.configure(gpu.device(), &Self::config(1, 1));
+        let width = 1;
+        let height = 1;
+        let volume = 1;
+
+        surface.configure(gpu.device(), &Self::config(width, height));
 
         Self {
+            width,
+            height,
+            volume,
             surface,
-            buffer: SurfaceBuffer::new(gpu, 1, 1),
+            buffer: SurfaceBuffer::new(gpu, width, height, volume),
         }
     }
 
-    pub fn resize(&mut self, gpu: &Gpu, width: u32, height: u32) {
+    pub fn maybe_resize(&mut self, gpu: &Gpu, width: u32, height: u32, volume: u32) -> &Self {
+        if width == self.width && height == self.height && volume == self.volume {
+            return self;
+        }
+
+        self.width = width;
+        self.height = height;
+        self.volume = volume;
+
         self.surface
             .configure(gpu.device(), &Self::config(width, height));
-        self.buffer = SurfaceBuffer::new(gpu, width, height)
+        self.buffer = SurfaceBuffer::new(gpu, width, height, volume);
+
+        self
     }
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
@@ -146,5 +173,17 @@ impl Surface {
 
     pub fn buffer(&self) -> &SurfaceBuffer {
         &self.buffer
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn volume(&self) -> u32 {
+        self.volume
     }
 }
