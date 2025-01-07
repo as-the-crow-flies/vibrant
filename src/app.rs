@@ -116,8 +116,6 @@ impl ApplicationHandler for App {
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
         let renderer = Renderer::new(&self.gpu, Arc::clone(&window));
 
-        window.set_maximized(true);
-
         let egui = egui_winit::State::new(
             egui::Context::default(),
             egui::viewport::ViewportId::ROOT,
@@ -139,10 +137,7 @@ impl ApplicationHandler for App {
 
 fn vibrant_event(event: WindowEvent) -> Option<Event> {
     match event {
-        WindowEvent::Resized(size) => Some(Event::Resized(Vec2::new(
-            size.width as f32,
-            size.height as f32,
-        ))),
+        WindowEvent::Resized(size) => Some(Event::Resized(size.width, size.height)),
         WindowEvent::CursorMoved {
             device_id: _,
             position,

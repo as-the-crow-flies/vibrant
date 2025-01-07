@@ -10,7 +10,7 @@ pub enum Key {
 }
 
 pub enum Event {
-    Resized(Vec2),
+    Resized(u32, u32),
     MouseMoved(Vec2),
     MousePressed(MouseButton),
     MouseReleased(MouseButton),

@@ -4,19 +4,24 @@ use super::event::{Event, Key, MouseButton};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ControllerState {
+    pub width: u32,
+    pub height: u32,
     pub pressed: bool,
     pub left: bool,
     pub right: bool,
     pub position: Vec2,
     pub delta: Vec2,
     pub scroll: Vec2,
-    pub size: Vec2,
     pub shift: bool,
 }
 
 impl ControllerState {
+    pub fn size(&self) -> Vec2 {
+        Vec2::new(self.width as f32, self.height as f32)
+    }
+
     pub fn relative_delta(&self) -> Vec2 {
-        self.delta / self.size
+        self.delta / self.size()
     }
 
     pub fn update(&self, event: Event) -> Self {
@@ -27,7 +32,11 @@ impl ControllerState {
         };
 
         match event {
-            Event::Resized(size) => ControllerState { size, ..default },
+            Event::Resized(width, height) => ControllerState {
+                width,
+                height,
+                ..default
+            },
             Event::MouseMoved(position) => ControllerState {
                 position,
                 delta: position - self.position,

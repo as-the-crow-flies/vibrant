@@ -52,6 +52,8 @@ impl Tractogram {
             .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
             .collect_vec();
 
+        dbg!(indices.len());
+
         let vertices = tck
             .vertices()
             .iter()

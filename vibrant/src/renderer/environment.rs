@@ -7,7 +7,7 @@ use wgpu::{
     BufferDescriptor, BufferUsages, ShaderStages,
 };
 
-use crate::{controller::Controller, gpu::Gpu, surface::Surface};
+use crate::{controller::Controller, gpu::Gpu};
 
 pub struct Environment {
     binding: BindGroup,
@@ -32,8 +32,7 @@ impl Environment {
 
         struct Environment {
             surface: vec2<u32>,
-            surface_: vec2<u32>,
-            volume: vec3<u32>,
+            volume: u32,
             volume_: u32,
             camera: Camera,
             light: vec3<f32>,
@@ -74,13 +73,13 @@ impl Environment {
         &self.binding
     }
 
-    pub fn update(&self, gpu: &Gpu, controller: &Controller, surface: &Surface) {
+    pub fn update(&self, gpu: &Gpu, controller: &Controller) {
         gpu.queue().write_buffer(
             &self.buffer,
             0,
             &[
-                bytes_of(&[surface.width(), surface.height(), 0, 0]),
-                bytes_of(&[surface.volume(), surface.volume(), surface.volume(), 0]),
+                bytes_of(&[controller.width(), controller.height()]),
+                bytes_of(&[controller.volume(), 0]),
                 bytes_of(&controller.camera().transform()),
                 bytes_of(&controller.camera().projection()),
                 bytes_of(&controller.camera().projection().inverse()),

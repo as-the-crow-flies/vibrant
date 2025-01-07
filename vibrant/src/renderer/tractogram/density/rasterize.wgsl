@@ -1,4 +1,4 @@
-@group(0) @binding(0) var<storage, read_write> VOLUME: array<atomic<u32>>;
+@group(0) @binding(0) var<storage, read_write> DENSITY: array<atomic<u32>>;
 
 @group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(1) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
@@ -16,7 +16,7 @@ const U32_MAX: u32 = 4294967295;
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if (id.x >= arrayLength(&TRACTOGRAM_INDICES)) { return; }
 
-    let dim = ENVIRONMENT.volume.x;
+    let dim = ENVIRONMENT.volume;
     let stride = vec3<u32>(dim * dim, dim, 1);
 
     let v0_index = TRACTOGRAM_INDICES[id.x];
@@ -46,11 +46,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
         let volume = u32(area * increment);
 
-        let original = atomicAdd(&VOLUME[index], volume);
+        let original = atomicAdd(&DENSITY[index], volume);
 
         // Prevent U32 Overflow
         if (original + volume < original) {
-            atomicStore(&VOLUME[index], U32_MAX);
+            atomicStore(&DENSITY[index], U32_MAX);
         }
 
         // Update Distances

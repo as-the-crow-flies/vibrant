@@ -52,7 +52,7 @@ impl Renderer {
             controller.volume(),
         );
 
-        self.environment.update(gpu, &controller, &surface);
+        self.environment.update(gpu, &controller);
 
         let mut cmd = gpu.cmd();
 

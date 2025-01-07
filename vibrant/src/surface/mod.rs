@@ -9,6 +9,7 @@ use density::Density;
 use depth::Depth;
 use gbuffer::GBuffer;
 use kbuffer::KBuffer;
+use log::warn;
 use wgpu::{
     CommandEncoder, CompositeAlphaMode, Extent3d, ImageCopyTexture, Origin3d, PresentMode,
     SurfaceConfiguration, SurfaceTarget, TextureAspect, TextureUsages,
@@ -129,33 +130,32 @@ impl Surface {
     }
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
-        let surface = self
-            .surface
-            .get_current_texture()
-            .expect("Could not optain SurfaceTexture");
+        if let Some(surface) = self.surface.get_current_texture().ok() {
+            cmd.copy_texture_to_texture(
+                ImageCopyTexture {
+                    texture: self.buffer.color().texture(),
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                ImageCopyTexture {
+                    texture: &surface.texture,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                Extent3d {
+                    width: surface.texture.width(),
+                    height: surface.texture.height(),
+                    depth_or_array_layers: 1,
+                },
+            );
 
-        cmd.copy_texture_to_texture(
-            ImageCopyTexture {
-                texture: self.buffer.color().texture(),
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            ImageCopyTexture {
-                texture: &surface.texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            Extent3d {
-                width: surface.texture.width(),
-                height: surface.texture.height(),
-                depth_or_array_layers: 1,
-            },
-        );
-
-        gpu.submit(cmd);
-        surface.present();
+            gpu.submit(cmd);
+            surface.present();
+        } else {
+            warn!("Could not obtain surface texture");
+        }
     }
 
     fn config(width: u32, height: u32) -> SurfaceConfiguration {
