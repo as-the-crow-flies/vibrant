@@ -51,8 +51,8 @@ impl Camera {
 
         self.zoom(-0.1 * state.scroll.y);
 
-        self.near = (self.distance - 0.5).max(0.01);
-        self.far = self.distance + 0.5;
+        self.near = (self.distance - 1.0).max(0.01);
+        self.far = self.distance + 1.0;
     }
 
     pub fn aspect(&self) -> f32 {

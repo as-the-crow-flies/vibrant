@@ -2,7 +2,7 @@ pub mod density;
 pub mod geometry;
 pub mod shading;
 
-use density::TractogramDensityAddCompute;
+use density::TractogramDensityPipeline;
 use geometry::{line::hardware::TractogramLineHardwareGeometry, tube::TractogramTubeGeometry};
 use shading::{
     gbuffer::TractogramGBufferShading, simple::TractogramSimpleShading,
@@ -20,7 +20,7 @@ use crate::{
 use super::environment::Environment;
 
 pub struct TractogramRenderer {
-    density_compute: TractogramDensityAddCompute,
+    density_compute: TractogramDensityPipeline,
     line_hardware_geometry: TractogramLineHardwareGeometry,
     tube_geometry: TractogramTubeGeometry,
     simple_shading: TractogramSimpleShading,
@@ -31,7 +31,7 @@ pub struct TractogramRenderer {
 impl TractogramRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            density_compute: TractogramDensityAddCompute::new(gpu),
+            density_compute: TractogramDensityPipeline::new(gpu),
             line_hardware_geometry: TractogramLineHardwareGeometry::new(gpu),
             tube_geometry: TractogramTubeGeometry::new(gpu),
             simple_shading: TractogramSimpleShading::new(gpu),

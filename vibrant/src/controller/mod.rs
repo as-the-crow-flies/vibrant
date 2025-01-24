@@ -31,7 +31,7 @@ impl Controller {
         Self {
             width: 1920,
             height: 1080,
-            volume: 128,
+            volume: 256,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),

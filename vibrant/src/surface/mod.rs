@@ -2,20 +2,16 @@ pub mod color;
 pub mod density;
 pub mod depth;
 pub mod gbuffer;
-pub mod kbuffer;
 
 use color::Color;
 use density::Density;
 use depth::Depth;
 use gbuffer::GBuffer;
-use kbuffer::KBuffer;
 use log::warn;
 use wgpu::{
     CommandEncoder, CompositeAlphaMode, Extent3d, ImageCopyTexture, Origin3d, PresentMode,
     SurfaceConfiguration, SurfaceTarget, TextureAspect, TextureUsages,
 };
-
-use crate::asset::scalar::ScalarTexture;
 
 use super::gpu::Gpu;
 
@@ -26,9 +22,7 @@ pub struct SurfaceBuffer {
     color: Color,
     depth: Depth,
     density: Density,
-    occlusion: ScalarTexture,
     gbuffer: GBuffer,
-    kbuffer: KBuffer,
 }
 
 impl SurfaceBuffer {
@@ -37,12 +31,10 @@ impl SurfaceBuffer {
             width,
             height,
             volume,
-            density: Density::new(gpu, volume, volume, volume),
-            occlusion: ScalarTexture::new(gpu, volume, volume, volume),
+            density: Density::new(gpu, volume),
             color: Color::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
             gbuffer: GBuffer::new(gpu, width, height),
-            kbuffer: KBuffer::new(gpu, width, height),
         }
     }
 
@@ -70,16 +62,8 @@ impl SurfaceBuffer {
         &self.density
     }
 
-    pub fn occlusion(&self) -> &ScalarTexture {
-        &self.occlusion
-    }
-
     pub fn gbuffer(&self) -> &GBuffer {
         &self.gbuffer
-    }
-
-    pub fn kbuffer(&self) -> &KBuffer {
-        &self.kbuffer
     }
 }
 

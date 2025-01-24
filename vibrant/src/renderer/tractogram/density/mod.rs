@@ -13,14 +13,14 @@ use crate::{
     surface::density::Density,
 };
 
-pub struct TractogramDensityAddCompute {
+pub struct TractogramDensityPipeline {
     rasterize: ComputePipeline,
     copy: ComputePipeline,
     mipmap: ComputePipeline,
     indirect: Buffer,
 }
 
-impl TractogramDensityAddCompute {
+impl TractogramDensityPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -33,8 +33,8 @@ impl TractogramDensityAddCompute {
                         bind_group_layouts: &[
                             &Density::layout(gpu),
                             &Tractogram::layout(gpu),
-                            &Filter::layout_read(gpu),
                             &Environment::layout(gpu),
+                            &Filter::layout_read(gpu),
                         ],
                         push_constant_ranges: &[],
                     }),
@@ -52,7 +52,7 @@ impl TractogramDensityAddCompute {
                         ],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(include_str!("copy.wgsl")),
+                &gpu.shader(&(Environment::wgsl() + include_str!("copy.wgsl"))),
                 "main",
             ),
             mipmap: gpu.compute(
@@ -96,14 +96,12 @@ impl TractogramDensityAddCompute {
             ..Default::default()
         });
 
-        let mut width = density.texture().width().div_ceil(8);
-        let mut height = density.texture().height().div_ceil(8);
-        let mut depth = density.texture().depth().div_ceil(8);
+        let mut volume = density.texture().volume().div_ceil(8);
 
         pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
-        pass.set_bind_group(2, tractogram.filter_default().binding_read(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(3, tractogram.filter_default().binding_read(), &[]);
 
         pass.set_pipeline(&self.rasterize);
         pass.dispatch_workgroups_indirect(&self.indirect, 0);
@@ -111,17 +109,15 @@ impl TractogramDensityAddCompute {
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, density.texture().binding_write(), &[]);
-        pass.dispatch_workgroups(width, height, depth);
+        pass.dispatch_workgroups(volume, volume, volume);
 
         pass.set_pipeline(&self.mipmap);
 
         for binding in density.texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
-            pass.dispatch_workgroups(width, height, depth);
+            pass.dispatch_workgroups(volume, volume, volume);
 
-            width /= 2;
-            height /= 2;
-            depth /= 2;
+            volume /= 2;
         }
     }
 }
