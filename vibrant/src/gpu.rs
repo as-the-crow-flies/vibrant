@@ -5,10 +5,10 @@ use futures::channel::oneshot::channel;
 use itertools::Itertools;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
-    ComputePipeline, ComputePipelineDescriptor, Extent3d, Features, ImageCopyBuffer,
-    ImageCopyTexture, ImageDataLayout, Limits, MapMode, Origin3d, PipelineLayout,
-    PipelineLayoutDescriptor, PowerPreference, RequestAdapterOptions, ShaderModule,
-    ShaderModuleDescriptor, ShaderSource, Texture, TextureAspect, TextureFormat,
+    ComputePipeline, ComputePipelineDescriptor, Extent3d, Features, Limits, MapMode, Origin3d,
+    PipelineLayout, PipelineLayoutDescriptor, PowerPreference, RequestAdapterOptions, ShaderModule,
+    ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo, TexelCopyBufferLayout,
+    TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
 };
 
 pub struct Gpu {
@@ -47,9 +47,8 @@ impl Gpu {
                     },
                     required_features: Features::empty()
                         | Features::FLOAT32_FILTERABLE
-                        | Features::SUBGROUP
-                        | Features::SHADER_INT64
-                        | Features::SHADER_INT64_ATOMIC_MIN_MAX,
+                        | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                        | Features::SUBGROUP,
                     ..Default::default()
                 },
                 None,
@@ -177,7 +176,7 @@ impl Gpu {
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());
         cmd.copy_texture_to_buffer(
-            ImageCopyTexture {
+            TexelCopyTextureInfo {
                 texture,
                 mip_level: 0,
                 origin: Origin3d {
@@ -187,9 +186,9 @@ impl Gpu {
                 },
                 aspect: TextureAspect::All,
             },
-            ImageCopyBuffer {
+            TexelCopyBufferInfo {
                 buffer: &result,
-                layout: ImageDataLayout {
+                layout: TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(width * pixel), // Must be multiple of 256
                     rows_per_image: None,

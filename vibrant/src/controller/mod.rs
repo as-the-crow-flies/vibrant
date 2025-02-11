@@ -18,6 +18,7 @@ pub struct Controller {
     width: u32,
     height: u32,
     volume: u32,
+    tile: u32,
     state: ControllerState,
     camera: Camera,
     light: Light,
@@ -32,6 +33,7 @@ impl Controller {
             width: 1920,
             height: 1080,
             volume: 256,
+            tile: 8,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -99,6 +101,16 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.shading,
+                        ShadingSetting::Density,
+                        "Density",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        ShadingSetting::Culling,
+                        "Culling",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
                         ShadingSetting::Tracing,
                         "Tracing",
                     );
@@ -116,6 +128,18 @@ impl Controller {
                     }
                 });
 
+            ComboBox::from_label("Tile Size")
+                .selected_text(format!("{:?}", self.tile))
+                .show_ui(ui, |ui| {
+                    for power in 1u32..6 {
+                        ui.selectable_value(
+                            &mut self.tile,
+                            2u32.pow(power),
+                            format!("{}", 2u32.pow(power)),
+                        );
+                    }
+                });
+
             ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.01..=0.5)
                     .logarithmic(true)
@@ -123,6 +147,17 @@ impl Controller {
             );
 
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
+
+            ui.add(
+                Slider::new(&mut self.settings.culling_threshold, 1.0..=10.0)
+                    .text("Culling Threshold"),
+            );
+
+            ui.add(
+                Slider::new(&mut self.settings.alpha, 0.0..=1.0)
+                    .logarithmic(true)
+                    .text("Alpha"),
+            );
         });
     }
 
@@ -136,6 +171,10 @@ impl Controller {
 
     pub fn volume(&self) -> u32 {
         self.volume
+    }
+
+    pub fn tile(&self) -> u32 {
+        self.tile
     }
 
     pub fn camera(&self) -> &Camera {

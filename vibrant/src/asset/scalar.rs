@@ -1,43 +1,62 @@
-use std::any::type_name;
+use std::{any::type_name, ops::Add};
 
 use bytemuck::bytes_of;
 use glam::Mat4;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BufferBinding,
-    BufferBindingType, BufferUsages, Extent3d, FilterMode, SamplerBindingType, SamplerDescriptor,
-    ShaderStages, StorageTextureAccess, Texture, TextureAspect, TextureDescriptor, TextureFormat,
-    TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
+    BufferBinding, BufferBindingType, BufferUsages, Extent3d, FilterMode, SamplerBindingType,
+    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureDescriptor,
+    TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
 
-pub struct ScalarTexture {
+pub type ScalarTexture3D = ScalarTexture<3>;
+pub type ScalarTexture2D = ScalarTexture<2>;
+
+pub struct ScalarTexture<const DIMENSION: u32> {
     texture: Texture,
+    transform: Buffer,
+    transform_inverse: Buffer,
     binding: BindGroup,
     binding_write: BindGroup,
     bindings_mipmap: Vec<BindGroup>,
 }
 
-impl ScalarTexture {
+impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
     const TEXTURE_FORMAT: TextureFormat = TextureFormat::R32Float;
 
-    pub fn new(gpu: &Gpu, volume: u32, transform: Mat4) -> Self {
+    pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32, transform: Mat4) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mip_level_count = volume.div_ceil(8).ilog2().max(1);
+        let mip_level_count = match DIMENSION {
+            1 => width,
+            2 => width.min(height),
+            3 => width.min(height).min(depth),
+            _ => panic!("Texture Dimension should be between 1 and 3"),
+        }
+        .div_ceil(8)
+        .add(1)
+        .ilog2()
+        .max(1);
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
             label,
             size: Extent3d {
-                width: volume,
-                height: volume,
-                depth_or_array_layers: volume,
+                width,
+                height,
+                depth_or_array_layers: depth,
             },
             mip_level_count,
             sample_count: 1,
-            dimension: wgpu::TextureDimension::D3,
+            dimension: match DIMENSION {
+                1 => wgpu::TextureDimension::D1,
+                2 => wgpu::TextureDimension::D2,
+                3 => wgpu::TextureDimension::D3,
+                _ => panic!("Texture Dimension should be between 1 and 3"),
+            },
             format: Self::TEXTURE_FORMAT,
             usage: TextureUsages::TEXTURE_BINDING
                 | TextureUsages::STORAGE_BINDING
@@ -57,15 +76,15 @@ impl ScalarTexture {
             ..Default::default()
         });
 
-        let transform_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let transform_inverse = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytes_of(&transform),
+            contents: bytes_of(&transform.inverse()),
             usage: BufferUsages::UNIFORM,
         });
 
-        let transform_inverse_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytes_of(&transform.inverse()),
+            contents: bytes_of(&transform),
             usage: BufferUsages::UNIFORM,
         });
 
@@ -79,12 +98,7 @@ impl ScalarTexture {
                         &TextureViewDescriptor {
                             label,
                             format: Some(Self::TEXTURE_FORMAT),
-                            dimension: Some(TextureViewDimension::D3),
-                            aspect: TextureAspect::All,
-                            base_mip_level: 0,
-                            mip_level_count: None,
-                            base_array_layer: 0,
-                            array_layer_count: None,
+                            ..Default::default()
                         },
                     )),
                 },
@@ -95,7 +109,7 @@ impl ScalarTexture {
                 BindGroupEntry {
                     binding: 2,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_buffer,
+                        buffer: &transform,
                         offset: 0,
                         size: None,
                     }),
@@ -103,7 +117,7 @@ impl ScalarTexture {
                 BindGroupEntry {
                     binding: 3,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_inverse_buffer,
+                        buffer: &transform_inverse,
                         offset: 0,
                         size: None,
                     }),
@@ -121,12 +135,8 @@ impl ScalarTexture {
                         &TextureViewDescriptor {
                             label,
                             format: Some(Self::TEXTURE_FORMAT),
-                            dimension: Some(TextureViewDimension::D3),
-                            aspect: TextureAspect::All,
-                            base_mip_level: 0,
                             mip_level_count: Some(1),
-                            base_array_layer: 0,
-                            array_layer_count: None,
+                            ..Default::default()
                         },
                     )),
                 },
@@ -137,7 +147,7 @@ impl ScalarTexture {
                 BindGroupEntry {
                     binding: 2,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_buffer,
+                        buffer: &transform,
                         offset: 0,
                         size: None,
                     }),
@@ -145,7 +155,7 @@ impl ScalarTexture {
                 BindGroupEntry {
                     binding: 3,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_inverse_buffer,
+                        buffer: &transform_inverse,
                         offset: 0,
                         size: None,
                     }),
@@ -166,12 +176,9 @@ impl ScalarTexture {
                                 &TextureViewDescriptor {
                                     label,
                                     format: Some(Self::TEXTURE_FORMAT),
-                                    dimension: Some(TextureViewDimension::D3),
-                                    aspect: TextureAspect::All,
                                     base_mip_level: level,
                                     mip_level_count: Some(1),
-                                    base_array_layer: 0,
-                                    array_layer_count: None,
+                                    ..Default::default()
                                 },
                             )),
                         },
@@ -185,12 +192,9 @@ impl ScalarTexture {
                                 &TextureViewDescriptor {
                                     label,
                                     format: Some(Self::TEXTURE_FORMAT),
-                                    dimension: Some(TextureViewDimension::D3),
-                                    aspect: TextureAspect::All,
                                     base_mip_level: level + 1,
                                     mip_level_count: Some(1),
-                                    base_array_layer: 0,
-                                    array_layer_count: None,
+                                    ..Default::default()
                                 },
                             )),
                         },
@@ -201,14 +205,29 @@ impl ScalarTexture {
 
         Self {
             texture,
+            transform,
+            transform_inverse,
             binding,
             binding_write,
             bindings_mipmap,
         }
     }
 
-    pub fn volume(&self) -> u32 {
+    pub fn width(&self) -> u32 {
         self.texture.width()
+    }
+
+    pub fn height(&self) -> u32 {
+        self.texture.height()
+    }
+
+    pub fn depth(&self) -> u32 {
+        self.texture.depth_or_array_layers()
+    }
+
+    pub fn update(&self, gpu: &Gpu, transform: &Mat4) {
+        gpu.queue()
+            .write_buffer(&self.transform, 0, bytes_of(transform));
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -221,7 +240,7 @@ impl ScalarTexture {
                         visibility: ShaderStages::all(),
                         ty: BindingType::Texture {
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D3,
+                            view_dimension: Self::view_dimension(),
                             multisampled: false,
                         },
                         count: None,
@@ -265,9 +284,9 @@ impl ScalarTexture {
                         binding: 0,
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::WriteOnly,
+                            access: StorageTextureAccess::ReadWrite,
                             format: Self::TEXTURE_FORMAT,
-                            view_dimension: TextureViewDimension::D3,
+                            view_dimension: Self::view_dimension(),
                         },
                         count: None,
                     },
@@ -311,7 +330,7 @@ impl ScalarTexture {
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Texture {
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D3,
+                            view_dimension: Self::view_dimension(),
                             multisampled: false,
                         },
                         count: None,
@@ -328,7 +347,7 @@ impl ScalarTexture {
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::WriteOnly,
                             format: Self::TEXTURE_FORMAT,
-                            view_dimension: TextureViewDimension::D3,
+                            view_dimension: Self::view_dimension(),
                         },
                         count: None,
                     },
@@ -347,10 +366,21 @@ impl ScalarTexture {
     pub fn bindings_mipmap(&self) -> &[BindGroup] {
         &self.bindings_mipmap
     }
+
+    fn view_dimension() -> TextureViewDimension {
+        match DIMENSION {
+            1 => wgpu::TextureViewDimension::D1,
+            2 => wgpu::TextureViewDimension::D2,
+            3 => wgpu::TextureViewDimension::D3,
+            _ => panic!("Dimension should be between 1 and 3"),
+        }
+    }
 }
 
-impl Drop for ScalarTexture {
+impl<const DIMENSION: u32> Drop for ScalarTexture<DIMENSION> {
     fn drop(&mut self) {
         self.texture.destroy();
+        self.transform.destroy();
+        self.transform_inverse.destroy();
     }
 }

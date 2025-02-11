@@ -11,8 +11,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 vibrant = { path = "vibrant" }
-wgpu = "23.0"
-winit = "0.30"
+wgpu = "24.0.0"
+winit = "0.30.7"
 egui = { git = "https://github.com/emilk/egui.git" }
 egui-winit = { git = "https://github.com/emilk/egui.git", default-features = false }
 bytemuck = { version = "1.18", features = ["derive", "min_const_generics"] }

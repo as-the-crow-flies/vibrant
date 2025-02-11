@@ -40,10 +40,10 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
     for (var distance = hit.x + jitter; distance < hit.y; distance += step) {
         let position = ray.origin + distance * ray.direction;
         let density = textureSampleLevel(DENSITY, SAMPLER, position + 0.5, 0.0).x;
-        occlusion += (1.0 - occlusion) * ENVIRONMENT.settings.shading_level * density;
+        occlusion += (1.0 - occlusion) * ENVIRONMENT.settings.alpha * density;
     }
 
-    return vec4<f32>(vec3<f32>(0.0), occlusion);
+    return vec4<f32>(vec3<f32>(occlusion), 1.0);
 }
 
 fn aabb(ray: Ray, aabb_min: vec3<f32>, aabb_max: vec3<f32>) -> vec2<f32> {
@@ -71,11 +71,4 @@ fn unproject(v: vec3<f32>) -> vec3<f32> {
 
 fn random(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-}
-
-fn hex2rgb(hex: u32) -> vec3<f32> {
-    let r: f32 = f32((hex >> 16u) & 0xFFu) / 255.0;
-    let g: f32 = f32((hex >> 8u) & 0xFFu) / 255.0;
-    let b: f32 = f32(hex & 0xFFu) / 255.0;
-    return vec3<f32>(r, g, b);
 }

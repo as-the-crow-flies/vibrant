@@ -6,7 +6,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::ScalarTexture,
+    asset::scalar::ScalarTexture3D,
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::Color, SurfaceBuffer},
@@ -20,7 +20,7 @@ impl TractogramDensityShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shader = gpu.shader(&(Environment::wgsl() + include_str!("volume.wgsl")));
+        let shader = gpu.shader(&(Environment::wgsl() + include_str!("density.wgsl")));
 
         Self {
             pipeline: gpu
@@ -28,7 +28,7 @@ impl TractogramDensityShading {
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label,
                     layout: Some(&gpu.pipeline_layout(&[
-                        &ScalarTexture::layout(gpu),
+                        &ScalarTexture3D::layout(gpu),
                         &Environment::layout(gpu),
                     ])),
                     vertex: VertexState {
@@ -60,7 +60,6 @@ impl TractogramDensityShading {
         cmd: &mut CommandEncoder,
         frame: &SurfaceBuffer,
         environment: &Environment,
-        scalar: &ScalarTexture,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             color_attachments: &[Some(frame.color().attachment_srgb())],
@@ -68,7 +67,7 @@ impl TractogramDensityShading {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, scalar.binding(), &[]);
+        pass.set_bind_group(0, frame.density().texture().binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }

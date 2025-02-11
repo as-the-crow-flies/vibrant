@@ -1,5 +1,5 @@
 @group(0) @binding(0) var<storage, read_write> BUFFER: array<u32>;
-@group(1) @binding(0) var TEXTURE: texture_storage_3d<r32float, write>;
+@group(1) @binding(0) var TEXTURE: texture_storage_3d<r32float, read_write>;
 
 const ONE_OVER_U16_MAX: f32 = 0.0000152590219;
 

@@ -7,7 +7,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{filter::Filter, scalar::ScalarTexture, tractogram::Tractogram},
+    asset::{filter::Filter, scalar::ScalarTexture3D, tractogram::Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::density::Density,
@@ -48,7 +48,7 @@ impl TractogramDensityPipeline {
                         label,
                         bind_group_layouts: &[
                             &Density::layout(gpu),
-                            &ScalarTexture::layout_write(gpu),
+                            &ScalarTexture3D::layout_write(gpu),
                         ],
                         push_constant_ranges: &[],
                     }),
@@ -60,7 +60,7 @@ impl TractogramDensityPipeline {
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
-                        bind_group_layouts: &[&ScalarTexture::layout_mipmap(gpu)],
+                        bind_group_layouts: &[&ScalarTexture3D::layout_mipmap(gpu)],
                         push_constant_ranges: &[],
                     }),
                 &gpu.shader(include_str!("mipmap.wgsl")),
@@ -96,7 +96,7 @@ impl TractogramDensityPipeline {
             ..Default::default()
         });
 
-        let mut volume = density.texture().volume().div_ceil(8);
+        let mut volume = density.texture().width().div_ceil(8);
 
         pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);

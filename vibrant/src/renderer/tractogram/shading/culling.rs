@@ -7,21 +7,20 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{scalar::ScalarTexture3D, tractogram::Tractogram},
+    asset::scalar::ScalarTexture2D,
     gpu::Gpu,
-    renderer::environment::Environment,
-    surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
+    surface::{color::Color, SurfaceBuffer},
 };
 
-pub struct TractogramTracingShading {
+pub struct TractogramCullingShading {
     pipeline: RenderPipeline,
 }
 
-impl TractogramTracingShading {
+impl TractogramCullingShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shading_module = gpu.shader(&(Environment::wgsl() + include_str!("tracing.wgsl")));
+        let shading_module = gpu.shader(include_str!("culling.wgsl"));
 
         Self {
             pipeline: gpu
@@ -32,12 +31,7 @@ impl TractogramTracingShading {
                         &gpu.device()
                             .create_pipeline_layout(&PipelineLayoutDescriptor {
                                 label,
-                                bind_group_layouts: &[
-                                    &GBuffer::layout(gpu),
-                                    &ScalarTexture3D::layout(gpu),
-                                    &Tractogram::layout(gpu),
-                                    &Environment::layout(gpu),
-                                ],
+                                bind_group_layouts: &[&ScalarTexture2D::layout(gpu)],
                                 push_constant_ranges: &[],
                             }),
                     ),
@@ -50,7 +44,7 @@ impl TractogramTracingShading {
                     fragment: Some(FragmentState {
                         module: &shading_module,
                         entry_point: Some("fragment"),
-                        targets: &[Some(Color::target_srgb())],
+                        targets: &[Some(Color::target())],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -65,26 +59,17 @@ impl TractogramTracingShading {
         }
     }
 
-    pub fn render(
-        &self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        frame: &SurfaceBuffer,
-        tractogram: &Tractogram,
-    ) {
+    pub fn render(&self, cmd: &mut CommandEncoder, frame: &SurfaceBuffer) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(frame.color().attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
-        pass.set_bind_group(1, frame.density().texture().binding(), &[]);
-        pass.set_bind_group(2, tractogram.binding(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(0, frame.occlusion().texture().binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

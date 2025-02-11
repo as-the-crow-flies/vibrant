@@ -20,6 +20,8 @@ impl Environment {
         struct Settings {
             streamline_radius: f32,
             direct_light: f32,
+            culling_threshold: f32,
+            alpha: f32
         }
 
         struct Camera {
@@ -33,7 +35,7 @@ impl Environment {
         struct Environment {
             surface: vec2<u32>,
             volume: u32,
-            volume_: u32,
+            tile: u32,
             camera: Camera,
             light: vec3<f32>,
             light_: f32,
@@ -79,7 +81,7 @@ impl Environment {
             0,
             &[
                 bytes_of(&[controller.width(), controller.height()]),
-                bytes_of(&[controller.volume(), 0]),
+                bytes_of(&[controller.volume(), controller.tile()]),
                 bytes_of(&controller.camera().transform()),
                 bytes_of(&controller.camera().projection()),
                 bytes_of(&controller.camera().projection().inverse()),
@@ -90,6 +92,8 @@ impl Environment {
                 bytes_of(&0u32),
                 bytes_of(&controller.settings().streamline_radius),
                 bytes_of(&controller.settings().direct_light),
+                bytes_of(&controller.settings().culling_threshold),
+                bytes_of(&controller.settings().alpha),
             ]
             .concat(),
         );

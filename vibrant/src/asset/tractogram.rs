@@ -52,12 +52,10 @@ impl Tractogram {
             .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
             .collect_vec();
 
-        dbg!(indices.len());
-
         let vertices = tck
             .vertices()
             .iter()
-            .map(|v| Vec4::new(v.x, v.y, v.z, 1.0))
+            .map(|v| Vec4::new(v.x, v.y, v.z, if v.is_finite() { 1.0 } else { 0.0 }))
             .collect_vec();
 
         let scale = tck.bounds().scale();

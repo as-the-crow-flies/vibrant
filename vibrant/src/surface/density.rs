@@ -9,11 +9,12 @@ use wgpu::{
     BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
 };
 
-use crate::{asset::scalar::ScalarTexture, gpu::Gpu};
+use crate::{asset::scalar::ScalarTexture3D, gpu::Gpu};
 
 pub struct Density {
-    texture: ScalarTexture,
+    texture: ScalarTexture3D,
     buffer: Buffer,
+    transform: Buffer,
     binding: BindGroup,
 }
 
@@ -22,10 +23,11 @@ impl Density {
         let label = Some(type_name::<Self>());
 
         let scale = volume as f32;
+
         let transform = Mat4::from_translation(Vec3::new(scale / 2.0, scale / 2.0, scale / 2.0))
             * Mat4::from_scale(Vec3::new(scale, scale, scale));
 
-        let texture = ScalarTexture::new(gpu, volume, transform);
+        let texture = ScalarTexture3D::new(gpu, volume, volume, volume, transform);
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
@@ -34,15 +36,9 @@ impl Density {
             mapped_at_creation: false,
         });
 
-        let transform_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytes_of(&transform),
-            usage: BufferUsages::UNIFORM,
-        });
-
-        let transform_inverse_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytes_of(&transform.inverse()),
             usage: BufferUsages::UNIFORM,
         });
 
@@ -61,15 +57,7 @@ impl Density {
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_buffer,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_inverse_buffer,
+                        buffer: &transform,
                         offset: 0,
                         size: None,
                     }),
@@ -80,6 +68,7 @@ impl Density {
         Self {
             texture,
             buffer,
+            transform,
             binding,
         }
     }
@@ -88,7 +77,7 @@ impl Density {
         cmd.clear_buffer(&self.buffer, 0, None);
     }
 
-    pub fn texture(&self) -> &ScalarTexture {
+    pub fn texture(&self) -> &ScalarTexture3D {
         &self.texture
     }
 
@@ -121,16 +110,6 @@ impl Density {
                         },
                         count: None,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                 ],
             })
     }
@@ -139,5 +118,6 @@ impl Density {
 impl Drop for Density {
     fn drop(&mut self) {
         self.buffer.destroy();
+        self.transform.destroy();
     }
 }

@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, ops::Div};
 
 use glam::{Mat4, Quat, Vec3};
 
@@ -25,9 +25,9 @@ impl Camera {
             pitch: 0.0,
             distance: 0.75,
             pan: Vec3::ZERO,
-            fov: PI / 4.0,
-            near: 0.01,
-            far: 4.0,
+            fov: PI / 3.0,
+            near: 0.1,
+            far: 1.0,
         }
     }
 
@@ -51,8 +51,10 @@ impl Camera {
 
         self.zoom(-0.1 * state.scroll.y);
 
-        self.near = (self.distance - 1.0).max(0.01);
-        self.far = self.distance + 1.0;
+        let distance_to_corners = 3f32.sqrt().div(2f32);
+
+        self.near = (self.distance - distance_to_corners).max(0.1);
+        self.far = self.distance + distance_to_corners;
     }
 
     pub fn aspect(&self) -> f32 {

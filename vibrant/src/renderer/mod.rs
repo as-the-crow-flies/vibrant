@@ -45,18 +45,19 @@ impl Renderer {
     ) {
         File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(gpu, &tck)));
 
-        if self.asset.tractogram.is_none() {
-            self.asset.tractogram = Some(Tractogram::new(
-                gpu,
-                &Tck::from_file("assets/HCP-100307/whole_brain200k.tck"),
-            ))
-        }
+        // if self.asset.tractogram.is_none() {
+        //     self.asset.tractogram = Some(Tractogram::new(
+        //         gpu,
+        //         &Tck::from_file("assets/HCP-100307/whole_brain200k.tck"),
+        //     ));
+        // }
 
         let surface = self.surface.maybe_resize(
             gpu,
             controller.width(),
             controller.height(),
             controller.volume(),
+            controller.tile(),
         );
 
         self.environment.update(gpu, &controller);
