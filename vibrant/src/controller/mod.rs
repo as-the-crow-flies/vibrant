@@ -77,12 +77,7 @@ impl Controller {
             ComboBox::from_label("Geometry")
                 .selected_text(format!("{:?}", self.settings.geometry))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.settings.geometry,
-                        GeometrySetting::LineHardware,
-                        "LineHardware",
-                    );
-
+                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Line, "Line");
                     ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Tube, "Tube");
                 });
 
@@ -149,7 +144,7 @@ impl Controller {
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
 
             ui.add(
-                Slider::new(&mut self.settings.culling_threshold, 1.0..=10.0)
+                Slider::new(&mut self.settings.culling_threshold, 0.0..=10.0)
                     .text("Culling Threshold"),
             );
 

@@ -3,7 +3,7 @@ pub mod services;
 pub mod tractogram;
 pub mod ui;
 
-use crate::{file::Tck, renderer::tractogram::TractogramRenderer};
+use crate::renderer::tractogram::TractogramRenderer;
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
@@ -44,13 +44,6 @@ impl Renderer {
         output: egui::FullOutput,
     ) {
         File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(gpu, &tck)));
-
-        // if self.asset.tractogram.is_none() {
-        //     self.asset.tractogram = Some(Tractogram::new(
-        //         gpu,
-        //         &Tck::from_file("assets/HCP-100307/whole_brain200k.tck"),
-        //     ));
-        // }
 
         let surface = self.surface.maybe_resize(
             gpu,

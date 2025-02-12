@@ -66,9 +66,9 @@ impl App {
                 renderer.render(&self.gpu, &self.controller, egui.egui_ctx(), output);
                 self.fps.stop();
 
-                if self.focused {
-                    self.request_redraw();
-                }
+                // if self.focused {
+                self.request_redraw();
+                // }
             }
             _ => (),
         }

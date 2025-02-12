@@ -4,7 +4,7 @@ pub mod occlusion;
 pub mod shading;
 
 use density::TractogramDensityPipeline;
-use geometry::{line::hardware::TractogramLineHardwareGeometry, tube::TractogramTubeGeometry};
+use geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry};
 use occlusion::TractogramOcclusionPipeline;
 use shading::{
     culling::TractogramCullingShading, density::TractogramDensityShading,
@@ -25,7 +25,7 @@ use super::environment::Environment;
 pub struct TractogramRenderer {
     density: TractogramDensityPipeline,
     occlusion: TractogramOcclusionPipeline,
-    line_hardware_geometry: TractogramLineHardwareGeometry,
+    line_hardware_geometry: TractogramLineGeometry,
     tube_geometry: TractogramTubeGeometry,
     simple_shading: TractogramSimpleShading,
     gbuffer_shading: TractogramGBufferShading,
@@ -39,7 +39,7 @@ impl TractogramRenderer {
         Self {
             density: TractogramDensityPipeline::new(gpu),
             occlusion: TractogramOcclusionPipeline::new(gpu),
-            line_hardware_geometry: TractogramLineHardwareGeometry::new(gpu),
+            line_hardware_geometry: TractogramLineGeometry::new(gpu),
             tube_geometry: TractogramTubeGeometry::new(gpu),
             simple_shading: TractogramSimpleShading::new(gpu),
             gbuffer_shading: TractogramGBufferShading::new(gpu),
@@ -64,7 +64,7 @@ impl TractogramRenderer {
 
         if [ShadingSetting::Simple, ShadingSetting::Tracing].contains(&settings.shading) {
             match settings.geometry {
-                GeometrySetting::LineHardware => self.line_hardware_geometry.render(
+                GeometrySetting::Line => self.line_hardware_geometry.render(
                     cmd,
                     environment,
                     buffer,

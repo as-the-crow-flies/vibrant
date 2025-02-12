@@ -69,7 +69,7 @@ impl TractogramCullingShading {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.occlusion().texture().binding(), &[]);
+        pass.set_bind_group(0, frame.occlusion().threshold().binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

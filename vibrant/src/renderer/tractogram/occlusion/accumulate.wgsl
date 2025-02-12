@@ -15,14 +15,16 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var threshold = 1.0;
 
     for (var froxel = vec3<u32>(pixel, 0); froxel.z < max_depth; froxel.z++) {
-        let sample = OCCLUSION_TO_PROJECTION * vec4<f32>(vec3<f32>(froxel), 1.0);
         let step = length(transform(froxel + vec3<u32>(0, 0, 1)) - transform(froxel));
 
-        occlusion += step * textureLoad(OCCLUSION, froxel).x;
+        let density = textureLoad(OCCLUSION, froxel).x;
+
+        occlusion += step * density;
 
         textureStore(OCCLUSION, froxel, vec4<f32>(occlusion));
 
         if (threshold == 1.0 && occlusion > ENVIRONMENT.settings.culling_threshold) {
+            let sample = OCCLUSION_TO_PROJECTION * vec4<f32>(vec3<f32>(froxel), 1.0);
             threshold = sample.z / sample.w;
         }
     }

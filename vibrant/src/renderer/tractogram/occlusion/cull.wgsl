@@ -28,6 +28,8 @@ fn main(
 }
 
 fn should_keep(index: u32) -> bool {
+    let dim = vec2<f32>(textureDimensions(OCCLUSION));
+
     let v0 = TRACTOGRAM_VERTICES[index + 0];
     let v1 = TRACTOGRAM_VERTICES[index + 1];
 
@@ -42,17 +44,17 @@ fn should_keep(index: u32) -> bool {
     // Frustum culling
     if (!(all(abs(v0_clip.xy) < vec2<f32>(1.0)) || all(abs(v1_clip.xy) < vec2<f32>(1.0)))) { return false; }
 
-    return true;
+    let vmin = min(v0_clip.xy, v1_clip.xy);
+    let vmax = max(v0_clip.xy, v1_clip.xy);
+    let vdim = (vmax - vmin) * dim;
 
-    // let vmin = min(v0_clip.xy, v1_clip.xy);
-    // let vmax = max(v0_clip.xy, v1_clip.xy);
-    // let vdim = (vmax - vmin) * vec2<f32>(textureDimensions(OCCLUSION));
+    let centroid = 0.5 * (vmin + vmax);
+    let sample = 0.5 * centroid + 0.5;
 
-    // let centroid = 0.5 * (vmin + vmax);
-    // let level = max(0.0, log2(max(vdim.x, vdim.y)));
+    let level = max(0.0, log2(max(vdim.x, vdim.y)));
 
-    // let max_depth = textureSampleLevel(OCCLUSION, SAMPLER, centroid + 0.5, level).x;
+    let max_depth = textureSampleLevel(OCCLUSION, SAMPLER, sample, level).x;
 
-    // // Occlusion Culling
-    // return min(v0_clip.z, v1_clip.z) > max_depth;
+    // Occlusion Culling
+    return min(v0_clip.z, v1_clip.z) < max_depth;
 }

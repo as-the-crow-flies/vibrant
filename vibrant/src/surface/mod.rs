@@ -4,8 +4,6 @@ pub mod depth;
 pub mod gbuffer;
 pub mod occlusion;
 
-use std::ops::Mul;
-
 use color::Color;
 use density::Density;
 use depth::Depth;
@@ -33,8 +31,6 @@ pub struct SurfaceBuffer {
 
 impl SurfaceBuffer {
     pub fn new(gpu: &Gpu, width: u32, height: u32, volume: u32, tile: u32) -> Self {
-        let depth = (volume as f32).mul(3f32.sqrt()).ceil() as u32;
-
         Self {
             width,
             height,
@@ -43,7 +39,7 @@ impl SurfaceBuffer {
             color: Color::new(gpu, width, height),
             depth: Depth::new(gpu, width, height),
             density: Density::new(gpu, volume),
-            occlusion: Occlusion::new(gpu, width.div_ceil(tile), height.div_ceil(tile), depth),
+            occlusion: Occlusion::new(gpu, width.div_ceil(tile), height.div_ceil(tile), volume),
             gbuffer: GBuffer::new(gpu, width, height),
         }
     }

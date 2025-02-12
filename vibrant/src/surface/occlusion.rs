@@ -7,7 +7,8 @@ use crate::{
 
 pub struct Occlusion {
     volume: ScalarTexture3D,
-    texture: ScalarTexture2D,
+    threshold: ScalarTexture2D,
+    hiz: ScalarTexture2D,
 }
 
 impl Occlusion {
@@ -20,7 +21,8 @@ impl Occlusion {
 
         Self {
             volume: ScalarTexture3D::new(gpu, width, height, depth, projection_to_occlusion),
-            texture: ScalarTexture2D::new(gpu, width, height, 1, projection_to_occlusion),
+            threshold: ScalarTexture2D::new(gpu, width, height, 1, projection_to_occlusion),
+            hiz: ScalarTexture2D::new(gpu, width, height, 1, projection_to_occlusion),
         }
     }
 
@@ -28,7 +30,11 @@ impl Occlusion {
         &self.volume
     }
 
-    pub fn texture(&self) -> &ScalarTexture2D {
-        &self.texture
+    pub fn threshold(&self) -> &ScalarTexture2D {
+        &self.threshold
+    }
+
+    pub fn hiz(&self) -> &ScalarTexture2D {
+        &self.hiz
     }
 }

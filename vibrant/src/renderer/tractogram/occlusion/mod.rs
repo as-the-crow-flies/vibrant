@@ -14,6 +14,7 @@ use crate::{
 pub struct TractogramOcclusionPipeline {
     copy: ComputePipeline,
     accumulate: ComputePipeline,
+    erode: ComputePipeline,
     mipmap: ComputePipeline,
     cull: ComputePipeline,
 }
@@ -39,6 +40,15 @@ impl TractogramOcclusionPipeline {
                     &Environment::layout(gpu),
                 ]),
                 &gpu.shader(&(Environment::wgsl() + include_str!("accumulate.wgsl"))),
+                "main",
+            ),
+            erode: gpu.compute(
+                "Occlusion::Erode",
+                &gpu.pipeline_layout(&[
+                    &ScalarTexture2D::layout(gpu),
+                    &ScalarTexture2D::layout_write(gpu),
+                ]),
+                &gpu.shader(include_str!("erode.wgsl")),
                 "main",
             ),
             mipmap: gpu.compute(
@@ -89,12 +99,17 @@ impl TractogramOcclusionPipeline {
         pass.dispatch_workgroups(x, y, z);
 
         pass.set_pipeline(&self.accumulate);
-        pass.set_bind_group(1, occlusion.texture().binding_write(), &[]);
+        pass.set_bind_group(1, occlusion.threshold().binding_write(), &[]);
+        pass.dispatch_workgroups(x, y, 1);
+
+        pass.set_pipeline(&self.erode);
+        pass.set_bind_group(0, occlusion.threshold().binding(), &[]);
+        pass.set_bind_group(1, occlusion.hiz().binding_write(), &[]);
         pass.dispatch_workgroups(x, y, 1);
 
         pass.set_pipeline(&self.mipmap);
 
-        for binding in occlusion.texture().bindings_mipmap() {
+        for binding in occlusion.hiz().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(x, y, 1);
 
@@ -103,7 +118,7 @@ impl TractogramOcclusionPipeline {
         }
 
         pass.set_pipeline(&self.cull);
-        pass.set_bind_group(0, occlusion.texture().binding(), &[]);
+        pass.set_bind_group(0, occlusion.hiz().binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.set_bind_group(3, tractogram.filter_culling().binding_write(), &[]);

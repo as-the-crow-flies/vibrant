@@ -1,6 +1,6 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum GeometrySetting {
-    LineHardware,
+    Line,
     Tube,
 }
 
@@ -27,9 +27,9 @@ impl Settings {
         Self {
             streamline_radius: 0.25,
             direct_light: 0.0,
-            culling_threshold: 1.0,
+            culling_threshold: 4.0,
             alpha: 0.01,
-            geometry: GeometrySetting::LineHardware,
+            geometry: GeometrySetting::Tube,
             shading: ShadingSetting::Tracing,
         }
     }
