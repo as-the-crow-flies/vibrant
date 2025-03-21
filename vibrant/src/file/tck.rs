@@ -67,7 +67,7 @@ impl Tck {
             .strip_prefix(". ")
             .expect("'file' entry in .tck header was expected to have '. ' prefix")
             .parse()
-            .expect("Couldnt parse 'file' entry in .tck header as usize");
+            .expect("Couldn't parse 'file' entry in .tck header as usize");
 
         let vertices: Vec<Vec3> = bytemuck::try_cast_slice(&bytes[offset..])
             .map(|slice| slice.to_vec())

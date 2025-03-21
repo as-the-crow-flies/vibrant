@@ -62,7 +62,13 @@ impl TractogramRenderer {
 
         self.occlusion.render(cmd, buffer, environment, tractogram);
 
-        if [ShadingSetting::Simple, ShadingSetting::Tracing].contains(&settings.shading) {
+        if [
+            ShadingSetting::Simple,
+            ShadingSetting::Tracing,
+            ShadingSetting::GBuffer,
+        ]
+        .contains(&settings.shading)
+        {
             match settings.geometry {
                 GeometrySetting::Line => self.line_hardware_geometry.render(
                     cmd,
