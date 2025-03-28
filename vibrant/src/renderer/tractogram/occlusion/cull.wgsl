@@ -19,7 +19,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>)
     for (var i=0u; i<CHUNK_SIZE; i++) {
         let index = id.x * CHUNK_SIZE + i;
 
-        if (index >= arrayLength(&TRACTOGRAM_VERTICES)) { return; }
+        if (index >= arrayLength(&TRACTOGRAM_INDICES)) { return; }
 
         if (should_keep(index)) {
             TRACTOGRAM_INDICES[atomicAdd(&OFFSET, 1u)] = index;

@@ -14,10 +14,13 @@ const U16_MAX: u32 = 65535;
 
 @compute
 @workgroup_size(1024)
-fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    if (id.x >= arrayLength(&TRACTOGRAM_INDICES)) { return; }
+fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(subgroup_invocation_id) subgroup_id: u32) {
+    let indices_length = arrayLength(&TRACTOGRAM_INDICES);
+    let index = id.x;
 
-    let v0_index = TRACTOGRAM_INDICES[id.x];
+    if (index >= indices_length) { return; }
+
+    let v0_index = TRACTOGRAM_INDICES[index];
     let v1_index = v0_index + 1;
 
     // Compute Area, relative to voxel size in range 0..U16_MAX
@@ -44,10 +47,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var voxel = vec3<i32>(v0);
 
     while (next.w > 0.0) {
-        let index = linear_index(vec3<u32>(voxel));
         let increment = minimum(next);
 
-        atomicAdd(&DENSITY[index], u32(area * increment));
+        let density = u32(area * increment);
+        let idx = linear_index(vec3<u32>(voxel));
+
+        atomicAdd(&DENSITY[idx], density);
 
         let mask = next == vec4<f32>(increment);
         voxel += select(vec3<i32>(0), step, mask.xyz);

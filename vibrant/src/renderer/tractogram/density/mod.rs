@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub struct TractogramDensityPipeline {
-    rasterize: ComputePipeline,
+    voxelize: ComputePipeline,
     copy: ComputePipeline,
     mipmap: ComputePipeline,
     indirect: Buffer,
@@ -25,7 +25,7 @@ impl TractogramDensityPipeline {
         let label = Some(type_name::<Self>());
 
         Self {
-            rasterize: gpu.compute(
+            voxelize: gpu.compute(
                 "Density::Rasterize",
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -41,7 +41,7 @@ impl TractogramDensityPipeline {
                 &gpu.shader(
                     &(Environment::wgsl()
                         + include_str!("common.wgsl")
-                        + include_str!("rasterize.wgsl")),
+                        + include_str!("voxelize.wgsl")),
                 ),
                 "main",
             ),
@@ -112,7 +112,7 @@ impl TractogramDensityPipeline {
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.set_bind_group(3, tractogram.filter_default().binding_read(), &[]);
 
-        pass.set_pipeline(&self.rasterize);
+        pass.set_pipeline(&self.voxelize);
         pass.dispatch_workgroups_indirect(&self.indirect, 0);
 
         pass.set_pipeline(&self.copy);

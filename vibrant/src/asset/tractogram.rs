@@ -1,3 +1,7 @@
+use rayon::{
+    iter::{IntoParallelRefIterator, ParallelIterator},
+    slice::ParallelSliceMut,
+};
 use std::{any::type_name, f32::consts::PI};
 
 use glam::{Mat4, Quat, Vec3, Vec4};
@@ -45,7 +49,7 @@ impl Tractogram {
     pub fn new(gpu: &Gpu, tck: &file::Tck) -> Self {
         let label = Some(type_name::<Self>());
 
-        let indices = tck
+        let mut indices = tck
             .vertices()
             .iter()
             .enumerate()
@@ -58,14 +62,34 @@ impl Tractogram {
             .map(|v| Vec4::new(v.x, v.y, v.z, if v.is_finite() { 1.0 } else { 0.0 }))
             .collect_vec();
 
-        dbg!(indices.len());
-
         let scale = tck.bounds().scale();
         let transform = Mat4::from_scale_rotation_translation(
             Vec3::new(scale, scale, scale),
             Quat::from_rotation_x(0.5 * PI),
             Vec3::ZERO,
         );
+
+        fn morton_encode(x: u8, y: u8, z: u8) -> u32 {
+            fn part1by2(n: u8) -> u32 {
+                let mut n = n as u32;
+                n = (n | (n << 16)) & 0x030000FF;
+                n = (n | (n << 8)) & 0x0300F00F;
+                n = (n | (n << 4)) & 0x030C30C3;
+                n = (n | (n << 2)) & 0x09249249;
+                n
+            }
+            part1by2(x) | (part1by2(y) << 1) | (part1by2(z) << 2)
+        }
+
+        let morton: Vec<u32> = vertices
+            .par_iter()
+            .map(|&vertex| {
+                let vertex = (u8::MAX as f32) * (0.5 + 0.5 * vertex / scale);
+                morton_encode(vertex.x as u8, vertex.y as u8, vertex.z as u8)
+            })
+            .collect();
+
+        indices.par_sort_by_cached_key(|&index| morton[index as usize]);
 
         let world_to_tractogram = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,

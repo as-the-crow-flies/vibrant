@@ -69,7 +69,7 @@ fn direct(position: vec3<f32>, light: vec3<f32>, radius: f32) -> f32 {
 fn ambient(position: vec3<f32>, radius: f32) -> f32 {
     if (ENVIRONMENT.settings.direct_light == 1.0) { return 0.0; }
 
-    let N_SAMPLES = 20.0;
+    let N_SAMPLES = 16.0;
     let TAN_CONE_ANGLE = tan(sqrt(4.0 * PI / N_SAMPLES));
     let DIM = f32(textureDimensions(DENSITY).x);
     let distance_start = 1.0 / DIM + radius;
