@@ -58,6 +58,8 @@ impl Tractogram {
             .map(|v| Vec4::new(v.x, v.y, v.z, if v.is_finite() { 1.0 } else { 0.0 }))
             .collect_vec();
 
+        dbg!(indices.len());
+
         let scale = tck.bounds().scale();
         let transform = Mat4::from_scale_rotation_translation(
             Vec3::new(scale, scale, scale),

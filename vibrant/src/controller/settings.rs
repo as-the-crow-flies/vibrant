@@ -13,6 +13,7 @@ pub enum ShadingSetting {
     Tracing,
 }
 
+#[derive(Debug)]
 pub struct Settings {
     pub streamline_radius: f32,
     pub direct_light: f32,
@@ -25,8 +26,8 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self {
-            streamline_radius: 0.25,
-            direct_light: 0.0,
+            streamline_radius: 0.2,
+            direct_light: 0.72,
             culling_threshold: 4.0,
             alpha: 0.01,
             geometry: GeometrySetting::Tube,

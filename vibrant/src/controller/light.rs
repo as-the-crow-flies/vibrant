@@ -4,7 +4,7 @@ use glam::{Quat, Vec3};
 
 use super::state::ControllerState;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Light {
     yaw: f32,
     pitch: f32,

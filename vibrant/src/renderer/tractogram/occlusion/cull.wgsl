@@ -10,20 +10,20 @@
 @group(3) @binding(0) var<storage, read_write> TRACTOGRAM_INDICES: array<u32>;
 @group(3) @binding(1) var<storage, read_write> OFFSET: atomic<u32>;
 
+const CHUNK_SIZE: u32 = 32;
+
 @compute
 @workgroup_size(1024)
-fn main(
-    @builtin(global_invocation_id) id: vec3<u32>,
-    @builtin(local_invocation_index) local: u32,
-    @builtin(subgroup_invocation_id) subgroup: u32,
-    @builtin(subgroup_size) subgroup_size: u32)
+fn main(@builtin(global_invocation_id) id: vec3<u32>)
 {
-    let index = id.x;
+    for (var i=0u; i<CHUNK_SIZE; i++) {
+        let index = id.x * CHUNK_SIZE + i;
 
-    if (index >= arrayLength(&TRACTOGRAM_VERTICES)) { return; }
+        if (index >= arrayLength(&TRACTOGRAM_VERTICES)) { return; }
 
-    if (should_keep(index)) {
-        TRACTOGRAM_INDICES[atomicAdd(&OFFSET, 1u)] = index;
+        if (should_keep(index)) {
+            TRACTOGRAM_INDICES[atomicAdd(&OFFSET, 1u)] = index;
+        }
     }
 }
 

@@ -6,6 +6,7 @@ use super::event::{Event, Key, MouseButton};
 pub struct ControllerState {
     pub width: u32,
     pub height: u32,
+    pub volume: u32,
     pub pressed: bool,
     pub left: bool,
     pub right: bool,

@@ -17,14 +17,11 @@ const U16_MAX: u32 = 65535;
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if (id.x >= arrayLength(&TRACTOGRAM_INDICES)) { return; }
 
-    let dim = ENVIRONMENT.volume;
-    let stride = vec3<u32>(dim * dim, dim, 1);
-
     let v0_index = TRACTOGRAM_INDICES[id.x];
     let v1_index = v0_index + 1;
 
     // Compute Area, relative to voxel size in range 0..U16_MAX
-    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(f32(dim) * ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
+    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(f32(ENVIRONMENT.volume) * ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
     let area = PI * radius * radius * f32(U16_MAX);
 
     let transform = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
@@ -47,7 +44,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var voxel = vec3<i32>(v0);
 
     while (next.w > 0.0) {
-        let index = dot(stride, vec3<u32>(voxel));
+        let index = linear_index(vec3<u32>(voxel));
         let increment = minimum(next);
 
         atomicAdd(&DENSITY[index], u32(area * increment));

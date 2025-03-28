@@ -152,7 +152,7 @@ impl Filter {
         &self.workgroup_count
     }
 
-    pub fn workgroup_count_2(&self) -> &Buffer {
+    pub fn workgroup_count_32(&self) -> &Buffer {
         &self.workgroup_count_2
     }
 

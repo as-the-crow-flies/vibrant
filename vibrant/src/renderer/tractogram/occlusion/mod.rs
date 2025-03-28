@@ -122,6 +122,6 @@ impl TractogramOcclusionPipeline {
         pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.set_bind_group(3, tractogram.filter_culling().binding_write(), &[]);
-        pass.dispatch_workgroups(tractogram.vertex_count().div_ceil(1024), 1, 1);
+        pass.dispatch_workgroups(tractogram.vertex_count().div_ceil(32 * 1024), 1, 1);
     }
 }

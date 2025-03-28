@@ -38,7 +38,11 @@ impl TractogramDensityPipeline {
                         ],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(&(Environment::wgsl() + include_str!("rasterize.wgsl"))),
+                &gpu.shader(
+                    &(Environment::wgsl()
+                        + include_str!("common.wgsl")
+                        + include_str!("rasterize.wgsl")),
+                ),
                 "main",
             ),
             copy: gpu.compute(
@@ -49,10 +53,15 @@ impl TractogramDensityPipeline {
                         bind_group_layouts: &[
                             &Density::layout(gpu),
                             &ScalarTexture3D::layout_write(gpu),
+                            &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(&(Environment::wgsl() + include_str!("copy.wgsl"))),
+                &gpu.shader(
+                    &(Environment::wgsl()
+                        + include_str!("common.wgsl")
+                        + include_str!("copy.wgsl")),
+                ),
                 "main",
             ),
             mipmap: gpu.compute(
@@ -107,7 +116,6 @@ impl TractogramDensityPipeline {
         pass.dispatch_workgroups_indirect(&self.indirect, 0);
 
         pass.set_pipeline(&self.copy);
-        pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, density.texture().binding_write(), &[]);
         pass.dispatch_workgroups(volume, volume, volume);
 

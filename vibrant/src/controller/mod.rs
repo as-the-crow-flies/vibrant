@@ -14,6 +14,7 @@ use winit::dpi::PhysicalSize;
 
 use crate::file::File;
 
+#[derive(Debug)]
 pub struct Controller {
     width: u32,
     height: u32,
@@ -41,6 +42,24 @@ impl Controller {
 
             show_side_panel: false,
         }
+    }
+
+    pub fn test(width: u32, height: u32, volume: u32, tile: u32) -> Self {
+        let mut controller = Self {
+            width,
+            height,
+            volume,
+            tile,
+            state: ControllerState::default(),
+            camera: Camera::new(),
+            light: Light::default(),
+            settings: Settings::new(),
+            show_side_panel: false,
+        };
+
+        controller.event(Event::Resized(width, height));
+
+        controller
     }
 
     pub fn event(&mut self, event: Event) {

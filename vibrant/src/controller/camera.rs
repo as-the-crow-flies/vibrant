@@ -4,6 +4,7 @@ use glam::{Mat4, Quat, Vec3};
 
 use super::state::ControllerState;
 
+#[derive(Debug)]
 pub struct Camera {
     width: u32,
     height: u32,
@@ -53,7 +54,7 @@ impl Camera {
 
         let distance_to_corners = 3f32.sqrt().div(2f32);
 
-        self.near = (self.distance - distance_to_corners).max(0.1);
+        self.near = (self.distance - distance_to_corners).max(0.2);
         self.far = self.distance + distance_to_corners;
     }
 
