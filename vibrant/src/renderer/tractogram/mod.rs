@@ -89,7 +89,10 @@ impl TractogramRenderer {
 
         match settings.shading {
             ShadingSetting::Simple => self.simple_shading.render(cmd, buffer, tractogram),
-            ShadingSetting::GBuffer => self.gbuffer_shading.render(cmd, buffer, tractogram),
+            ShadingSetting::GBuffer => {
+                self.gbuffer_shading
+                    .render(cmd, buffer, environment, tractogram)
+            }
             ShadingSetting::Density => self.density_shading.render(cmd, buffer, environment),
             ShadingSetting::Tracing => {
                 self.tracing_shading

@@ -3,45 +3,31 @@ use std::any::type_name;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Color, ColorTargetState, ColorWrites,
-    Extent3d, LoadOp, Operations, RenderPassColorAttachment, ShaderStages, StoreOp, Texture,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    TextureView, TextureViewDescriptor, TextureViewDimension,
+    CompareFunction, DepthBiasState, DepthStencilState, Extent3d, LoadOp, Operations,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, ShaderStages, StencilState,
+    StoreOp, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType,
+    TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
 
 pub struct GBuffer {
-    position: Texture,
     normal: Texture,
     tangent: Texture,
-    position_view: TextureView,
+    depth: Texture,
     normal_view: TextureView,
     tangent_view: TextureView,
+    depth_view: TextureView,
     binding: BindGroup,
 }
 
 impl GBuffer {
-    pub const POSITION_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
     pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
     pub const TANGENT_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+    pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());
-
-        let position = gpu.device().create_texture(&TextureDescriptor {
-            label,
-            size: Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: Self::POSITION_FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[Self::POSITION_FORMAT],
-        });
 
         let normal = gpu.device().create_texture(&TextureDescriptor {
             label: Some(type_name::<Self>()),
@@ -73,10 +59,19 @@ impl GBuffer {
             view_formats: &[Self::TANGENT_FORMAT],
         });
 
-        let position_view = position.create_view(&TextureViewDescriptor {
+        let depth = gpu.device().create_texture(&TextureDescriptor {
             label,
-            format: Some(Self::POSITION_FORMAT),
-            ..Default::default()
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: Self::DEPTH_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[Self::DEPTH_FORMAT],
         });
 
         let normal_view = normal.create_view(&TextureViewDescriptor {
@@ -91,22 +86,18 @@ impl GBuffer {
             ..Default::default()
         });
 
+        let depth_view = depth.create_view(&TextureViewDescriptor {
+            label,
+            format: Some(Self::DEPTH_FORMAT),
+            ..Default::default()
+        });
+
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu),
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&position.create_view(
-                        &TextureViewDescriptor {
-                            label,
-                            format: Some(Self::POSITION_FORMAT),
-                            ..Default::default()
-                        },
-                    )),
-                },
-                BindGroupEntry {
-                    binding: 1,
                     resource: BindingResource::TextureView(&normal.create_view(
                         &TextureViewDescriptor {
                             label,
@@ -116,7 +107,7 @@ impl GBuffer {
                     )),
                 },
                 BindGroupEntry {
-                    binding: 2,
+                    binding: 1,
                     resource: BindingResource::TextureView(&tangent.create_view(
                         &TextureViewDescriptor {
                             label,
@@ -125,30 +116,44 @@ impl GBuffer {
                         },
                     )),
                 },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::TextureView(&depth.create_view(
+                        &TextureViewDescriptor {
+                            label,
+                            format: Some(Self::DEPTH_FORMAT),
+                            ..Default::default()
+                        },
+                    )),
+                },
             ],
         });
 
         Self {
-            position,
             normal,
             tangent,
-            position_view,
+            depth,
             normal_view,
             tangent_view,
+            depth_view,
             binding,
         }
     }
 
-    pub fn attachments<'a>(&'a self) -> Vec<Option<RenderPassColorAttachment<'a>>> {
+    pub fn attachment_tangent<'a>(&'a self) -> Vec<Option<RenderPassColorAttachment<'a>>> {
+        [Some(RenderPassColorAttachment {
+            view: &self.tangent_view,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(Color::TRANSPARENT),
+                store: StoreOp::Store,
+            },
+        })]
+        .into()
+    }
+
+    pub fn attachment_normal_tangent<'a>(&'a self) -> Vec<Option<RenderPassColorAttachment<'a>>> {
         vec![
-            Some(RenderPassColorAttachment {
-                view: &self.position_view,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color::TRANSPARENT),
-                    store: StoreOp::Store,
-                },
-            }),
             Some(RenderPassColorAttachment {
                 view: &self.normal_view,
                 resolve_target: None,
@@ -207,13 +212,17 @@ impl GBuffer {
             })
     }
 
-    pub fn targets() -> Vec<Option<ColorTargetState>> {
-        vec![
-            Some(ColorTargetState {
-                format: Self::POSITION_FORMAT,
-                blend: None,
-                write_mask: ColorWrites::all(),
-            }),
+    pub fn target_tangent() -> Vec<Option<ColorTargetState>> {
+        [Some(ColorTargetState {
+            format: Self::TANGENT_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        })]
+        .into()
+    }
+
+    pub fn target_normal_tangent() -> Vec<Option<ColorTargetState>> {
+        [
             Some(ColorTargetState {
                 format: Self::NORMAL_FORMAT,
                 blend: None,
@@ -225,10 +234,28 @@ impl GBuffer {
                 write_mask: ColorWrites::all(),
             }),
         ]
+        .into()
     }
 
-    pub fn view(&self) -> Vec<&TextureView> {
-        vec![&self.position_view, &self.normal_view, &self.tangent_view]
+    pub fn depth_attachment(&self) -> RenderPassDepthStencilAttachment {
+        RenderPassDepthStencilAttachment {
+            view: &self.depth_view,
+            depth_ops: Some(Operations {
+                load: LoadOp::Clear(1.0),
+                store: StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }
+    }
+
+    pub fn depth_state() -> DepthStencilState {
+        DepthStencilState {
+            format: Self::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: CompareFunction::Less,
+            stencil: StencilState::default(),
+            bias: DepthBiasState::default(),
+        }
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -238,8 +265,8 @@ impl GBuffer {
 
 impl Drop for GBuffer {
     fn drop(&mut self) {
-        self.position.destroy();
         self.normal.destroy();
         self.tangent.destroy();
+        self.depth.destroy();
     }
 }

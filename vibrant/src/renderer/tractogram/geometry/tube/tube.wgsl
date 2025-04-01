@@ -35,9 +35,8 @@ struct Fragment {
 }
 
 struct GBuffer {
-    @location(0) position: vec4<f32>,
-    @location(1) normal: vec4<f32>,
-    @location(2) tangent: vec4<f32>,
+    @location(0) normal: vec4<f32>,
+    @location(1) tangent: vec4<f32>,
     @builtin(frag_depth) depth: f32,
 }
 
@@ -82,11 +81,7 @@ fn fragment(fragment: Fragment) -> GBuffer {
     let clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
     let depth = clip.z / clip.w;
 
-    return GBuffer(
-        vec4<f32>(position, 1.0),
-        vec4<f32>(0.5 + 0.5 * normal, 1.0),
-        vec4<f32>(fragment.tangent, 1.0),
-        depth);
+    return GBuffer(vec4<f32>(0.5 + 0.5 * normal, 1.0), vec4<f32>(fragment.tangent, 1.0), depth);
 }
 
 fn transform(mat: mat4x4<f32>, vec: vec4<f32>) -> vec3<f32> {

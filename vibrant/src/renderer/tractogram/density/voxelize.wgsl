@@ -12,36 +12,43 @@
 const PI: f32 = 3.14159265358979323846264338327950288;
 const U16_MAX: u32 = 65535;
 
+const WORKGROUP_SIZE: u32 = 1024;
+
 @compute
-@workgroup_size(1024)
-fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(subgroup_invocation_id) subgroup_id: u32) {
-    let indices_length = arrayLength(&TRACTOGRAM_INDICES);
-    let index = id.x;
+@workgroup_size(WORKGROUP_SIZE)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let index = min(id.x, arrayLength(&TRACTOGRAM_INDICES) - 2);
 
-    if (index >= indices_length) { return; }
-
-    let v0_index = TRACTOGRAM_INDICES[index];
-    let v1_index = v0_index + 1;
-
-    // Compute Area, relative to voxel size in range 0..U16_MAX
-    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(f32(ENVIRONMENT.volume) * ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
-    let area = PI * radius * radius * f32(U16_MAX);
+    let tractogram_index = TRACTOGRAM_INDICES[index];
 
     let transform = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
 
-    let v0 = (transform * TRACTOGRAM_VERTICES[v0_index]).xyz;
-    let v1 = (transform * TRACTOGRAM_VERTICES[v1_index]).xyz;
+    let v0 = (transform * TRACTOGRAM_VERTICES[tractogram_index    ]).xyz;
+    let v1 = (transform * TRACTOGRAM_VERTICES[tractogram_index + 1]).xyz;
+
+    voxelize(v0, v1);
+}
+
+fn one_if_zero(v: vec3<f32>) -> vec3<f32> {
+    return v + vec3<f32>(v == vec3<f32>(0.0));
+}
+
+fn minimum(v: vec4<f32>) -> f32 {
+    return min(min(v.x, v.y), min(v.z, v.w));
+}
+
+fn voxelize(v0: vec3<f32>, v1: vec3<f32>) {
+    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(f32(ENVIRONMENT.volume) * ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
+    let area = PI * radius * radius * f32(U16_MAX);
 
     let delta = v1 - v0;
-    let total_distance = length(delta);
-    let direction = delta / total_distance;
+    let distance = length(delta);
+    let direction = delta / distance;
     let voxel_boundaries = 1.0 / abs(direction);
-
     let step = vec3<i32>(sign(direction));
-
     var next = vec4<f32>(
         one_if_zero(abs(fract(vec3<f32>(-step) * fract(v0)))) * voxel_boundaries,
-        total_distance
+        distance
     );
 
     var voxel = vec3<i32>(v0);
@@ -62,12 +69,4 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(subgroup_invocati
             mask
         );
     }
-}
-
-fn one_if_zero(v: vec3<f32>) -> vec3<f32> {
-    return v + vec3<f32>(v == vec3<f32>(0.0));
-}
-
-fn minimum(v: vec4<f32>) -> f32 {
-    return min(min(v.x, v.y), min(v.z, v.w));
 }

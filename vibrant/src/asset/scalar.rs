@@ -26,7 +26,7 @@ pub struct ScalarTexture<const DIMENSION: u32> {
 }
 
 impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
-    const TEXTURE_FORMAT: TextureFormat = TextureFormat::R32Float;
+    const TEXTURE_FORMAT: TextureFormat = TextureFormat::R8Unorm;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32, transform: Mat4) -> Self {
         let label = Some(type_name::<Self>());

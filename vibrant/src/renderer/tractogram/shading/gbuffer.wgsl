@@ -1,9 +1,11 @@
-@group(0) @binding(0) var POSITION: texture_2d<f32>;
-@group(0) @binding(1) var NORMAL: texture_2d<f32>;
-@group(0) @binding(2) var TANGENT: texture_2d<f32>;
+@group(0) @binding(0) var NORMAL: texture_2d<f32>;
+@group(0) @binding(1) var TANGENT: texture_2d<f32>;
+@group(0) @binding(2) var DEPTH: texture_2d<f32>;
 
 @group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(1) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
+
+@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 struct Fragment {
     @builtin(position) clip: vec4<f32>,
@@ -20,11 +22,15 @@ fn vertex(@builtin(vertex_index) index: u32) -> Fragment {
 fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let pixel = vec2<u32>(fragment.clip.xy);
 
-    let position = textureLoad(POSITION, pixel, 0);
+    // let position = textureLoad(POSITION, pixel, 0);
     let normal = textureLoad(NORMAL, pixel, 0) * 2.0 - 1.0;
     let tangent = textureLoad(TANGENT, pixel, 0);
 
-    if (position.w == 0.0) {
+    let ndc = vec4<f32>(fragment.ndc.xy, textureLoad(DEPTH, pixel, 0).x, 1.0);
+    var position = ENVIRONMENT.camera.projection_inverse * ndc;
+        position /= position.w;
+
+    if (ndc.z == 1.0) {
         return vec4<f32>(0.0, 0.0, 0.0, 1.0);
     }
 

@@ -4,7 +4,7 @@ use wgpu::{CommandEncoder, RenderPassDescriptor};
 
 use crate::{
     gpu::Gpu,
-    surface::{color::Color, depth::Depth, SurfaceBuffer},
+    surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
 };
 
 pub struct UiRenderer {
@@ -17,7 +17,7 @@ impl UiRenderer {
             egui: egui_wgpu::Renderer::new(
                 gpu.device(),
                 Color::FORMAT,
-                Some(Depth::FORMAT),
+                Some(GBuffer::DEPTH_FORMAT),
                 1,
                 false,
             ),
@@ -51,7 +51,7 @@ impl UiRenderer {
             .begin_render_pass(&RenderPassDescriptor {
                 label: Some(type_name::<Self>()),
                 color_attachments: &[Some(frame.color().attachment())],
-                depth_stencil_attachment: Some(frame.depth().attachment()),
+                depth_stencil_attachment: Some(frame.gbuffer().depth_attachment()),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             })

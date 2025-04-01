@@ -1,4 +1,4 @@
-@group(0) @binding(0) var OCCLUSION: texture_storage_3d<r32float, read_write>;
+@group(0) @binding(0) var OCCLUSION: texture_storage_3d<r8unorm, read_write>;
 @group(0) @binding(3) var<uniform> OCCLUSION_TO_PROJECTION: mat4x4<f32>;
 
 @group(1) @binding(0) var DENSITY: texture_3d<f32>;

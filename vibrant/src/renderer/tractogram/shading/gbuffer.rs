@@ -9,6 +9,7 @@ use wgpu::{
 use crate::{
     asset::tractogram::Tractogram,
     gpu::Gpu,
+    renderer::environment::Environment,
     surface::{color::Color, gbuffer::GBuffer, SurfaceBuffer},
 };
 
@@ -20,7 +21,7 @@ impl TractogramGBufferShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shading_module = gpu.shader(include_str!("gbuffer.wgsl"));
+        let shading_module = gpu.shader(&(Environment::wgsl() + include_str!("gbuffer.wgsl")));
 
         Self {
             pipeline: gpu
@@ -34,6 +35,7 @@ impl TractogramGBufferShading {
                                 bind_group_layouts: &[
                                     &GBuffer::layout(gpu),
                                     &Tractogram::layout(gpu),
+                                    &Environment::layout(gpu),
                                 ],
                                 push_constant_ranges: &[],
                             }),
@@ -62,7 +64,13 @@ impl TractogramGBufferShading {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &SurfaceBuffer, tractogram: &Tractogram) {
+    pub fn render(
+        &self,
+        cmd: &mut CommandEncoder,
+        frame: &SurfaceBuffer,
+        environment: &Environment,
+        tractogram: &Tractogram,
+    ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
             color_attachments: &[Some(frame.color().attachment_srgb())],
@@ -72,6 +80,7 @@ impl TractogramGBufferShading {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

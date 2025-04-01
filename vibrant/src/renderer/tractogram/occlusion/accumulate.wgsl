@@ -1,8 +1,7 @@
-@group(0) @binding(0) var OCCLUSION: texture_storage_3d<r32float, read_write>;
+@group(0) @binding(0) var OCCLUSION: texture_storage_3d<r8unorm, read_write>;
 @group(0) @binding(3) var<uniform> OCCLUSION_TO_PROJECTION: mat4x4<f32>;
 
-@group(1) @binding(0) var THRESHOLD: texture_storage_2d<r32float, read_write>;
-
+@group(1) @binding(0) var THRESHOLD: texture_storage_2d<r8unorm, read_write>;
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 @compute

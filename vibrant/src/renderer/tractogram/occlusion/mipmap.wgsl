@@ -1,6 +1,6 @@
 @group(0) @binding(0) var SOURCE: texture_2d<f32>;
 @group(0) @binding(1) var SAMPLER: sampler;
-@group(0) @binding(2) var DESTINATION: texture_storage_2d<r32float, write>;
+@group(0) @binding(2) var DESTINATION: texture_storage_2d<r8unorm, write>;
 
 @compute
 @workgroup_size(8, 8)

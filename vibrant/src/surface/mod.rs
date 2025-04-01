@@ -1,12 +1,10 @@
 pub mod color;
 pub mod density;
-pub mod depth;
 pub mod gbuffer;
 pub mod occlusion;
 
 use color::Color;
 use density::Density;
-use depth::Depth;
 use gbuffer::GBuffer;
 use log::warn;
 use occlusion::Occlusion;
@@ -23,7 +21,6 @@ pub struct SurfaceBuffer {
     volume: u32,
     tile: u32,
     color: Color,
-    depth: Depth,
     density: Density,
     occlusion: Occlusion,
     gbuffer: GBuffer,
@@ -37,7 +34,6 @@ impl SurfaceBuffer {
             volume,
             tile,
             color: Color::new(gpu, width, height),
-            depth: Depth::new(gpu, width, height),
             density: Density::new(gpu, volume),
             occlusion: Occlusion::new(gpu, width.div_ceil(tile), height.div_ceil(tile), volume),
             gbuffer: GBuffer::new(gpu, width, height),
@@ -62,10 +58,6 @@ impl SurfaceBuffer {
 
     pub fn color(&self) -> &Color {
         &self.color
-    }
-
-    pub fn depth(&self) -> &Depth {
-        &self.depth
     }
 
     pub fn density(&self) -> &Density {

@@ -1,3 +1,4 @@
+use lindel::morton_encode;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     slice::ParallelSliceMut,
@@ -69,23 +70,11 @@ impl Tractogram {
             Vec3::ZERO,
         );
 
-        fn morton_encode(x: u8, y: u8, z: u8) -> u32 {
-            fn part1by2(n: u8) -> u32 {
-                let mut n = n as u32;
-                n = (n | (n << 16)) & 0x030000FF;
-                n = (n | (n << 8)) & 0x0300F00F;
-                n = (n | (n << 4)) & 0x030C30C3;
-                n = (n | (n << 2)) & 0x09249249;
-                n
-            }
-            part1by2(x) | (part1by2(y) << 1) | (part1by2(z) << 2)
-        }
-
         let morton: Vec<u32> = vertices
             .par_iter()
             .map(|&vertex| {
                 let vertex = (u8::MAX as f32) * (0.5 + 0.5 * vertex / scale);
-                morton_encode(vertex.x as u8, vertex.y as u8, vertex.z as u8)
+                morton_encode([vertex.x as u8, vertex.y as u8, vertex.z as u8])
             })
             .collect();
 

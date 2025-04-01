@@ -105,8 +105,6 @@ impl TractogramDensityPipeline {
             ..Default::default()
         });
 
-        let mut volume = density.texture().width().div_ceil(8);
-
         pass.set_bind_group(0, density.binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
@@ -115,17 +113,21 @@ impl TractogramDensityPipeline {
         pass.set_pipeline(&self.voxelize);
         pass.dispatch_workgroups_indirect(&self.indirect, 0);
 
+        let copy = density.texture().width().div_ceil(8);
+
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(1, density.texture().binding_write(), &[]);
-        pass.dispatch_workgroups(volume, volume, volume);
+        pass.dispatch_workgroups(copy, copy, copy);
 
         pass.set_pipeline(&self.mipmap);
 
+        let mut mipmap = density.texture().width().div_ceil(8);
+
         for binding in density.texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
-            pass.dispatch_workgroups(volume, volume, volume);
+            pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 
-            volume /= 2;
+            mipmap /= 2;
         }
     }
 }

@@ -1,6 +1,6 @@
-@group(0) @binding(0) var POSITION: texture_2d<f32>;
-@group(0) @binding(1) var NORMAL: texture_2d<f32>;
-@group(0) @binding(2) var TANGENT: texture_2d<f32>;
+@group(0) @binding(0) var NORMAL: texture_2d<f32>;
+@group(0) @binding(1) var TANGENT: texture_2d<f32>;
+@group(0) @binding(2) var DEPTH: texture_2d<f32>;
 
 @group(1) @binding(0) var DENSITY: texture_3d<f32>;
 @group(1) @binding(1) var SAMPLER: sampler;
@@ -13,28 +13,39 @@
 const PI: f32 = 3.1415926535897932;
 const PHI = 1.6180339887498948482045868;
 
+struct Fragment {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) ndc: vec2<f32>,
+}
+
 @vertex
-fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
-    return vec4<f32>(2.0 * vec2<f32>(f32((index & 1) == 0), f32((index & 2) == 0)) - 1.0, 0.0, 1.0);
+fn vertex(@builtin(vertex_index) index: u32) -> Fragment {
+    let ndc = 2.0 * vec2<f32>(f32((index & 1) == 0), f32((index & 2) == 0)) - 1.0;
+    return Fragment(vec4<f32>(ndc, 0.0, 1.0), ndc);
 }
 
 @fragment
-fn fragment(@builtin(position) uv: vec4<f32>) -> @location(0) vec4<f32> {
+fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let camera = ENVIRONMENT.camera.transform[3].xyz;
     let light = normalize(ENVIRONMENT.light);
 
-    let position = textureLoad(POSITION, vec2<u32>(uv.xy), 0);
-    let normal = textureLoad(NORMAL, vec2<u32>(uv.xy), 0) * 2.0 - 1.0;
-    let tangent = textureLoad(TANGENT, vec2<u32>(uv.xy), 0);
+    let pixel = vec2<u32>(fragment.clip.xy);
 
-    if (position.w == 0.0) { discard; }
+    let normal = textureLoad(NORMAL, pixel, 0) * 2.0 - 1.0;
+    let tangent = textureLoad(TANGENT, pixel, 0);
+
+    let ndc = vec4<f32>(fragment.ndc.xy, textureLoad(DEPTH, pixel, 0).x, 1.0);
+    var position = ENVIRONMENT.camera.projection_inverse * ndc;
+        position /= position.w;
+
+    if (ndc.z == 1.0) { discard; }
 
     let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
 
     let view = normalize(camera - position.xyz);
 
     let lighting = ambient(position.xyz, radius) + direct(position.xyz, light, radius) *
-        select(lambert(normal.xyz, light), stalling(tangent.xyz, light), normal.w < 0.5);
+        select(lambert(normal.xyz, light), stalling(tangent.xyz, light), tangent.w < 0.5);
 
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(tangent.xyz, 0.0));
 

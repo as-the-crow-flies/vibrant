@@ -12,7 +12,7 @@ use crate::{
     asset::{filter::Filter, tractogram::Tractogram},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{depth::Depth, gbuffer::GBuffer, SurfaceBuffer},
+    surface::{gbuffer::GBuffer, SurfaceBuffer},
 };
 
 pub struct TractogramLineGeometry {
@@ -40,7 +40,7 @@ impl TractogramLineGeometry {
                     fragment: Some(FragmentState {
                         module: &module,
                         entry_point: Some("fragment"),
-                        targets: &GBuffer::targets(),
+                        targets: &GBuffer::target_tangent(),
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -52,7 +52,7 @@ impl TractogramLineGeometry {
                         &Filter::layout_read(gpu),
                         &Environment::layout(gpu),
                     ])),
-                    depth_stencil: Some(Depth::state()),
+                    depth_stencil: Some(GBuffer::depth_state()),
                     multisample: MultisampleState::default(),
                     multiview: None,
                     cache: None,
@@ -77,8 +77,8 @@ impl TractogramLineGeometry {
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &frame.gbuffer().attachments(),
-            depth_stencil_attachment: Some(frame.depth().attachment()),
+            color_attachments: &frame.gbuffer().attachment_tangent(),
+            depth_stencil_attachment: Some(frame.gbuffer().depth_attachment()),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
