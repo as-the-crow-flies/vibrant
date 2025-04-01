@@ -133,7 +133,7 @@ impl Controller {
             ComboBox::from_label("Volume Resolution")
                 .selected_text(format!("{:?}", self.volume))
                 .show_ui(ui, |ui| {
-                    for power in 5u32..9 {
+                    for power in 5u32..10 {
                         ui.selectable_value(
                             &mut self.volume,
                             2u32.pow(power),
