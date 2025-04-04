@@ -10,20 +10,18 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let pixel = id.xy;
     let max_depth = textureDimensions(OCCLUSION).z;
 
-    var occlusion = 0.0;
+    var optical_depth = 0.0;
     var threshold = 1.0;
 
     for (var froxel = vec3<u32>(pixel, 0); froxel.z < max_depth; froxel.z++) {
-        let step = length(transform(froxel + vec3<u32>(0, 0, 1)) - transform(froxel));
+        let next = froxel + vec3<u32>(0, 0, 1);
+        let step = length(transform(next) - transform(froxel));
+        let absorbance = textureLoad(OCCLUSION, froxel).x;
+        optical_depth += step * absorbance;
+        textureStore(OCCLUSION, froxel, vec4<f32>(optical_depth));
 
-        let density = textureLoad(OCCLUSION, froxel).x;
-
-        occlusion += step * density;
-
-        textureStore(OCCLUSION, froxel, vec4<f32>(occlusion));
-
-        if (threshold == 1.0 && occlusion > ENVIRONMENT.settings.culling_threshold) {
-            let sample = OCCLUSION_TO_PROJECTION * vec4<f32>(vec3<f32>(froxel), 1.0);
+        if (threshold == 1.0 && optical_depth > ENVIRONMENT.settings.culling_threshold) {
+            let sample = OCCLUSION_TO_PROJECTION * vec4<f32>(vec3<f32>(next), 1.0);
             threshold = sample.z / sample.w;
         }
     }

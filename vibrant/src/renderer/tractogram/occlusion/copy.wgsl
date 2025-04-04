@@ -15,13 +15,13 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let froxel = vec3<f32>(id);
     let steps = 2;
 
-    let step = 1.01 / f32(steps);
+    let step = 1.00001 / f32(steps);
 
     var density = 0.0;
 
-    for (var x = 0.0; x <= 1.0; x += step) {
-        for (var y = 0.0; y <= 1.0; y += step) {
-            for (var z = 0.0; z <= 1.0; z += step) {
+    for (var x = 0.0; x < 1.0; x += step) {
+        for (var y = 0.0; y < 1.0; y += step) {
+            for (var z = 0.0; z < 1.0; z += step) {
                 density += textureSampleLevel(DENSITY, DENSITY_SAMPLER, transform(froxel + vec3<f32>(x, y, z)), 0.0).x;
             }
         }

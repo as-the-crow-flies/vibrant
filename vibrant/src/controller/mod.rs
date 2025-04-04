@@ -172,6 +172,8 @@ impl Controller {
                     .logarithmic(true)
                     .text("Alpha"),
             );
+
+            ui.add(Slider::new(&mut self.settings.level, 0.0..=16.0).text("Level"));
         });
     }
 

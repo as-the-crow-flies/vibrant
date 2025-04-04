@@ -108,7 +108,6 @@ impl TractogramOcclusionPipeline {
         pass.dispatch_workgroups(x, y, 1);
 
         pass.set_pipeline(&self.mipmap);
-
         for binding in occlusion.hiz().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(x, y, 1);

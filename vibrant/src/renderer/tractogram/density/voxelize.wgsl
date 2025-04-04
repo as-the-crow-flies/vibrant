@@ -56,10 +56,9 @@ fn voxelize(v0: vec3<f32>, v1: vec3<f32>) {
     while (next.w > 0.0) {
         let increment = minimum(next);
 
-        let density = u32(area * increment);
         let idx = linear_index(vec3<u32>(voxel));
 
-        atomicAdd(&DENSITY[idx], density);
+        atomicAdd(&DENSITY[idx], u32(area * increment));
 
         let mask = next == vec4<f32>(increment);
         voxel += select(vec3<i32>(0), step, mask.xyz);

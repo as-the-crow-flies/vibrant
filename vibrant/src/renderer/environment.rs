@@ -21,7 +21,8 @@ impl Environment {
             streamline_radius: f32,
             direct_light: f32,
             culling_threshold: f32,
-            alpha: f32
+            alpha: f32,
+            level: f32
         }
 
         struct Camera {
@@ -94,6 +95,7 @@ impl Environment {
                 bytes_of(&controller.settings().direct_light),
                 bytes_of(&controller.settings().culling_threshold),
                 bytes_of(&controller.settings().alpha),
+                bytes_of(&controller.settings().level),
             ]
             .concat(),
         );

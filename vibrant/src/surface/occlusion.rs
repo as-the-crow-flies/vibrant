@@ -1,4 +1,5 @@
 use glam::{Mat4, Quat, Vec3};
+use wgpu::FilterMode;
 
 use crate::{
     asset::scalar::{ScalarTexture2D, ScalarTexture3D},
@@ -20,9 +21,30 @@ impl Occlusion {
         );
 
         Self {
-            volume: ScalarTexture3D::new(gpu, width, height, depth, projection_to_occlusion),
-            threshold: ScalarTexture2D::new(gpu, width, height, 1, projection_to_occlusion),
-            hiz: ScalarTexture2D::new(gpu, width, height, 1, projection_to_occlusion),
+            volume: ScalarTexture3D::new(
+                gpu,
+                width,
+                height,
+                depth,
+                projection_to_occlusion,
+                FilterMode::Linear,
+            ),
+            threshold: ScalarTexture2D::new(
+                gpu,
+                width,
+                height,
+                1,
+                projection_to_occlusion,
+                FilterMode::Nearest,
+            ),
+            hiz: ScalarTexture2D::new(
+                gpu,
+                width,
+                height,
+                1,
+                projection_to_occlusion,
+                FilterMode::Nearest,
+            ),
         }
     }
 

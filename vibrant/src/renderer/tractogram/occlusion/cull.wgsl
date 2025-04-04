@@ -1,4 +1,4 @@
-@group(0) @binding(0) var OCCLUSION: texture_2d<f32>;
+@group(0) @binding(0) var HIZ: texture_2d<f32>;
 @group(0) @binding(1) var SAMPLER: sampler;
 
 @group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
@@ -28,7 +28,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>)
 }
 
 fn should_keep(index: u32) -> bool {
-    let dim = vec2<f32>(textureDimensions(OCCLUSION));
+    let dim = vec2<f32>(textureDimensions(HIZ));
 
     let v0 = TRACTOGRAM_VERTICES[index + 0];
     let v1 = TRACTOGRAM_VERTICES[index + 1];
@@ -51,10 +51,12 @@ fn should_keep(index: u32) -> bool {
     let centroid = 0.5 * (vmin + vmax);
     let sample = 0.5 * centroid + 0.5;
 
-    let level = max(0.0, log2(max(vdim.x, vdim.y)));
+    let level = min(u32(ceil(max(0.0, log2(max(vdim.x, vdim.y))))), textureNumLevels(HIZ) - 1u);
+    let surface_dim = vec2<f32>(ENVIRONMENT.surface);
+    let hiz_dim = vec2<f32>(textureDimensions(HIZ, i32(level)) * (ENVIRONMENT.tile << level));
 
-    let max_depth = textureSampleLevel(OCCLUSION, SAMPLER, sample, level).x;
+    let max_depth = textureSampleLevel(HIZ, SAMPLER, surface_dim / hiz_dim * sample, f32(level)).x;
 
     // Occlusion Culling
-    return min(v0_clip.z, v1_clip.z) < max_depth;
+    return min(v0_clip.z, v1_clip.z) <= max_depth;
 }

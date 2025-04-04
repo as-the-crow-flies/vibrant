@@ -1,5 +1,7 @@
-@group(0) @binding(0) var OCCLUSION: texture_2d<f32>;
+@group(0) @binding(0) var HIZ: texture_2d<f32>;
 @group(0) @binding(1) var SAMPLER: sampler;
+
+@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 struct Fragment {
     @builtin(position) clip: vec4<f32>,
@@ -14,6 +16,12 @@ fn vertex(@builtin(vertex_index) index: u32) -> Fragment {
 
 @fragment
 fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
-    let depth = textureSampleLevel(OCCLUSION, SAMPLER, fragment.uv, 0.0).x;
+    let level = min(u32(ENVIRONMENT.settings.level), textureNumLevels(HIZ) - 1u);
+    let surface_dim = vec2<f32>(ENVIRONMENT.surface);
+    let hiz_dim = vec2<f32>(textureDimensions(HIZ, i32(level)) * (ENVIRONMENT.tile << level));
+
+    let sample = surface_dim / hiz_dim * fragment.uv;
+    let depth = textureSampleLevel(HIZ, SAMPLER, sample, f32(level)).x;
+
     return vec4<f32>(vec3<f32>(depth), 1.0);
 }

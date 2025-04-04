@@ -27,7 +27,14 @@ impl Density {
         let transform = Mat4::from_translation(Vec3::new(scale / 2.0, scale / 2.0, scale / 2.0))
             * Mat4::from_scale(Vec3::new(scale, scale, scale));
 
-        let texture = ScalarTexture3D::new(gpu, volume, volume, volume, transform);
+        let texture = ScalarTexture3D::new(
+            gpu,
+            volume,
+            volume,
+            volume,
+            transform,
+            wgpu::FilterMode::Linear,
+        );
 
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,

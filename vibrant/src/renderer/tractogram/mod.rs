@@ -99,7 +99,7 @@ impl TractogramRenderer {
                     .render(cmd, environment, buffer, tractogram)
             }
             ShadingSetting::Culling => {
-                self.culling_shading.render(cmd, buffer);
+                self.culling_shading.render(cmd, environment, buffer);
             }
         }
     }

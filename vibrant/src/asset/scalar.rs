@@ -28,7 +28,14 @@ pub struct ScalarTexture<const DIMENSION: u32> {
 impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
     const TEXTURE_FORMAT: TextureFormat = TextureFormat::R8Unorm;
 
-    pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32, transform: Mat4) -> Self {
+    pub fn new(
+        gpu: &Gpu,
+        width: u32,
+        height: u32,
+        depth: u32,
+        transform: Mat4,
+        filter: FilterMode,
+    ) -> Self {
         let label = Some(type_name::<Self>());
 
         let mip_level_count = match DIMENSION {
@@ -37,7 +44,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             3 => width.min(height).min(depth),
             _ => panic!("Texture Dimension should be between 1 and 3"),
         }
-        .div_ceil(8)
+        .div_ceil(2)
         .add(1)
         .ilog2()
         .max(1);
@@ -70,9 +77,9 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             address_mode_u: AddressMode::ClampToEdge,
             address_mode_v: AddressMode::ClampToEdge,
             address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mag_filter: filter,
+            min_filter: filter,
+            mipmap_filter: filter,
             ..Default::default()
         });
 

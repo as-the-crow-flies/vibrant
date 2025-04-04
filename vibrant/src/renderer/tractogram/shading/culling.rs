@@ -9,6 +9,7 @@ use wgpu::{
 use crate::{
     asset::scalar::ScalarTexture2D,
     gpu::Gpu,
+    renderer::environment::Environment,
     surface::{color::Color, SurfaceBuffer},
 };
 
@@ -20,7 +21,7 @@ impl TractogramCullingShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shading_module = gpu.shader(include_str!("culling.wgsl"));
+        let shading_module = gpu.shader(&(Environment::wgsl() + include_str!("culling.wgsl")));
 
         Self {
             pipeline: gpu
@@ -31,7 +32,10 @@ impl TractogramCullingShading {
                         &gpu.device()
                             .create_pipeline_layout(&PipelineLayoutDescriptor {
                                 label,
-                                bind_group_layouts: &[&ScalarTexture2D::layout(gpu)],
+                                bind_group_layouts: &[
+                                    &ScalarTexture2D::layout(gpu),
+                                    &Environment::layout(gpu),
+                                ],
                                 push_constant_ranges: &[],
                             }),
                     ),
@@ -59,7 +63,12 @@ impl TractogramCullingShading {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &SurfaceBuffer) {
+    pub fn render(
+        &self,
+        cmd: &mut CommandEncoder,
+        environment: &Environment,
+        frame: &SurfaceBuffer,
+    ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
             color_attachments: &[Some(frame.color().attachment())],
@@ -69,7 +78,8 @@ impl TractogramCullingShading {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.occlusion().threshold().binding(), &[]);
+        pass.set_bind_group(0, frame.occlusion().hiz().binding(), &[]);
+        pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }
