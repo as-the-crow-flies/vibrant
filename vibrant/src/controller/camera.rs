@@ -56,8 +56,6 @@ impl Camera {
 
         self.near = (self.distance - distance_to_corners).max(0.2);
         self.far = self.distance + distance_to_corners;
-
-        dbg!(self.near, self.far, self.far - self.near);
     }
 
     pub fn aspect(&self) -> f32 {

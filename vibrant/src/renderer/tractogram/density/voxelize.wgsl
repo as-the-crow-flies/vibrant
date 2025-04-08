@@ -13,20 +13,27 @@ const PI: f32 = 3.14159265358979323846264338327950288;
 const U16_MAX: u32 = 65535;
 
 const WORKGROUP_SIZE: u32 = 1024;
+const CHUNK_SIZE: u32 = 32;
 
 @compute
 @workgroup_size(WORKGROUP_SIZE)
-fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    let index = min(id.x, arrayLength(&TRACTOGRAM_INDICES) - 2);
-
-    let tractogram_index = TRACTOGRAM_INDICES[index];
-
+fn main(
+    @builtin(workgroup_id) workgroup: vec3<u32>,
+    @builtin(local_invocation_index) local: u32
+) {
     let transform = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
+    let n_indices = arrayLength(&TRACTOGRAM_INDICES);
 
-    let v0 = (transform * TRACTOGRAM_VERTICES[tractogram_index    ]).xyz;
-    let v1 = (transform * TRACTOGRAM_VERTICES[tractogram_index + 1]).xyz;
+    let offset = workgroup.x * WORKGROUP_SIZE * CHUNK_SIZE;
 
-    voxelize(v0, v1);
+    for (var chunk=0u; chunk<CHUNK_SIZE; chunk++) {
+        let index = TRACTOGRAM_INDICES[min(offset + chunk * WORKGROUP_SIZE + local, n_indices - 2)];
+
+        let v0 = (transform * TRACTOGRAM_VERTICES[index    ]).xyz;
+        let v1 = (transform * TRACTOGRAM_VERTICES[index + 1]).xyz;
+
+        voxelize(v0, v1);
+    }
 }
 
 fn one_if_zero(v: vec3<f32>) -> vec3<f32> {

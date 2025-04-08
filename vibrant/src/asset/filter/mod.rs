@@ -14,14 +14,14 @@ pub struct Filter {
     indices: Buffer,
     count: Buffer,
     workgroup_count: Buffer,
-    workgroup_count_2: Buffer,
+    workgroup_count_32: Buffer,
     read: BindGroup,
     write: BindGroup,
     copy: ComputePipeline,
 }
 
 impl Filter {
-    pub const WORKGROUP_SIZE: usize = 256;
+    pub const WORKGROUP_SIZE: usize = 1024;
 
     pub fn new(gpu: &Gpu, indices: &[u32]) -> Self {
         let label = Some(type_name::<Self>());
@@ -38,9 +38,9 @@ impl Filter {
             usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
-        let workgroup_count_2 = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let workgroup_count_32 = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytes_of(&(indices.len().div_ceil(Self::WORKGROUP_SIZE * 2) as u32)),
+            contents: bytes_of(&(indices.len().div_ceil(Self::WORKGROUP_SIZE * 32) as u32)),
             usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
@@ -104,7 +104,7 @@ impl Filter {
                 BindGroupEntry {
                     binding: 3,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &workgroup_count_2,
+                        buffer: &workgroup_count_32,
                         offset: 0,
                         size: None,
                     }),
@@ -122,7 +122,7 @@ impl Filter {
         Self {
             count,
             workgroup_count,
-            workgroup_count_2,
+            workgroup_count_32,
             indices,
             read,
             write,
@@ -153,7 +153,7 @@ impl Filter {
     }
 
     pub fn workgroup_count_32(&self) -> &Buffer {
-        &self.workgroup_count_2
+        &self.workgroup_count_32
     }
 
     pub fn binding_read(&self) -> &BindGroup {
@@ -248,6 +248,6 @@ impl Drop for Filter {
         self.indices.destroy();
         self.count.destroy();
         self.workgroup_count.destroy();
-        self.workgroup_count_2.destroy();
+        self.workgroup_count_32.destroy();
     }
 }

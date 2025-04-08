@@ -93,7 +93,7 @@ impl TractogramDensityPipeline {
         density.clear(cmd);
 
         cmd.copy_buffer_to_buffer(
-            tractogram.filter_default().workgroup_count(),
+            tractogram.filter_default().workgroup_count_32(),
             0,
             &self.indirect,
             0,
