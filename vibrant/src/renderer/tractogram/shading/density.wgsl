@@ -39,7 +39,7 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
 
     for (var distance = hit.x + jitter; distance < hit.y; distance += step) {
         let position = ray.origin + distance * ray.direction;
-        let density = textureSampleLevel(DENSITY, SAMPLER, position + 0.5, ENVIRONMENT.settings.level).x;
+        let density = textureSampleLevel(DENSITY, SAMPLER, position + 0.5, 0.0).x;
         occlusion += (1.0 - occlusion) * ENVIRONMENT.settings.alpha * density;
     }
 

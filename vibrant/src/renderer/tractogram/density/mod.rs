@@ -26,7 +26,7 @@ impl TractogramDensityPipeline {
 
         Self {
             voxelize: gpu.compute(
-                "Density::Rasterize",
+                "Density::Voxelize",
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
@@ -113,11 +113,11 @@ impl TractogramDensityPipeline {
         pass.set_pipeline(&self.voxelize);
         pass.dispatch_workgroups_indirect(&self.indirect, 0);
 
-        let copy = density.texture().width().div_ceil(8);
+        let n_copy = density.texture().width().div_ceil(8);
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(1, density.texture().binding_write(), &[]);
-        pass.dispatch_workgroups(copy, copy, copy);
+        pass.dispatch_workgroups(n_copy, n_copy, n_copy);
 
         pass.set_pipeline(&self.mipmap);
 

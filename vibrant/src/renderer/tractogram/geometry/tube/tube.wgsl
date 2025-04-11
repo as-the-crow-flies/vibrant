@@ -55,7 +55,7 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
     let dx = normalize(cross(dy, vec3<f32>(1.0, 0.0, 0.0)));
     let dz = normalize(cross(dy, dx));
 
-    let radius = length(TRACTOGRAM_TO_WORLD * vec4<f32>(ENVIRONMENT.settings.streamline_radius, 0.0, 0.0, 0.0));
+    let radius = ENVIRONMENT.settings.streamline_radius / f32(ENVIRONMENT.volume);
     let vertex = CUBE[vertex_index] * vec3<f32>(radius, distance + 2.0 * radius, radius);
 
     let position = v0 + vertex.x * dx + vertex.y * dy - radius * dy + vertex.z * dz;

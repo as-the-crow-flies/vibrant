@@ -155,8 +155,7 @@ impl Controller {
                 });
 
             ui.add(
-                Slider::new(&mut self.settings.streamline_radius, 0.01..=0.5)
-                    .logarithmic(true)
+                Slider::new(&mut self.settings.streamline_radius, 0.1..=3.0)
                     .text("Streamline Radius"),
             );
 
@@ -174,6 +173,10 @@ impl Controller {
             );
 
             ui.add(Slider::new(&mut self.settings.level, 0.0..=16.0).text("Level"));
+
+            ui.add(Slider::new(&mut self.settings.skip, 1..=8).text("Skip"));
+
+            ui.checkbox(&mut self.settings.quality, "Quality");
         });
     }
 

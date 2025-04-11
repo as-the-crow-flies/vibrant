@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub struct TractogramOcclusionPipeline {
-    copy: ComputePipeline,
+    sample: ComputePipeline,
     accumulate: ComputePipeline,
     erode: ComputePipeline,
     mipmap: ComputePipeline,
@@ -22,14 +22,14 @@ pub struct TractogramOcclusionPipeline {
 impl TractogramOcclusionPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            copy: gpu.compute(
-                "Occlusion::Copy",
+            sample: gpu.compute(
+                "Occlusion::Sample",
                 &gpu.pipeline_layout(&[
                     &ScalarTexture3D::layout_write(gpu),
                     &ScalarTexture3D::layout(gpu),
                     &Environment::layout(gpu),
                 ]),
-                &gpu.shader(&(Environment::wgsl() + include_str!("copy.wgsl"))),
+                &gpu.shader(&(Environment::wgsl() + include_str!("sample.wgsl"))),
                 "main",
             ),
             accumulate: gpu.compute(
@@ -92,7 +92,7 @@ impl TractogramOcclusionPipeline {
             ..Default::default()
         });
 
-        pass.set_pipeline(&self.copy);
+        pass.set_pipeline(&self.sample);
         pass.set_bind_group(0, occlusion.volume().binding_write(), &[]);
         pass.set_bind_group(1, density.binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);

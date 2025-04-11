@@ -36,9 +36,11 @@ impl Density {
             wgpu::FilterMode::Linear,
         );
 
+        let n_voxels = volume * volume * volume;
+
         let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: (volume * volume * volume * 4) as u64,
+            size: (n_voxels * 4) as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -109,7 +111,7 @@ impl Density {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::all(),
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
