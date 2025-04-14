@@ -24,7 +24,8 @@ impl Environment {
             alpha: f32,
             level: f32,
             skip: u32,
-            quality: u32
+            quality: u32,
+            smoothing: f32
         }
 
         struct Camera {
@@ -100,6 +101,7 @@ impl Environment {
                 bytes_of(&controller.settings().level),
                 bytes_of(&controller.settings().skip),
                 bytes_of(&(controller.settings().quality as u32)),
+                bytes_of(&controller.settings().smoothing),
             ]
             .concat(),
         );

@@ -6,11 +6,7 @@ pub mod shading;
 use density::TractogramDensityPipeline;
 use geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry};
 use occlusion::TractogramOcclusionPipeline;
-use shading::{
-    culling::TractogramCullingShading, density::TractogramDensityShading,
-    gbuffer::TractogramGBufferShading, simple::TractogramSimpleShading,
-    tracing::TractogramTracingShading,
-};
+use shading::TractogramShadingRenderer;
 use wgpu::CommandEncoder;
 
 use crate::{
@@ -27,11 +23,7 @@ pub struct TractogramRenderer {
     occlusion: TractogramOcclusionPipeline,
     line_hardware_geometry: TractogramLineGeometry,
     tube_geometry: TractogramTubeGeometry,
-    simple_shading: TractogramSimpleShading,
-    gbuffer_shading: TractogramGBufferShading,
-    density_shading: TractogramDensityShading,
-    culling_shading: TractogramCullingShading,
-    tracing_shading: TractogramTracingShading,
+    shading: TractogramShadingRenderer,
 }
 
 impl TractogramRenderer {
@@ -41,11 +33,7 @@ impl TractogramRenderer {
             occlusion: TractogramOcclusionPipeline::new(gpu),
             line_hardware_geometry: TractogramLineGeometry::new(gpu),
             tube_geometry: TractogramTubeGeometry::new(gpu),
-            simple_shading: TractogramSimpleShading::new(gpu),
-            gbuffer_shading: TractogramGBufferShading::new(gpu),
-            density_shading: TractogramDensityShading::new(gpu),
-            culling_shading: TractogramCullingShading::new(gpu),
-            tracing_shading: TractogramTracingShading::new(gpu),
+            shading: TractogramShadingRenderer::new(gpu),
         }
     }
 
@@ -87,20 +75,7 @@ impl TractogramRenderer {
             }
         }
 
-        match settings.shading {
-            ShadingSetting::Simple => self.simple_shading.render(cmd, buffer, tractogram),
-            ShadingSetting::GBuffer => {
-                self.gbuffer_shading
-                    .render(cmd, buffer, environment, tractogram)
-            }
-            ShadingSetting::Density => self.density_shading.render(cmd, buffer, environment),
-            ShadingSetting::Tracing => {
-                self.tracing_shading
-                    .render(cmd, environment, buffer, tractogram)
-            }
-            ShadingSetting::Culling => {
-                self.culling_shading.render(cmd, environment, buffer);
-            }
-        }
+        self.shading
+            .render(cmd, environment, buffer, tractogram, settings);
     }
 }

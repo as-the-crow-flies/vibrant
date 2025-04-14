@@ -47,18 +47,22 @@ fn main(
 }
 
 fn voxelize_sdf(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
+    let smoothing = ENVIRONMENT.settings.smoothing;
+
+    let radius_clamp = max(smoothing, radius);
+
     let delta = v1 - v0;
     let direction = normalize(delta);
     let rank = rank_axes(abs(delta));
 
-    let v0_radius = v0 - direction * radius;
-    let v1_radius = v1 + direction * radius;
+    let v0_radius = v0 - direction * radius_clamp;
+    let v1_radius = v1 + direction * radius_clamp;
     let delta_radius = v1_radius - v0_radius;
     let distance_radius = length(delta_radius);
 
     let step = abs(delta_radius / delta_radius[rank[0]]);
     let step_length = length(step);
-    let width = 0.5 * step + radius;
+    let width = 0.5 * step + radius_clamp;
 
     let minusplus = vec2<f32>(-1.0, 1.0);
 
@@ -77,7 +81,13 @@ fn voxelize_sdf(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
                 voxel[rank[1]] = axis_1;
                 voxel[rank[2]] = axis_2;
 
-                let coverage = aaa(vec3<f32>(voxel) + 0.5, v0, v1, radius);
+                let sample = vec3<f32>(voxel) + 0.5;
+
+                let alpha = smoothstep(-0.5, 0.5, -capsule(sample, v0, v1, radius_clamp))
+                          - smoothstep(-0.5, 0.5, -sphere(sample - v0, radius_clamp));
+
+                let coverage = alpha * saturate(radius * radius / smoothing / smoothing);
+
                 let coverage_u32 = u32(coverage * f32(U24_MAX));
 
                 if (coverage_u32 > 0) {
@@ -106,12 +116,6 @@ fn rank_axes(v: vec3<f32>) -> vec3<u32> {
     }
 
     return idx;
-}
-
-fn aaa(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
-    let r_clamped = max(r, 0.5);
-    let distance = saturate(0.5 - capsule(p, a, b, r_clamped)) - saturate(0.5 - sphere(p - a, r_clamped));
-    return distance * saturate(r);
 }
 
 fn capsule(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {

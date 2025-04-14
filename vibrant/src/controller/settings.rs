@@ -1,3 +1,5 @@
+use std::ops::Div;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum GeometrySetting {
     Line,
@@ -10,6 +12,7 @@ pub enum ShadingSetting {
     GBuffer,
     Culling,
     Density,
+    Occlusion,
     Tracing,
 }
 
@@ -22,6 +25,7 @@ pub struct Settings {
     pub level: f32,
     pub skip: u32,
     pub quality: bool,
+    pub smoothing: f32,
     pub geometry: GeometrySetting,
     pub shading: ShadingSetting,
 }
@@ -36,6 +40,7 @@ impl Settings {
             level: 0.0,
             skip: 1,
             quality: true,
+            smoothing: 1.0,
             geometry: GeometrySetting::Tube,
             shading: ShadingSetting::Tracing,
         }

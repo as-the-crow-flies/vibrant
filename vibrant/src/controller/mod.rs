@@ -120,6 +120,11 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.shading,
+                        ShadingSetting::Occlusion,
+                        "Occlusion",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
                         ShadingSetting::Culling,
                         "Culling",
                     );
@@ -177,6 +182,8 @@ impl Controller {
             ui.add(Slider::new(&mut self.settings.skip, 1..=8).text("Skip"));
 
             ui.checkbox(&mut self.settings.quality, "Quality");
+
+            ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=2.0).text("Smoothing"));
         });
     }
 
