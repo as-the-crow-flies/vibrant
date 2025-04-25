@@ -14,23 +14,13 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var threshold = 1.0;
 
     for (var froxel = vec3<u32>(pixel, 0); froxel.z < max_depth; froxel.z++) {
-        let next = froxel + vec3<u32>(0, 0, 1);
-        let step = length(transform(next) - transform(froxel));
-        let absorbance = textureLoad(OCCLUSION, froxel).x;
-        optical_depth += step * absorbance;
+        optical_depth += textureLoad(OCCLUSION, froxel).x;
         textureStore(OCCLUSION, froxel, vec4<f32>(optical_depth));
 
         if (threshold == 1.0 && optical_depth > ENVIRONMENT.settings.culling_threshold) {
-            let sample = OCCLUSION_TO_PROJECTION * vec4<f32>(vec3<f32>(next), 1.0);
-            threshold = sample.z / sample.w;
+            threshold = f32(froxel.z + 1u) / f32(max_depth);
         }
     }
 
     textureStore(THRESHOLD, pixel, vec4<f32>(threshold));
-}
-
-fn transform(froxel: vec3<u32>) -> vec3<f32> {
-    let transform = ENVIRONMENT.camera.projection_inverse * OCCLUSION_TO_PROJECTION;
-    let sample = transform * vec4<f32>(vec3<f32>(froxel), 1.0);
-    return sample.xyz / sample.w * vec3<f32>(f32(ENVIRONMENT.volume));
 }

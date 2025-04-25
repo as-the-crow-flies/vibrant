@@ -3,7 +3,7 @@ use pollster::FutureExt;
 use vibrant::{
     asset::tractogram::Tractogram,
     controller::Controller,
-    file::Tck,
+    file::TractogramFile,
     gpu::Gpu,
     renderer::{
         environment::Environment,
@@ -35,7 +35,7 @@ pub fn line(criterion: &mut Criterion) {
 
     let environment = &get_environment(gpu);
     let frame = &SurfaceBuffer::new(gpu, WIDTH, HEIGHT, VOLUME, 8);
-    let tractogram = &Tractogram::new(gpu, &Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let pipeline = TractogramLineGeometry::new(gpu);
 
@@ -62,7 +62,7 @@ pub fn tube(criterion: &mut Criterion) {
 
     let environment = &get_environment(gpu);
     let frame = &SurfaceBuffer::new(gpu, WIDTH, HEIGHT, VOLUME, 8);
-    let tractogram = &Tractogram::new(gpu, &Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let pipeline = TractogramTubeGeometry::new(gpu);
 
@@ -88,7 +88,7 @@ pub fn density(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let tractogram = &Tractogram::new(gpu, &Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let density = &Density::new(gpu, VOLUME);
 
@@ -111,7 +111,7 @@ pub fn occlusion(criterion: &mut Criterion) {
 
     let environment = &get_environment(gpu);
     let frame = &SurfaceBuffer::new(gpu, WIDTH, HEIGHT, VOLUME, 8);
-    let tractogram = &Tractogram::new(gpu, &Tck::from_file(TRACTOGRAM_PATH));
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let density = &Density::new(gpu, VOLUME);
 

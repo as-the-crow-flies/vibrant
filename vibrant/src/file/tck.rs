@@ -1,58 +1,16 @@
 use glam::Vec3;
+
 use std::{collections::HashMap, fs, io::BufRead};
 
-#[derive(Debug)]
-pub struct Bounds {
-    pub min: Vec3,
-    pub max: Vec3,
-}
-
-impl Bounds {
-    pub fn scale(&self) -> f32 {
-        2.0 * self.min.abs().max_element().max(self.max.max_element())
-    }
-
-    pub fn from_vertices(vertices: &[Vec3]) -> Bounds {
-        vertices
-            .iter()
-            .filter(|&vertex| vertex.is_finite())
-            .fold(
-                Bounds {
-                    min: Vec3::MAX,
-                    max: Vec3::MIN,
-                },
-                |bounds, vertex| Bounds {
-                    min: bounds.min.min(*vertex),
-                    max: bounds.max.max(*vertex),
-                },
-            )
-            .grow(1.01)
-    }
-
-    pub fn grow(&self, factor: f32) -> Bounds {
-        Bounds {
-            min: self.min * factor,
-            max: self.max * factor,
-        }
-    }
-}
-
-impl Default for Bounds {
-    fn default() -> Self {
-        Bounds {
-            min: Vec3::MAX,
-            max: Vec3::MIN,
-        }
-    }
-}
+use super::bounds::Bounds;
 
 #[derive(Debug, Default)]
-pub struct Tck {
+pub struct TractogramFile {
     vertices: Vec<Vec3>,
     bounds: Bounds,
 }
 
-impl Tck {
+impl TractogramFile {
     pub fn vertices(&self) -> &[Vec3] {
         &self.vertices
     }
@@ -61,7 +19,7 @@ impl Tck {
         &self.bounds
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Tck {
+    pub fn from_tck(bytes: &[u8]) -> TractogramFile {
         let header: HashMap<String, String> = bytes
             .lines()
             .map(|line| line.unwrap())
@@ -87,20 +45,21 @@ impl Tck {
 
         let bounds = Bounds::from_vertices(&vertices);
 
-        Tck { vertices, bounds }
+        TractogramFile { vertices, bounds }
     }
 
-    pub fn join(tcks: Vec<Tck>) -> Tck {
-        tcks.into_iter().fold(Tck::default(), |x, y| Tck {
-            vertices: [x.vertices, y.vertices].concat(),
-            bounds: Bounds {
-                min: y.bounds.min.min(x.bounds.min),
-                max: y.bounds.max.max(x.bounds.max),
-            },
-        })
+    pub fn join(tcks: Vec<TractogramFile>) -> TractogramFile {
+        tcks.into_iter()
+            .fold(TractogramFile::default(), |x, y| TractogramFile {
+                vertices: [x.vertices, y.vertices].concat(),
+                bounds: Bounds {
+                    min: y.bounds.min.min(x.bounds.min),
+                    max: y.bounds.max.max(x.bounds.max),
+                },
+            })
     }
 
-    pub fn from_file(path: &str) -> Tck {
-        Self::from_bytes(&fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
+    pub fn from_file(path: &str) -> TractogramFile {
+        Self::from_tck(&fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
     }
 }

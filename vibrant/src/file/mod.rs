@@ -1,3 +1,4 @@
+pub mod bounds;
 pub mod nifti;
 pub mod tck;
 
@@ -11,7 +12,7 @@ use std::{
 
 #[derive(Default)]
 pub struct File {
-    pub tractogram: Option<Tck>,
+    pub tractogram: Option<TractogramFile>,
     pub nifti: Option<Nifti>,
     pub save: Option<PathBuf>,
 }
@@ -23,7 +24,7 @@ impl File {
             let file = rfd::AsyncFileDialog::new().pick_file().await;
 
             if let Some(file) = file {
-                Self::publish_tractogram(Tck::from_bytes(&file.read().await));
+                Self::publish_tractogram(TractogramFile::from_bytes(&file.read().await));
             }
         });
     }
@@ -35,14 +36,18 @@ impl File {
         let files = rfd::FileDialog::new().pick_files();
 
         if let Some(files) = files {
-            let tractograms: Vec<Tck> = files
+            let tcks: Vec<TractogramFile> = files
                 .iter()
-                .filter(|file| file.extension() == Some(OsStr::new("tck")))
-                .map(|file| Tck::from_bytes(&fs::read(file).unwrap()))
+                .filter_map(
+                    |file| match file.extension().map(|ext| ext.to_str()).flatten() {
+                        Some("tck") => Some(TractogramFile::from_tck(&fs::read(file).unwrap())),
+                        _ => None,
+                    },
+                )
                 .collect();
 
-            if !tractograms.is_empty() {
-                Self::publish_tractogram(Tck::join(tractograms));
+            if !tcks.is_empty() {
+                Self::publish_tck(TractogramFile::join(tcks));
             }
 
             if let Some(nifti) = files
@@ -71,7 +76,7 @@ impl File {
         todo!()
     }
 
-    pub fn on_tck(callback: impl FnOnce(Tck)) {
+    pub fn on_tck(callback: impl FnOnce(TractogramFile)) {
         let mut data = QUEUE.lock().unwrap();
 
         if let Some(tractogram) = data.tractogram.take() {
@@ -99,8 +104,8 @@ impl File {
         }
     }
 
-    fn publish_tractogram(tractogram: Tck) {
-        QUEUE.lock().unwrap().tractogram = Some(tractogram);
+    fn publish_tck(tck: TractogramFile) {
+        QUEUE.lock().unwrap().tractogram = Some(tck);
     }
 
     fn publish_nifti(nifti: Nifti) {

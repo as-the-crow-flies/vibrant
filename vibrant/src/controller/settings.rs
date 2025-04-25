@@ -1,5 +1,3 @@
-use std::ops::Div;
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum GeometrySetting {
     Line,
@@ -33,13 +31,13 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self {
-            streamline_radius: 0.5,
+            streamline_radius: 0.25,
             direct_light: 0.72,
             culling_threshold: 2.0,
             alpha: 0.01,
             level: 0.0,
             skip: 1,
-            quality: true,
+            quality: false,
             smoothing: 1.0,
             geometry: GeometrySetting::Tube,
             shading: ShadingSetting::Tracing,

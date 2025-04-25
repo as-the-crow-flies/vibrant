@@ -1,11 +1,6 @@
 @group(0) @binding(0) var<storage, read_write> DENSITY: array<atomic<u32>>;
 @group(0) @binding(1) var<uniform> WORLD_TO_VOLUME: mat4x4<f32>;
 
-@group(0) @binding(2) var<storage, read_write> BIN_COUNTER: atomic<u32>;
-@group(0) @binding(3) var<storage, read_write> BIN_HEADS: array<atomic<u32>>;
-@group(0) @binding(4) var<storage, read_write> BIN_PREVIOUS: array<u32>;
-@group(0) @binding(5) var<storage, read_write> BIN_INDICES: array<u32>;
-
 @group(1) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
 @group(1) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
 @group(1) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<vec4<f32>>;
@@ -62,37 +57,38 @@ fn voxelize_sdf(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
 
     let step = abs(delta_radius / delta_radius[rank[0]]);
     let step_length = length(step);
-    let width = 0.5 * step + radius_clamp;
+    let width = vec3<i32>(0.5 * step + radius_clamp);
 
-    let minusplus = vec2<f32>(-1.0, 1.0);
+    var distance = 0.5 * step_length;
+    var axis_1 = -width[rank[1]];
+    var axis_2 = -width[rank[2]];
 
-    for (var distance = 0.5 * step_length; distance <= distance_radius; distance += step_length) {
-        let position = v0 + distance * direction;
+    let coverage_multiplier = saturate(radius * radius / smoothing / smoothing) * f32(U24_MAX);
 
-        let axis_0 = u32(position[rank[0]]);
+    while (distance < distance_radius) {
+        var voxel = vec3<i32>(v0 + distance * direction);
+        voxel[rank[1]] += axis_1;
+        voxel[rank[2]] += axis_2;
 
-        let bounds_1 = vec2<u32>(position[rank[1]] + minusplus * width[rank[1]]);
-        let bounds_2 = vec2<u32>(position[rank[2]] + minusplus * width[rank[2]]);
+        voxel = clamp(voxel, vec3<i32>(), vec3<i32>(ENVIRONMENT.volume));
 
-        for (var axis_1 = bounds_1.x; axis_1 <= bounds_1.y; axis_1++) {
-            for (var axis_2 = bounds_2.x; axis_2 <= bounds_2.y; axis_2++) {
-                var voxel = vec3<u32>();
-                voxel[rank[0]] = axis_0;
-                voxel[rank[1]] = axis_1;
-                voxel[rank[2]] = axis_2;
+        let sample = vec3<f32>(voxel) + 0.5;
 
-                let sample = vec3<f32>(voxel) + 0.5;
+        let alpha = saturate(0.5 - capsule(sample, v0, v1, radius_clamp))
+                  - saturate(0.5 - sphere(sample - v0, radius_clamp));
 
-                let alpha = smoothstep(-0.5, 0.5, -capsule(sample, v0, v1, radius_clamp))
-                          - smoothstep(-0.5, 0.5, -sphere(sample - v0, radius_clamp));
+        if (alpha > 0.0) {
+            atomicAdd(&DENSITY[linear_index(vec3<u32>(voxel))], u32(alpha * coverage_multiplier));
+        }
 
-                let coverage = alpha * saturate(radius * radius / smoothing / smoothing);
+        axis_1++;
+        if (axis_1 > width[rank[1]]) {
+            axis_1 = -width[rank[1]];
 
-                let coverage_u32 = u32(coverage * f32(U24_MAX));
-
-                if (coverage_u32 > 0) {
-                    atomicAdd(&DENSITY[linear_index(voxel)], coverage_u32);
-                }
+            axis_2++;
+            if (axis_2 > width[rank[2]]) {
+                axis_2 = -width[rank[2]];
+                distance += step_length;
             }
         }
     }
@@ -152,7 +148,7 @@ fn voxelize(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
         atomicAdd(&DENSITY[idx], u32(area * increment));
 
         let mask = next == vec4<f32>(increment);
-        voxel += select(vec3<i32>(0), step, mask.xyz);
+        voxel += step * vec3<i32>(mask.xyz);
         next = select(
             next - increment,
             vec4<f32>(voxel_boundaries, 0.0),

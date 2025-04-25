@@ -47,7 +47,7 @@ impl Tractogram {
         &self.filter_culling
     }
 
-    pub fn new(gpu: &Gpu, tck: &file::Tck) -> Self {
+    pub fn new(gpu: &Gpu, tck: &file::TractogramFile) -> Self {
         let label = Some(type_name::<Self>());
 
         let mut indices = tck

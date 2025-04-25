@@ -3,6 +3,7 @@ use glam::Vec2;
 pub enum MouseButton {
     Left,
     Right,
+    Middle,
 }
 
 pub enum Key {

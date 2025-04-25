@@ -19,7 +19,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let surface_dim = vec2<f32>(ENVIRONMENT.surface);
     let occlusion_dim = vec3<f32>(textureDimensions(OCCLUSION, 0));
 
-    let sample = vec3<f32>(surface_dim / occlusion_dim.xy * fragment.uv, 0.9);
+    let sample = vec3<f32>(fragment.uv, 1.0);
     let occlusion = textureSampleLevel(OCCLUSION, SAMPLER, sample, 0.0).x;
 
     return vec4<f32>(vec3<f32>(occlusion), 1.0);

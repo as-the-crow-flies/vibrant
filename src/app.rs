@@ -166,6 +166,16 @@ fn vibrant_event(event: WindowEvent) -> Option<Event> {
             state: winit::event::ElementState::Released,
             button: winit::event::MouseButton::Right,
         } => Some(Event::MouseReleased(MouseButton::Right)),
+        WindowEvent::MouseInput {
+            device_id: _,
+            state: winit::event::ElementState::Pressed,
+            button: winit::event::MouseButton::Middle,
+        } => Some(Event::MousePressed(MouseButton::Middle)),
+        WindowEvent::MouseInput {
+            device_id: _,
+            state: winit::event::ElementState::Released,
+            button: winit::event::MouseButton::Middle,
+        } => Some(Event::MouseReleased(MouseButton::Middle)),
         WindowEvent::MouseWheel {
             device_id: _,
             delta: MouseScrollDelta::PixelDelta(delta),

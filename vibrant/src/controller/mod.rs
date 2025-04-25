@@ -160,7 +160,7 @@ impl Controller {
                 });
 
             ui.add(
-                Slider::new(&mut self.settings.streamline_radius, 0.1..=3.0)
+                Slider::new(&mut self.settings.streamline_radius, 0.1..=1.0)
                     .text("Streamline Radius"),
             );
 

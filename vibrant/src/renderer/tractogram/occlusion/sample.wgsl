@@ -10,28 +10,20 @@
 @compute
 @workgroup_size(8, 8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    if (any(id > textureDimensions(OCCLUSION))) { return; }
+    let dim = textureDimensions(OCCLUSION);
 
-    let froxel = vec3<f32>(id);
-    let steps = 2;
+    if (any(id > dim)) { return; }
 
-    let step = 1.00001 / f32(steps);
+    let position = (vec3<f32>(id) + 0.5) / vec3<f32>(dim);
+    let uv = 2.0 * position.xy - 1.0;
+    let near = unproject(vec4<f32>(uv, 0.0, 1.0));
+    let far = unproject(vec4<f32>(uv, 1.0, 1.0));
+    let sample = mix(near, far, position.z) + 0.5;
 
-    var density = 0.0;
-
-    for (var x = 0.0; x < 1.0; x += step) {
-        for (var y = 0.0; y < 1.0; y += step) {
-            for (var z = 0.0; z < 1.0; z += step) {
-                density += textureSampleLevel(DENSITY, DENSITY_SAMPLER, transform(froxel + vec3<f32>(x, y, z)), 0.0).x;
-            }
-        }
-    }
-
-    textureStore(OCCLUSION, id, vec4<f32>(1.0 / pow(f32(steps), 3.0) * density));
+    textureStore(OCCLUSION, id, textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, 0.0));
 }
 
-fn transform(froxel: vec3<f32>) -> vec3<f32> {
-    let transform = ENVIRONMENT.camera.projection_inverse * OCCLUSION_TO_PROJECTION;
-    let sample = transform * vec4<f32>(froxel, 1.0);
-    return sample.xyz / sample.w + 0.5;
+fn unproject(v: vec4<f32>) -> vec3<f32> {
+    let t = ENVIRONMENT.camera.projection_inverse * v;
+    return t.xyz / t.w;
 }

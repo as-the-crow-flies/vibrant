@@ -50,11 +50,16 @@ impl Camera {
             self.pan(pan.x, -pan.y);
         }
 
+        if state.middle {
+            dbg!(state.relative_delta().y);
+            self.zoom(state.relative_delta().y);
+        }
+
         self.zoom(-0.1 * state.scroll.y);
 
         let distance_to_corners = 1.0;
 
-        self.near = (self.distance - distance_to_corners).max(0.2);
+        self.near = (self.distance - distance_to_corners).max(0.001);
         self.far = self.distance + distance_to_corners;
     }
 

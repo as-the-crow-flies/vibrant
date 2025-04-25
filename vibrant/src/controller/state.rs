@@ -10,6 +10,7 @@ pub struct ControllerState {
     pub pressed: bool,
     pub left: bool,
     pub right: bool,
+    pub middle: bool,
     pub position: Vec2,
     pub delta: Vec2,
     pub scroll: Vec2,
@@ -58,9 +59,19 @@ impl ControllerState {
                 right: true,
                 ..default
             },
+            Event::MousePressed(MouseButton::Middle) => ControllerState {
+                pressed: true,
+                middle: true,
+                ..default
+            },
             Event::MouseReleased(MouseButton::Right) => ControllerState {
                 pressed: false,
                 right: false,
+                ..default
+            },
+            Event::MouseReleased(MouseButton::Middle) => ControllerState {
+                pressed: false,
+                middle: false,
                 ..default
             },
             Event::MouseWheel(scroll) => ControllerState { scroll, ..default },
