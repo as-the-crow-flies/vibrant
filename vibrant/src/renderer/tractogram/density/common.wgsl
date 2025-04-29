@@ -1,4 +1,5 @@
 const U24_MAX: u32 = 16777216;
+const U24_MAX_INV: f32 = 0.000000059604645;
 
 fn linear_index(voxel: vec3<u32>) -> u32 {
     // let stride = vec3<u32>(ENVIRONMENT.volume * ENVIRONMENT.volume, ENVIRONMENT.volume, 1u);

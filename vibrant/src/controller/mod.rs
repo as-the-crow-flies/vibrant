@@ -34,7 +34,7 @@ impl Controller {
             width: 1920,
             height: 1080,
             volume: 256,
-            tile: 8,
+            tile: 4,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -172,23 +172,18 @@ impl Controller {
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
 
             ui.add(
-                Slider::new(&mut self.settings.culling_threshold, 0.0..=10.0)
-                    .text("Culling Threshold"),
-            );
-
-            ui.add(
-                Slider::new(&mut self.settings.alpha, 0.0..=1.0)
+                Slider::new(&mut self.settings.alpha, 0.0001..=1.0)
                     .logarithmic(true)
                     .text("Alpha"),
             );
 
+            ui.add(
+                Slider::new(&mut self.settings.culling_threshold, 0.0..=10.0)
+                    .text("Culling Threshold"),
+            );
+
             ui.add(Slider::new(&mut self.settings.level, 0.0..=16.0).text("Level"));
-
-            ui.add(Slider::new(&mut self.settings.skip, 1..=8).text("Skip"));
-
             ui.checkbox(&mut self.settings.quality, "Quality");
-
-            ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=2.0).text("Smoothing"));
         });
     }
 

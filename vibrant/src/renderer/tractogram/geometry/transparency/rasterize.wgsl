@@ -81,16 +81,18 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let position = origin + front * direction;
     let normal = capsule_normal(position, fragment.v0, fragment.v1, radius);
 
-    var clip = ENVIRONMENT.camera.projection * vec4<f32>(position + direction * radius, 1.0);
+    var clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
     clip /= clip.w;
 
     let surface_dim = vec2<f32>(ENVIRONMENT.surface);
     let occlusion_dim = vec2<f32>(textureDimensions(OCCLUSION, 0).xy * ENVIRONMENT.tile);
 
-    let sample = vec3<f32>((0.5 + 0.5 * clip.xy) * surface_dim / occlusion_dim, linearize_depth(clip.z));
-    let transmittance = 1.0 - textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, sample, 0.0).x;
+    let absorbance_sample = vec3<f32>((0.5 + 0.5 * clip.xy) * surface_dim / occlusion_dim, linearize_depth(clip.z));
+    let absorbance = textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, absorbance_sample, 0.0).x;
 
-    if (transmittance < 1E-6) { discard; }
+    let density = textureSampleLevel(DENSITY, DENSITY_SAMPLER, position + 0.5, 0.0).x;
+
+    let transmittance = saturate(1.0 - absorbance);
 
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(fragment.tangent, 0.0)).xyz;
 

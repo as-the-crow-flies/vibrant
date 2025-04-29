@@ -19,7 +19,7 @@ use vibrant::{
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
 const VOLUME: u32 = 256;
-const TILE: u32 = 8;
+const TILE: u32 = 4;
 
 const TRACTOGRAM_PATH: &'static str = "assets/HCP-100307/whole_brain200k.tck";
 

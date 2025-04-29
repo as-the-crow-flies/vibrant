@@ -35,7 +35,7 @@ impl SurfaceBuffer {
             tile,
             color: Color::new(gpu, width, height),
             density: Density::new(gpu, volume),
-            occlusion: Occlusion::new(gpu, width.div_ceil(tile), height.div_ceil(tile), volume),
+            occlusion: Occlusion::new(gpu, width.div_ceil(tile), height.div_ceil(tile), 2 * volume),
             gbuffer: GBuffer::new(gpu, width, height),
         }
     }

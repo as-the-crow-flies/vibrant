@@ -12,6 +12,8 @@
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let dim = textureDimensions(OCCLUSION);
 
+    let ratio = f32(textureDimensions(DENSITY).z) / f32(textureDimensions(OCCLUSION).z);
+
     if (any(id > dim)) { return; }
 
     let position = (vec3<f32>(id) + 0.5) / vec3<f32>(dim);
@@ -20,7 +22,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let far = unproject(vec4<f32>(uv, 1.0, 1.0));
     let sample = mix(near, far, position.z) + 0.5;
 
-    textureStore(OCCLUSION, id, textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, 0.0));
+    let value = ratio * saturate(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, 0.0));
+
+    textureStore(OCCLUSION, id, value);
 }
 
 fn unproject(v: vec4<f32>) -> vec3<f32> {
