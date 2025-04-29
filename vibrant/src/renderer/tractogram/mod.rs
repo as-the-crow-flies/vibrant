@@ -4,7 +4,10 @@ pub mod occlusion;
 pub mod shading;
 
 use density::TractogramDensityPipeline;
-use geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry};
+use geometry::{
+    line::TractogramLineGeometry, transparency::TractogramTransparentGeometry,
+    tube::TractogramTubeGeometry,
+};
 use occlusion::TractogramOcclusionPipeline;
 use shading::TractogramShadingRenderer;
 use wgpu::CommandEncoder;
@@ -21,8 +24,9 @@ use super::environment::Environment;
 pub struct TractogramRenderer {
     density: TractogramDensityPipeline,
     occlusion: TractogramOcclusionPipeline,
-    line_hardware_geometry: TractogramLineGeometry,
+    line_geometry: TractogramLineGeometry,
     tube_geometry: TractogramTubeGeometry,
+    transparency_geometry: TractogramTransparentGeometry,
     shading: TractogramShadingRenderer,
 }
 
@@ -31,8 +35,9 @@ impl TractogramRenderer {
         Self {
             density: TractogramDensityPipeline::new(gpu),
             occlusion: TractogramOcclusionPipeline::new(gpu),
-            line_hardware_geometry: TractogramLineGeometry::new(gpu),
+            line_geometry: TractogramLineGeometry::new(gpu),
             tube_geometry: TractogramTubeGeometry::new(gpu),
+            transparency_geometry: TractogramTransparentGeometry::new(gpu),
             shading: TractogramShadingRenderer::new(gpu),
         }
     }
@@ -58,7 +63,7 @@ impl TractogramRenderer {
         .contains(&settings.shading)
         {
             match settings.geometry {
-                GeometrySetting::Line => self.line_hardware_geometry.render(
+                GeometrySetting::Line => self.line_geometry.render(
                     cmd,
                     environment,
                     buffer,
@@ -72,10 +77,19 @@ impl TractogramRenderer {
                     tractogram,
                     tractogram.filter_culling(),
                 ),
+                GeometrySetting::Transparency => self.transparency_geometry.render(
+                    cmd,
+                    environment,
+                    buffer,
+                    tractogram,
+                    tractogram.filter_culling(),
+                ),
             }
         }
 
-        self.shading
-            .render(cmd, environment, buffer, tractogram, settings);
+        if settings.geometry != GeometrySetting::Transparency {
+            self.shading
+                .render(cmd, environment, buffer, tractogram, settings);
+        }
     }
 }

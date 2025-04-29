@@ -67,7 +67,7 @@ impl TractogramDensityShading {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.density().texture().binding(), &[]);
+        pass.set_bind_group(0, frame.density().volume().binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }

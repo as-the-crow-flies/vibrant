@@ -51,7 +51,6 @@ impl Camera {
         }
 
         if state.middle {
-            dbg!(state.relative_delta().y);
             self.zoom(state.relative_delta().y);
         }
 

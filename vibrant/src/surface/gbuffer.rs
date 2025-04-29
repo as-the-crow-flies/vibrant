@@ -15,13 +15,16 @@ pub struct GBuffer {
     normal: Texture,
     tangent: Texture,
     depth: Texture,
+    color: Texture,
     normal_view: TextureView,
     tangent_view: TextureView,
     depth_view: TextureView,
+    color_view: TextureView,
     binding: BindGroup,
 }
 
 impl GBuffer {
+    pub const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
     pub const NORMAL_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
     pub const TANGENT_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
     pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
@@ -74,6 +77,21 @@ impl GBuffer {
             view_formats: &[Self::DEPTH_FORMAT],
         });
 
+        let color = gpu.device().create_texture(&TextureDescriptor {
+            label: Some(type_name::<Self>()),
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: Self::COLOR_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[Self::COLOR_FORMAT],
+        });
+
         let normal_view = normal.create_view(&TextureViewDescriptor {
             label,
             format: Some(Self::NORMAL_FORMAT),
@@ -89,6 +107,12 @@ impl GBuffer {
         let depth_view = depth.create_view(&TextureViewDescriptor {
             label,
             format: Some(Self::DEPTH_FORMAT),
+            ..Default::default()
+        });
+
+        let color_view = color.create_view(&TextureViewDescriptor {
+            label,
+            format: Some(Self::COLOR_FORMAT),
             ..Default::default()
         });
 
@@ -126,6 +150,16 @@ impl GBuffer {
                         },
                     )),
                 },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::TextureView(&color.create_view(
+                        &TextureViewDescriptor {
+                            label,
+                            format: Some(Self::COLOR_FORMAT),
+                            ..Default::default()
+                        },
+                    )),
+                },
             ],
         });
 
@@ -133,11 +167,25 @@ impl GBuffer {
             normal,
             tangent,
             depth,
+            color,
             normal_view,
             tangent_view,
             depth_view,
+            color_view,
             binding,
         }
+    }
+
+    pub fn attachment_color<'a>(&'a self) -> Vec<Option<RenderPassColorAttachment<'a>>> {
+        [Some(RenderPassColorAttachment {
+            view: &self.color_view,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(Color::TRANSPARENT),
+                store: StoreOp::Store,
+            },
+        })]
+        .into()
     }
 
     pub fn attachment_tangent<'a>(&'a self) -> Vec<Option<RenderPassColorAttachment<'a>>> {
@@ -208,8 +256,27 @@ impl GBuffer {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::all(),
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
                 ],
             })
+    }
+
+    pub fn target_color() -> Vec<Option<ColorTargetState>> {
+        [Some(ColorTargetState {
+            format: Self::COLOR_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        })]
+        .into()
     }
 
     pub fn target_tangent() -> Vec<Option<ColorTargetState>> {
@@ -268,5 +335,6 @@ impl Drop for GBuffer {
         self.normal.destroy();
         self.tangent.destroy();
         self.depth.destroy();
+        self.color.destroy();
     }
 }

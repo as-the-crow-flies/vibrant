@@ -36,6 +36,7 @@ impl Gpu {
                 &wgpu::DeviceDescriptor {
                     label: Some(type_name::<Self>()),
                     required_limits: Limits {
+                        max_bind_groups: limits.max_bind_groups,
                         max_compute_invocations_per_workgroup: limits
                             .max_compute_invocations_per_workgroup,
                         max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
@@ -47,6 +48,7 @@ impl Gpu {
                     },
                     required_features: Features::empty()
                         | Features::FLOAT32_FILTERABLE
+                        | Features::BGRA8UNORM_STORAGE
                         | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                         | Features::SUBGROUP,
                     ..Default::default()
@@ -76,9 +78,11 @@ impl Gpu {
     }
 
     pub fn shader(&self, source: &str) -> ShaderModule {
+        let common = include_str!("common.wgsl");
+
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Borrowed(source)),
+            source: ShaderSource::Wgsl(Cow::Owned(common.to_string() + source)),
         })
     }
 

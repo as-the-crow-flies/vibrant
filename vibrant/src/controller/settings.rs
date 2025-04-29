@@ -2,6 +2,7 @@
 pub enum GeometrySetting {
     Line,
     Tube,
+    Transparency,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -34,10 +35,10 @@ impl Settings {
             streamline_radius: 0.25,
             direct_light: 0.72,
             culling_threshold: 2.0,
-            alpha: 0.01,
+            alpha: 1.0,
             level: 0.0,
             skip: 1,
-            quality: false,
+            quality: true,
             smoothing: 1.0,
             geometry: GeometrySetting::Tube,
             shading: ShadingSetting::Tracing,

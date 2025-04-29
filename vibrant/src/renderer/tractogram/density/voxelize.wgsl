@@ -28,7 +28,12 @@ fn main(
     let offset = workgroup.x * WORKGROUP_SIZE * CHUNK_SIZE;
 
     for (var chunk=0u; chunk<CHUNK_SIZE; chunk++) {
-        let index = TRACTOGRAM_INDICES[min(offset + chunk * WORKGROUP_SIZE + local, n_indices - 2)];
+
+        let index_index = offset + chunk * WORKGROUP_SIZE + local;
+
+        if (index_index >= n_indices - 1) { continue; }
+
+        let index = TRACTOGRAM_INDICES[index_index];
 
         let v0 = (transform * TRACTOGRAM_VERTICES[index    ]).xyz;
         let v1 = (transform * TRACTOGRAM_VERTICES[index + 1]).xyz;
@@ -78,7 +83,8 @@ fn voxelize_sdf(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
                   - saturate(0.5 - sphere(sample - v0, radius_clamp));
 
         if (alpha > 0.0) {
-            atomicAdd(&DENSITY[linear_index(vec3<u32>(voxel))], u32(alpha * coverage_multiplier));
+            let value = ENVIRONMENT.settings.alpha * alpha * coverage_multiplier;
+            atomicAdd(&DENSITY[linear_index(vec3<u32>(voxel))], u32(value));
         }
 
         axis_1++;
@@ -145,7 +151,7 @@ fn voxelize(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
 
         let idx = linear_index(vec3<u32>(voxel));
 
-        atomicAdd(&DENSITY[idx], u32(area * increment));
+        atomicAdd(&DENSITY[idx], u32(ENVIRONMENT.settings.alpha * area * increment));
 
         let mask = next == vec4<f32>(increment);
         voxel += step * vec3<i32>(mask.xyz);

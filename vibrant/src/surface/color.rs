@@ -34,6 +34,7 @@ impl Color {
             format: Self::FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT
                 | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::STORAGE_BINDING
                 | TextureUsages::COPY_SRC,
             view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
         });

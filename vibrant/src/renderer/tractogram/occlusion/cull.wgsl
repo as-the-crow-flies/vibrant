@@ -58,10 +58,10 @@ fn should_keep(index: u32) -> bool {
     let max_depth = textureSampleLevel(HIZ, SAMPLER, surface_dim / hiz_dim * sample, f32(level)).x;
 
     // Occlusion Culling
-    return linearize(min(v0_clip.z, v1_clip.z)) <= max_depth;
+    return linearize_depth(min(v0_clip.z, v1_clip.z)) <= max_depth;
 }
 
-fn linearize(ndc_depth: f32) -> f32 {
+fn linearize_depth(ndc_depth: f32) -> f32 {
     let near = ENVIRONMENT.camera.near;
     let far = ENVIRONMENT.camera.far;
 

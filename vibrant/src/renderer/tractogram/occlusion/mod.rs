@@ -80,7 +80,7 @@ impl TractogramOcclusionPipeline {
     ) {
         tractogram.filter_culling().clear(cmd);
 
-        let density = buffer.density().texture();
+        let density = buffer.density().volume();
         let occlusion = buffer.occlusion();
 
         let mut x = occlusion.volume().width().div_ceil(8);

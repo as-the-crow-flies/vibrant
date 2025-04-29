@@ -80,7 +80,7 @@ impl TractogramTracingShading {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.gbuffer().binding(), &[]);
-        pass.set_bind_group(1, frame.density().texture().binding(), &[]);
+        pass.set_bind_group(1, frame.density().volume().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..4, 0..1);

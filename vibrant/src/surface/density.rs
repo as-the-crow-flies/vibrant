@@ -86,7 +86,7 @@ impl Density {
         cmd.clear_buffer(&self.buffer, 0, None);
     }
 
-    pub fn texture(&self) -> &ScalarTexture3D {
+    pub fn volume(&self) -> &ScalarTexture3D {
         &self.texture
     }
 

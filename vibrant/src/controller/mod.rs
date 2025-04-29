@@ -98,6 +98,11 @@ impl Controller {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Line, "Line");
                     ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Tube, "Tube");
+                    ui.selectable_value(
+                        &mut self.settings.geometry,
+                        GeometrySetting::Transparency,
+                        "Transparency",
+                    );
                 });
 
             ComboBox::from_label("Shading")
