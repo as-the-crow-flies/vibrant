@@ -6,15 +6,17 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
-    BufferBinding, BufferBindingType, BufferUsages, Extent3d, FilterMode, SamplerBindingType,
-    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureDescriptor,
-    TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    BufferBinding, BufferBindingType, BufferUsages, CommandEncoder, Extent3d, FilterMode,
+    ImageSubresourceRange, SamplerBindingType, SamplerDescriptor, ShaderStages,
+    StorageTextureAccess, Texture, TextureAspect, TextureDescriptor, TextureFormat, TextureUsages,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
 
 pub type ScalarTexture3D = ScalarTexture<3>;
 pub type ScalarTexture2D = ScalarTexture<2>;
+pub type ScalarTexture2DArray = ScalarTexture<4>;
 
 pub struct ScalarTexture<const DIMENSION: u32> {
     texture: Texture,
@@ -40,7 +42,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
 
         let mip_level_count = match DIMENSION {
             1 => width,
-            2 => width.min(height),
+            2 | 4 => width.min(height),
             3 => width.min(height).min(depth),
             _ => panic!("Texture Dimension should be between 1 and 3"),
         }
@@ -60,7 +62,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             sample_count: 1,
             dimension: match DIMENSION {
                 1 => wgpu::TextureDimension::D1,
-                2 => wgpu::TextureDimension::D2,
+                2 | 4 => wgpu::TextureDimension::D2,
                 3 => wgpu::TextureDimension::D3,
                 _ => panic!("Texture Dimension should be between 1 and 3"),
             },
@@ -105,6 +107,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                         &TextureViewDescriptor {
                             label,
                             format: Some(Self::TEXTURE_FORMAT),
+                            dimension: Some(Self::view_dimension()),
                             ..Default::default()
                         },
                     )),
@@ -142,6 +145,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                         &TextureViewDescriptor {
                             label,
                             format: Some(Self::TEXTURE_FORMAT),
+                            dimension: Some(Self::view_dimension()),
                             mip_level_count: Some(1),
                             ..Default::default()
                         },
@@ -183,6 +187,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                                 &TextureViewDescriptor {
                                     label,
                                     format: Some(Self::TEXTURE_FORMAT),
+                                    dimension: Some(Self::view_dimension()),
                                     base_mip_level: level,
                                     mip_level_count: Some(1),
                                     ..Default::default()
@@ -199,6 +204,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                                 &TextureViewDescriptor {
                                     label,
                                     format: Some(Self::TEXTURE_FORMAT),
+                                    dimension: Some(Self::view_dimension()),
                                     base_mip_level: level + 1,
                                     mip_level_count: Some(1),
                                     ..Default::default()
@@ -218,6 +224,19 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             binding_write,
             bindings_mipmap,
         }
+    }
+
+    pub fn clear(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_texture(
+            &self.texture,
+            &ImageSubresourceRange {
+                aspect: TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: None,
+                base_array_layer: 0,
+                array_layer_count: None,
+            },
+        );
     }
 
     pub fn width(&self) -> u32 {
@@ -379,6 +398,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             1 => wgpu::TextureViewDimension::D1,
             2 => wgpu::TextureViewDimension::D2,
             3 => wgpu::TextureViewDimension::D3,
+            4 => wgpu::TextureViewDimension::D2Array,
             _ => panic!("Dimension should be between 1 and 3"),
         }
     }

@@ -1,17 +1,19 @@
 pub mod color;
 pub mod density;
 pub mod gbuffer;
-pub mod occlusion;
+pub mod slice;
 
 use color::Color;
 use density::Density;
 use gbuffer::GBuffer;
 use log::warn;
-use occlusion::Occlusion;
+use slice::SliceBuffer;
 use wgpu::{
     CommandEncoder, CompositeAlphaMode, Extent3d, Origin3d, PresentMode, SurfaceConfiguration,
     SurfaceTarget, TexelCopyTextureInfo, TextureAspect, TextureUsages,
 };
+
+use crate::controller::Controller;
 
 use super::gpu::Gpu;
 
@@ -20,23 +22,31 @@ pub struct SurfaceBuffer {
     height: u32,
     volume: u32,
     tile: u32,
+    layers: u32,
     color: Color,
     density: Density,
-    occlusion: Occlusion,
     gbuffer: GBuffer,
+    slice: SliceBuffer,
 }
 
 impl SurfaceBuffer {
-    pub fn new(gpu: &Gpu, width: u32, height: u32, volume: u32, tile: u32) -> Self {
+    pub fn new(gpu: &Gpu, controller: &Controller) -> Self {
         Self {
-            width,
-            height,
-            volume,
-            tile,
-            color: Color::new(gpu, width, height),
-            density: Density::new(gpu, volume),
-            occlusion: Occlusion::new(gpu, width.div_ceil(tile), height.div_ceil(tile), 2 * volume),
-            gbuffer: GBuffer::new(gpu, width, height),
+            width: controller.width(),
+            height: controller.height(),
+            volume: controller.volume(),
+            tile: controller.tile(),
+            layers: controller.layers(),
+            color: Color::new(gpu, controller.width(), controller.height()),
+            density: Density::new(gpu, controller.volume()),
+            gbuffer: GBuffer::new(gpu, controller.width(), controller.height()),
+            slice: SliceBuffer::new(
+                gpu,
+                controller.width(),
+                controller.height(),
+                controller.tile(),
+                controller.layers(),
+            ),
         }
     }
 
@@ -48,14 +58,6 @@ impl SurfaceBuffer {
         self.height
     }
 
-    pub fn volume(&self) -> u32 {
-        self.volume
-    }
-
-    pub fn tile(&self) -> u32 {
-        self.tile
-    }
-
     pub fn color(&self) -> &Color {
         &self.color
     }
@@ -64,12 +66,12 @@ impl SurfaceBuffer {
         &self.density
     }
 
-    pub fn occlusion(&self) -> &Occlusion {
-        &self.occlusion
-    }
-
     pub fn gbuffer(&self) -> &GBuffer {
         &self.gbuffer
+    }
+
+    pub fn slice(&self) -> &SliceBuffer {
+        &self.slice
     }
 }
 
@@ -89,29 +91,25 @@ impl Surface {
 
         Self {
             surface,
-            buffer: SurfaceBuffer::new(gpu, 1, 1, 1, 1),
+            buffer: SurfaceBuffer::new(gpu, &Controller::test(1, 1, 1, 1, 1)),
         }
     }
 
-    pub fn maybe_resize(
-        &mut self,
-        gpu: &Gpu,
-        width: u32,
-        height: u32,
-        volume: u32,
-        tile: u32,
-    ) -> &Self {
-        if width == self.buffer.width()
-            && height == self.buffer.height()
-            && volume == self.buffer.volume()
-            && tile == self.buffer.tile()
+    pub fn maybe_resize(&mut self, gpu: &Gpu, controller: &Controller) -> &Self {
+        if controller.width() == self.buffer.width()
+            && controller.height() == self.buffer.height
+            && controller.volume() == self.buffer.volume
+            && controller.tile() == self.buffer.tile
+            && controller.layers() == self.buffer().layers
         {
             return self;
         }
 
-        self.buffer = SurfaceBuffer::new(gpu, width, height, volume, tile);
-        self.surface
-            .configure(gpu.device(), &Self::config(width, height));
+        self.buffer = SurfaceBuffer::new(gpu, &controller);
+        self.surface.configure(
+            gpu.device(),
+            &Self::config(controller.width(), controller.height()),
+        );
 
         self
     }

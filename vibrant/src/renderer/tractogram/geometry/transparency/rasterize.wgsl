@@ -7,10 +7,14 @@
 @group(2) @binding(0) var DENSITY: texture_3d<f32>;
 @group(2) @binding(1) var DENSITY_SAMPLER: sampler;
 
-@group(3) @binding(0) var OCCLUSION: texture_3d<f32>;
-@group(3) @binding(1) var OCCLUSION_SAMPLER: sampler;
+@group(3) @binding(0) var HIZ: texture_2d<f32>;
 
-@group(4) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(4) @binding(0) var<storage, read_write> COLOR: array<atomic<u32>>;
+@group(4) @binding(1) var BINS: texture_storage_3d<r8uint, read_write>;
+@group(4) @binding(2) var LOZ: texture_storage_2d<r8unorm, read_write>;
+@group(4) @binding(3) var ABSORBANCE: texture_storage_2d<r8unorm, read_write>;
+
+@group(5) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 const CUBE: array<vec3<f32>, 14> = array(
     vec3<f32>(-1.0, 1.0, 1.0),  // Front-top-left
@@ -64,43 +68,51 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
 }
 
 @fragment
-fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
+fn fragment(fragment: Fragment) {
     let radius = ENVIRONMENT.settings.streamline_radius / f32(ENVIRONMENT.volume);
 
     let origin = ENVIRONMENT.camera.transform[3].xyz;
     let direction = normalize(fragment.position - origin);
 
-    let front = capsule_intersection(origin, direction, fragment.v0, fragment.v1, radius);
+    let capsule = capsule_intersection(origin, direction, fragment.v0, fragment.v1, radius);
 
-    if (front < 0.0) { discard; }
+    if (capsule < 0.0) { discard; }
 
     let sphere = sphere_intersection(origin, direction, fragment.v1, radius);
 
     if (sphere.x >= 0) { discard; }
 
-    let position = origin + front * direction;
+    let position = origin + capsule * direction;
     let normal = capsule_normal(position, fragment.v0, fragment.v1, radius);
 
     var clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
     clip /= clip.w;
 
-    let surface_dim = vec2<f32>(ENVIRONMENT.surface);
-    let occlusion_dim = vec2<f32>(textureDimensions(OCCLUSION, 0).xy * ENVIRONMENT.tile);
+    let depth = linearize_depth(clip.z);
 
-    let absorbance_sample = vec3<f32>((0.5 + 0.5 * clip.xy) * surface_dim / occlusion_dim, linearize_depth(clip.z));
-    let absorbance = textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, absorbance_sample, 0.0).x;
+    let tile = vec2<u32>((0.5 + 0.5 * clip.xy) * vec2<f32>(ENVIRONMENT.surface / ENVIRONMENT.tile));
 
-    let density = textureSampleLevel(DENSITY, DENSITY_SAMPLER, position + 0.5, 0.0).x;
+    let loz = textureLoad(LOZ, tile).x;
+    let hiz = textureLoad(HIZ, tile, 0).x;
 
-    let transmittance = saturate(1.0 - absorbance);
+    let bin = u32((depth - loz) / (hiz - loz) * f32(U8_MAX));
+
+    if (bin > U8_MAX) { discard; }
+
+    let absorbance = precision_decode(textureLoad(ABSORBANCE, tile).x) * ENVIRONMENT.settings.culling_threshold;
+    let absorbance_per_layer = absorbance / f32(ENVIRONMENT.layers);
+
+    let layer = textureLoad(BINS, vec3<u32>(tile, bin)).x;
 
     let tangent_object_space = normalize(TRACTOGRAM_TO_WORLD * vec4<f32>(fragment.tangent, 0.0)).xyz;
+    let color = vec4<f32>(abs(tangent_object_space), ENVIRONMENT.settings.alpha);
+    let encoded = rgba_encode(color, absorbance_per_layer);
 
-    let color = abs(tangent_object_space);
+    let pixel = vec2<u32>(fragment.clip.xy);
+    let offset = block_index(vec3<u32>(pixel, layer), vec3<u32>(ENVIRONMENT.surface, ENVIRONMENT.layers));
 
-    let alpha = ENVIRONMENT.settings.alpha * transmittance;
-
-    return vec4<f32>(color * alpha, alpha);
+    atomicAdd(&COLOR[2 * offset + 0], encoded.x);
+    atomicAdd(&COLOR[2 * offset + 1], encoded.y);
 }
 
 fn transform(mat: mat4x4<f32>, vec: vec4<f32>) -> vec3<f32> {

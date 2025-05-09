@@ -21,7 +21,7 @@ impl TractogramCullingShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shading_module = gpu.shader(&(Environment::wgsl() + include_str!("culling.wgsl")));
+        let shading_module = gpu.shader(include_str!("culling.wgsl"));
 
         Self {
             pipeline: gpu
@@ -48,7 +48,7 @@ impl TractogramCullingShading {
                     fragment: Some(FragmentState {
                         module: &shading_module,
                         entry_point: Some("fragment"),
-                        targets: &[Some(Color::target())],
+                        targets: &[Some(Color::target_srgb())],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
@@ -71,14 +71,14 @@ impl TractogramCullingShading {
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(frame.color().attachment())],
+            color_attachments: &[Some(frame.color().attachment_srgb())],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.occlusion().hiz().binding(), &[]);
+        pass.set_bind_group(0, frame.slice().hiz().binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }

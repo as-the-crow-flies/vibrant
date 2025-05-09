@@ -32,15 +32,17 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
     if (path <= 0) { discard; }
 
     let dim = vec3<f32>(textureDimensions(DENSITY));
-    let step = 1.0 / maximum(abs(ray.direction * path * dim));
+    let step = 1.0 / maximum(abs(ray.direction * dim));
+    let factor = dim.x * step;
+
     let jitter = random(ray.position.xy) * step;
 
     var occlusion = 0.0;
 
     for (var distance = hit.x + jitter; distance < hit.y; distance += step) {
         let position = ray.origin + distance * ray.direction;
-        let density = textureSampleLevel(DENSITY, SAMPLER, position + 0.5, 0.0).x;
-        occlusion += (1.0 - occlusion) * density;
+        let density = factor * precision_decode(textureSampleLevel(DENSITY, SAMPLER, position + 0.5, 0.0).x);
+        occlusion += (1.0 - occlusion) * saturate(density);
     }
 
     return vec4<f32>(vec3<f32>(occlusion), 1.0);

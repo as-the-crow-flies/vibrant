@@ -20,6 +20,7 @@ pub struct Controller {
     height: u32,
     volume: u32,
     tile: u32,
+    layers: u32,
     state: ControllerState,
     camera: Camera,
     light: Light,
@@ -34,7 +35,8 @@ impl Controller {
             width: 1920,
             height: 1080,
             volume: 256,
-            tile: 4,
+            tile: 8,
+            layers: 16,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -44,12 +46,13 @@ impl Controller {
         }
     }
 
-    pub fn test(width: u32, height: u32, volume: u32, tile: u32) -> Self {
+    pub fn test(width: u32, height: u32, volume: u32, tile: u32, layers: u32) -> Self {
         let mut controller = Self {
             width,
             height,
             volume,
             tile,
+            layers,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -125,11 +128,6 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.shading,
-                        ShadingSetting::Occlusion,
-                        "Occlusion",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
                         ShadingSetting::Culling,
                         "Culling",
                     );
@@ -140,7 +138,11 @@ impl Controller {
                     );
                 });
 
-            ComboBox::from_label("Volume Resolution")
+            ui.separator();
+            ui.label("Resolutions");
+            ui.separator();
+
+            ComboBox::from_label("Volume")
                 .selected_text(format!("{:?}", self.volume))
                 .show_ui(ui, |ui| {
                     for power in 5u32..10 {
@@ -152,7 +154,7 @@ impl Controller {
                     }
                 });
 
-            ComboBox::from_label("Tile Size")
+            ComboBox::from_label("Tile")
                 .selected_text(format!("{:?}", self.tile))
                 .show_ui(ui, |ui| {
                     for power in 1u32..6 {
@@ -163,6 +165,22 @@ impl Controller {
                         );
                     }
                 });
+
+            ComboBox::from_label("Layers")
+                .selected_text(format!("{:?}", self.layers))
+                .show_ui(ui, |ui| {
+                    for power in 3u32..7 {
+                        ui.selectable_value(
+                            &mut self.layers,
+                            2u32.pow(power),
+                            format!("{}", 2u32.pow(power)),
+                        );
+                    }
+                });
+
+            ui.separator();
+            ui.label("Appearance");
+            ui.separator();
 
             ui.add(
                 Slider::new(&mut self.settings.streamline_radius, 0.1..=1.0)
@@ -183,6 +201,7 @@ impl Controller {
             );
 
             ui.add(Slider::new(&mut self.settings.level, 0.0..=16.0).text("Level"));
+            ui.add(Slider::new(&mut self.settings.layer, 0..=self.layers).text("Layer"));
             ui.checkbox(&mut self.settings.quality, "Quality");
         });
     }
@@ -201,6 +220,10 @@ impl Controller {
 
     pub fn tile(&self) -> u32 {
         self.tile
+    }
+
+    pub fn layers(&self) -> u32 {
+        self.layers
     }
 
     pub fn camera(&self) -> &Camera {

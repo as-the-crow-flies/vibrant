@@ -68,7 +68,7 @@ fn voxelize_sdf(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
     var axis_1 = -width[rank[1]];
     var axis_2 = -width[rank[2]];
 
-    let coverage_multiplier = saturate(radius * radius / smoothing / smoothing) * f32(U24_MAX);
+    let coverage_multiplier = saturate(radius * radius / smoothing / smoothing) * f32(U20_MAX);
 
     while (distance < distance_radius) {
         var voxel = vec3<i32>(v0 + distance * direction);
@@ -84,7 +84,7 @@ fn voxelize_sdf(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
 
         if (alpha > 0.0) {
             let value = ENVIRONMENT.settings.alpha * alpha * coverage_multiplier;
-            atomicAdd(&DENSITY[linear_index(vec3<u32>(voxel))], u32(value));
+            atomicAdd(&DENSITY[block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume))], u32(value));
         }
 
         axis_1++;
@@ -132,7 +132,7 @@ fn sphere(p: vec3<f32>, r: f32) -> f32 {
 }
 
 fn voxelize(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
-    let area = PI * radius * radius * f32(U24_MAX);
+    let area = PI * radius * radius * f32(U20_MAX);
 
     let delta = v1 - v0;
     let distance = length(delta);
@@ -149,7 +149,7 @@ fn voxelize(v0: vec3<f32>, v1: vec3<f32>, radius: f32) {
     while (next.w > 0.0) {
         let increment = minimum(next);
 
-        let idx = linear_index(vec3<u32>(voxel));
+        let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
 
         atomicAdd(&DENSITY[idx], u32(ENVIRONMENT.settings.alpha * area * increment));
 

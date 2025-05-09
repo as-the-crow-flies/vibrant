@@ -13,5 +13,5 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         textureLoad(SOURCE, pixel + vec2<u32>(1, 0), 0).x),
         textureLoad(SOURCE, pixel + vec2<u32>(1, 1), 0).x);
 
-    textureStore(DESTINATION, id.xy, vec4<f32>(maximum));
+        textureStore(DESTINATION, id.xy, vec4<f32>(maximum));
 }

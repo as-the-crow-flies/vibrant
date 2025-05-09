@@ -45,13 +45,7 @@ impl Renderer {
     ) {
         File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(gpu, &tck)));
 
-        let surface = self.surface.maybe_resize(
-            gpu,
-            controller.width(),
-            controller.height(),
-            controller.volume(),
-            controller.tile(),
-        );
+        let surface = self.surface.maybe_resize(gpu, &controller);
 
         self.environment.update(gpu, &controller);
 

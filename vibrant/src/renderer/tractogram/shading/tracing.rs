@@ -21,7 +21,7 @@ impl TractogramTracingShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shading_module = gpu.shader(&(Environment::wgsl() + include_str!("tracing.wgsl")));
+        let shading_module = gpu.shader(include_str!("tracing.wgsl"));
 
         Self {
             pipeline: gpu

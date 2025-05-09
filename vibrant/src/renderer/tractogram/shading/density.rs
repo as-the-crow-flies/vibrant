@@ -20,7 +20,7 @@ impl TractogramDensityShading {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let shader = gpu.shader(&(Environment::wgsl() + include_str!("density.wgsl")));
+        let shader = gpu.shader(include_str!("density.wgsl"));
 
         Self {
             pipeline: gpu

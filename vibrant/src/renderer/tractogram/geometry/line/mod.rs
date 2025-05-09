@@ -24,7 +24,7 @@ impl TractogramLineGeometry {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let module = gpu.shader(&(Environment::wgsl() + include_str!("line.wgsl")));
+        let module = gpu.shader(include_str!("line.wgsl"));
 
         Self {
             pipeline: gpu

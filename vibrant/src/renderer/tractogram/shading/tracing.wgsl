@@ -71,7 +71,7 @@ fn direct(position: vec3<f32>, light: vec3<f32>, radius: f32) -> f32 {
     var level = 0.5;
 
     for (var sample = start; in_domain(sample); sample += step) {
-        occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
+        occlusion += (1.0 - occlusion) * precision_decode(textureSampleLevel(DENSITY, SAMPLER, sample, level).x);
     }
 
     return ENVIRONMENT.settings.direct_light * max(0.0, 1.0 - occlusion);
@@ -99,7 +99,7 @@ fn ambient(position: vec3<f32>, radius: f32) -> f32 {
             if (!in_domain(sample) || occlusion > 0.99) { break; }
 
             let level = log2(TAN_CONE_ANGLE * distance * DIM);
-            occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
+            occlusion += (1.0 - occlusion) * precision_decode(textureSampleLevel(DENSITY, SAMPLER, sample, level).x);
         }
 
         total_occlusion += occlusion;

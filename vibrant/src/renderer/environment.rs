@@ -15,40 +15,6 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn wgsl() -> String {
-        "
-        struct Settings {
-            streamline_radius: f32,
-            direct_light: f32,
-            culling_threshold: f32,
-            alpha: f32,
-            level: f32,
-            skip: u32,
-            quality: u32,
-            smoothing: f32
-        }
-
-        struct Camera {
-            transform: mat4x4<f32>,
-            projection: mat4x4<f32>,
-            projection_inverse: mat4x4<f32>,
-            near: f32,
-            far: f32,
-        }
-
-        struct Environment {
-            surface: vec2<u32>,
-            volume: u32,
-            tile: u32,
-            camera: Camera,
-            light: vec3<f32>,
-            light_: f32,
-            settings: Settings
-        }
-        "
-        .to_string()
-    }
-
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -84,8 +50,16 @@ impl Environment {
             &self.buffer,
             0,
             &[
-                bytes_of(&[controller.width(), controller.height()]),
-                bytes_of(&[controller.volume(), controller.tile()]),
+                bytes_of(&[
+                    controller.width(),
+                    controller.height(),
+                    controller.width().div_ceil(controller.tile()),
+                    controller.height().div_ceil(controller.tile()),
+                    controller.volume(),
+                    controller.tile(),
+                    0,
+                    controller.layers(),
+                ]),
                 bytes_of(&controller.camera().transform()),
                 bytes_of(&controller.camera().projection()),
                 bytes_of(&controller.camera().projection().inverse()),
@@ -99,6 +73,7 @@ impl Environment {
                 bytes_of(&controller.settings().culling_threshold),
                 bytes_of(&controller.settings().alpha),
                 bytes_of(&controller.settings().level),
+                bytes_of(&controller.settings().layer),
                 bytes_of(&controller.settings().skip),
                 bytes_of(&(controller.settings().quality as u32)),
                 bytes_of(&controller.settings().smoothing),

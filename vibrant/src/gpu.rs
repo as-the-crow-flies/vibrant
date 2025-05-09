@@ -13,6 +13,7 @@ use wgpu::{
 
 pub struct Gpu {
     instance: wgpu::Instance,
+    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
@@ -46,10 +47,7 @@ impl Gpu {
                         max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                         ..Default::default()
                     },
-                    required_features: Features::empty()
-                        | Features::FLOAT32_FILTERABLE
-                        | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | Features::SUBGROUP,
+                    required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     ..Default::default()
                 },
                 None,
@@ -59,6 +57,7 @@ impl Gpu {
 
         Self {
             instance,
+            adapter,
             device,
             queue,
         }
@@ -66,6 +65,10 @@ impl Gpu {
 
     pub fn instance(&self) -> &wgpu::Instance {
         &self.instance
+    }
+
+    pub fn adapter(&self) -> &wgpu::Adapter {
+        &self.adapter
     }
 
     pub fn device(&self) -> &wgpu::Device {
@@ -90,14 +93,13 @@ impl Gpu {
         label: &str,
         layout: &PipelineLayout,
         module: &ShaderModule,
-        entry_point: &str,
     ) -> ComputePipeline {
         self.device()
             .create_compute_pipeline(&ComputePipelineDescriptor {
                 label: Some(label),
                 layout: Some(layout),
                 module,
-                entry_point: Some(entry_point),
+                entry_point: None,
                 compilation_options: Default::default(),
                 cache: None,
             })

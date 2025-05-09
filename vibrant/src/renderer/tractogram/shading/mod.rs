@@ -1,8 +1,8 @@
 use culling::TractogramCullingShading;
 use density::TractogramDensityShading;
 use gbuffer::TractogramGBufferShading;
-use occlusion::TractogramOcclusionShading;
 use simple::TractogramSimpleShading;
+
 use tracing::TractogramTracingShading;
 use wgpu::CommandEncoder;
 
@@ -17,7 +17,6 @@ use crate::{
 pub mod culling;
 pub mod density;
 pub mod gbuffer;
-pub mod occlusion;
 pub mod simple;
 pub mod tracing;
 
@@ -25,7 +24,6 @@ pub struct TractogramShadingRenderer {
     simple: TractogramSimpleShading,
     gbuffer: TractogramGBufferShading,
     density: TractogramDensityShading,
-    occlusion: TractogramOcclusionShading,
     culling: TractogramCullingShading,
     tracing: TractogramTracingShading,
 }
@@ -36,7 +34,6 @@ impl TractogramShadingRenderer {
             simple: TractogramSimpleShading::new(gpu),
             gbuffer: TractogramGBufferShading::new(gpu),
             density: TractogramDensityShading::new(gpu),
-            occlusion: TractogramOcclusionShading::new(gpu),
             culling: TractogramCullingShading::new(gpu),
             tracing: TractogramTracingShading::new(gpu),
         }
@@ -54,7 +51,6 @@ impl TractogramShadingRenderer {
             ShadingSetting::Simple => self.simple.render(cmd, buffer, tractogram),
             ShadingSetting::GBuffer => self.gbuffer.render(cmd, buffer, environment, tractogram),
             ShadingSetting::Density => self.density.render(cmd, buffer, environment),
-            ShadingSetting::Occlusion => self.occlusion.render(cmd, environment, buffer),
             ShadingSetting::Tracing => self.tracing.render(cmd, environment, buffer, tractogram),
             ShadingSetting::Culling => self.culling.render(cmd, environment, buffer),
         }

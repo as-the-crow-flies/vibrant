@@ -38,12 +38,7 @@ impl TractogramDensityPipeline {
                         ],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(
-                    &(Environment::wgsl()
-                        + include_str!("common.wgsl")
-                        + include_str!("voxelize.wgsl")),
-                ),
-                "main",
+                &gpu.shader(include_str!("voxelize.wgsl")),
             ),
             copy: gpu.compute(
                 "Density::Copy",
@@ -57,12 +52,7 @@ impl TractogramDensityPipeline {
                         ],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(
-                    &(Environment::wgsl()
-                        + include_str!("common.wgsl")
-                        + include_str!("copy.wgsl")),
-                ),
-                "main",
+                &gpu.shader(include_str!("copy.wgsl")),
             ),
             mipmap: gpu.compute(
                 "Density::MipMap",
@@ -73,7 +63,6 @@ impl TractogramDensityPipeline {
                         push_constant_ranges: &[],
                     }),
                 &gpu.shader(include_str!("mipmap.wgsl")),
-                "main",
             ),
             indirect: gpu.device().create_buffer_init(&BufferInitDescriptor {
                 label,

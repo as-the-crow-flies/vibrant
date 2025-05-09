@@ -3,28 +3,33 @@ use std::any::type_name;
 use bytemuck::bytes_of;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BlendComponent, BlendFactor, BlendOperation, BlendState, Buffer, BufferUsages,
-    ColorTargetState, ColorWrites, Face, FragmentState, MultisampleState,
-    PipelineCompilationOptions, PrimitiveState, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, VertexState,
+    Buffer, BufferUsages, CommandEncoder, CompareFunction, DepthBiasState, DepthStencilState, Face,
+    FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState, PrimitiveTopology,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StencilState, VertexState,
 };
 
 use crate::{
-    asset::{filter::Filter, scalar::ScalarTexture3D, tractogram::Tractogram},
+    asset::{
+        filter::Filter,
+        scalar::{ScalarTexture2D, ScalarTexture3D},
+        tractogram::Tractogram,
+    },
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::Color, SurfaceBuffer},
+    surface::{color::Color, gbuffer::GBuffer, slice::SliceBuffer, SurfaceBuffer},
 };
 
 pub struct TractogramTransparentGeometry {
     rasterize: RenderPipeline,
+    resolve: RenderPipeline,
     indirect: Buffer,
 }
 
 impl TractogramTransparentGeometry {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<TractogramTransparentGeometry>());
-        let rasterize = gpu.shader(&(Environment::wgsl() + include_str!("rasterize.wgsl")));
+        let rasterize = gpu.shader(include_str!("rasterize.wgsl"));
+        let resolve = gpu.shader(include_str!("resolve.wgsl"));
 
         Self {
             rasterize: gpu
@@ -35,7 +40,8 @@ impl TractogramTransparentGeometry {
                         &Tractogram::layout(gpu),
                         &Filter::layout_read(gpu),
                         &ScalarTexture3D::layout(gpu),
-                        &ScalarTexture3D::layout(gpu),
+                        &ScalarTexture2D::layout(gpu),
+                        &SliceBuffer::layout(gpu, false),
                         &Environment::layout(gpu),
                     ])),
                     vertex: VertexState {
@@ -47,27 +53,47 @@ impl TractogramTransparentGeometry {
                     fragment: Some(FragmentState {
                         module: &rasterize,
                         entry_point: Some("fragment"),
-                        targets: &[Some(ColorTargetState {
-                            format: Color::FORMAT_SRGB,
-                            blend: Some(BlendState {
-                                color: BlendComponent {
-                                    src_factor: BlendFactor::One,
-                                    dst_factor: BlendFactor::OneMinusSrc,
-                                    operation: BlendOperation::Add,
-                                },
-                                alpha: BlendComponent {
-                                    src_factor: BlendFactor::One,
-                                    dst_factor: BlendFactor::OneMinusSrc,
-                                    operation: BlendOperation::Add,
-                                },
-                            }),
-                            write_mask: ColorWrites::all(),
-                        })],
+                        targets: &[],
                         compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::TriangleStrip,
+                        topology: PrimitiveTopology::TriangleStrip,
                         cull_mode: Some(Face::Back),
+                        ..Default::default()
+                    },
+                    depth_stencil: Some(DepthStencilState {
+                        format: GBuffer::DEPTH_FORMAT,
+                        depth_write_enabled: false,
+                        depth_compare: CompareFunction::Always,
+                        stencil: StencilState::default(),
+                        bias: DepthBiasState::default(),
+                    }),
+                    multisample: MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+                }),
+            resolve: gpu
+                .device()
+                .create_render_pipeline(&RenderPipelineDescriptor {
+                    label,
+                    layout: Some(&gpu.pipeline_layout(&[
+                        &SliceBuffer::layout(gpu, true),
+                        &Environment::layout(gpu),
+                    ])),
+                    vertex: VertexState {
+                        module: &resolve,
+                        entry_point: Some("vertex"),
+                        buffers: &[],
+                        compilation_options: PipelineCompilationOptions::default(),
+                    },
+                    fragment: Some(FragmentState {
+                        module: &resolve,
+                        entry_point: Some("fragment"),
+                        targets: &[Some(Color::target_srgb())],
+                        compilation_options: PipelineCompilationOptions::default(),
+                    }),
+                    primitive: PrimitiveState {
+                        topology: PrimitiveTopology::TriangleStrip,
                         ..Default::default()
                     },
                     depth_stencil: None,
@@ -85,7 +111,19 @@ impl TractogramTransparentGeometry {
 
     pub fn render(
         &self,
-        cmd: &mut wgpu::CommandEncoder,
+        cmd: &mut CommandEncoder,
+        env: &Environment,
+        frame: &SurfaceBuffer,
+        tractogram: &Tractogram,
+        filter: &Filter,
+    ) {
+        self.rasterize(cmd, env, frame, tractogram, filter);
+        self.resolve(cmd, env, frame);
+    }
+
+    fn rasterize(
+        &self,
+        cmd: &mut CommandEncoder,
         env: &Environment,
         frame: &SurfaceBuffer,
         tractogram: &Tractogram,
@@ -95,17 +133,33 @@ impl TractogramTransparentGeometry {
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
-            color_attachments: &[Some(frame.color().attachment_srgb())],
+            depth_stencil_attachment: Some(frame.gbuffer().depth_attachment()),
             ..Default::default()
         });
 
         pass.set_bind_group(0, tractogram.binding(), &[]);
         pass.set_bind_group(1, filter.binding_read(), &[]);
         pass.set_bind_group(2, frame.density().volume().binding(), &[]);
-        pass.set_bind_group(3, frame.occlusion().volume().binding(), &[]);
-        pass.set_bind_group(4, env.binding(), &[]);
+        pass.set_bind_group(3, frame.slice().hiz().binding(), &[]);
+        pass.set_bind_group(4, frame.slice().binding(false), &[]);
+        pass.set_bind_group(5, env.binding(), &[]);
 
         pass.set_pipeline(&self.rasterize);
         pass.draw_indirect(&self.indirect, 0);
+    }
+
+    fn resolve(&self, cmd: &mut CommandEncoder, env: &Environment, frame: &SurfaceBuffer) {
+        let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+            label: Some(type_name::<Self>()),
+            color_attachments: &[Some(frame.color().attachment_srgb())],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_pipeline(&self.resolve);
+        pass.set_bind_group(0, frame.slice().binding(true), &[]);
+        pass.set_bind_group(1, env.binding(), &[]);
+        pass.draw(0..4, 0..1);
     }
 }
