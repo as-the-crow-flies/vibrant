@@ -7,11 +7,9 @@ pub enum GeometrySetting {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ShadingSetting {
-    Simple,
-    GBuffer,
-    Culling,
+    Render,
     Density,
-    Tracing,
+    Occlusion,
 }
 
 #[derive(Debug)]
@@ -40,9 +38,9 @@ impl Settings {
             layer: 0,
             skip: 1,
             quality: false,
-            smoothing: 1.0,
+            smoothing: 0.5,
             geometry: GeometrySetting::Tube,
-            shading: ShadingSetting::Tracing,
+            shading: ShadingSetting::Render,
         }
     }
 }

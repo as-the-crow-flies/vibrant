@@ -1,4 +1,4 @@
-use std::{any::type_name, ops::Add};
+use std::{any::type_name, marker::PhantomData, ops::Add};
 
 use bytemuck::bytes_of;
 use glam::Mat4;
@@ -6,30 +6,72 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
-    BufferBinding, BufferBindingType, BufferUsages, CommandEncoder, Extent3d, FilterMode,
-    ImageSubresourceRange, SamplerBindingType, SamplerDescriptor, ShaderStages,
-    StorageTextureAccess, Texture, TextureAspect, TextureDescriptor, TextureFormat, TextureUsages,
-    TextureViewDescriptor, TextureViewDimension,
+    BufferBinding, BufferBindingType, BufferUsages, Extent3d, FilterMode, SamplerBindingType,
+    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureDescriptor,
+    TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
 
-pub type ScalarTexture3D = ScalarTexture<3>;
-pub type ScalarTexture2D = ScalarTexture<2>;
-pub type ScalarTexture2DArray = ScalarTexture<4>;
+pub trait ScalarTextureFormat {
+    fn format() -> TextureFormat;
+    fn sample_type() -> TextureSampleType;
+    fn sampler_type() -> SamplerBindingType {
+        match Self::sample_type() {
+            TextureSampleType::Float { filterable: true } => SamplerBindingType::Filtering,
+            _ => SamplerBindingType::NonFiltering,
+        }
+    }
+}
 
-pub struct ScalarTexture<const DIMENSION: u32> {
+pub struct R8Unorm {}
+pub struct R8Uint {}
+pub struct R32Uint {}
+
+impl ScalarTextureFormat for R8Unorm {
+    fn format() -> TextureFormat {
+        TextureFormat::R8Unorm
+    }
+
+    fn sample_type() -> TextureSampleType {
+        TextureSampleType::Float { filterable: true }
+    }
+}
+
+impl ScalarTextureFormat for R8Uint {
+    fn format() -> TextureFormat {
+        TextureFormat::R8Uint
+    }
+
+    fn sample_type() -> TextureSampleType {
+        TextureSampleType::Uint
+    }
+}
+
+impl ScalarTextureFormat for R32Uint {
+    fn format() -> TextureFormat {
+        TextureFormat::R32Uint
+    }
+
+    fn sample_type() -> TextureSampleType {
+        TextureSampleType::Uint
+    }
+}
+
+pub type ScalarTexture3D<Format> = ScalarTexture<3, Format>;
+pub type ScalarTexture2D<Format> = ScalarTexture<2, Format>;
+
+pub struct ScalarTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
     texture: Texture,
     transform: Buffer,
     transform_inverse: Buffer,
     binding: BindGroup,
     binding_write: BindGroup,
     bindings_mipmap: Vec<BindGroup>,
+    phantom: PhantomData<Format>,
 }
 
-impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
-    const TEXTURE_FORMAT: TextureFormat = TextureFormat::R8Unorm;
-
+impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION, Format> {
     pub fn new(
         gpu: &Gpu,
         width: u32,
@@ -62,16 +104,16 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             sample_count: 1,
             dimension: match DIMENSION {
                 1 => wgpu::TextureDimension::D1,
-                2 | 4 => wgpu::TextureDimension::D2,
+                2 => wgpu::TextureDimension::D2,
                 3 => wgpu::TextureDimension::D3,
                 _ => panic!("Texture Dimension should be between 1 and 3"),
             },
-            format: Self::TEXTURE_FORMAT,
+            format: Format::format(),
             usage: TextureUsages::TEXTURE_BINDING
                 | TextureUsages::STORAGE_BINDING
                 | TextureUsages::COPY_SRC
                 | TextureUsages::COPY_DST,
-            view_formats: &[Self::TEXTURE_FORMAT],
+            view_formats: &[Format::format()],
         });
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
@@ -106,7 +148,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                     resource: BindingResource::TextureView(&texture.create_view(
                         &TextureViewDescriptor {
                             label,
-                            format: Some(Self::TEXTURE_FORMAT),
+                            format: Some(Format::format()),
                             dimension: Some(Self::view_dimension()),
                             ..Default::default()
                         },
@@ -144,7 +186,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                     resource: BindingResource::TextureView(&texture.create_view(
                         &TextureViewDescriptor {
                             label,
-                            format: Some(Self::TEXTURE_FORMAT),
+                            format: Some(Format::format()),
                             dimension: Some(Self::view_dimension()),
                             mip_level_count: Some(1),
                             ..Default::default()
@@ -186,7 +228,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                             resource: BindingResource::TextureView(&texture.create_view(
                                 &TextureViewDescriptor {
                                     label,
-                                    format: Some(Self::TEXTURE_FORMAT),
+                                    format: Some(Format::format()),
                                     dimension: Some(Self::view_dimension()),
                                     base_mip_level: level,
                                     mip_level_count: Some(1),
@@ -203,7 +245,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                             resource: BindingResource::TextureView(&texture.create_view(
                                 &TextureViewDescriptor {
                                     label,
-                                    format: Some(Self::TEXTURE_FORMAT),
+                                    format: Some(Format::format()),
                                     dimension: Some(Self::view_dimension()),
                                     base_mip_level: level + 1,
                                     mip_level_count: Some(1),
@@ -223,20 +265,8 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             binding,
             binding_write,
             bindings_mipmap,
+            phantom: PhantomData,
         }
-    }
-
-    pub fn clear(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_texture(
-            &self.texture,
-            &ImageSubresourceRange {
-                aspect: TextureAspect::All,
-                base_mip_level: 0,
-                mip_level_count: None,
-                base_array_layer: 0,
-                array_layer_count: None,
-            },
-        );
     }
 
     pub fn width(&self) -> u32 {
@@ -265,7 +295,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                         binding: 0,
                         visibility: ShaderStages::all(),
                         ty: BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            sample_type: Format::sample_type(),
                             view_dimension: Self::view_dimension(),
                             multisampled: false,
                         },
@@ -274,7 +304,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::all(),
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::Sampler(Format::sampler_type()),
                         count: None,
                     },
                     BindGroupLayoutEntry {
@@ -311,7 +341,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::ReadWrite,
-                            format: Self::TEXTURE_FORMAT,
+                            format: Format::format(),
                             view_dimension: Self::view_dimension(),
                         },
                         count: None,
@@ -319,7 +349,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::all(),
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::Sampler(Format::sampler_type()),
                         count: None,
                     },
                     BindGroupLayoutEntry {
@@ -355,7 +385,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                         binding: 0,
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            sample_type: Format::sample_type(),
                             view_dimension: Self::view_dimension(),
                             multisampled: false,
                         },
@@ -364,7 +394,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::Sampler(Format::sampler_type()),
                         count: None,
                     },
                     BindGroupLayoutEntry {
@@ -372,7 +402,7 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::WriteOnly,
-                            format: Self::TEXTURE_FORMAT,
+                            format: Format::format(),
                             view_dimension: Self::view_dimension(),
                         },
                         count: None,
@@ -398,13 +428,12 @@ impl<const DIMENSION: u32> ScalarTexture<DIMENSION> {
             1 => wgpu::TextureViewDimension::D1,
             2 => wgpu::TextureViewDimension::D2,
             3 => wgpu::TextureViewDimension::D3,
-            4 => wgpu::TextureViewDimension::D2Array,
             _ => panic!("Dimension should be between 1 and 3"),
         }
     }
 }
 
-impl<const DIMENSION: u32> Drop for ScalarTexture<DIMENSION> {
+impl<const DIMENSION: u32, Format: ScalarTextureFormat> Drop for ScalarTexture<DIMENSION, Format> {
     fn drop(&mut self) {
         self.texture.destroy();
         self.transform.destroy();

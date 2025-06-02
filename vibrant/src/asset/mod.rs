@@ -1,4 +1,3 @@
-pub mod filter;
 pub mod scalar;
 pub mod tractogram;
 

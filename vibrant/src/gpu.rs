@@ -47,7 +47,8 @@ impl Gpu {
                         max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                         ..Default::default()
                     },
-                    required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                    required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                        | Features::BGRA8UNORM_STORAGE,
                     ..Default::default()
                 },
                 None,
@@ -80,7 +81,7 @@ impl Gpu {
     }
 
     pub fn shader(&self, source: &str) -> ShaderModule {
-        let common = include_str!("common.wgsl");
+        let common = include_str!("renderer/wgsl/common.wgsl");
 
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,

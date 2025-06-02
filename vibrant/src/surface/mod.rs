@@ -1,13 +1,12 @@
 pub mod color;
 pub mod density;
-pub mod gbuffer;
-pub mod slice;
+pub mod occlusion;
+pub mod vvs;
 
 use color::Color;
 use density::Density;
-use gbuffer::GBuffer;
 use log::warn;
-use slice::SliceBuffer;
+use occlusion::Occlusion;
 use wgpu::{
     CommandEncoder, CompositeAlphaMode, Extent3d, Origin3d, PresentMode, SurfaceConfiguration,
     SurfaceTarget, TexelCopyTextureInfo, TextureAspect, TextureUsages,
@@ -25,8 +24,7 @@ pub struct SurfaceBuffer {
     layers: u32,
     color: Color,
     density: Density,
-    gbuffer: GBuffer,
-    slice: SliceBuffer,
+    occlusion: Occlusion,
 }
 
 impl SurfaceBuffer {
@@ -39,14 +37,7 @@ impl SurfaceBuffer {
             layers: controller.layers(),
             color: Color::new(gpu, controller.width(), controller.height()),
             density: Density::new(gpu, controller.volume()),
-            gbuffer: GBuffer::new(gpu, controller.width(), controller.height()),
-            slice: SliceBuffer::new(
-                gpu,
-                controller.width(),
-                controller.height(),
-                controller.tile(),
-                controller.layers(),
-            ),
+            occlusion: Occlusion::new(gpu, controller.volume()),
         }
     }
 
@@ -58,6 +49,10 @@ impl SurfaceBuffer {
         self.height
     }
 
+    pub fn volume(&self) -> u32 {
+        self.volume
+    }
+
     pub fn color(&self) -> &Color {
         &self.color
     }
@@ -66,12 +61,8 @@ impl SurfaceBuffer {
         &self.density
     }
 
-    pub fn gbuffer(&self) -> &GBuffer {
-        &self.gbuffer
-    }
-
-    pub fn slice(&self) -> &SliceBuffer {
-        &self.slice
+    pub fn occlusion(&self) -> &Occlusion {
+        &self.occlusion
     }
 }
 

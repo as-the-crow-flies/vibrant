@@ -41,7 +41,7 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
 
     for (var distance = hit.x + jitter; distance < hit.y; distance += step) {
         let position = ray.origin + distance * ray.direction;
-        let density = factor * precision_decode(textureSampleLevel(DENSITY, SAMPLER, position + 0.5, 0.0).x);
+        let density = factor * precision_decode(textureSampleLevel(DENSITY, SAMPLER, position + 0.5, ENVIRONMENT.settings.level).x);
         occlusion += (1.0 - occlusion) * saturate(density);
     }
 

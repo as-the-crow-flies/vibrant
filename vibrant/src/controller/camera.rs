@@ -58,7 +58,7 @@ impl Camera {
 
         let distance_to_corners = 1.0;
 
-        self.near = (self.distance - distance_to_corners).max(0.001);
+        self.near = (self.distance - distance_to_corners).max(0.01);
         self.far = self.distance + distance_to_corners;
     }
 

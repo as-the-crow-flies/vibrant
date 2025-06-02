@@ -7,13 +7,9 @@ use vibrant::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        tractogram::{
-            density::TractogramDensityPipeline,
-            geometry::{line::TractogramLineGeometry, tube::TractogramTubeGeometry},
-            slice::TractogramSlicePipeline,
-        },
+        tractogram::{density::TractogramDensityPipeline, occlusion::TractogramOcclusionPipeline},
     },
-    surface::{density::Density, SurfaceBuffer},
+    surface::SurfaceBuffer,
 };
 
 const WIDTH: u32 = 1920;
@@ -35,54 +31,12 @@ pub fn get_environment(gpu: &Gpu) -> Environment {
     return environment;
 }
 
-pub fn line(criterion: &mut Criterion) {
+pub fn empty(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
-    let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
-    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
-
-    let pipeline = TractogramLineGeometry::new(gpu);
-
-    criterion.bench_function("line", |bencher| {
+    criterion.bench_function("empty", |bencher| {
         bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-
-            pipeline.render(
-                &mut cmd,
-                environment,
-                frame,
-                tractogram,
-                tractogram.filter_default(),
-            );
-
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-pub fn tube(criterion: &mut Criterion) {
-    let gpu = &Gpu::new().block_on();
-
-    let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
-    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
-
-    let pipeline = TractogramTubeGeometry::new(gpu);
-
-    criterion.bench_function("tube", |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-
-            pipeline.render(
-                &mut cmd,
-                environment,
-                frame,
-                tractogram,
-                tractogram.filter_default(),
-            );
-
+            let cmd = gpu.cmd();
             gpu.submit(cmd);
             gpu.wait();
         })
@@ -93,41 +47,12 @@ pub fn density(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
+    let frame = &SurfaceBuffer::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
-
-    let density = &Density::new(gpu, VOLUME);
 
     let pipeline = TractogramDensityPipeline::new(gpu);
 
     criterion.bench_function("density", |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-
-            pipeline.render(&mut cmd, environment, tractogram, density);
-
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-pub fn slice(criterion: &mut Criterion) {
-    let gpu = &Gpu::new().block_on();
-
-    let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
-    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
-
-    let density = &Density::new(gpu, VOLUME);
-
-    let mut cmd = gpu.cmd();
-    TractogramDensityPipeline::new(gpu).render(&mut cmd, environment, tractogram, density);
-    gpu.submit(cmd);
-    gpu.wait();
-
-    let pipeline = TractogramSlicePipeline::new(gpu);
-
-    criterion.bench_function("slice", |bencher| {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
@@ -139,5 +64,31 @@ pub fn slice(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, density, slice, line, tube);
+pub fn occlusion(criterion: &mut Criterion) {
+    let gpu = &Gpu::new().block_on();
+
+    let environment = &get_environment(gpu);
+    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
+
+    let mut cmd = gpu.cmd();
+    TractogramDensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    gpu.submit(cmd);
+    gpu.wait();
+
+    let pipeline = TractogramOcclusionPipeline::new(gpu);
+
+    criterion.bench_function("occlusion", |bencher| {
+        bencher.iter(|| {
+            let mut cmd = gpu.cmd();
+
+            pipeline.render(&mut cmd, frame, environment);
+
+            gpu.submit(cmd);
+            gpu.wait();
+        })
+    });
+}
+
+criterion_group!(benches, empty, density, occlusion);
 criterion_main!(benches);

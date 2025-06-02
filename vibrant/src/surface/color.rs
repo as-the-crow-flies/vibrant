@@ -1,9 +1,11 @@
 use std::any::type_name;
 
 use wgpu::{
-    ColorTargetState, ColorWrites, Extent3d, LoadOp, Operations, RenderPassColorAttachment,
-    StoreOp, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureView, TextureViewDescriptor,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingResource, BindingType, ColorTargetState, ColorWrites, Extent3d,
+    LoadOp, Operations, RenderPassColorAttachment, ShaderStages, StorageTextureAccess, StoreOp,
+    Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -12,6 +14,7 @@ pub struct Color {
     texture: Texture,
     view: TextureView,
     view_sgrb: TextureView,
+    binding_write: BindGroup,
 }
 
 impl Color {
@@ -33,6 +36,7 @@ impl Color {
             dimension: TextureDimension::D2,
             format: Self::FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::STORAGE_BINDING
                 | TextureUsages::TEXTURE_BINDING
                 | TextureUsages::COPY_SRC,
             view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
@@ -50,10 +54,20 @@ impl Color {
             ..Default::default()
         });
 
+        let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &Self::layout_write(gpu),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&view),
+            }],
+        });
+
         Self {
             texture,
             view,
             view_sgrb,
+            binding_write,
         }
     }
 
@@ -97,6 +111,27 @@ impl Color {
                 store: StoreOp::Store,
             },
         }
+    }
+
+    pub fn binding_write(&self) -> &BindGroup {
+        &self.binding_write
+    }
+
+    pub fn layout_write(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::WriteOnly,
+                        format: Self::FORMAT,
+                        view_dimension: TextureViewDimension::D2,
+                    },
+                    count: None,
+                }],
+            })
     }
 }
 

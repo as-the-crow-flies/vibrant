@@ -9,10 +9,14 @@ use wgpu::{
     BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
 };
 
-use crate::{asset::scalar::ScalarTexture3D, gpu::Gpu};
+use crate::{
+    asset::scalar::{R8Uint, R8Unorm, ScalarTexture3D},
+    gpu::Gpu,
+};
 
 pub struct Density {
-    texture: ScalarTexture3D,
+    density: ScalarTexture3D<R8Unorm>,
+    count: ScalarTexture3D<R8Uint>,
     buffer: Buffer,
     transform: Buffer,
     binding: BindGroup,
@@ -27,13 +31,22 @@ impl Density {
         let transform = Mat4::from_translation(Vec3::new(scale / 2.0, scale / 2.0, scale / 2.0))
             * Mat4::from_scale(Vec3::new(scale, scale, scale));
 
-        let texture = ScalarTexture3D::new(
+        let density = ScalarTexture3D::<R8Unorm>::new(
             gpu,
             volume,
             volume,
             volume,
             transform,
             wgpu::FilterMode::Linear,
+        );
+
+        let count = ScalarTexture3D::<R8Uint>::new(
+            gpu,
+            volume,
+            volume,
+            volume,
+            transform,
+            wgpu::FilterMode::Nearest,
         );
 
         let n_voxels = volume * volume * volume;
@@ -75,7 +88,8 @@ impl Density {
         });
 
         Self {
-            texture,
+            density,
+            count,
             buffer,
             transform,
             binding,
@@ -86,8 +100,12 @@ impl Density {
         cmd.clear_buffer(&self.buffer, 0, None);
     }
 
-    pub fn volume(&self) -> &ScalarTexture3D {
-        &self.texture
+    pub fn density(&self) -> &ScalarTexture3D<R8Unorm> {
+        &self.density
+    }
+
+    pub fn count(&self) -> &ScalarTexture3D<R8Uint> {
+        &self.count
     }
 
     pub fn binding(&self) -> &BindGroup {

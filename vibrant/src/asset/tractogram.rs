@@ -1,8 +1,3 @@
-use lindel::morton_encode;
-use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
-    slice::ParallelSliceMut,
-};
 use std::{any::type_name, f32::consts::PI};
 
 use glam::{Mat4, Quat, Vec3, Vec4};
@@ -12,45 +7,23 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferUsages, ShaderStages,
+    BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
 };
 
 use crate::{file, gpu::Gpu};
 
-use super::filter::Filter;
-
 pub struct Tractogram {
     vertices: Buffer,
+    indices: Buffer,
+    count: Buffer,
     binding: BindGroup,
-    filter_default: Filter,
-    filter_culling: Filter,
 }
 
 impl Tractogram {
-    pub fn vertices(&self) -> &Buffer {
-        &self.vertices
-    }
-
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
-    }
-
-    pub fn vertex_count(&self) -> u32 {
-        (self.vertices.size() / 12) as u32
-    }
-
-    pub fn filter_default(&self) -> &Filter {
-        &self.filter_default
-    }
-
-    pub fn filter_culling(&self) -> &Filter {
-        &self.filter_culling
-    }
-
     pub fn new(gpu: &Gpu, tck: &file::TractogramFile) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mut indices = tck
+        let indices = tck
             .vertices()
             .iter()
             .enumerate()
@@ -70,16 +43,6 @@ impl Tractogram {
             Vec3::ZERO,
         );
 
-        let morton: Vec<u32> = vertices
-            .par_iter()
-            .map(|&vertex| {
-                let vertex = (u8::MAX as f32) * (0.5 + 0.5 * vertex / scale);
-                morton_encode([vertex.x as u8, vertex.y as u8, vertex.z as u8])
-            })
-            .collect();
-
-        indices.par_sort_by_cached_key(|&index| morton[index as usize]);
-
         let world_to_tractogram = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::bytes_of(&transform),
@@ -96,6 +59,19 @@ impl Tractogram {
             label,
             contents: bytemuck::cast_slice(&vertices),
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
+        });
+
+        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&indices),
+            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
+        });
+
+        let count = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 8,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -126,15 +102,47 @@ impl Tractogram {
                         size: None,
                     }),
                 },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &indices,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &count,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
             ],
         });
 
         Self {
-            filter_default: Filter::new(gpu, &indices),
-            filter_culling: Filter::new(gpu, &indices),
             vertices,
+            indices,
+            count,
             binding,
         }
+    }
+
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
+    }
+
+    pub fn index_count(&self) -> u32 {
+        (self.indices.size() / 4) as u32
+    }
+
+    pub fn vertex_count(&self) -> u32 {
+        (self.vertices.size() / 12) as u32
+    }
+
+    pub fn clear_count(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_buffer(&self.count, 0, None);
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -172,6 +180,26 @@ impl Tractogram {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::all(),
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -180,5 +208,7 @@ impl Tractogram {
 impl Drop for Tractogram {
     fn drop(&mut self) {
         self.vertices.destroy();
+        self.indices.destroy();
+        self.count.destroy();
     }
 }

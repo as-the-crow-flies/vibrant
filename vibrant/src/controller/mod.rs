@@ -8,7 +8,7 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{GeometrySetting, Settings, ShadingSetting};
+use settings::{Settings, ShadingSetting};
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
@@ -96,30 +96,13 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
-            ComboBox::from_label("Geometry")
-                .selected_text(format!("{:?}", self.settings.geometry))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Line, "Line");
-                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Tube, "Tube");
-                    ui.selectable_value(
-                        &mut self.settings.geometry,
-                        GeometrySetting::Transparency,
-                        "Transparency",
-                    );
-                });
-
             ComboBox::from_label("Shading")
                 .selected_text(format!("{:?}", self.settings.shading))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.settings.shading,
-                        ShadingSetting::Simple,
-                        "Simple",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::GBuffer,
-                        "GBuffer",
+                        ShadingSetting::Render,
+                        "Render",
                     );
                     ui.selectable_value(
                         &mut self.settings.shading,
@@ -128,13 +111,8 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.shading,
-                        ShadingSetting::Culling,
-                        "Culling",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Tracing,
-                        "Tracing",
+                        ShadingSetting::Occlusion,
+                        "Occlusion",
                     );
                 });
 
@@ -154,36 +132,12 @@ impl Controller {
                     }
                 });
 
-            ComboBox::from_label("Tile")
-                .selected_text(format!("{:?}", self.tile))
-                .show_ui(ui, |ui| {
-                    for power in 1u32..6 {
-                        ui.selectable_value(
-                            &mut self.tile,
-                            2u32.pow(power),
-                            format!("{}", 2u32.pow(power)),
-                        );
-                    }
-                });
-
-            ComboBox::from_label("Layers")
-                .selected_text(format!("{:?}", self.layers))
-                .show_ui(ui, |ui| {
-                    for power in 3u32..7 {
-                        ui.selectable_value(
-                            &mut self.layers,
-                            2u32.pow(power),
-                            format!("{}", 2u32.pow(power)),
-                        );
-                    }
-                });
-
             ui.separator();
             ui.label("Appearance");
             ui.separator();
 
             ui.add(
-                Slider::new(&mut self.settings.streamline_radius, 0.1..=1.0)
+                Slider::new(&mut self.settings.streamline_radius, 0.01..=1.0)
                     .text("Streamline Radius"),
             );
 
@@ -195,14 +149,7 @@ impl Controller {
                     .text("Alpha"),
             );
 
-            ui.add(
-                Slider::new(&mut self.settings.culling_threshold, 0.0..=10.0)
-                    .text("Culling Threshold"),
-            );
-
-            ui.add(Slider::new(&mut self.settings.level, 0.0..=16.0).text("Level"));
-            ui.add(Slider::new(&mut self.settings.layer, 0..=self.layers).text("Layer"));
-            ui.checkbox(&mut self.settings.quality, "Quality");
+            ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
         });
     }
 

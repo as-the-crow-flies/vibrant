@@ -6,17 +6,17 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::ScalarTexture3D,
+    asset::scalar::{R8Unorm, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::Color, SurfaceBuffer},
 };
 
-pub struct TractogramDensityShading {
+pub struct TractogramVolumeShadingPipeline {
     pipeline: RenderPipeline,
 }
 
-impl TractogramDensityShading {
+impl TractogramVolumeShadingPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -28,7 +28,7 @@ impl TractogramDensityShading {
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label,
                     layout: Some(&gpu.pipeline_layout(&[
-                        &ScalarTexture3D::layout(gpu),
+                        &ScalarTexture3D::<R8Unorm>::layout(gpu),
                         &Environment::layout(gpu),
                     ])),
                     vertex: VertexState {
@@ -59,6 +59,7 @@ impl TractogramDensityShading {
         &self,
         cmd: &mut CommandEncoder,
         frame: &SurfaceBuffer,
+        texture: &ScalarTexture3D<R8Unorm>,
         environment: &Environment,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -67,7 +68,7 @@ impl TractogramDensityShading {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.density().volume().binding(), &[]);
+        pass.set_bind_group(0, texture.binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
