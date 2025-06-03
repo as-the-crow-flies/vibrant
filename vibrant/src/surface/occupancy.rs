@@ -1,12 +1,9 @@
 use std::{any::type_name, ops::Mul};
 
-use glam::Mat4;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoder, Extent3d, FilterMode, ShaderStages,
-    StorageTextureAccess, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    BufferDescriptor, BufferUsages, CommandEncoder, FilterMode, ShaderStages,
 };
 
 use crate::{
@@ -15,7 +12,7 @@ use crate::{
 };
 
 pub struct Occupancy {
-    offset: Texture,
+    offset: Buffer,
     count: Buffer,
     index: Buffer,
     bin: Buffer,
@@ -29,22 +26,12 @@ impl Occupancy {
     pub fn new(gpu: &Gpu, volume: u32, memory: u32) -> Self {
         let label = Some(type_name::<Self>());
 
-        let offset = gpu.device().create_texture(&TextureDescriptor {
+        let offset = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: Extent3d {
-                width: volume,
-                height: volume,
-                depth_or_array_layers: volume,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D3,
-            format: TextureFormat::R32Uint,
-            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
+            size: volume.pow(3).mul(4) as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
         });
-
-        let offset_view = offset.create_view(&TextureViewDescriptor::default());
 
         let count = gpu.device().create_buffer(&BufferDescriptor {
             label,
@@ -74,19 +61,17 @@ impl Occupancy {
             mapped_at_creation: false,
         });
 
-        let occupancy: ScalarTexture3D<R8Unorm> = ScalarTexture3D::new(
-            gpu,
-            volume,
-            volume,
-            volume,
-            Mat4::IDENTITY,
-            FilterMode::Linear,
-        );
+        let occupancy: ScalarTexture3D<R8Unorm> =
+            ScalarTexture3D::new(gpu, volume, FilterMode::Linear);
 
         let entries = &[
             BindGroupEntry {
                 binding: 0,
-                resource: BindingResource::TextureView(&offset_view),
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &offset,
+                    offset: 0,
+                    size: None,
+                }),
             },
             BindGroupEntry {
                 binding: 1,
@@ -183,14 +168,10 @@ impl Occupancy {
                     BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::StorageTexture {
-                            access: if read_only {
-                                StorageTextureAccess::ReadOnly
-                            } else {
-                                StorageTextureAccess::ReadWrite
-                            },
-                            format: TextureFormat::R32Uint,
-                            view_dimension: TextureViewDimension::D3,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
                         },
                         count: None,
                     },

@@ -1,6 +1,7 @@
 pub mod density;
 pub mod occlusion;
 pub mod occupancy;
+pub mod populate;
 pub mod render;
 pub mod shading;
 
@@ -12,7 +13,10 @@ use crate::{
     asset::tractogram::Tractogram,
     controller::settings::{Settings, ShadingSetting},
     gpu::Gpu,
-    renderer::tractogram::{occlusion::OcclusionPipeline, occupancy::OccupancyPipeline},
+    renderer::tractogram::{
+        occlusion::OcclusionPipeline, occupancy::OccupancyPipeline, populate::PopulatePipeline,
+        render::TractogramRenderPipeline,
+    },
     surface::SurfaceBuffer,
 };
 
@@ -22,7 +26,9 @@ pub struct TractogramRenderer {
     density: DensityPipeline,
     occlusion: OcclusionPipeline,
     occupancy: OccupancyPipeline,
+    populate: PopulatePipeline,
     volume: VolumeShadingPipeline,
+    render: TractogramRenderPipeline,
 }
 
 impl TractogramRenderer {
@@ -31,7 +37,9 @@ impl TractogramRenderer {
             density: DensityPipeline::new(gpu),
             occlusion: OcclusionPipeline::new(gpu),
             occupancy: OccupancyPipeline::new(gpu),
+            populate: PopulatePipeline::new(gpu),
             volume: VolumeShadingPipeline::new(gpu),
+            render: TractogramRenderPipeline::new(gpu),
         }
     }
 
@@ -46,9 +54,10 @@ impl TractogramRenderer {
         self.density.render(cmd, frame, environment, tractogram);
         self.occlusion.render(cmd, frame, environment);
         self.occupancy.render(cmd, frame, environment);
+        self.populate.render(cmd, frame, environment, tractogram);
 
         match settings.shading {
-            ShadingSetting::Render => todo!(),
+            ShadingSetting::Render => self.render.render(cmd, frame, environment, tractogram),
             ShadingSetting::Density => {
                 self.volume
                     .render(cmd, frame, frame.density().volume(), environment)

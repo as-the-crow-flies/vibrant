@@ -1,4 +1,3 @@
-use glam::Mat4;
 use wgpu::FilterMode;
 
 use crate::{
@@ -13,14 +12,7 @@ pub struct Occlusion {
 impl Occlusion {
     pub fn new(gpu: &Gpu, volume: u32) -> Self {
         Self {
-            volume: ScalarTexture3D::<R8Unorm>::new(
-                gpu,
-                volume,
-                volume,
-                volume,
-                Mat4::IDENTITY,
-                FilterMode::Linear,
-            ),
+            volume: ScalarTexture3D::<R8Unorm>::new(gpu, volume, FilterMode::Linear),
         }
     }
 

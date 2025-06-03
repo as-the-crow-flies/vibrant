@@ -58,8 +58,6 @@ fn compute(pixel: vec2<u32>) -> vec4<f32> {
 
     while (next.w > 0.0) {
         let increment = minimum4(next);
-        let mask = next == vec4<f32>(increment);
-        let next_voxel = voxel + step * vec3<i32>(mask.xyz);
 
         var closest = 10.0;
         var color = vec3<f32>(0.0);
@@ -89,7 +87,8 @@ fn compute(pixel: vec2<u32>) -> vec4<f32> {
             return vec4<f32>(color, 1.0);
         }
 
-        voxel = next_voxel;
+        let mask = next == vec4<f32>(increment);
+        voxel = voxel + step * vec3<i32>(mask.xyz);
         next = select(next - increment, voxel_boundaries, mask);
     }
 

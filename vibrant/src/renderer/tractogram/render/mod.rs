@@ -45,6 +45,7 @@ impl TractogramRenderPipeline {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(1, frame.occupancy().binding(true), &[]);
         pass.set_bind_group(2, frame.density().count().binding(), &[]);
         pass.set_bind_group(3, frame.density().volume().binding(), &[]);
         pass.set_bind_group(4, environment.binding(), &[]);

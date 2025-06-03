@@ -1,4 +1,4 @@
-@group(0) @binding(0) var OFFSET: texture_storage_3d<r32uint, read_write>;;
+@group(0) @binding(0) var<storage, read_write> OFFSET: array<u32>;
 
 @group(0) @binding(1) var<storage, read_write> SUM: atomic<u32>;
 @group(0) @binding(4) var<storage, read_write> THRESHOLD: f32;
@@ -27,7 +27,7 @@ fn main(
     let count = textureLoad(COUNT, voxel, 0).x;
     let occlusion = textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, uv, 0.0).x;
 
-    let occupancy = u32(occlusion < THRESHOLD) * count;
+    let occupancy = u32(occlusion <= THRESHOLD) * count;
 
     let workgroup_offset = workgroupExclusiveAdd(occupancy, local, subgroup, subgroup_size);
 
@@ -37,6 +37,7 @@ fn main(
 
     let offset = workgroupUniformLoad(&WORKGROUP_GLOBAL_OFFSET) + workgroup_offset;
 
-    textureStore(OFFSET, voxel, vec4<u32>(offset));
+    OFFSET[block_index(voxel, dim)] = offset;
+
     textureStore(OCCUPANCY, voxel, vec4<f32>(f32(occupancy > 0)));
 }

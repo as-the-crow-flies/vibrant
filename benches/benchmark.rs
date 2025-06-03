@@ -9,6 +9,7 @@ use vibrant::{
         environment::Environment,
         tractogram::{
             density::DensityPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
+            populate::PopulatePipeline,
         },
     },
     surface::SurfaceBuffer,
@@ -116,12 +117,36 @@ pub fn occupancy(criterion: &mut Criterion) {
             gpu.wait();
         })
     });
-
-    let bin: Vec<u32> = gpu.read_buffer(frame.occupancy().bin()).block_on();
-    let threshold: f32 = gpu.read_buffer(frame.occupancy().threshold()).block_on()[0];
-
-    dbg!(bin, threshold);
 }
 
-criterion_group!(benches, empty, density, occlusion, occupancy);
+pub fn populate(criterion: &mut Criterion) {
+    let gpu = &Gpu::new().block_on();
+
+    let environment = &get_environment(gpu);
+    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
+
+    let mut cmd = gpu.cmd();
+    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
+    gpu.submit(cmd);
+    gpu.wait();
+
+    let occupancy = OccupancyPipeline::new(gpu);
+    let populate = PopulatePipeline::new(gpu);
+
+    criterion.bench_function("populate", |bencher| {
+        bencher.iter(|| {
+            let mut cmd = gpu.cmd();
+
+            occupancy.render(&mut cmd, frame, environment);
+            populate.render(&mut cmd, frame, environment, tractogram);
+
+            gpu.submit(cmd);
+            gpu.wait();
+        })
+    });
+}
+
+criterion_group!(benches, empty, density, occlusion, occupancy, populate);
 criterion_main!(benches);

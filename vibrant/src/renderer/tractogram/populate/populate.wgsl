@@ -1,5 +1,7 @@
-@group(0) @binding(0) var<storage, read_write> DENSITY: array<atomic<u32>>;
+@group(0) @binding(0) var<storage, read_write> OFFSET: array<atomic<u32>>;
+@group(0) @binding(2) var<storage, read_write> INDEX: array<u32>;
 
+@group(1) @binding(0) var OCCUPANCY: texture_3d<f32>;
 @group(1) @binding(2) var<uniform> WORLD_TO_VOLUME: mat4x4<f32>;
 
 @group(2) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
@@ -14,7 +16,7 @@
 const WORKGROUP_SIZE: u32 = 1024;
 const CHUNK_SIZE: u32 = 32;
 
-var<workgroup> OFFSET: u32;
+var<workgroup> WORKGROUP_OFFSET: u32;
 
 @compute
 @workgroup_size(WORKGROUP_SIZE)
@@ -25,10 +27,10 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
     loop {
         if (local == 0) {
-            OFFSET = atomicAdd(&TRACTOGRAM_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
+            WORKGROUP_OFFSET = atomicAdd(&TRACTOGRAM_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
         }
 
-        let offset = workgroupUniformLoad(&OFFSET);
+        let offset = workgroupUniformLoad(&WORKGROUP_OFFSET);
 
         if (offset >= n_indices) { return; }
 
@@ -44,30 +46,5 @@ fn main(@builtin(local_invocation_index) local: u32) {
 }
 
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: vec3<f32>, v1: vec3<f32>) {
-    let smoothing = ENVIRONMENT.settings.smoothing;
-    let radius = ENVIRONMENT.settings.streamline_radius;
-    let radius_clamp = max(smoothing, radius);
-
-    let coverage_multiplier = saturate(radius * radius / smoothing) * f32(U20_MAX);
-
-    let sample = vec3<f32>(voxel) + 0.5;
-
-    let alpha = saturate(0.5 - capsule(sample, v0, v1, radius_clamp))
-              - saturate(0.5 - sphere(sample - v0, radius_clamp));
-
-    let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
-    let value = u32(ENVIRONMENT.settings.alpha * alpha * coverage_multiplier);
-
-    atomicAdd(&DENSITY[idx], (value << 8) + 1);
-}
-
-fn capsule(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
-    let pa = p - a;
-    let ba = b - a;
-    let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-    return length(pa - ba * h) - r;
-}
-
-fn sphere(p: vec3<f32>, r: f32) -> f32 {
-  return length(p) - r;
+    INDEX[atomicAdd(&OFFSET[block_index(vec3<u32>(voxel), textureDimensions(OCCUPANCY))], 1u)] = index;
 }

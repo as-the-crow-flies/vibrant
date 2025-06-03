@@ -69,7 +69,7 @@ impl Tractogram {
 
         let count = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 8,
+            size: 4,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

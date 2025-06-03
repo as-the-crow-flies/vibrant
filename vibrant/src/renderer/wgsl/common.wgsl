@@ -37,6 +37,7 @@ const U8_MAX: u32 = 255;
 const U8_MAX_f32: f32 = f32(U8_MAX);
 const U8_MAX_INV: f32 = 0.003921568627;
 
+const BLOCK_BITS: u32 = 3u;
 const BLOCK_SIZE: u32 = 8u;
 const BLOCK_SIZE_2: u32 = BLOCK_SIZE * BLOCK_SIZE;
 const BLOCK_SIZE_3: u32 = BLOCK_SIZE_2 * BLOCK_SIZE;
@@ -45,13 +46,13 @@ const U24_MAX: u32 = 16777216;
 
 fn block_index(voxel: vec3<u32>, dim: vec3<u32>) -> u32 {
     // Number of blocks along each axis
-    let blocks = (dim + (BLOCK_SIZE - 1u)) / BLOCK_SIZE;
+    let blocks = dim >> vec3<u32>(BLOCK_BITS);
 
     // Block coordinate of this voxel
-    let block_coord = voxel / BLOCK_SIZE;
+    let block_coord = voxel >> vec3<u32>(BLOCK_BITS);
 
     // Local coordinate within the block
-    let local_coord = voxel % BLOCK_SIZE;
+    let local_coord = voxel & vec3<u32>(BLOCK_SIZE - 1);
 
     // Linear index of the block
     let block_index =

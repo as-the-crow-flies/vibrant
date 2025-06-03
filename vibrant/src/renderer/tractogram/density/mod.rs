@@ -30,6 +30,7 @@ impl DensityPipeline {
                         label,
                         bind_group_layouts: &[
                             &Density::layout(gpu),
+                            &ScalarTexture3D::<R8Unorm>::layout(gpu),
                             &Tractogram::layout(gpu),
                             &Environment::layout(gpu),
                         ],
@@ -76,6 +77,7 @@ impl DensityPipeline {
         tractogram: &Tractogram,
     ) {
         frame.density().clear(cmd);
+        tractogram.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Density"),
@@ -85,11 +87,12 @@ impl DensityPipeline {
         let n = frame.density().volume().width().div_ceil(8);
 
         pass.set_bind_group(0, frame.density().binding(), &[]);
-        pass.set_bind_group(1, tractogram.binding(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(1, frame.density().volume().binding(), &[]);
+        pass.set_bind_group(2, tractogram.binding(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
 
         pass.set_pipeline(&self.voxelize);
-        pass.dispatch_workgroups(tractogram.index_count().div_ceil(1024 * 32), 1, 1);
+        pass.dispatch_workgroups(64, 1, 1);
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, frame.density().binding(), &[]);

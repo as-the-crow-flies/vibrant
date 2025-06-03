@@ -41,7 +41,7 @@ impl Settings {
             quality: false,
             smoothing: 0.5,
             geometry: GeometrySetting::Tube,
-            shading: ShadingSetting::Density,
+            shading: ShadingSetting::Render,
         }
     }
 }

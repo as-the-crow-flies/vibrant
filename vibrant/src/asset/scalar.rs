@@ -1,7 +1,7 @@
 use std::{any::type_name, marker::PhantomData, ops::Add};
 
 use bytemuck::bytes_of;
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -72,33 +72,17 @@ pub struct ScalarTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
 }
 
 impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION, Format> {
-    pub fn new(
-        gpu: &Gpu,
-        width: u32,
-        height: u32,
-        depth: u32,
-        transform: Mat4,
-        filter: FilterMode,
-    ) -> Self {
+    pub fn new(gpu: &Gpu, volume: u32, filter: FilterMode) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mip_level_count = match DIMENSION {
-            1 => width,
-            2 | 4 => width.min(height),
-            3 => width.min(height).min(depth),
-            _ => panic!("Texture Dimension should be between 1 and 3"),
-        }
-        .div_ceil(2)
-        .add(1)
-        .ilog2()
-        .max(1);
+        let mip_level_count = volume.div_ceil(2).add(1).ilog2().max(1);
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
             label,
             size: Extent3d {
-                width,
-                height,
-                depth_or_array_layers: depth,
+                width: volume,
+                height: volume,
+                depth_or_array_layers: volume,
             },
             mip_level_count,
             sample_count: 1,
@@ -126,6 +110,10 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
             mipmap_filter: filter,
             ..Default::default()
         });
+
+        let scale = volume as f32;
+        let transform = Mat4::from_translation(Vec3::new(scale / 2.0, scale / 2.0, scale / 2.0))
+            * Mat4::from_scale(Vec3::new(scale, scale, scale));
 
         let transform_inverse = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,

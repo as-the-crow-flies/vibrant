@@ -28,7 +28,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     var absorbance = 0.0;
 
-    for (var depth = 0.0; depth < 1.0; depth += step) {
+    for (var depth = step; depth < 1.0; depth += step) {
         let sample = mix(position, camera, depth);
 
         if (any(abs(sample) > vec3<f32>(0.5))) { break; }
