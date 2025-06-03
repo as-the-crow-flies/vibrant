@@ -71,6 +71,14 @@ impl Color {
         }
     }
 
+    pub fn width(&self) -> u32 {
+        self.texture.width()
+    }
+
+    pub fn height(&self) -> u32 {
+        self.texture.height()
+    }
+
     pub fn texture(&self) -> &Texture {
         &self.texture
     }

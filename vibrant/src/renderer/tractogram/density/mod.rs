@@ -12,13 +12,13 @@ use crate::{
     surface::{density::Density, SurfaceBuffer},
 };
 
-pub struct TractogramDensityPipeline {
+pub struct DensityPipeline {
     voxelize: ComputePipeline,
     copy: ComputePipeline,
     mipmap: ComputePipeline,
 }
 
-impl TractogramDensityPipeline {
+impl DensityPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -82,7 +82,7 @@ impl TractogramDensityPipeline {
             ..Default::default()
         });
 
-        let n = frame.density().density().width().div_ceil(8);
+        let n = frame.density().volume().width().div_ceil(8);
 
         pass.set_bind_group(0, frame.density().binding(), &[]);
         pass.set_bind_group(1, tractogram.binding(), &[]);
@@ -93,16 +93,16 @@ impl TractogramDensityPipeline {
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, frame.density().binding(), &[]);
-        pass.set_bind_group(1, frame.density().density().binding_write(), &[]);
+        pass.set_bind_group(1, frame.density().volume().binding_write(), &[]);
         pass.set_bind_group(2, frame.density().count().binding_write(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.density().density().width().div_ceil(8);
+        let mut mipmap = frame.density().volume().width().div_ceil(8);
 
-        for binding in frame.density().density().bindings_mipmap() {
+        for binding in frame.density().volume().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

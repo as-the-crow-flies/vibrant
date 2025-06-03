@@ -20,11 +20,10 @@ struct Camera {
 
 struct Environment {
     surface: vec2<u32>,
-    tiles: vec2<u32>,
     volume: u32,
-    tile: u32,
-    slices: u32,
-    layers: u32,
+    occlusion: u32,
+    memory_: vec3<u32>,
+    memory: u32,
     camera: Camera,
     light: vec3<f32>,
     light_: f32,
@@ -41,6 +40,8 @@ const U8_MAX_INV: f32 = 0.003921568627;
 const BLOCK_SIZE: u32 = 8u;
 const BLOCK_SIZE_2: u32 = BLOCK_SIZE * BLOCK_SIZE;
 const BLOCK_SIZE_3: u32 = BLOCK_SIZE_2 * BLOCK_SIZE;
+
+const U24_MAX: u32 = 16777216;
 
 fn block_index(voxel: vec3<u32>, dim: vec3<u32>) -> u32 {
     // Number of blocks along each axis
@@ -85,20 +86,22 @@ fn precision_decode(x: f32) -> f32 {
     return saturate(pow(saturate(x), GAMMA_INV));
 }
 
-const RGBA_ENCODE_FACTOR: f32 = 100.0;
+var<workgroup> WORKGROUP_EXCLUSIVE_ADD: array<u32, 32>;
+fn workgroupExclusiveAdd(value: u32, local: u32, subgroup: u32, subgroup_size: u32) -> u32 {
+    let subgroup_id = local / subgroup_size;
+    let subgroup_cumsum = subgroupExclusiveAdd(value);
 
-fn rgba_encode(color: vec4<f32>, absorbance: f32) -> vec2<u32> {
-    let premultiplied = vec4<f32>(color.rgb * color.a, color.a) ;
+    if (subgroup == subgroup_size - 1) {
+        WORKGROUP_EXCLUSIVE_ADD[subgroup_id] = subgroup_cumsum + value;
+    }
 
-    return vec2<u32>(
-        pack2x16unorm(premultiplied.rg / RGBA_ENCODE_FACTOR / absorbance),
-        pack2x16unorm(premultiplied.ba / RGBA_ENCODE_FACTOR / absorbance)
-    );
-}
+    workgroupBarrier();
 
-fn rgba_decode(encoded: vec2<u32>, absorbance: f32) -> vec4<f32> {
-    return vec4<f32>(
-        unpack2x16unorm(encoded.x) * RGBA_ENCODE_FACTOR * absorbance,
-        unpack2x16unorm(encoded.y) * RGBA_ENCODE_FACTOR * absorbance,
-    );
+    if (local < 32) {
+        WORKGROUP_EXCLUSIVE_ADD[local] = subgroupExclusiveAdd(WORKGROUP_EXCLUSIVE_ADD[local]);
+    }
+
+    workgroupBarrier();
+
+    return WORKGROUP_EXCLUSIVE_ADD[subgroup_id] + subgroup_cumsum;
 }

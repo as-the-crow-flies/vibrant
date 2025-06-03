@@ -1,4 +1,4 @@
-@group(0) @binding(0) var DENSITY: texture_3d<f32>;
+@group(0) @binding(0) var VOLUME: texture_3d<f32>;
 @group(0) @binding(1) var SAMPLER: sampler;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
@@ -31,7 +31,7 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
 
     if (path <= 0) { discard; }
 
-    let dim = vec3<f32>(textureDimensions(DENSITY));
+    let dim = vec3<f32>(textureDimensions(VOLUME));
     let step = 1.0 / maximum(abs(ray.direction * dim));
     let factor = dim.x * step;
 
@@ -41,7 +41,7 @@ fn fragment(ray: Ray) -> @location(0) vec4<f32> {
 
     for (var distance = hit.x + jitter; distance < hit.y; distance += step) {
         let position = ray.origin + distance * ray.direction;
-        let density = factor * precision_decode(textureSampleLevel(DENSITY, SAMPLER, position + 0.5, ENVIRONMENT.settings.level).x);
+        let density = factor * precision_decode(textureSampleLevel(VOLUME, SAMPLER, position + 0.5, ENVIRONMENT.settings.level).x);
         occlusion += (1.0 - occlusion) * saturate(density);
     }
 

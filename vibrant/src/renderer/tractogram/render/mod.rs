@@ -9,7 +9,7 @@ use crate::{
     },
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::Color, vvs::VVS, SurfaceBuffer},
+    surface::{color::Color, occupancy::Occupancy, SurfaceBuffer},
 };
 
 pub struct TractogramRenderPipeline {
@@ -23,7 +23,7 @@ impl TractogramRenderPipeline {
                 type_name::<Self>(),
                 &gpu.pipeline_layout(&[
                     &Tractogram::layout(gpu),
-                    &VVS::layout(gpu, true),
+                    &Occupancy::layout(gpu, true),
                     &ScalarTexture3D::<R8Uint>::layout(gpu),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
                     &Environment::layout(gpu),
@@ -46,10 +46,14 @@ impl TractogramRenderPipeline {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, tractogram.binding(), &[]);
         pass.set_bind_group(2, frame.density().count().binding(), &[]);
-        pass.set_bind_group(3, frame.density().density().binding(), &[]);
+        pass.set_bind_group(3, frame.density().volume().binding(), &[]);
         pass.set_bind_group(4, environment.binding(), &[]);
         pass.set_bind_group(5, frame.color().binding_write(), &[]);
 
-        pass.dispatch_workgroups(frame.width().div_ceil(8), frame.height().div_ceil(8), 1);
+        pass.dispatch_workgroups(
+            frame.color().width().div_ceil(8),
+            frame.color().height().div_ceil(8),
+            1,
+        );
     }
 }

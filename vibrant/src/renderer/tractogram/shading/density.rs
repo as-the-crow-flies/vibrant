@@ -12,11 +12,11 @@ use crate::{
     surface::{color::Color, SurfaceBuffer},
 };
 
-pub struct TractogramVolumeShadingPipeline {
+pub struct VolumeShadingPipeline {
     pipeline: RenderPipeline,
 }
 
-impl TractogramVolumeShadingPipeline {
+impl VolumeShadingPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 

@@ -100,7 +100,11 @@ impl Density {
         cmd.clear_buffer(&self.buffer, 0, None);
     }
 
-    pub fn density(&self) -> &ScalarTexture3D<R8Unorm> {
+    pub fn resolution(&self) -> u32 {
+        self.density.width()
+    }
+
+    pub fn volume(&self) -> &ScalarTexture3D<R8Unorm> {
         &self.density
     }
 

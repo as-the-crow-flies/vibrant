@@ -24,6 +24,10 @@ impl Occlusion {
         }
     }
 
+    pub fn resolution(&self) -> u32 {
+        self.volume().width()
+    }
+
     pub fn volume(&self) -> &ScalarTexture3D<R8Unorm> {
         &self.volume
     }

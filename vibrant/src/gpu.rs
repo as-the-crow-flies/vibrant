@@ -48,7 +48,8 @@ impl Gpu {
                         ..Default::default()
                     },
                     required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | Features::BGRA8UNORM_STORAGE,
+                        | Features::BGRA8UNORM_STORAGE
+                        | Features::SUBGROUP,
                     ..Default::default()
                 },
                 None,

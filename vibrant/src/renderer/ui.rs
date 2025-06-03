@@ -29,7 +29,7 @@ impl UiRenderer {
         let (device, queue) = (gpu.device(), gpu.queue());
 
         let screen = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [frame.width(), frame.height()],
+            size_in_pixels: [frame.color().width(), frame.color().height()],
             pixels_per_point: output.pixels_per_point,
         };
 

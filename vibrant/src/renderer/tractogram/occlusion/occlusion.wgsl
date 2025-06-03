@@ -13,7 +13,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     // Camera Position in World Space
     let camera = ENVIRONMENT.camera.transform[3].xyz;
 
-    // let camera = vec3<f32>(0.0, 0.0, 1.0);
+    // let camera = vec3<f32>(1.0, 1.0, 1.0);
 
     // Voxel Position in World Space
     let position = vec3<f32>(voxel) / vec3<f32>(textureDimensions(OCCLUSION)) - 0.5;
@@ -40,7 +40,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 }
 
 fn density(sample: vec3<f32>) -> f32 {
-    return precision_decode(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample + 0.5, 0.0).x);
+    let level = f32(firstLeadingBit(ENVIRONMENT.volume / ENVIRONMENT.occlusion));
+    return precision_decode(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample + 0.5, level).x);
 }
 
 fn maximum(v: vec3<f32>) -> f32 {

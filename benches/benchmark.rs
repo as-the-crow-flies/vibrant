@@ -7,22 +7,23 @@ use vibrant::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        tractogram::{density::TractogramDensityPipeline, occlusion::TractogramOcclusionPipeline},
+        tractogram::{
+            density::DensityPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
+        },
     },
     surface::SurfaceBuffer,
 };
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
-const VOLUME: u32 = 256;
-const TILE: u32 = 4;
-
-const LAYERS: u32 = 32;
+const DENSITY: u32 = 256;
+const OCCLUSION: u32 = 32;
+const MEMORY: u32 = 32;
 
 const TRACTOGRAM_PATH: &'static str = "assets/HCP-100307/whole_brain200k.tck";
 
 pub fn get_controller() -> Controller {
-    Controller::test(WIDTH, HEIGHT, VOLUME, TILE, LAYERS)
+    Controller::test(WIDTH, HEIGHT, DENSITY, OCCLUSION, MEMORY)
 }
 
 pub fn get_environment(gpu: &Gpu) -> Environment {
@@ -50,7 +51,7 @@ pub fn density(criterion: &mut Criterion) {
     let frame = &SurfaceBuffer::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
-    let pipeline = TractogramDensityPipeline::new(gpu);
+    let pipeline = DensityPipeline::new(gpu);
 
     criterion.bench_function("density", |bencher| {
         bencher.iter(|| {
@@ -72,11 +73,11 @@ pub fn occlusion(criterion: &mut Criterion) {
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
-    TractogramDensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
 
-    let pipeline = TractogramOcclusionPipeline::new(gpu);
+    let pipeline = OcclusionPipeline::new(gpu);
 
     criterion.bench_function("occlusion", |bencher| {
         bencher.iter(|| {
@@ -90,5 +91,37 @@ pub fn occlusion(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, empty, density, occlusion);
+pub fn occupancy(criterion: &mut Criterion) {
+    let gpu = &Gpu::new().block_on();
+
+    let environment = &get_environment(gpu);
+    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
+
+    let mut cmd = gpu.cmd();
+    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
+    gpu.submit(cmd);
+    gpu.wait();
+
+    let pipeline = OccupancyPipeline::new(gpu);
+
+    criterion.bench_function("occupancy", |bencher| {
+        bencher.iter(|| {
+            let mut cmd = gpu.cmd();
+
+            pipeline.render(&mut cmd, frame, environment);
+
+            gpu.submit(cmd);
+            gpu.wait();
+        })
+    });
+
+    let bin: Vec<u32> = gpu.read_buffer(frame.occupancy().bin()).block_on();
+    let threshold: f32 = gpu.read_buffer(frame.occupancy().threshold()).block_on()[0];
+
+    dbg!(bin, threshold);
+}
+
+criterion_group!(benches, empty, density, occlusion, occupancy);
 criterion_main!(benches);

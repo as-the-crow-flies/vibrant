@@ -9,11 +9,11 @@ use crate::{
     surface::SurfaceBuffer,
 };
 
-pub struct TractogramOcclusionPipeline {
+pub struct OcclusionPipeline {
     occlusion: ComputePipeline,
 }
 
-impl TractogramOcclusionPipeline {
+impl OcclusionPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             occlusion: gpu.compute(
@@ -31,7 +31,7 @@ impl TractogramOcclusionPipeline {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        buffer: &SurfaceBuffer,
+        frame: &SurfaceBuffer,
         environment: &Environment,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -39,11 +39,11 @@ impl TractogramOcclusionPipeline {
             ..Default::default()
         });
 
-        let n = buffer.occlusion().volume().width().div_ceil(8);
+        let n = frame.occlusion().volume().width().div_ceil(8);
 
         pass.set_pipeline(&self.occlusion);
-        pass.set_bind_group(0, buffer.density().density().binding(), &[]);
-        pass.set_bind_group(1, buffer.occlusion().volume().binding_write(), &[]);
+        pass.set_bind_group(0, frame.density().volume().binding(), &[]);
+        pass.set_bind_group(1, frame.occlusion().volume().binding_write(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
     }

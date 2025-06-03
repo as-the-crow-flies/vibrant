@@ -10,6 +10,7 @@ pub enum ShadingSetting {
     Render,
     Density,
     Occlusion,
+    Occupancy,
 }
 
 #[derive(Debug)]
@@ -40,7 +41,7 @@ impl Settings {
             quality: false,
             smoothing: 0.5,
             geometry: GeometrySetting::Tube,
-            shading: ShadingSetting::Render,
+            shading: ShadingSetting::Density,
         }
     }
 }

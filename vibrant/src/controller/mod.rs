@@ -18,9 +18,9 @@ use crate::file::File;
 pub struct Controller {
     width: u32,
     height: u32,
-    volume: u32,
-    tile: u32,
-    layers: u32,
+    density: u32,
+    occlusion: u32,
+    memory: u32,
     state: ControllerState,
     camera: Camera,
     light: Light,
@@ -34,9 +34,9 @@ impl Controller {
         Self {
             width: 1920,
             height: 1080,
-            volume: 256,
-            tile: 8,
-            layers: 16,
+            density: 256,
+            occlusion: 32,
+            memory: 64,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -46,13 +46,13 @@ impl Controller {
         }
     }
 
-    pub fn test(width: u32, height: u32, volume: u32, tile: u32, layers: u32) -> Self {
+    pub fn test(width: u32, height: u32, density: u32, occlusion: u32, memory: u32) -> Self {
         let mut controller = Self {
             width,
             height,
-            volume,
-            tile,
-            layers,
+            density,
+            occlusion,
+            memory,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -114,20 +114,49 @@ impl Controller {
                         ShadingSetting::Occlusion,
                         "Occlusion",
                     );
+                    ui.selectable_value(
+                        &mut self.settings.shading,
+                        ShadingSetting::Occupancy,
+                        "Occupancy",
+                    );
                 });
 
             ui.separator();
             ui.label("Resolutions");
             ui.separator();
 
-            ComboBox::from_label("Volume")
-                .selected_text(format!("{:?}", self.volume))
+            ComboBox::from_label("Density")
+                .selected_text(format!("{:?}", self.density))
                 .show_ui(ui, |ui| {
                     for power in 5u32..10 {
                         ui.selectable_value(
-                            &mut self.volume,
+                            &mut self.density,
                             2u32.pow(power),
                             format!("{}", 2u32.pow(power)),
+                        );
+                    }
+                });
+
+            ComboBox::from_label("Occlusion")
+                .selected_text(format!("{:?}", self.occlusion))
+                .show_ui(ui, |ui| {
+                    for power in 4u32..8 {
+                        ui.selectable_value(
+                            &mut self.occlusion,
+                            2u32.pow(power),
+                            format!("{}", 2u32.pow(power)),
+                        );
+                    }
+                });
+
+            ComboBox::from_label("Memory")
+                .selected_text(format!("{} MB", self.memory))
+                .show_ui(ui, |ui| {
+                    for power in 4u32..8 {
+                        ui.selectable_value(
+                            &mut self.memory,
+                            2u32.pow(power),
+                            format!("{} MB", 2u32.pow(power)),
                         );
                     }
                 });
@@ -161,16 +190,16 @@ impl Controller {
         self.height
     }
 
-    pub fn volume(&self) -> u32 {
-        self.volume
+    pub fn density(&self) -> u32 {
+        self.density
     }
 
-    pub fn tile(&self) -> u32 {
-        self.tile
+    pub fn occlusion(&self) -> u32 {
+        self.occlusion
     }
 
-    pub fn layers(&self) -> u32 {
-        self.layers
+    pub fn memory(&self) -> u32 {
+        self.memory
     }
 
     pub fn camera(&self) -> &Camera {
