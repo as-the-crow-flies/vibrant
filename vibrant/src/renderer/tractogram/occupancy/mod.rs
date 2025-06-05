@@ -1,7 +1,7 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::scalar::{R8Uint, R8Unorm, ScalarTexture3D},
+    asset::scalar::{R16Uint, R8Unorm, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{occupancy::Occupancy, SurfaceBuffer},
@@ -21,7 +21,7 @@ impl OccupancyPipeline {
                 "Occupancy::Bin",
                 &gpu.pipeline_layout(&[
                     &Occupancy::layout(gpu, false),
-                    &ScalarTexture3D::<R8Uint>::layout(gpu),
+                    &ScalarTexture3D::<R16Uint>::layout(gpu),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("bin.wgsl")),
@@ -35,7 +35,7 @@ impl OccupancyPipeline {
                 "Occupancy::Occupancy",
                 &gpu.pipeline_layout(&[
                     &Occupancy::layout(gpu, false),
-                    &ScalarTexture3D::<R8Uint>::layout(gpu),
+                    &ScalarTexture3D::<R16Uint>::layout(gpu),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
                     &ScalarTexture3D::<R8Unorm>::layout_write(gpu),
                 ]),

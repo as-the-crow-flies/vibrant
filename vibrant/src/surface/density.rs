@@ -7,13 +7,13 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::{R8Uint, R8Unorm, ScalarTexture3D},
+    asset::scalar::{R16Uint, R8Unorm, ScalarTexture3D},
     gpu::Gpu,
 };
 
 pub struct Density {
     density: ScalarTexture3D<R8Unorm>,
-    count: ScalarTexture3D<R8Uint>,
+    count: ScalarTexture3D<R16Uint>,
     buffer: Buffer,
     binding: BindGroup,
 }
@@ -23,7 +23,7 @@ impl Density {
         let label = Some(type_name::<Self>());
 
         let density = ScalarTexture3D::<R8Unorm>::new(gpu, volume, wgpu::FilterMode::Linear);
-        let count = ScalarTexture3D::<R8Uint>::new(gpu, volume, wgpu::FilterMode::Nearest);
+        let count = ScalarTexture3D::new(gpu, volume, wgpu::FilterMode::Nearest);
 
         let n_voxels = volume * volume * volume;
 
@@ -67,7 +67,7 @@ impl Density {
         &self.density
     }
 
-    pub fn count(&self) -> &ScalarTexture3D<R8Uint> {
+    pub fn count(&self) -> &ScalarTexture3D<R16Uint> {
         &self.count
     }
 

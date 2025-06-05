@@ -23,7 +23,7 @@ var<workgroup> WORKGROUP_OFFSET: u32;
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&TRACTOGRAM_INDICES);
     let radius = ENVIRONMENT.settings.streamline_radius;
-    let transform = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
+    let TRANSFORM = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
 
     loop {
         if (local == 0) {
@@ -32,13 +32,14 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
         let offset = workgroupUniformLoad(&WORKGROUP_OFFSET);
 
-        if (offset >= n_indices) { return; }
-
         for (var i = 0u; i < CHUNK_SIZE; i++) {
-            let index = TRACTOGRAM_INDICES[offset + i * WORKGROUP_SIZE + local];
+            let index_index = offset + i * WORKGROUP_SIZE + local;
+            if (index_index > n_indices) { return; }
 
-            let v0 = (transform * TRACTOGRAM_VERTICES[index    ]).xyz;
-            let v1 = (transform * TRACTOGRAM_VERTICES[index + 1]).xyz;
+            let index = TRACTOGRAM_INDICES[index_index];
+
+            let v0 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 0]);
+            let v1 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 1]);
 
             voxelize(index, v0, v1, radius);
         }

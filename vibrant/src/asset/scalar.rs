@@ -26,6 +26,7 @@ pub trait ScalarTextureFormat {
 
 pub struct R8Unorm {}
 pub struct R8Uint {}
+pub struct R16Uint {}
 pub struct R32Uint {}
 
 impl ScalarTextureFormat for R8Unorm {
@@ -41,6 +42,16 @@ impl ScalarTextureFormat for R8Unorm {
 impl ScalarTextureFormat for R8Uint {
     fn format() -> TextureFormat {
         TextureFormat::R8Uint
+    }
+
+    fn sample_type() -> TextureSampleType {
+        TextureSampleType::Uint
+    }
+}
+
+impl ScalarTextureFormat for R16Uint {
+    fn format() -> TextureFormat {
+        TextureFormat::R16Uint
     }
 
     fn sample_type() -> TextureSampleType {

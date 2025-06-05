@@ -1,5 +1,3 @@
-use std::any::type_name;
-
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
@@ -35,7 +33,7 @@ impl OcclusionPipeline {
         environment: &Environment,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some(type_name::<Self>()),
+            label: Some("Occlusion"),
             ..Default::default()
         });
 

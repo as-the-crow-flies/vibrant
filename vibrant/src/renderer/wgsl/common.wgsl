@@ -30,8 +30,16 @@ struct Environment {
     settings: Settings
 }
 
-const U20_MAX: u32 = 1048576;
-const U20_MAX_INV: f32 = 1.0 / f32(U20_MAX);
+const U24_MAX: u32 = 16777215;
+const U24_MAX_f32: f32 = f32(U24_MAX);
+const U24_MAX_INV: f32 = 1.0 / f32(U24_MAX);
+
+const U16_MAX: u32 = 65535;
+const U16_MAX_f32: f32 = f32(U16_MAX);
+const U16_MAX_INV: f32 = 1.0 / f32(U16_MAX);
+
+const U14_SHIFT: u32 = 14;
+const U14_MAX: u32 = 16383;
 
 const U8_MAX: u32 = 255;
 const U8_MAX_f32: f32 = f32(U8_MAX);
@@ -41,8 +49,6 @@ const BLOCK_BITS: u32 = 3u;
 const BLOCK_SIZE: u32 = 8u;
 const BLOCK_SIZE_2: u32 = BLOCK_SIZE * BLOCK_SIZE;
 const BLOCK_SIZE_3: u32 = BLOCK_SIZE_2 * BLOCK_SIZE;
-
-const U24_MAX: u32 = 16777216;
 
 fn block_index(voxel: vec3<u32>, dim: vec3<u32>) -> u32 {
     // Number of blocks along each axis
@@ -70,6 +76,9 @@ fn block_index(voxel: vec3<u32>, dim: vec3<u32>) -> u32 {
     return block_index * BLOCK_SIZE_3 + local_index;
 }
 
+fn transform(m: mat4x4<f32>, v: vec4<f32>) -> vec3<f32> {
+    return (m * vec4<f32>(v.xyz, 1.0)).xyz;
+}
 
 fn div_ceil(a: u32, b: u32) -> u32 {
     return (a + b - 1) / b;

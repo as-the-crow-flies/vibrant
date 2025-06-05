@@ -23,7 +23,10 @@ fn main(
     let last_overflow = BIN[select(local - 1u, 0u, local == 0u)] > max_number;
     let no_overflow = (local == 255) && !curr_overflow;
 
-    if ((curr_overflow && !last_overflow) || no_overflow) {
+    if (no_overflow) {
+        THRESHOLD = 2.0;
+    }
+    else if ((curr_overflow && !last_overflow)) {
         THRESHOLD = f32(local) * U8_MAX_INV;
     }
 }

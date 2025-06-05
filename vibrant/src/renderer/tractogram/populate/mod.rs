@@ -22,7 +22,7 @@ impl PopulatePipeline {
                 &gpu.pipeline_layout(&[
                     &Occupancy::layout(gpu, false),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
-                    &Tractogram::layout(gpu),
+                    &Tractogram::layout(gpu, true),
                     &Environment::layout(gpu),
                 ]),
                 &gpu.shader(
@@ -43,14 +43,14 @@ impl PopulatePipeline {
         tractogram.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Occupancy"),
+            label: Some("Populate"),
             ..Default::default()
         });
 
         pass.set_pipeline(&self.populate);
         pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
         pass.set_bind_group(1, frame.occupancy().occupancy().binding(), &[]);
-        pass.set_bind_group(2, tractogram.binding(), &[]);
+        pass.set_bind_group(2, tractogram.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }

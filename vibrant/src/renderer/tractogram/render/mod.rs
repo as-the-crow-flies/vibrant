@@ -22,7 +22,7 @@ impl TractogramRenderPipeline {
             pipeline: gpu.compute(
                 type_name::<Self>(),
                 &gpu.pipeline_layout(&[
-                    &Tractogram::layout(gpu),
+                    &Tractogram::layout(gpu, true),
                     &Occupancy::layout(gpu, true),
                     &ScalarTexture3D::<R8Uint>::layout(gpu),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
@@ -41,10 +41,13 @@ impl TractogramRenderPipeline {
         environment: &Environment,
         tractogram: &Tractogram,
     ) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("Render"),
+            ..Default::default()
+        });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, tractogram.binding(), &[]);
+        pass.set_bind_group(0, tractogram.binding(true), &[]);
         pass.set_bind_group(1, frame.occupancy().binding(true), &[]);
         pass.set_bind_group(2, frame.density().count().binding(), &[]);
         pass.set_bind_group(3, frame.density().volume().binding(), &[]);

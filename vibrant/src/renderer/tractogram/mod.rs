@@ -1,3 +1,4 @@
+pub mod adjacency;
 pub mod density;
 pub mod occlusion;
 pub mod occupancy;
@@ -14,8 +15,8 @@ use crate::{
     controller::settings::{Settings, ShadingSetting},
     gpu::Gpu,
     renderer::tractogram::{
-        occlusion::OcclusionPipeline, occupancy::OccupancyPipeline, populate::PopulatePipeline,
-        render::TractogramRenderPipeline,
+        adjacency::AdjacenyPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
+        populate::PopulatePipeline, render::TractogramRenderPipeline,
     },
     surface::SurfaceBuffer,
 };
@@ -23,6 +24,7 @@ use crate::{
 use super::environment::Environment;
 
 pub struct TractogramRenderer {
+    adjaceny: AdjacenyPipeline,
     density: DensityPipeline,
     occlusion: OcclusionPipeline,
     occupancy: OccupancyPipeline,
@@ -34,6 +36,7 @@ pub struct TractogramRenderer {
 impl TractogramRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
+            adjaceny: AdjacenyPipeline::new(gpu),
             density: DensityPipeline::new(gpu),
             occlusion: OcclusionPipeline::new(gpu),
             occupancy: OccupancyPipeline::new(gpu),
@@ -51,6 +54,7 @@ impl TractogramRenderer {
         tractogram: &Tractogram,
         settings: &Settings,
     ) {
+        self.adjaceny.render(cmd, tractogram);
         self.density.render(cmd, frame, environment, tractogram);
         self.occlusion.render(cmd, frame, environment);
         self.occupancy.render(cmd, frame, environment);

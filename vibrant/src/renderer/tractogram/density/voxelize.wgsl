@@ -21,7 +21,7 @@ var<workgroup> OFFSET: u32;
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&TRACTOGRAM_INDICES);
     let radius = ENVIRONMENT.settings.streamline_radius;
-    let transform = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
+    let TRANSFORM = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
 
     loop {
         if (local == 0) {
@@ -30,13 +30,14 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
         let offset = workgroupUniformLoad(&OFFSET);
 
-        if (offset >= n_indices) { return; }
-
         for (var i = 0u; i < CHUNK_SIZE; i++) {
-            let index = TRACTOGRAM_INDICES[offset + i * WORKGROUP_SIZE + local];
+            let index_index = offset + i * WORKGROUP_SIZE + local;
+            if (index_index > n_indices) { return; }
 
-            let v0 = (transform * TRACTOGRAM_VERTICES[index    ]).xyz;
-            let v1 = (transform * TRACTOGRAM_VERTICES[index + 1]).xyz;
+            let index = TRACTOGRAM_INDICES[index_index];
+
+            let v0 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 0]);
+            let v1 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 1]);
 
             voxelize(index, v0, v1, radius);
         }
@@ -48,7 +49,7 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: vec3<f32>, v1: vec3<f32>) {
     let radius = ENVIRONMENT.settings.streamline_radius;
     let radius_clamp = max(smoothing, radius);
 
-    let coverage_multiplier = saturate(radius * radius / smoothing) * f32(U20_MAX);
+    let coverage_multiplier = saturate(radius * radius / smoothing) * U16_MAX_f32;
 
     let sample = vec3<f32>(voxel) + 0.5;
 
@@ -58,7 +59,7 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: vec3<f32>, v1: vec3<f32>) {
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
     let value = u32(ENVIRONMENT.settings.alpha * alpha * coverage_multiplier);
 
-    atomicAdd(&DENSITY[idx], (value << 8) + 1);
+    atomicAdd(&DENSITY[idx], (value << U14_SHIFT) + 1);
 }
 
 fn capsule(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {

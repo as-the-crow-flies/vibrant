@@ -4,7 +4,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 
 use crate::{
     asset::{
-        scalar::{R8Uint, R8Unorm, ScalarTexture3D},
+        scalar::{R16Uint, R8Unorm, ScalarTexture3D},
         tractogram::Tractogram,
     },
     gpu::Gpu,
@@ -31,7 +31,7 @@ impl DensityPipeline {
                         bind_group_layouts: &[
                             &Density::layout(gpu),
                             &ScalarTexture3D::<R8Unorm>::layout(gpu),
-                            &Tractogram::layout(gpu),
+                            &Tractogram::layout(gpu, true),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -49,7 +49,7 @@ impl DensityPipeline {
                         bind_group_layouts: &[
                             &Density::layout(gpu),
                             &ScalarTexture3D::<R8Unorm>::layout_write(gpu),
-                            &ScalarTexture3D::<R8Uint>::layout_write(gpu),
+                            &ScalarTexture3D::<R16Uint>::layout_write(gpu),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -88,7 +88,7 @@ impl DensityPipeline {
 
         pass.set_bind_group(0, frame.density().binding(), &[]);
         pass.set_bind_group(1, frame.density().volume().binding(), &[]);
-        pass.set_bind_group(2, tractogram.binding(), &[]);
+        pass.set_bind_group(2, tractogram.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
 
         pass.set_pipeline(&self.voxelize);

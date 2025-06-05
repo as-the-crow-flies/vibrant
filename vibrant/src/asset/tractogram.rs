@@ -16,7 +16,8 @@ pub struct Tractogram {
     vertices: Buffer,
     indices: Buffer,
     count: Buffer,
-    binding: BindGroup,
+    binding_read: BindGroup,
+    binding_write: BindGroup,
 }
 
 impl Tractogram {
@@ -74,63 +75,76 @@ impl Tractogram {
             mapped_at_creation: false,
         });
 
-        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+        let entries = &[
+            BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &tractogram_to_world,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &world_to_tractogram,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &vertices,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &indices,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 4,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &count,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        ];
+
+        let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
-            layout: &Self::layout(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &tractogram_to_world,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &world_to_tractogram,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &vertices,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &indices,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &count,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-            ],
+            layout: &Self::layout(gpu, true),
+            entries,
+        });
+
+        let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &Self::layout(gpu, false),
+            entries,
         });
 
         Self {
             vertices,
             indices,
             count,
-            binding,
+            binding_read,
+            binding_write,
         }
     }
 
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
+    pub fn binding(&self, read_only: bool) -> &BindGroup {
+        if read_only {
+            &self.binding_read
+        } else {
+            &self.binding_write
+        }
     }
 
     pub fn index_count(&self) -> u32 {
@@ -145,14 +159,14 @@ impl Tractogram {
         cmd.clear_buffer(&self.count, 0, None);
     }
 
-    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+    pub fn layout(gpu: &Gpu, read_only: bool) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::all(),
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -162,7 +176,7 @@ impl Tractogram {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::all(),
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -172,9 +186,9 @@ impl Tractogram {
                     },
                     BindGroupLayoutEntry {
                         binding: 2,
-                        visibility: ShaderStages::all(),
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
+                            ty: BufferBindingType::Storage { read_only },
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
@@ -182,9 +196,9 @@ impl Tractogram {
                     },
                     BindGroupLayoutEntry {
                         binding: 3,
-                        visibility: ShaderStages::all(),
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
+                            ty: BufferBindingType::Storage { read_only },
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },

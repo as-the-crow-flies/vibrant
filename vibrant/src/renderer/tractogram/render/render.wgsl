@@ -14,9 +14,9 @@
 @group(5) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
 
 @compute
-@workgroup_size(8, 8, 1)
-fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    let pixel = id.xy;
+@workgroup_size(64, 1)
+fn main(@builtin(workgroup_id) tile: vec3<u32>, @builtin(local_invocation_index) local: u32) {
+    let pixel = tile.xy * 8 + vec2<u32>(local & 7, local >> 3);
 
     if (any(pixel >= ENVIRONMENT.surface)) { return; }
 
@@ -25,66 +25,105 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     textureStore(COLOR, vec2<u32>(pixel.x, ENVIRONMENT.surface.y - pixel.y), result);
 }
 
+const LOCAL_SORT_SIZE: u32 = 32;
+
+var<private> HIT_DISTANCE_INDEX: array<u32, LOCAL_SORT_SIZE>;
+
 fn compute(pixel: vec2<u32>) -> vec4<f32> {
     let dim_u32 = vec3<u32>(textureDimensions(DENSITY));
     let dim = vec3<f32>(dim_u32);
 
     let radius = ENVIRONMENT.settings.streamline_radius / dim.x;
+    let alpha = ENVIRONMENT.settings.alpha;
 
     let uv = vec2<f32>(pixel) / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0;
 
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));
 
-    let origin = near;
     let direction = normalize(far - near);
 
-    let hit = aabb(origin, direction, vec3<f32>(0.5));
+    let hit = aabb(near, direction, vec3<f32>(0.5));
     let distance = hit.y - hit.x;
 
     if (distance <= 0) { return vec4<f32>(); }
 
-    let t0 = (origin + direction * 1.001 * hit.x + 0.5) * dim;
+    let origin = near + direction * 1.001 * hit.x;
+    let t0 = (origin + 0.5) * dim;
 
-    let voxel_boundaries = vec4<f32>(1.0 / abs(direction), 0.0);
+    let voxel_boundaries = vec4<f32>(1.0 / abs(direction) / dim, 0.0);
     let step = vec3<i32>(sign(direction));
     var next = vec4<f32>(
         one_if_zero(fract(abs(sign(direction) - t0 + floor(t0)))) * voxel_boundaries.xyz,
-        distance * dim.x
+        distance
     );
 
     var voxel = vec3<i32>(floor(t0));
-    var color = vec4<f32>(0.0);
 
     while (next.w > 0.0) {
         let increment = minimum4(next);
 
-        var closest = 10.0;
-        var color = vec3<f32>(0.0);
+        let count = textureLoad(COUNT, voxel, 0).x;
 
-        if (all(abs(voxel) < vec3<i32>(dim_u32))) {
-            let count = textureLoad(COUNT, voxel, 0).x;
-            let offset = OFFSET[block_index(vec3<u32>(voxel), dim_u32)] - count;
+        if (count > 0) { break; }
 
-            for (var i = 0u; i < count; i++) {
-                let index = INDEX[offset + i];
-                let v0 = TRACTOGRAM_TO_WORLD * TRACTOGRAM_VERTICES[index + 0];
-                let v1 = TRACTOGRAM_TO_WORLD * TRACTOGRAM_VERTICES[index + 1];
+        let mask = next == vec4<f32>(increment);
+        voxel = voxel + step * vec3<i32>(mask.xyz);
+        next = select(next - increment, voxel_boundaries, mask);
+    }
 
-                let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, radius);
+    var color = vec4<f32>(0.0);
 
-                let position = origin + hit * direction;
-                let in_voxel = all(vec3<i32>((position + 0.5) * dim) == voxel);
+    while (next.w > 0.0) {
+        let increment = minimum4(next);
+        let count = textureLoad(COUNT, voxel, 0).x;
+        let offset = OFFSET[block_index(vec3<u32>(voxel), dim_u32)] - count;
 
-                if (hit < closest && in_voxel) {
-                    closest = hit;
-                    color = capsule_normal(position, v0.xyz, v1.xyz, radius) * 0.5 + 0.5;
-                }
+        var in_voxel_count = 0u;
+
+        for (var i = 0u; i < count; i++) {
+            let index = INDEX[offset + i];
+
+            let v0_original = TRACTOGRAM_VERTICES[index + 0];
+            let v1_original = TRACTOGRAM_VERTICES[index + 1];
+
+            let v0 = transform(TRACTOGRAM_TO_WORLD, v0_original);
+            let v1 = transform(TRACTOGRAM_TO_WORLD, v1_original);
+
+            let n0 = TRACTOGRAM_TO_WORLD * unpack4x8snorm(bitcast<u32>(v0_original.w));
+            let n1 = TRACTOGRAM_TO_WORLD * unpack4x8snorm(bitcast<u32>(v1_original.w));
+
+            let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, radius);
+            let position = origin + hit * direction;
+
+            let in_voxel = all(vec3<i32>((position + 0.5) * dim) == voxel);
+            let clipped = dot(position - v0, n0.xyz) < 0.0 || dot(v1 - position, n1.xyz) < 0.0;
+
+            if (in_voxel && !clipped) {
+
+                // Store 24 bit Depth | 8 bit Index pair
+                HIT_DISTANCE_INDEX[in_voxel_count] = (u32(hit / distance * U24_MAX_f32) << 8) | i;
+                in_voxel_count++;
             }
         }
 
-        if (closest < 10.0) {
-            return vec4<f32>(color, 1.0);
+        sort(&HIT_DISTANCE_INDEX, in_voxel_count);
+
+        for (var i = 0u; i < in_voxel_count; i++) {
+            let hdi = HIT_DISTANCE_INDEX[i];
+            let hit = f32(hdi >> 8) * distance * U24_MAX_INV;
+            let index = INDEX[offset + (hdi & U8_MAX)];
+
+            let position = origin + hit * direction;
+
+            let v0 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 0]);
+            let v1 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 1]);
+
+            let rgb = capsule_normal(position, v0, v1, radius) * 0.5 + 0.5;
+
+            color += (1.0 - color.a) * vec4<f32>(rgb * alpha, alpha);
+
+            if (color.a > 0.95) { return color; }
         }
 
         let mask = next == vec4<f32>(increment);
@@ -94,6 +133,22 @@ fn compute(pixel: vec2<u32>) -> vec4<f32> {
 
     return color;
 }
+
+fn sort(data: ptr<private, array<u32, LOCAL_SORT_SIZE>>, count: u32) {
+    for (var i: u32 = 1u; i < count; i = i + 1u) {
+        let key = (*data)[i];
+        var j: i32 = i32(i) - 1;
+
+        // Move elements of data[0..i-1] that are greater than key
+        while (j >= 0 && (*data)[u32(j)] > key) {
+            (*data)[u32(j + 1)] = (*data)[u32(j)];
+            j = j - 1;
+        }
+
+        (*data)[u32(j + 1)] = key;
+    }
+}
+
 
 fn aabb(origin: vec3<f32>, direction: vec3<f32>, size: vec3<f32>) -> vec2<f32>
 {

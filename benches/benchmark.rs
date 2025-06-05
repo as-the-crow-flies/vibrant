@@ -9,7 +9,7 @@ use vibrant::{
         environment::Environment,
         tractogram::{
             density::DensityPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
-            populate::PopulatePipeline,
+            populate::PopulatePipeline, render::TractogramRenderPipeline,
         },
     },
     surface::SurfaceBuffer,
@@ -148,5 +148,34 @@ pub fn populate(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, empty, density, occlusion, occupancy, populate);
+pub fn render(criterion: &mut Criterion) {
+    let gpu = &Gpu::new().block_on();
+
+    let environment = &get_environment(gpu);
+    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
+
+    let mut cmd = gpu.cmd();
+    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
+    OccupancyPipeline::new(gpu).render(&mut cmd, frame, environment);
+    PopulatePipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    gpu.submit(cmd);
+    gpu.wait();
+
+    let pipeline = TractogramRenderPipeline::new(gpu);
+
+    criterion.bench_function("render", |bencher| {
+        bencher.iter(|| {
+            let mut cmd = gpu.cmd();
+
+            pipeline.render(&mut cmd, frame, environment, tractogram);
+
+            gpu.submit(cmd);
+            gpu.wait();
+        })
+    });
+}
+
+criterion_group!(benches, empty, density, occlusion, occupancy, populate, render);
 criterion_main!(benches);
