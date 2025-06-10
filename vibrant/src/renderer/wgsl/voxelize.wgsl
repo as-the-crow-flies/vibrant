@@ -29,6 +29,8 @@ fn voxelize(index: u32, v0_: vec3<f32>, v1_: vec3<f32>, radius: f32) {
         for (var j = j_min; j <= j_max; j++) {
             for (var k = k_min; k <= k_max; k++) {
                 let voxel = shuffle(vec3<i32>(i, j, k), axes);
+
+                // TODO: check if it actually hits corner voxels! (maybe it does not?)
                 visit_voxel(voxel, index, v0, v1);
             }
         }

@@ -59,6 +59,9 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: vec3<f32>, v1: vec3<f32>) {
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
     let value = u32(ENVIRONMENT.settings.alpha * alpha * coverage_multiplier);
 
+    // TODO: endpoint spheres are now voxelized twice, take normal planes into account
+    // FUN: curved segments!
+
     atomicAdd(&DENSITY[idx], (value << U14_SHIFT) + 1);
 }
 
