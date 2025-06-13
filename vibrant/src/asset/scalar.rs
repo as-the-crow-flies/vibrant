@@ -268,16 +268,12 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
         }
     }
 
-    pub fn width(&self) -> u32 {
+    pub fn size(&self) -> u32 {
         self.texture.width()
     }
 
-    pub fn height(&self) -> u32 {
-        self.texture.height()
-    }
-
-    pub fn depth(&self) -> u32 {
-        self.texture.depth_or_array_layers()
+    pub fn texture(&self) -> &Texture {
+        &self.texture
     }
 
     pub fn update(&self, gpu: &Gpu, transform: &Mat4) {

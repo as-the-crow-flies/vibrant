@@ -7,7 +7,7 @@ use crate::{
     },
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{occupancy::Occupancy, SurfaceBuffer},
+    surface::{occupancy::Occupancy, Frame},
 };
 
 pub struct PopulatePipeline {
@@ -36,7 +36,7 @@ impl PopulatePipeline {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         environment: &Environment,
         tractogram: &Tractogram,
     ) {
@@ -49,7 +49,7 @@ impl PopulatePipeline {
 
         pass.set_pipeline(&self.populate);
         pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, frame.occupancy().occupancy().binding(), &[]);
+        pass.set_bind_group(1, frame.occupancy().texture().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);

@@ -9,7 +9,7 @@ use crate::{
     },
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{density::Density, SurfaceBuffer},
+    surface::{density::Density, Frame},
 };
 
 pub struct DensityPipeline {
@@ -72,7 +72,7 @@ impl DensityPipeline {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         environment: &Environment,
         tractogram: &Tractogram,
     ) {
@@ -84,10 +84,10 @@ impl DensityPipeline {
             ..Default::default()
         });
 
-        let n = frame.density().volume().width().div_ceil(8);
+        let n = frame.density().texture().size().div_ceil(8);
 
         pass.set_bind_group(0, frame.density().binding(), &[]);
-        pass.set_bind_group(1, frame.density().volume().binding(), &[]);
+        pass.set_bind_group(1, frame.density().texture().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
 
@@ -96,16 +96,16 @@ impl DensityPipeline {
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, frame.density().binding(), &[]);
-        pass.set_bind_group(1, frame.density().volume().binding_write(), &[]);
+        pass.set_bind_group(1, frame.density().texture().binding_write(), &[]);
         pass.set_bind_group(2, frame.density().count().binding_write(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.density().volume().width().div_ceil(8);
+        let mut mipmap = frame.density().texture().size().div_ceil(8);
 
-        for binding in frame.density().volume().bindings_mipmap() {
+        for binding in frame.density().texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

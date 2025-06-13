@@ -4,7 +4,7 @@ use crate::{
     asset::scalar::{R8Unorm, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::SurfaceBuffer,
+    surface::Frame,
 };
 
 pub struct OcclusionPipeline {
@@ -29,7 +29,7 @@ impl OcclusionPipeline {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         environment: &Environment,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -37,11 +37,11 @@ impl OcclusionPipeline {
             ..Default::default()
         });
 
-        let n = frame.occlusion().volume().width().div_ceil(8);
+        let n = frame.occlusion().texture().size().div_ceil(8);
 
         pass.set_pipeline(&self.occlusion);
-        pass.set_bind_group(0, frame.density().volume().binding(), &[]);
-        pass.set_bind_group(1, frame.occlusion().volume().binding_write(), &[]);
+        pass.set_bind_group(0, frame.density().texture().binding(), &[]);
+        pass.set_bind_group(1, frame.occlusion().texture().binding_write(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
     }

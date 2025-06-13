@@ -16,14 +16,14 @@ use crate::{controller::Controller, surface::occupancy::Occupancy};
 
 use super::gpu::Gpu;
 
-pub struct SurfaceBuffer {
+pub struct Frame {
     color: Color,
     density: Density,
     occlusion: Occlusion,
     occupancy: Occupancy,
 }
 
-impl SurfaceBuffer {
+impl Frame {
     pub fn new(gpu: &Gpu, controller: &Controller) -> Self {
         Self {
             color: Color::new(gpu, controller.width(), controller.height()),
@@ -52,7 +52,7 @@ impl SurfaceBuffer {
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
-    buffer: SurfaceBuffer,
+    buffer: Frame,
 }
 
 impl Surface {
@@ -66,7 +66,7 @@ impl Surface {
 
         Self {
             surface,
-            buffer: SurfaceBuffer::new(gpu, &Controller::test(1, 1, 1, 1, 1)),
+            buffer: Frame::new(gpu, &Controller::test(1, 1, 1, 1, 1)),
         }
     }
 
@@ -79,7 +79,7 @@ impl Surface {
             return self;
         }
 
-        self.buffer = SurfaceBuffer::new(gpu, &controller);
+        self.buffer = Frame::new(gpu, &controller);
         self.surface.configure(
             gpu.device(),
             &Self::config(controller.width(), controller.height()),
@@ -130,7 +130,7 @@ impl Surface {
         }
     }
 
-    pub fn buffer(&self) -> &SurfaceBuffer {
+    pub fn buffer(&self) -> &Frame {
         &self.buffer
     }
 }

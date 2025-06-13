@@ -9,7 +9,7 @@ use crate::{
     asset::scalar::{R8Unorm, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::Color, SurfaceBuffer},
+    surface::{color::Color, Frame},
 };
 
 pub struct VolumeShadingPipeline {
@@ -58,7 +58,7 @@ impl VolumeShadingPipeline {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         texture: &ScalarTexture3D<R8Unorm>,
         environment: &Environment,
     ) {

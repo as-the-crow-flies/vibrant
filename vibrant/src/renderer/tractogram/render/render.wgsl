@@ -4,14 +4,16 @@
 @group(1) @binding(0) var<storage> OFFSET: array<u32>;
 @group(1) @binding(2) var<storage> INDEX: array<u32>;
 
-@group(2) @binding(0) var COUNT: texture_3d<u32>;
+@group(2) @binding(0) var OCCUPANCY: texture_3d<f32>;
 
-@group(3) @binding(0) var DENSITY: texture_3d<f32>;
-@group(3) @binding(1) var SAMPLER: sampler;
+@group(3) @binding(0) var COUNT: texture_3d<u32>;
 
-@group(4) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(4) @binding(0) var DENSITY: texture_3d<f32>;
+@group(4) @binding(1) var SAMPLER: sampler;
 
-@group(5) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
+@group(5) @binding(0) var<uniform> ENVIRONMENT: Environment;
+
+@group(6) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
 
 @compute
 @workgroup_size(64, 1)
@@ -33,102 +35,150 @@ fn compute(pixel: vec2<u32>) -> vec4<f32> {
     let dim_u32 = vec3<u32>(textureDimensions(DENSITY));
     let dim = vec3<f32>(dim_u32);
 
-    let radius = ENVIRONMENT.settings.streamline_radius / dim.x;
-    let alpha = ENVIRONMENT.settings.alpha;
-
     let uv = vec2<f32>(pixel) / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0;
 
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));
-
     let direction = normalize(far - near);
 
-    let hit = aabb(near, direction, vec3<f32>(0.5));
-    let distance = hit.y - hit.x;
+    return raymarch(near + 0.5, direction);
+}
 
-    if (distance <= 0) { return vec4<f32>(); }
+fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
+    let dim = f32(textureDimensions(OCCUPANCY).x);
+    let dim_inv = 1.0 / dim;
 
-    let origin = near + direction * 1.001 * hit.x;
-    let t0 = (origin + 0.5) * dim;
+    let radius = ENVIRONMENT.settings.streamline_radius * dim_inv;
 
-    let voxel_boundaries = vec4<f32>(1.0 / abs(direction) / dim, 0.0);
-    let step = vec3<i32>(sign(direction));
-    var next = vec4<f32>(
-        one_if_zero(fract(abs(sign(direction) - t0 + floor(t0)))) * voxel_boundaries.xyz,
-        distance
-    );
+    let delta = select(1.0 / direction, vec3<f32>(1E10), abs(direction) < vec3<f32>(1E-5));
+    let boundary = select(vec3<u32>(0), vec3<u32>(1), direction >= vec3<f32>(0.0));
 
-    var voxel = vec3<i32>(floor(t0));
+    let tMinBounds = (vec3<f32>(0.0) - origin) * delta;
+    let tMaxBounds = (vec3<f32>(1.0) - origin) * delta;
 
-    while (next.w > 0.0) {
-        let increment = minimum4(next);
+    let tEnter = maximum(min(tMinBounds, tMaxBounds)) + 1E-5;
+    let tExit = minimum(max(tMinBounds, tMaxBounds)) - 1E-5;
 
-        let count = textureLoad(COUNT, voxel, 0).x;
+    if (tEnter >= tExit || tExit < 0.0) { return vec4<f32>(0.0); }
 
-        if (count > 0) { break; }
+    var t = max(tEnter, 0.0);
+    var mip = textureNumLevels(OCCUPANCY) - 1;
+    var position = origin + direction * t;
+    var voxel = vec3<u32>(floor(position * dim));
 
-        let mask = next == vec4<f32>(increment);
-        voxel = voxel + step * vec3<i32>(mask.xyz);
-        next = select(next - increment, voxel_boundaries, mask);
+    while (t < tExit) {
+        // Get the current voxel at the current mip level
+        let voxel_at_mip = voxel >> vec3<u32>(mip);
+
+        // Traverse down level if mip is occupied
+        if (textureLoad(OCCUPANCY, voxel_at_mip, i32(mip)).x > 0.0) {
+            if (mip == 0) { break; }
+            else { mip--; }
+
+            continue;
+        }
+
+        // Get the next voxel boundary, given current mip level
+        let next = (voxel_at_mip + boundary) << vec3<u32>(mip);
+
+        // Get minimum distance till next voxel boundaries
+        let d = abs((vec3<f32>(next) * dim_inv - position) * delta);
+
+        // Get axis of smallest distance
+        let axis = select(select(2u, 1u, d.y < d.z), 0u, d.x < min(d.y, d.z));
+
+        // Get Increment
+        let increment = max(d[axis], 1E-5);
+
+        // Increment Ray Position
+        t += increment;
+        position += direction * increment;
+        voxel = vec3<u32>(floor(position * dim));
+        voxel[axis] = next[axis] + boundary[axis] - 1;
     }
 
     var color = vec4<f32>(0.0);
 
-    while (next.w > 0.0) {
-        let increment = minimum4(next);
-        let count = textureLoad(COUNT, voxel, 0).x;
-        let offset = OFFSET[block_index(vec3<u32>(voxel), dim_u32)] - count;
+    while (t < tExit) {
+        // Get the next voxel boundary
+        let next = voxel + boundary;
 
-        var in_voxel_count = 0u;
+        // Get minimum distance till next voxel boundaries
+        let d = abs((vec3<f32>(next) * dim_inv - position) * delta);
 
-        for (var i = 0u; i < count; i++) {
-            let index = INDEX[offset + i];
+        // Get axis of smallest distance
+        let axis = select(select(2u, 1u, d.y < d.z), 0u, d.x < min(d.y, d.z));
 
-            let v0_original = TRACTOGRAM_VERTICES[index + 0];
-            let v1_original = TRACTOGRAM_VERTICES[index + 1];
+        // Get Increment
+        let increment = max(d[axis], 1E-5);
 
-            let v0 = transform(TRACTOGRAM_TO_WORLD, v0_original);
-            let v1 = transform(TRACTOGRAM_TO_WORLD, v1_original);
+        // Accumulate Color
+        color += (1.0 - color.a) * intersect(voxel, origin - 0.5, direction, tExit);
+        if (color.a > 0.95) { return color; }
 
-            let n0 = TRACTOGRAM_TO_WORLD * unpack4x8snorm(bitcast<u32>(v0_original.w));
-            let n1 = TRACTOGRAM_TO_WORLD * unpack4x8snorm(bitcast<u32>(v1_original.w));
+        // Increment Ray Position
+        t += increment;
+        position += direction * increment;
+        voxel[axis] = next[axis] + boundary[axis] - 1;
+    }
 
-            let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, radius);
-            let position = origin + hit * direction;
+    return color;
+}
 
-            let in_voxel = all(vec3<i32>((position + 0.5) * dim) == voxel);
-            let clipped = dot(position - v0, n0.xyz) < 0.0 || dot(v1 - position, n1.xyz) < 0.0;
+fn intersect(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, distance: f32) -> vec4<f32> {
+    let dim = f32(ENVIRONMENT.volume);
+    let radius = ENVIRONMENT.settings.streamline_radius / dim;
+    let alpha = ENVIRONMENT.settings.alpha;
 
-            if (in_voxel && !clipped) {
+    var color = vec4<f32>(0.0);
 
-                // Store 24 bit Depth | 8 bit Index pair
-                HIT_DISTANCE_INDEX[in_voxel_count] = (u32(hit / distance * U24_MAX_f32) << 8) | i;
-                in_voxel_count++;
-            }
+    let count = textureLoad(COUNT, voxel, 0).x;
+    let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
+
+    var in_voxel_count = 0u;
+
+    for (var i = 0u; i < count; i++) {
+        let index = INDEX[offset + i];
+
+        let v0_original = TRACTOGRAM_VERTICES[index + 0];
+        let v1_original = TRACTOGRAM_VERTICES[index + 1];
+
+        let v0 = transform(TRACTOGRAM_TO_WORLD, v0_original);
+        let v1 = transform(TRACTOGRAM_TO_WORLD, v1_original);
+
+        let n0 = TRACTOGRAM_TO_WORLD * unpack4x8snorm(bitcast<u32>(v0_original.w));
+        let n1 = TRACTOGRAM_TO_WORLD * unpack4x8snorm(bitcast<u32>(v1_original.w));
+
+        let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, radius);
+        let position = origin + hit * direction;
+
+        let in_voxel = all(vec3<u32>((position + 0.5) * dim) == voxel);
+        let clipped = dot(position - v0, n0.xyz) < 0.0 || dot(v1 - position, n1.xyz) < 0.0;
+
+        if (in_voxel && !clipped) {
+            // Store 24 bit Depth | 8 bit Index pair
+            HIT_DISTANCE_INDEX[in_voxel_count] = (u32(hit / distance * U24_MAX_f32) << 8) | i;
+            in_voxel_count++;
         }
+    }
 
-        sort(&HIT_DISTANCE_INDEX, in_voxel_count);
+    sort(&HIT_DISTANCE_INDEX, in_voxel_count);
 
-        for (var i = 0u; i < in_voxel_count; i++) {
-            let hdi = HIT_DISTANCE_INDEX[i];
-            let hit = f32(hdi >> 8) * distance * U24_MAX_INV;
-            let index = INDEX[offset + (hdi & U8_MAX)];
+    for (var i = 0u; i < in_voxel_count; i++) {
+        let hdi = HIT_DISTANCE_INDEX[i];
+        let hit = f32(hdi >> 8) * distance * U24_MAX_INV;
+        let index = INDEX[offset + (hdi & U8_MAX)];
 
-            let position = origin + hit * direction;
+        let position = origin + hit * direction;
 
-            let v0 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 0]);
-            let v1 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 1]);
+        let v0 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 0]);
+        let v1 = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 1]);
 
-            let rgb = capsule_normal(position, v0, v1, radius) * 0.5 + 0.5;
+        let rgb = capsule_normal(position, v0, v1, radius) * 0.5 + 0.5;
 
-            color += (1.0 - color.a) * vec4<f32>(rgb * alpha, alpha);
+        color += (1.0 - color.a) * vec4<f32>(rgb * alpha, alpha);
 
-            if (color.a > 0.95) { return color; }
-        }
-
-        let mask = next == vec4<f32>(increment);
-        voxel = voxel + step * vec3<i32>(mask.xyz);
-        next = select(next - increment, voxel_boundaries, mask);
+        if (color.a > 0.95) { return color; }
     }
 
     return color;
@@ -149,20 +199,6 @@ fn sort(data: ptr<private, array<u32, LOCAL_SORT_SIZE>>, count: u32) {
     }
 }
 
-
-fn aabb(origin: vec3<f32>, direction: vec3<f32>, size: vec3<f32>) -> vec2<f32>
-{
-    let m = 1.0 / direction;
-    let n = m * origin;
-    let k = abs(m) * size;
-    let t1 = -n - k;
-    let t2 = -n + k;
-    let tN = max(maximum(t1), 0.0);
-    let tF = minimum(t2);
-    if( tN>tF || tF<0.0) { return vec2(-1.0); } // no intersection
-    return vec2<f32>( tN, tF );
-}
-
 fn maximum(v: vec3<f32>) -> f32 {
     return max(max(v.x, v.y), v.z);
 }
@@ -175,20 +211,9 @@ fn minimum(v: vec3<f32>) -> f32 {
     return min(min(v.x, v.y), v.z);
 }
 
-fn one_if_zero(v: vec3<f32>) -> vec3<f32> {
-    return v + vec3<f32>(v < vec3<f32>(1E-6));
-}
-
 fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
     return t.xyz / t.w;
-}
-
-fn sdCapsule(p: vec3<f32>,a: vec3<f32>,b: vec3<f32>, r: f32) -> f32 {
-  let pa = p - a;
-  let ba = b - a;
-  let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-  return length(pa - ba*h) - r;
 }
 
 // https://iquilezles.org/articles/intersectors

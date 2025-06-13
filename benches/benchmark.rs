@@ -8,18 +8,19 @@ use vibrant::{
     renderer::{
         environment::Environment,
         tractogram::{
-            density::DensityPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
-            populate::PopulatePipeline, render::TractogramRenderPipeline,
+            adjacency::AdjacenyPipeline, density::DensityPipeline, occlusion::OcclusionPipeline,
+            occupancy::OccupancyPipeline, populate::PopulatePipeline,
+            render::TractogramRenderPipeline,
         },
     },
-    surface::SurfaceBuffer,
+    surface::Frame,
 };
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
 const DENSITY: u32 = 256;
-const OCCLUSION: u32 = 32;
-const MEMORY: u32 = 32;
+const OCCLUSION: u32 = 64;
+const MEMORY: u32 = 64;
 
 const TRACTOGRAM_PATH: &'static str = "assets/HCP-100307/whole_brain200k.tck";
 
@@ -49,8 +50,13 @@ pub fn density(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
+
+    let mut cmd = gpu.cmd();
+    AdjacenyPipeline::new(gpu).render(&mut cmd, tractogram);
+    gpu.submit(cmd);
+    gpu.wait();
 
     let pipeline = DensityPipeline::new(gpu);
 
@@ -70,10 +76,11 @@ pub fn occlusion(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
+    AdjacenyPipeline::new(gpu).render(&mut cmd, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
@@ -96,10 +103,11 @@ pub fn occupancy(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
+    AdjacenyPipeline::new(gpu).render(&mut cmd, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
@@ -123,10 +131,11 @@ pub fn populate(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
+    AdjacenyPipeline::new(gpu).render(&mut cmd, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
@@ -152,10 +161,11 @@ pub fn render(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &SurfaceBuffer::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
+    AdjacenyPipeline::new(gpu).render(&mut cmd, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     OccupancyPipeline::new(gpu).render(&mut cmd, frame, environment);
@@ -177,5 +187,36 @@ pub fn render(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, empty, density, occlusion, occupancy, populate, render);
+pub fn full(criterion: &mut Criterion) {
+    let gpu = &Gpu::new().block_on();
+
+    let environment = &get_environment(gpu);
+    let frame = &Frame::new(gpu, &get_controller());
+    let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
+
+    let adjacency = AdjacenyPipeline::new(gpu);
+    let density = DensityPipeline::new(gpu);
+    let occlusion = OcclusionPipeline::new(gpu);
+    let occupancy = OccupancyPipeline::new(gpu);
+    let populate = PopulatePipeline::new(gpu);
+    let render = TractogramRenderPipeline::new(gpu);
+
+    criterion.bench_function("full", |bencher| {
+        bencher.iter(|| {
+            let mut cmd = gpu.cmd();
+
+            adjacency.render(&mut cmd, tractogram);
+            density.render(&mut cmd, frame, environment, tractogram);
+            occlusion.render(&mut cmd, frame, environment);
+            occupancy.render(&mut cmd, frame, environment);
+            populate.render(&mut cmd, frame, environment, tractogram);
+            render.render(&mut cmd, frame, environment, tractogram);
+
+            gpu.submit(cmd);
+            gpu.wait();
+        })
+    });
+}
+
+criterion_group!(benches, empty, density, occlusion, occupancy, populate, render, full);
 criterion_main!(benches);

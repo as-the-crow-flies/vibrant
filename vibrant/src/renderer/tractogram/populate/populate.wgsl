@@ -32,14 +32,28 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
         let offset = workgroupUniformLoad(&WORKGROUP_OFFSET);
 
-        for (var i = 0u; i < CHUNK_SIZE; i++) {
-            let index_index = offset + i * WORKGROUP_SIZE + local;
-            if (index_index > n_indices) { return; }
+        var i = 0u;
 
-            let index = TRACTOGRAM_INDICES[index_index];
+        loop {
+            var index = 0u;
+            var v0 = vec3<f32>();
+            var v1 = vec3<f32>();
 
-            let v0 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 0]);
-            let v1 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 1]);
+            loop {
+                if (i >= CHUNK_SIZE) { return; }
+
+                let index_index = offset + i * WORKGROUP_SIZE + local;
+
+                if (index_index > n_indices) { return; }
+
+                index = TRACTOGRAM_INDICES[index_index];
+                v0 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 0]);
+                v1 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 1]);
+
+                i++;
+
+                if (occupancy(v0, v1) > 0.0) { break; }
+            }
 
             voxelize(index, v0, v1, radius);
         }
@@ -47,5 +61,24 @@ fn main(@builtin(local_invocation_index) local: u32) {
 }
 
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: vec3<f32>, v1: vec3<f32>) {
-    INDEX[atomicAdd(&OFFSET[block_index(vec3<u32>(voxel), textureDimensions(OCCUPANCY))], 1u)] = index;
+    let should_write = textureLoad(OCCUPANCY, voxel, 0).x > 0.0;
+
+    if (should_write) {
+        let offset = &OFFSET[block_index(vec3<u32>(voxel), textureDimensions(OCCUPANCY))];
+        INDEX[atomicAdd(offset, 1u)] = index;
+    }
+}
+
+fn occupancy(v0: vec3<f32>, v1: vec3<f32>) -> f32 {
+    let level = maximum(32 - countLeadingZeros(vec3<u32>(v0) ^ vec3<u32>(v1)));
+
+    return select(
+        1.0,
+        textureLoad(OCCUPANCY, vec3<u32>(v0) >> vec3<u32>(level), i32(level)).x,
+        level < textureNumLevels(OCCUPANCY)
+    );
+}
+
+fn maximum(v: vec3<u32>) -> u32 {
+    return max(max(v.x, v.y), v.z);
 }

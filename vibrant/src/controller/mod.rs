@@ -35,8 +35,8 @@ impl Controller {
             width: 1920,
             height: 1080,
             density: 256,
-            occlusion: 32,
-            memory: 64,
+            occlusion: 128,
+            memory: 256,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -109,6 +109,7 @@ impl Controller {
                         ShadingSetting::Density,
                         "Density",
                     );
+
                     ui.selectable_value(
                         &mut self.settings.shading,
                         ShadingSetting::Occlusion,
@@ -178,6 +179,7 @@ impl Controller {
                     .text("Alpha"),
             );
 
+            ui.add(Slider::new(&mut self.settings.level, 0.0..=8.0).text("Mipmap Level"));
             ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
         });
     }

@@ -60,10 +60,10 @@ impl Density {
     }
 
     pub fn resolution(&self) -> u32 {
-        self.density.width()
+        self.density.size()
     }
 
-    pub fn volume(&self) -> &ScalarTexture3D<R8Unorm> {
+    pub fn texture(&self) -> &ScalarTexture3D<R8Unorm> {
         &self.density
     }
 

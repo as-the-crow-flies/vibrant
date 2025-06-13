@@ -27,7 +27,7 @@ fn main(
     let count = textureLoad(COUNT, voxel, 0).x;
     let occlusion = textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, uv, 0.0).x;
 
-    let occupancy = u32(occlusion <= THRESHOLD) * count;
+    let occupancy = u32(occlusion < THRESHOLD) * count;
 
     let workgroup_offset = workgroupExclusiveAdd(occupancy, local, subgroup, subgroup_size);
 

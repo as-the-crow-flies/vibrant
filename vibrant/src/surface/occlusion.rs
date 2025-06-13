@@ -6,21 +6,21 @@ use crate::{
 };
 
 pub struct Occlusion {
-    volume: ScalarTexture3D<R8Unorm>,
+    occlusion: ScalarTexture3D<R8Unorm>,
 }
 
 impl Occlusion {
     pub fn new(gpu: &Gpu, volume: u32) -> Self {
         Self {
-            volume: ScalarTexture3D::<R8Unorm>::new(gpu, volume, FilterMode::Linear),
+            occlusion: ScalarTexture3D::<R8Unorm>::new(gpu, volume, FilterMode::Linear),
         }
     }
 
     pub fn resolution(&self) -> u32 {
-        self.volume().width()
+        self.texture().size()
     }
 
-    pub fn volume(&self) -> &ScalarTexture3D<R8Unorm> {
-        &self.volume
+    pub fn texture(&self) -> &ScalarTexture3D<R8Unorm> {
+        &self.occlusion
     }
 }

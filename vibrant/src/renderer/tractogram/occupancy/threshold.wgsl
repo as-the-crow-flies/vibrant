@@ -24,7 +24,7 @@ fn main(
     let no_overflow = (local == 255) && !curr_overflow;
 
     if (no_overflow) {
-        THRESHOLD = 2.0;
+        THRESHOLD = 1.0;
     }
     else if ((curr_overflow && !last_overflow)) {
         THRESHOLD = f32(local) * U8_MAX_INV;

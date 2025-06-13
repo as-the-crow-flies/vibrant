@@ -5,45 +5,42 @@
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+const TAN_CONE_ANGLE: f32 = 1.73205080757;
+
 @compute
 @workgroup_size(8, 8, 8)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
-    let dim = vec3<f32>(textureDimensions(DENSITY));
+    let position = vec3<f32>(voxel) + 0.5;
 
-    // Camera Position in World Space
-    let camera = ENVIRONMENT.camera.transform[3].xyz;
+    let total =
+        occlusion(position, vec3<f32>( 0.0, 0.0, 1.0)) +
+        occlusion(position, vec3<f32>( 0.0, 0.0,-1.0)) +
+        occlusion(position, vec3<f32>( 0.0, 1.0, 0.0)) +
+        occlusion(position, vec3<f32>( 0.0,-1.0, 0.0)) +
+        occlusion(position, vec3<f32>( 1.0, 0.0, 0.0)) +
+        occlusion(position, vec3<f32>(-1.0, 0.0, 0.0));
 
-    // let camera = vec3<f32>(1.0, 1.0, 1.0);
+    textureStore(OCCLUSION, voxel, vec4<f32>(0.17 * total));
+}
 
-    // Voxel Position in World Space
-    let position = vec3<f32>(voxel) / vec3<f32>(textureDimensions(OCCLUSION)) - 0.5;
+fn occlusion(position: vec3<f32>, direction: vec3<f32>) -> f32 {
+    let zero = vec3<f32>(0.0);
+    let dim = vec3<f32>(textureDimensions(OCCLUSION));
+    let one_over_dim = 1.0 / dim;
 
-    let delta = camera - position;
-    let distance = length(delta);
+    var occlusion = 0.0;
 
-    let direction = delta / distance;
-    let step = 1.0 / maximum(abs(direction * dim));
+    for (var distance = 1.0; distance < dim.x; distance *= 2.0) {
+        let sample = position + direction * distance;
 
-    let factor = distance * step * dim.x;
+        if (any(sample < zero) || any(sample >= dim)) { break; }
 
-    var absorbance = 0.0;
-
-    for (var depth = step; depth < 1.0; depth += step) {
-        let sample = mix(position, camera, depth);
-
-        if (any(abs(sample) > vec3<f32>(0.5))) { break; }
-
-        absorbance += factor * density(sample);
+        occlusion += (1.0 - occlusion) * density(sample * one_over_dim, distance);
     }
 
-    textureStore(OCCLUSION, voxel, vec4<f32>(absorbance));
+    return occlusion;
 }
 
-fn density(sample: vec3<f32>) -> f32 {
-    let level = f32(firstLeadingBit(ENVIRONMENT.volume / ENVIRONMENT.occlusion));
-    return precision_decode(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample + 0.5, level).x);
-}
-
-fn maximum(v: vec3<f32>) -> f32 {
-    return max(max(v.x, v.y), v.z);
+fn density(sample: vec3<f32>, level: f32) -> f32 {
+    return 0.5 * precision_decode(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x);
 }

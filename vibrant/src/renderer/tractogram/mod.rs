@@ -7,7 +7,7 @@ pub mod render;
 pub mod shading;
 
 use density::DensityPipeline;
-use shading::density::VolumeShadingPipeline;
+use shading::volume::VolumeRenderPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
         adjacency::AdjacenyPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
         populate::PopulatePipeline, render::TractogramRenderPipeline,
     },
-    surface::SurfaceBuffer,
+    surface::Frame,
 };
 
 use super::environment::Environment;
@@ -29,7 +29,7 @@ pub struct TractogramRenderer {
     occlusion: OcclusionPipeline,
     occupancy: OccupancyPipeline,
     populate: PopulatePipeline,
-    volume: VolumeShadingPipeline,
+    volume: VolumeRenderPipeline,
     render: TractogramRenderPipeline,
 }
 
@@ -41,7 +41,7 @@ impl TractogramRenderer {
             occlusion: OcclusionPipeline::new(gpu),
             occupancy: OccupancyPipeline::new(gpu),
             populate: PopulatePipeline::new(gpu),
-            volume: VolumeShadingPipeline::new(gpu),
+            volume: VolumeRenderPipeline::new(gpu),
             render: TractogramRenderPipeline::new(gpu),
         }
     }
@@ -50,7 +50,7 @@ impl TractogramRenderer {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         tractogram: &Tractogram,
         settings: &Settings,
     ) {
@@ -64,15 +64,15 @@ impl TractogramRenderer {
             ShadingSetting::Render => self.render.render(cmd, frame, environment, tractogram),
             ShadingSetting::Density => {
                 self.volume
-                    .render(cmd, frame, frame.density().volume(), environment)
+                    .render(cmd, frame, frame.density().texture(), environment)
             }
             ShadingSetting::Occlusion => {
                 self.volume
-                    .render(cmd, frame, frame.occlusion().volume(), environment)
+                    .render(cmd, frame, frame.occlusion().texture(), environment)
             }
             ShadingSetting::Occupancy => {
                 self.volume
-                    .render(cmd, frame, frame.occupancy().occupancy(), environment)
+                    .render(cmd, frame, frame.occupancy().texture(), environment)
             }
         }
     }

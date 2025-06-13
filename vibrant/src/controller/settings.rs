@@ -31,8 +31,8 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self {
-            streamline_radius: 0.25,
-            direct_light: 0.72,
+            streamline_radius: 0.2,
+            direct_light: 0.7,
             culling_threshold: 4.0,
             alpha: 1.0,
             level: 0.0,

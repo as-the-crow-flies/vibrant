@@ -148,7 +148,7 @@ impl Occupancy {
         &self.threshold
     }
 
-    pub fn occupancy(&self) -> &ScalarTexture3D<R8Unorm> {
+    pub fn texture(&self) -> &ScalarTexture3D<R8Unorm> {
         &self.occupancy
     }
 

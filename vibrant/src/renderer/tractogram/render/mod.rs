@@ -9,7 +9,7 @@ use crate::{
     },
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::Color, occupancy::Occupancy, SurfaceBuffer},
+    surface::{color::Color, occupancy::Occupancy, Frame},
 };
 
 pub struct TractogramRenderPipeline {
@@ -24,6 +24,7 @@ impl TractogramRenderPipeline {
                 &gpu.pipeline_layout(&[
                     &Tractogram::layout(gpu, true),
                     &Occupancy::layout(gpu, true),
+                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
                     &ScalarTexture3D::<R8Uint>::layout(gpu),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
                     &Environment::layout(gpu),
@@ -37,7 +38,7 @@ impl TractogramRenderPipeline {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         environment: &Environment,
         tractogram: &Tractogram,
     ) {
@@ -49,10 +50,11 @@ impl TractogramRenderPipeline {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, tractogram.binding(true), &[]);
         pass.set_bind_group(1, frame.occupancy().binding(true), &[]);
-        pass.set_bind_group(2, frame.density().count().binding(), &[]);
-        pass.set_bind_group(3, frame.density().volume().binding(), &[]);
-        pass.set_bind_group(4, environment.binding(), &[]);
-        pass.set_bind_group(5, frame.color().binding_write(), &[]);
+        pass.set_bind_group(2, frame.occupancy().texture().binding(), &[]);
+        pass.set_bind_group(3, frame.density().count().binding(), &[]);
+        pass.set_bind_group(4, frame.density().texture().binding(), &[]);
+        pass.set_bind_group(5, environment.binding(), &[]);
+        pass.set_bind_group(6, frame.color().binding_write(), &[]);
 
         pass.dispatch_workgroups(
             frame.color().width().div_ceil(8),
@@ -60,4 +62,9 @@ impl TractogramRenderPipeline {
             1,
         );
     }
+}
+
+mod test {
+    #[test]
+    fn test() {}
 }

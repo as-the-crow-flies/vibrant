@@ -4,7 +4,7 @@ use wgpu::{CommandEncoder, RenderPassDescriptor};
 
 use crate::{
     gpu::Gpu,
-    surface::{color::Color, SurfaceBuffer},
+    surface::{color::Color, Frame},
 };
 
 pub struct UiRenderer {
@@ -22,7 +22,7 @@ impl UiRenderer {
         &mut self,
         gpu: &Gpu,
         cmd: &mut CommandEncoder,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {

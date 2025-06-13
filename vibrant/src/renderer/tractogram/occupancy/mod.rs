@@ -4,7 +4,7 @@ use crate::{
     asset::scalar::{R16Uint, R8Unorm, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{occupancy::Occupancy, SurfaceBuffer},
+    surface::{occupancy::Occupancy, Frame},
 };
 
 pub struct OccupancyPipeline {
@@ -52,7 +52,7 @@ impl OccupancyPipeline {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &SurfaceBuffer,
+        frame: &Frame,
         environment: &Environment,
     ) {
         frame.occupancy().clear(cmd);
@@ -67,7 +67,7 @@ impl OccupancyPipeline {
         pass.set_pipeline(&self.bin);
         pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
         pass.set_bind_group(1, frame.density().count().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().volume().binding(), &[]);
+        pass.set_bind_group(2, frame.occlusion().texture().binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.threshold);
@@ -78,14 +78,14 @@ impl OccupancyPipeline {
         pass.set_pipeline(&self.occupancy);
         pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
         pass.set_bind_group(1, frame.density().count().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().volume().binding(), &[]);
-        pass.set_bind_group(3, frame.occupancy().occupancy().binding_write(), &[]);
+        pass.set_bind_group(2, frame.occlusion().texture().binding(), &[]);
+        pass.set_bind_group(3, frame.occupancy().texture().binding_write(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.occupancy().occupancy().width().div_ceil(8);
-        for binding in frame.occupancy().occupancy().bindings_mipmap() {
+        let mut mipmap = frame.occupancy().texture().size().div_ceil(8);
+        for binding in frame.occupancy().texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
             mipmap /= 2;
