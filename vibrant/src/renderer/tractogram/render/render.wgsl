@@ -28,7 +28,6 @@ fn main(@builtin(workgroup_id) tile: vec3<u32>, @builtin(local_invocation_index)
 }
 
 const LOCAL_SORT_SIZE: u32 = 32;
-
 var<private> HIT_DISTANCE_INDEX: array<u32, LOCAL_SORT_SIZE>;
 
 fn compute(pixel: vec2<u32>) -> vec4<f32> {

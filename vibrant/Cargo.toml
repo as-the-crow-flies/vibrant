@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = "24.0.0"
-winit = "0.30.7"
+wgpu = "25.0.2"
+winit = "0.30"
 
 egui = { git = "https://github.com/emilk/egui.git" }
 egui-wgpu = { git = "https://github.com/emilk/egui.git", features = ["winit"] }

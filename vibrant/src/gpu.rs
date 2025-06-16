@@ -33,27 +33,24 @@ impl Gpu {
         let limits = adapter.limits();
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some(type_name::<Self>()),
-                    required_limits: Limits {
-                        max_bind_groups: limits.max_bind_groups,
-                        max_compute_invocations_per_workgroup: limits
-                            .max_compute_invocations_per_workgroup,
-                        max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
-                        max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y,
-                        max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
-                        max_buffer_size: limits.max_buffer_size,
-                        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
-                        ..Default::default()
-                    },
-                    required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | Features::BGRA8UNORM_STORAGE
-                        | Features::SUBGROUP,
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some(type_name::<Self>()),
+                required_limits: Limits {
+                    max_bind_groups: limits.max_bind_groups,
+                    max_compute_invocations_per_workgroup: limits
+                        .max_compute_invocations_per_workgroup,
+                    max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
+                    max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y,
+                    max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
+                    max_buffer_size: limits.max_buffer_size,
+                    max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                     ..Default::default()
                 },
-                None,
-            )
+                required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | Features::BGRA8UNORM_STORAGE
+                    | Features::SUBGROUP,
+                ..Default::default()
+            })
             .await
             .expect("Could not acquire GPU Device");
 
@@ -127,8 +124,8 @@ impl Gpu {
         self.queue.submit([cmd.finish()]);
     }
 
-    pub fn wait(&self) {
-        self.device.poll(wgpu::MaintainBase::Wait);
+    pub fn wait(&self) -> bool {
+        self.device.poll(wgpu::MaintainBase::Wait).is_ok()
     }
 
     pub async fn read_buffer<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
@@ -154,7 +151,7 @@ impl Gpu {
             let _ = sender.send(x);
         });
 
-        self.device.poll(wgpu::MaintainBase::Wait);
+        let _ = self.device.poll(wgpu::MaintainBase::Wait).is_ok();
 
         receiver
             .await
