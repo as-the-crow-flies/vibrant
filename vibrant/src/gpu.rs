@@ -50,8 +50,7 @@ impl Gpu {
                 },
                 required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                     | Features::BGRA8UNORM_STORAGE
-                    | Features::SUBGROUP
-                    | Features::SHADER_F16,
+                    | Features::SUBGROUP,
                 ..Default::default()
             })
             .await
