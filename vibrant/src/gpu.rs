@@ -30,6 +30,8 @@ impl Gpu {
             .await
             .expect("Could not aqcuire GPU Adapter");
 
+        dbg!(adapter.features());
+
         let limits = adapter.limits();
 
         let (device, queue) = adapter
@@ -48,7 +50,8 @@ impl Gpu {
                 },
                 required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                     | Features::BGRA8UNORM_STORAGE
-                    | Features::SUBGROUP,
+                    | Features::SUBGROUP
+                    | Features::SHADER_F16,
                 ..Default::default()
             })
             .await

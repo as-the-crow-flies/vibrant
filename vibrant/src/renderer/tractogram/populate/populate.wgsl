@@ -23,7 +23,7 @@ var<workgroup> WORKGROUP_OFFSET: u32;
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&TRACTOGRAM_INDICES);
     let radius = ENVIRONMENT.settings.streamline_radius;
-    let TRANSFORM = WORLD_TO_VOLUME * TRACTOGRAM_TO_WORLD;
+    let TRANSFORM = WORLD_TO_VOLUME;
 
     loop {
         if (local == 0) {

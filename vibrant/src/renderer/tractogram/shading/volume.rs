@@ -41,7 +41,7 @@ impl VolumeRenderPipeline {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, texture.binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_bind_group(2, frame.color().binding_write(), &[]);
+        pass.set_bind_group(2, frame.color().binding(), &[]);
 
         pass.dispatch_workgroups(
             frame.color().width().div_ceil(8),

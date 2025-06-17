@@ -54,7 +54,7 @@ impl TractogramRenderPipeline {
         pass.set_bind_group(3, frame.density().count().binding(), &[]);
         pass.set_bind_group(4, frame.density().texture().binding(), &[]);
         pass.set_bind_group(5, environment.binding(), &[]);
-        pass.set_bind_group(6, frame.color().binding_write(), &[]);
+        pass.set_bind_group(6, frame.color().binding(), &[]);
 
         pass.dispatch_workgroups(
             frame.color().width().div_ceil(8),

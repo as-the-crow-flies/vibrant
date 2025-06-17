@@ -33,7 +33,10 @@ fn main(@builtin(local_invocation_index) local: u32) {
             let endpoint = any(vp > vec3<f32>(1E6)) || any(vm > vec3<f32>(1E6));
             let plane = select(normalize(vp - vm), vec3<f32>(0), endpoint);
 
-            TRACTOGRAM_VERTICES[index].w = bitcast<f32>(pack4x8snorm(vec4<f32>(plane, 0.0)));
+            let position = TRACTOGRAM_TO_WORLD * vec4<f32>(v, 1.0);
+            let normal = TRACTOGRAM_TO_WORLD * vec4<f32>(plane, 0.0);
+
+            TRACTOGRAM_VERTICES[index] = vec4<f32>(position.xyz, bitcast<f32>(pack4x8snorm(normal)));
         }
     }
 }

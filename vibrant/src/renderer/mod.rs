@@ -43,7 +43,12 @@ impl Renderer {
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {
-        File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(gpu, &tck)));
+        let mut needs_preprocess = false;
+
+        File::on_tck(|tck| {
+            self.asset.tractogram = Some(Tractogram::new(gpu, &tck));
+            needs_preprocess = true;
+        });
 
         let surface = self.surface.maybe_resize(gpu, &controller);
 
@@ -58,6 +63,7 @@ impl Renderer {
                 surface.buffer(),
                 tractogram,
                 controller.settings(),
+                needs_preprocess,
             );
         }
 

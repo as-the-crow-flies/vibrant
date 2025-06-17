@@ -13,13 +13,11 @@ use crate::gpu::Gpu;
 pub struct Color {
     texture: Texture,
     view: TextureView,
-    view_sgrb: TextureView,
-    binding_write: BindGroup,
+    binding: BindGroup,
 }
 
 impl Color {
     pub const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
-    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());
@@ -39,7 +37,7 @@ impl Color {
                 | TextureUsages::STORAGE_BINDING
                 | TextureUsages::TEXTURE_BINDING
                 | TextureUsages::COPY_SRC,
-            view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
+            view_formats: &[],
         });
 
         let view = texture.create_view(&TextureViewDescriptor {
@@ -48,13 +46,7 @@ impl Color {
             ..Default::default()
         });
 
-        let view_sgrb = texture.create_view(&TextureViewDescriptor {
-            label,
-            format: Some(Self::FORMAT_SRGB),
-            ..Default::default()
-        });
-
-        let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout_write(gpu),
             entries: &[BindGroupEntry {
@@ -66,8 +58,7 @@ impl Color {
         Self {
             texture,
             view,
-            view_sgrb,
-            binding_write,
+            binding,
         }
     }
 
@@ -91,14 +82,6 @@ impl Color {
         }
     }
 
-    pub fn target_srgb() -> ColorTargetState {
-        ColorTargetState {
-            format: Self::FORMAT_SRGB,
-            blend: None,
-            write_mask: ColorWrites::all(),
-        }
-    }
-
     pub fn attachment(&self) -> RenderPassColorAttachment {
         RenderPassColorAttachment {
             view: &self.view,
@@ -110,19 +93,8 @@ impl Color {
         }
     }
 
-    pub fn attachment_srgb(&self) -> RenderPassColorAttachment {
-        RenderPassColorAttachment {
-            view: &self.view_sgrb,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                store: StoreOp::Store,
-            },
-        }
-    }
-
-    pub fn binding_write(&self) -> &BindGroup {
-        &self.binding_write
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
     }
 
     pub fn layout_write(gpu: &Gpu) -> BindGroupLayout {

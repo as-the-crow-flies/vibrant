@@ -194,7 +194,11 @@ pub fn full(criterion: &mut Criterion) {
     let frame = &Frame::new(gpu, &get_controller());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
-    let adjacency = AdjacenyPipeline::new(gpu);
+    let mut cmd = gpu.cmd();
+    AdjacenyPipeline::new(gpu).render(&mut cmd, tractogram);
+    gpu.submit(cmd);
+    gpu.wait();
+
     let density = DensityPipeline::new(gpu);
     let occlusion = OcclusionPipeline::new(gpu);
     let occupancy = OccupancyPipeline::new(gpu);
@@ -205,7 +209,6 @@ pub fn full(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            adjacency.render(&mut cmd, tractogram);
             density.render(&mut cmd, frame, environment, tractogram);
             occlusion.render(&mut cmd, frame, environment);
             occupancy.render(&mut cmd, frame, environment);

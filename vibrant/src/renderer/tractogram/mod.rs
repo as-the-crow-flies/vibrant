@@ -53,8 +53,12 @@ impl TractogramRenderer {
         frame: &Frame,
         tractogram: &Tractogram,
         settings: &Settings,
+        needs_preprocess: bool,
     ) {
-        self.adjaceny.render(cmd, tractogram);
+        if needs_preprocess {
+            self.adjaceny.render(cmd, tractogram);
+        }
+
         self.density.render(cmd, frame, environment, tractogram);
         self.occlusion.render(cmd, frame, environment);
         self.occupancy.render(cmd, frame, environment);

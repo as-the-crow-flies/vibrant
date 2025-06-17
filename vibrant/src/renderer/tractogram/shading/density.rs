@@ -44,7 +44,7 @@ impl VolumeShadingPipeline {
                     fragment: Some(FragmentState {
                         module: &shader,
                         entry_point: Some("fragment"),
-                        targets: &[Some(Color::target_srgb())],
+                        targets: &[Some(Color::target())],
                         compilation_options: Default::default(),
                     }),
                     multisample: Default::default(),
@@ -63,7 +63,7 @@ impl VolumeShadingPipeline {
         environment: &Environment,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment())],
             ..Default::default()
         });
 
