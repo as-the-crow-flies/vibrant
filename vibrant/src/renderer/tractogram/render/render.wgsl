@@ -27,7 +27,7 @@ fn main(@builtin(workgroup_id) tile: vec3<u32>, @builtin(local_invocation_index)
     textureStore(COLOR, vec2<u32>(pixel.x, ENVIRONMENT.surface.y - pixel.y), result);
 }
 
-const LOCAL_SORT_SIZE: u32 = 32;
+const LOCAL_SORT_SIZE: u32 = 64;
 var<private> HIT_DISTANCE: array<f32, LOCAL_SORT_SIZE>;
 var<private> HIT_INDEX: array<u32, LOCAL_SORT_SIZE>;
 var<private> HIT_COUNT: u32 = 0;
@@ -38,7 +38,7 @@ var<private> RADIUS: f32;
 var<private> ALPHA: f32;
 
 fn compute(pixel: vec2<u32>) -> vec4<f32> {
-    DIM = f32(textureDimensions(OCCUPANCY).x);
+    DIM = f32(textureDimensions(DENSITY).x);
     DIM_INV = 1.0 / DIM;
     RADIUS = ENVIRONMENT.settings.streamline_radius * DIM_INV;
     ALPHA = ENVIRONMENT.settings.alpha;

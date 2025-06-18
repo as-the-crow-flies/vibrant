@@ -30,8 +30,6 @@ impl Gpu {
             .await
             .expect("Could not aqcuire GPU Adapter");
 
-        dbg!(adapter.features());
-
         let limits = adapter.limits();
 
         let (device, queue) = adapter

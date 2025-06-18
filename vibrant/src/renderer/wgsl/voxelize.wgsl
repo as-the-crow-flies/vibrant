@@ -1,10 +1,16 @@
 fn voxelize(index: u32, v0_: vec3<f32>, v1_: vec3<f32>, radius: f32) {
-    let direction = normalize(v1_ - v0_);
+    let delta_ = v1_ - v0_;
+    let direction = normalize(delta_);
     let axes = rank(abs(direction));
-    let r = radius * direction;
 
-    let v0 = select(v1_ + r, v0_ - r, direction[axes[0]] > 0.0);
-    let v1 = select(v0_ - r, v1_ + r, direction[axes[0]] > 0.0);
+    // Extend by one radius in major direction to ensure caps are voxelized
+    let extension = delta_ / abs(delta_[axes[0]]) * radius;
+    let v0 = select(v1_ + extension, v0_ - extension, direction[axes[0]] > 0.0);
+    let v1 = select(v0_ - extension, v1_ + extension, direction[axes[0]] > 0.0);
+
+    // Find cylinder radii along the minor axes
+    let r1 = radius / sqrt(1.0 - direction[axes[1]] * direction[axes[1]]);
+    let r2 = radius / sqrt(1.0 - direction[axes[2]] * direction[axes[2]]);
 
     let t_min = v0[axes[0]];
     let t_max = v1[axes[0]];
@@ -15,22 +21,22 @@ fn voxelize(index: u32, v0_: vec3<f32>, v1_: vec3<f32>, radius: f32) {
     var s0 = v0;
 
     while (t0 < t_max) {
-        let t1 = min(t_max, floor(t0 + 1.0));
-        let s1 = v0 + step * (t1 - t_min);
+        let t1 = min(t_max, floor(t0 + 1.0)); // Jump to the next voxel boundary or line end
+        let s1 = v0 + step * (t1 - t_min); // position along line at t1
 
         let i = i32(t0);
 
-        let j_min = i32(min(s0[axes[1]], s1[axes[1]]) - radius);
-        let j_max = i32(max(s0[axes[1]], s1[axes[1]]) + radius);
+        // Compute bounding square along minor axes
+        let j_min = i32(min(s0[axes[1]], s1[axes[1]]) - r1);
+        let j_max = i32(max(s0[axes[1]], s1[axes[1]]) + r1);
 
-        let k_min = i32(min(s0[axes[2]], s1[axes[2]]) - radius);
-        let k_max = i32(max(s0[axes[2]], s1[axes[2]]) + radius);
+        let k_min = i32(min(s0[axes[2]], s1[axes[2]]) - r2);
+        let k_max = i32(max(s0[axes[2]], s1[axes[2]]) + r2);
 
+        // Visit all voxels in bounding square
         for (var j = j_min; j <= j_max; j++) {
             for (var k = k_min; k <= k_max; k++) {
                 let voxel = shuffle(vec3<i32>(i, j, k), axes);
-
-                // TODO: check if it actually hits corner voxels! (maybe it does not?)
                 visit_voxel(voxel, index, v0, v1);
             }
         }

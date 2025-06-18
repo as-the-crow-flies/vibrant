@@ -34,7 +34,7 @@ impl Controller {
         Self {
             width: 1920,
             height: 1080,
-            density: 256,
+            density: 128,
             occlusion: 128,
             memory: 256,
             state: ControllerState::default(),
