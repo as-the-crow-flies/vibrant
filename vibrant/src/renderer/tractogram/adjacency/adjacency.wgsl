@@ -26,15 +26,15 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
             let index = TRACTOGRAM_INDICES[index_index];
 
-            let v = TRACTOGRAM_VERTICES[index    ].xyz;
-            let vp = TRACTOGRAM_VERTICES[index + 1].xyz;
-            let vm = TRACTOGRAM_VERTICES[index - 1].xyz;
+            let v = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index    ]);
+            let vp = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 1]);
+            let vm = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index - 1]);
 
             let endpoint = any(vp > vec3<f32>(1E6)) || any(vm > vec3<f32>(1E6));
             let plane = select(normalize(vp - vm), vec3<f32>(0), endpoint);
 
-            let position = TRACTOGRAM_TO_WORLD * vec4<f32>(v, 1.0);
-            let normal = TRACTOGRAM_TO_WORLD * vec4<f32>(plane, 0.0);
+            let position = vec4<f32>(v, 1.0);
+            let normal = vec4<f32>(plane, 0.0);
 
             TRACTOGRAM_VERTICES[index] = vec4<f32>(position.xyz, bitcast<f32>(pack4x8snorm(normal)));
         }

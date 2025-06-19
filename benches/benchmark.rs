@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
 use vibrant::{
     asset::tractogram::Tractogram,
-    controller::Controller,
+    controller::{settings::Settings, Controller},
     file::TractogramFile,
     gpu::Gpu,
     renderer::{
@@ -16,21 +16,11 @@ use vibrant::{
     surface::Frame,
 };
 
-const WIDTH: u32 = 1920;
-const HEIGHT: u32 = 1080;
-const DENSITY: u32 = 256;
-const OCCLUSION: u32 = 64;
-const MEMORY: u32 = 64;
-
 const TRACTOGRAM_PATH: &'static str = "assets/HCP-100307/whole_brain200k.tck";
-
-pub fn get_controller() -> Controller {
-    Controller::test(WIDTH, HEIGHT, DENSITY, OCCLUSION, MEMORY)
-}
 
 pub fn get_environment(gpu: &Gpu) -> Environment {
     let environment = Environment::new(&gpu);
-    environment.update(&gpu, &get_controller());
+    environment.update(&gpu, &Controller::new());
     return environment;
 }
 
@@ -50,7 +40,7 @@ pub fn density(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &Settings::new());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
@@ -76,7 +66,7 @@ pub fn occlusion(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &Settings::new());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
@@ -103,7 +93,7 @@ pub fn occupancy(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &Settings::new());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
@@ -131,7 +121,7 @@ pub fn populate(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &Settings::new());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
@@ -161,7 +151,7 @@ pub fn render(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &Settings::new());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();
@@ -191,7 +181,7 @@ pub fn full(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &get_controller());
+    let frame = &Frame::new(gpu, &Settings::new());
     let tractogram = &Tractogram::new(gpu, &TractogramFile::from_file(TRACTOGRAM_PATH));
 
     let mut cmd = gpu.cmd();

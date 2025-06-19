@@ -27,7 +27,7 @@ fn main(@builtin(workgroup_id) tile: vec3<u32>, @builtin(local_invocation_index)
     textureStore(COLOR, vec2<u32>(pixel.x, ENVIRONMENT.surface.y - pixel.y), result);
 }
 
-const LOCAL_SORT_SIZE: u32 = 64;
+const LOCAL_SORT_SIZE: u32 = 8;
 var<private> HIT_DISTANCE: array<f32, LOCAL_SORT_SIZE>;
 var<private> HIT_INDEX: array<u32, LOCAL_SORT_SIZE>;
 var<private> HIT_COUNT: u32 = 0;
@@ -129,16 +129,24 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
 }
 
 fn intersect(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, distance: f32) -> vec4<f32> {
-    gather(voxel, origin, direction);
+    let color = gather(voxel, origin, direction);
+
+    if (any(color >= vec3<f32>(0.0))) {
+        return vec4<f32>(color, 1.0);
+    }
+
     sort(&HIT_INDEX, &HIT_DISTANCE, HIT_COUNT);
     return blend(origin, direction);
 }
 
-fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>) {
+fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
     HIT_COUNT = 0u;
 
     let count = textureLoad(COUNT, voxel, 0).x;
     let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
+
+    var closest = 1E6;
+    var color = vec3<f32>(-1.0);
 
     for (var i = 0u; i < count; i++) {
         let index = INDEX[offset + i];
@@ -148,13 +156,23 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>) {
 
         let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
 
-        if (hit >= 0.0 && within_voxel(origin + hit * direction, voxel, v0, v1)) {
-            HIT_INDEX[HIT_COUNT] = index;
-            HIT_DISTANCE[HIT_COUNT] = hit;
+        if (hit < 1E6 && within_voxel(origin + hit * direction, voxel, v0, v1)) {
+            if (ALPHA < 1.0) {
+                HIT_INDEX[HIT_COUNT] = index;
+                HIT_DISTANCE[HIT_COUNT] = hit;
 
-            HIT_COUNT++;
+                HIT_COUNT++;
+            }
+            else if (hit <= closest) {
+                closest = hit;
+
+                let position = origin + hit * direction;
+                color = capsule_normal(position, v0.xyz, v1.xyz, RADIUS) * 0.5 + 0.5;
+            }
         }
     }
+
+    return color;
 }
 
 fn blend(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
@@ -180,20 +198,14 @@ fn blend(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
 }
 
 fn within_voxel(position: vec3<f32>, voxel: vec3<u32>, v0: vec4<f32>, v1: vec4<f32>) -> bool {
-    let not_in_voxel = any(vec3<u32>((position + 0.5) * DIM) != voxel);
+    if (any(vec3<u32>((position + 0.5) * DIM) != voxel)) { return false; }
 
-    return !not_in_voxel;
+    let n0 = unpack4x8snorm(bitcast<u32>(v0.w));
+    let n1 = unpack4x8snorm(bitcast<u32>(v1.w));
 
-    // if (not_in_voxel) {
-    //     return false;
-    // }
+    let clipped = dot(position - v0.xyz, n0.xyz) < 0.0 || dot(v1.xyz - position, n1.xyz) < 0.0;
 
-    // let n0 = unpack4x8snorm(bitcast<u32>(v0.w));
-    // let n1 = unpack4x8snorm(bitcast<u32>(v1.w));
-
-    // let clipped = dot(position - v0.xyz, n0.xyz) < 0.0 || dot(v1.xyz - position, n1.xyz) < 0.0;
-
-    // return !clipped;
+    return !clipped;
 }
 
 fn sort(
@@ -236,6 +248,16 @@ fn unproject(v: vec3<f32>) -> vec3<f32> {
     return t.xyz / t.w;
 }
 
+fn sphere_intersection(ro: vec3<f32>, rd: vec3<f32>, ce: vec3<f32>, ra: f32) -> f32
+{
+    let oc = ro - ce;
+    let b = dot( oc, rd );
+    let c = dot( oc, oc ) - ra*ra;
+    var h = b*b - c;
+
+    return select(-b - sqrt( h ), -1.0, h < 0.0);
+}
+
 
 // https://iquilezles.org/articles/intersectors
 fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32
@@ -271,7 +293,7 @@ fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f3
         if (h>0.0) { return -b - sqrt(h); }
     }
 
-    return -1.0;
+    return 1E6;
 }
 
 fn capsule_normal(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> vec3<f32>

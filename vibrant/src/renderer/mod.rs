@@ -50,7 +50,7 @@ impl Renderer {
             needs_preprocess = true;
         });
 
-        let surface = self.surface.maybe_resize(gpu, &controller);
+        let surface = self.surface.maybe_resize(gpu, &controller.settings());
 
         self.environment.update(gpu, &controller);
 

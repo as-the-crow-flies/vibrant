@@ -12,7 +12,7 @@ use wgpu::{
     SurfaceTarget, TexelCopyTextureInfo, TextureAspect, TextureUsages,
 };
 
-use crate::{controller::Controller, surface::occupancy::Occupancy};
+use crate::{controller::settings::Settings, surface::occupancy::Occupancy};
 
 use super::gpu::Gpu;
 
@@ -24,12 +24,12 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(gpu: &Gpu, controller: &Controller) -> Self {
+    pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         Self {
-            color: Color::new(gpu, controller.width(), controller.height()),
-            density: Density::new(gpu, controller.density()),
-            occlusion: Occlusion::new(gpu, controller.occlusion()),
-            occupancy: Occupancy::new(gpu, controller.density(), controller.memory()),
+            color: Color::new(gpu, settings.width, settings.height),
+            density: Density::new(gpu, settings.density),
+            occlusion: Occlusion::new(gpu, settings.occlusion),
+            occupancy: Occupancy::new(gpu, settings.density, settings.memory),
         }
     }
 
@@ -66,24 +66,22 @@ impl Surface {
 
         Self {
             surface,
-            buffer: Frame::new(gpu, &Controller::test(1, 1, 1, 1, 1)),
+            buffer: Frame::new(gpu, &Settings::new()),
         }
     }
 
-    pub fn maybe_resize(&mut self, gpu: &Gpu, controller: &Controller) -> &Self {
-        if controller.width() == self.buffer.color().width()
-            && controller.height() == self.buffer.color().height()
-            && controller.density() == self.buffer.density().resolution()
-            && controller.occlusion() == self.buffer.occlusion().resolution()
+    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
+        if settings.width == self.buffer.color().width()
+            && settings.height == self.buffer.color().height()
+            && settings.density == self.buffer.density().resolution()
+            && settings.occlusion == self.buffer.occlusion().resolution()
         {
             return self;
         }
 
-        self.buffer = Frame::new(gpu, &controller);
-        self.surface.configure(
-            gpu.device(),
-            &Self::config(controller.width(), controller.height()),
-        );
+        self.buffer = Frame::new(gpu, &settings);
+        self.surface
+            .configure(gpu.device(), &Self::config(settings.width, settings.height));
 
         self
     }

@@ -42,5 +42,5 @@ fn occlusion(position: vec3<f32>, direction: vec3<f32>) -> f32 {
 }
 
 fn density(sample: vec3<f32>, level: f32) -> f32 {
-    return 0.5 * precision_decode(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x);
+    return 0.25 * precision_decode(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x);
 }

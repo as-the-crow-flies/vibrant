@@ -15,6 +15,11 @@ pub enum ShadingSetting {
 
 #[derive(Debug)]
 pub struct Settings {
+    pub width: u32,
+    pub height: u32,
+    pub density: u32,
+    pub occlusion: u32,
+    pub memory: u32,
     pub streamline_radius: f32,
     pub direct_light: f32,
     pub culling_threshold: f32,
@@ -31,6 +36,11 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self {
+            width: 1920,
+            height: 1080,
+            density: 256,
+            occlusion: 128,
+            memory: 256,
             streamline_radius: 0.2,
             direct_light: 0.7,
             culling_threshold: 4.0,
