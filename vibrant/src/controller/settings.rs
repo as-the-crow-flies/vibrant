@@ -41,7 +41,7 @@ impl Settings {
             density: 256,
             occlusion: 128,
             memory: 256,
-            streamline_radius: 0.2,
+            streamline_radius: 0.12,
             direct_light: 0.7,
             culling_threshold: 4.0,
             alpha: 1.0,

@@ -32,7 +32,8 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
         for (var i = 0u; i < CHUNK_SIZE; i++) {
             let index_index = offset + i * WORKGROUP_SIZE + local;
-            if (index_index > n_indices) { return; }
+
+            if (index_index >= n_indices) { return; }
 
             let index = TRACTOGRAM_INDICES[index_index];
 

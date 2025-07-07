@@ -1,22 +1,22 @@
-pub mod adjacency;
 pub mod density;
 pub mod occlusion;
 pub mod occupancy;
 pub mod populate;
 pub mod render;
 pub mod shading;
+pub mod transform;
 
 use density::DensityPipeline;
 use shading::volume::VolumeRenderPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::tractogram::Tractogram,
+    asset::line::LineSet,
     controller::settings::{Settings, ShadingSetting},
     gpu::Gpu,
     renderer::tractogram::{
-        adjacency::AdjacenyPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
-        populate::PopulatePipeline, render::TractogramRenderPipeline,
+        occlusion::OcclusionPipeline, occupancy::OccupancyPipeline, populate::PopulatePipeline,
+        render::TractogramRenderPipeline, transform::TransformPipeline,
     },
     surface::Frame,
 };
@@ -24,7 +24,7 @@ use crate::{
 use super::environment::Environment;
 
 pub struct TractogramRenderer {
-    adjaceny: AdjacenyPipeline,
+    transform: TransformPipeline,
     density: DensityPipeline,
     occlusion: OcclusionPipeline,
     occupancy: OccupancyPipeline,
@@ -36,7 +36,7 @@ pub struct TractogramRenderer {
 impl TractogramRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            adjaceny: AdjacenyPipeline::new(gpu),
+            transform: TransformPipeline::new(gpu),
             density: DensityPipeline::new(gpu),
             occlusion: OcclusionPipeline::new(gpu),
             occupancy: OccupancyPipeline::new(gpu),
@@ -51,12 +51,12 @@ impl TractogramRenderer {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &Frame,
-        tractogram: &Tractogram,
+        tractogram: &LineSet,
         settings: &Settings,
         needs_preprocess: bool,
     ) {
         if needs_preprocess {
-            self.adjaceny.render(cmd, tractogram);
+            self.transform.render(cmd, tractogram);
         }
 
         self.density.render(cmd, frame, environment, tractogram);

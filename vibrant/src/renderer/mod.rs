@@ -10,7 +10,7 @@ use ui::UiRenderer;
 use wgpu::SurfaceTarget;
 
 use crate::{
-    asset::{tractogram::Tractogram, Asset},
+    asset::{line::LineSet, Asset},
     file::File,
 };
 
@@ -32,7 +32,7 @@ impl Renderer {
             ui: UiRenderer::new(gpu),
 
             environment: Environment::new(gpu),
-            asset: Asset { tractogram: None },
+            asset: Asset { line: None },
         }
     }
 
@@ -45,8 +45,8 @@ impl Renderer {
     ) {
         let mut needs_preprocess = false;
 
-        File::on_tck(|tck| {
-            self.asset.tractogram = Some(Tractogram::new(gpu, &tck));
+        File::on_line(|tck| {
+            self.asset.line = Some(LineSet::new(gpu, &tck));
             needs_preprocess = true;
         });
 
@@ -56,7 +56,7 @@ impl Renderer {
 
         let mut cmd = gpu.cmd();
 
-        if let Some(tractogram) = &self.asset.tractogram {
+        if let Some(tractogram) = &self.asset.line {
             self.tractogram.render(
                 &mut cmd,
                 &self.environment,

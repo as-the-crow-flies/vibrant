@@ -1,0 +1,126 @@
+use glam::{Vec3, Vec4};
+use itertools::Itertools;
+
+use std::{collections::HashMap, fs, io::BufRead};
+
+use super::bounds::Bounds;
+
+#[derive(Debug, Default)]
+pub struct LineFile {
+    vertices: Vec<Vec4>,
+    indices: Vec<u32>,
+    bounds: Bounds,
+}
+
+impl LineFile {
+    pub fn vertices(&self) -> &[Vec4] {
+        &self.vertices
+    }
+
+    pub fn indices(&self) -> &[u32] {
+        &self.indices
+    }
+
+    pub fn bounds(&self) -> &Bounds {
+        &self.bounds
+    }
+
+    pub fn from_obj(data: &String) -> LineFile {
+        let mut vertices: Vec<Vec4> = Vec::new();
+        let mut indices: Vec<u32> = Vec::new();
+
+        for line in data.lines() {
+            match line.split_once(" ") {
+                Some(("v", vertex)) => {
+                    let mut v = vertex.split_whitespace();
+
+                    vertices.push(Vec4::new(
+                        v.next().unwrap().parse().unwrap(),
+                        v.next().unwrap().parse().unwrap(),
+                        v.next().unwrap().parse().unwrap(),
+                        1.0,
+                    ));
+                }
+                Some(("l", index)) => {
+                    indices.extend(
+                        index
+                            .split_whitespace()
+                            .map(|i| i.parse::<u32>().unwrap() - 1),
+                    );
+                    indices.pop();
+                }
+                _ => {}
+            }
+        }
+
+        LineFile {
+            bounds: Bounds::from_vertices(&vertices),
+            vertices,
+            indices,
+        }
+    }
+
+    pub fn from_tck(bytes: &[u8]) -> LineFile {
+        let header: HashMap<String, String> = bytes
+            .lines()
+            .map(|line| line.unwrap())
+            .take_while(|line| line != "END")
+            .filter_map(|line| {
+                line.split_once(": ")
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
+            })
+            .collect();
+
+        let offset: usize = header
+            .get("file")
+            .expect("No 'file' entry in .tck header")
+            .strip_prefix(". ")
+            .expect("'file' entry in .tck header was expected to have '. ' prefix")
+            .parse()
+            .expect("Couldn't parse 'file' entry in .tck header as usize");
+
+        let vertices: Vec<Vec3> = bytemuck::try_cast_slice(&bytes[offset..])
+            .map(|slice| slice.to_vec())
+            // Fallback to copy when vertices are not aligned properly
+            .unwrap_or_else(|_| bytemuck::cast_slice(&bytes[offset..].to_owned()).to_vec());
+
+        let vertices = vertices
+            .iter()
+            .map(|v| Vec4::new(v.x, v.y, v.z, 1.0))
+            .collect_vec();
+
+        let indices: Vec<u32> = vertices
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
+            .collect();
+
+        LineFile {
+            bounds: Bounds::from_vertices(&vertices),
+            vertices,
+            indices,
+        }
+    }
+
+    pub fn join(tcks: Vec<LineFile>) -> LineFile {
+        tcks.into_iter().fold(LineFile::default(), |x, y| LineFile {
+            indices: [
+                x.indices,
+                y.indices
+                    .iter()
+                    .map(|i| i + x.vertices.len() as u32)
+                    .collect(),
+            ]
+            .concat(),
+            vertices: [x.vertices, y.vertices].concat(),
+            bounds: Bounds {
+                min: y.bounds.min.min(x.bounds.min),
+                max: y.bounds.max.max(x.bounds.max),
+            },
+        })
+    }
+
+    pub fn from_file(path: &str) -> LineFile {
+        Self::from_tck(&fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
+    }
+}

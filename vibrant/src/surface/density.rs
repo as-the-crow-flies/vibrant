@@ -63,6 +63,10 @@ impl Density {
         self.density.size()
     }
 
+    pub fn buffer(&self) -> &Buffer {
+        &self.buffer
+    }
+
     pub fn texture(&self) -> &ScalarTexture3D<R8Unorm> {
         &self.density
     }

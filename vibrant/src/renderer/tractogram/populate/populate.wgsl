@@ -44,7 +44,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
                 let index_index = offset + i * WORKGROUP_SIZE + local;
 
-                if (index_index > n_indices) { return; }
+                if (index_index >= n_indices) { return; }
 
                 index = TRACTOGRAM_INDICES[index_index];
                 v0 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 0]);

@@ -49,12 +49,7 @@ impl OccupancyPipeline {
         }
     }
 
-    pub fn render(
-        &self,
-        cmd: &mut CommandEncoder,
-        frame: &Frame,
-        environment: &Environment,
-    ) {
+    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
         frame.occupancy().clear(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -88,7 +83,8 @@ impl OccupancyPipeline {
         for binding in frame.occupancy().texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
-            mipmap /= 2;
+
+            mipmap = mipmap.div_ceil(2);
         }
     }
 }

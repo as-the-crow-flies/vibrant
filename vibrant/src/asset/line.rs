@@ -1,8 +1,7 @@
 use std::{any::type_name, f32::consts::PI};
 
-use glam::{Mat4, Quat, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec3};
 
-use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
@@ -12,7 +11,7 @@ use wgpu::{
 
 use crate::{file, gpu::Gpu};
 
-pub struct Tractogram {
+pub struct LineSet {
     vertices: Buffer,
     indices: Buffer,
     count: Buffer,
@@ -20,28 +19,16 @@ pub struct Tractogram {
     binding_write: BindGroup,
 }
 
-impl Tractogram {
-    pub fn new(gpu: &Gpu, tck: &file::TractogramFile) -> Self {
+impl LineSet {
+    pub fn new(gpu: &Gpu, line: &file::LineFile) -> Self {
         let label = Some(type_name::<Self>());
 
-        let indices = tck
-            .vertices()
-            .iter()
-            .enumerate()
-            .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
-            .collect_vec();
+        let scale = line.bounds().scale();
 
-        let vertices = tck
-            .vertices()
-            .iter()
-            .map(|v| Vec4::new(v.x, v.y, v.z, if v.is_finite() { 1.0 } else { 0.0 }))
-            .collect_vec();
-
-        let scale = tck.bounds().scale();
         let transform = Mat4::from_scale_rotation_translation(
-            Vec3::new(scale, scale, scale),
+            Vec3::splat(scale.max_element()),
             Quat::from_rotation_x(0.5 * PI),
-            Vec3::ZERO,
+            line.bounds().min + 0.5 * scale,
         );
 
         let world_to_tractogram = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -58,13 +45,13 @@ impl Tractogram {
 
         let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytemuck::cast_slice(&vertices),
+            contents: bytemuck::cast_slice(&line.vertices()),
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
         });
 
         let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytemuck::cast_slice(&indices),
+            contents: bytemuck::cast_slice(&line.indices()),
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
         });
 
@@ -147,14 +134,6 @@ impl Tractogram {
         }
     }
 
-    pub fn index_count(&self) -> u32 {
-        (self.indices.size() / 4) as u32
-    }
-
-    pub fn vertex_count(&self) -> u32 {
-        (self.vertices.size() / 12) as u32
-    }
-
     pub fn clear_count(&self, cmd: &mut CommandEncoder) {
         cmd.clear_buffer(&self.count, 0, None);
     }
@@ -219,7 +198,7 @@ impl Tractogram {
     }
 }
 
-impl Drop for Tractogram {
+impl Drop for LineSet {
     fn drop(&mut self) {
         self.vertices.destroy();
         self.indices.destroy();

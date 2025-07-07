@@ -5,7 +5,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 use crate::{
     asset::{
         scalar::{R16Uint, R8Unorm, ScalarTexture3D},
-        tractogram::Tractogram,
+        line::LineSet,
     },
     gpu::Gpu,
     renderer::environment::Environment,
@@ -31,7 +31,7 @@ impl DensityPipeline {
                         bind_group_layouts: &[
                             &Density::layout(gpu),
                             &ScalarTexture3D::<R8Unorm>::layout(gpu),
-                            &Tractogram::layout(gpu, true),
+                            &LineSet::layout(gpu, true),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -74,7 +74,7 @@ impl DensityPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        tractogram: &Tractogram,
+        tractogram: &LineSet,
     ) {
         frame.density().clear(cmd);
         tractogram.clear_count(cmd);
@@ -109,7 +109,7 @@ impl DensityPipeline {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 
-            mipmap /= 2;
+            mipmap = mipmap.div_ceil(2);
         }
     }
 }

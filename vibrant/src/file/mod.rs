@@ -1,9 +1,9 @@
 pub mod bounds;
+pub mod line;
 pub mod nifti;
-pub mod tck;
 
+pub use line::*;
 pub use nifti::*;
-pub use tck::*;
 
 use std::{
     path::PathBuf,
@@ -12,7 +12,7 @@ use std::{
 
 #[derive(Default)]
 pub struct File {
-    pub tractogram: Option<TractogramFile>,
+    pub line: Option<LineFile>,
     pub nifti: Option<Nifti>,
     pub save: Option<PathBuf>,
 }
@@ -24,7 +24,7 @@ impl File {
             let file = rfd::AsyncFileDialog::new().pick_file().await;
 
             if let Some(file) = file {
-                Self::publish_tractogram(TractogramFile::from_bytes(&file.read().await));
+                Self::publish_tractogram(LineFile::from_bytes(&file.read().await));
             }
         });
     }
@@ -36,18 +36,19 @@ impl File {
         let files = rfd::FileDialog::new().pick_files();
 
         if let Some(files) = files {
-            let tcks: Vec<TractogramFile> = files
+            let line_files: Vec<LineFile> = files
                 .iter()
                 .filter_map(
                     |file| match file.extension().map(|ext| ext.to_str()).flatten() {
-                        Some("tck") => Some(TractogramFile::from_tck(&fs::read(file).unwrap())),
+                        Some("tck") => Some(LineFile::from_tck(&fs::read(file).unwrap())),
+                        Some("obj") => Some(LineFile::from_obj(&fs::read_to_string(file).unwrap())),
                         _ => None,
                     },
                 )
                 .collect();
 
-            if !tcks.is_empty() {
-                Self::publish_tck(TractogramFile::join(tcks));
+            if !line_files.is_empty() {
+                Self::publish_line(LineFile::join(line_files));
             }
 
             if let Some(nifti) = files
@@ -76,10 +77,10 @@ impl File {
         todo!()
     }
 
-    pub fn on_tck(callback: impl FnOnce(TractogramFile)) {
+    pub fn on_line(callback: impl FnOnce(LineFile)) {
         let mut data = QUEUE.lock().unwrap();
 
-        if let Some(tractogram) = data.tractogram.take() {
+        if let Some(tractogram) = data.line.take() {
             callback(tractogram);
         }
     }
@@ -104,8 +105,8 @@ impl File {
         }
     }
 
-    fn publish_tck(tck: TractogramFile) {
-        QUEUE.lock().unwrap().tractogram = Some(tck);
+    fn publish_line(tck: LineFile) {
+        QUEUE.lock().unwrap().line = Some(tck);
     }
 
     fn publish_nifti(nifti: Nifti) {

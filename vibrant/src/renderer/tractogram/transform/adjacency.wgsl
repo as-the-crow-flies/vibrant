@@ -22,14 +22,15 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
         for (var i = 0u; i < CHUNK_SIZE; i++) {
             let index_index = offset + i * WORKGROUP_SIZE + local;
-            if (index_index > n_indices) { return; }
+            if (index_index >= n_indices) { return; }
 
             let index = TRACTOGRAM_INDICES[index_index];
 
-            let v = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index    ]);
-            let vp = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index + 1]);
-            let vm = transform(TRACTOGRAM_TO_WORLD, TRACTOGRAM_VERTICES[index - 1]);
+            let v  = TRACTOGRAM_VERTICES[index    ].xyz;
+            let vp = TRACTOGRAM_VERTICES[index + 1].xyz;
+            let vm = TRACTOGRAM_VERTICES[index - 1].xyz;
 
+            // TODO: Base logic on indices!
             let endpoint = any(vp > vec3<f32>(1E6)) || any(vm > vec3<f32>(1E6));
             let plane = select(normalize(vp - vm), vec3<f32>(0), endpoint);
 

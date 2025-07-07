@@ -1,8 +1,8 @@
+pub mod line;
 pub mod scalar;
-pub mod tractogram;
 
-use tractogram::Tractogram;
+use line::LineSet;
 
 pub struct Asset {
-    pub tractogram: Option<Tractogram>,
+    pub line: Option<LineSet>,
 }

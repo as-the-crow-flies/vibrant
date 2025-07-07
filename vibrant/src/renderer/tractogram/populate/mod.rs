@@ -3,7 +3,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 use crate::{
     asset::{
         scalar::{R8Unorm, ScalarTexture3D},
-        tractogram::Tractogram,
+        line::LineSet,
     },
     gpu::Gpu,
     renderer::environment::Environment,
@@ -22,7 +22,7 @@ impl PopulatePipeline {
                 &gpu.pipeline_layout(&[
                     &Occupancy::layout(gpu, false),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
-                    &Tractogram::layout(gpu, true),
+                    &LineSet::layout(gpu, true),
                     &Environment::layout(gpu),
                 ]),
                 &gpu.shader(
@@ -38,7 +38,7 @@ impl PopulatePipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        tractogram: &Tractogram,
+        tractogram: &LineSet,
     ) {
         tractogram.clear_count(cmd);
 

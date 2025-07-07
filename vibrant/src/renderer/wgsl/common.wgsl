@@ -84,6 +84,10 @@ fn div_ceil(a: u32, b: u32) -> u32 {
     return (a + b - 1) / b;
 }
 
+fn length2(a: vec3<f32>) -> f32 {
+    return dot(a, a);
+}
+
 // Constants
 const GAMMA = 0.5;
 const GAMMA_INV = 1.0 / GAMMA;

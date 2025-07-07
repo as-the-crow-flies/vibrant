@@ -5,7 +5,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 use crate::{
     asset::{
         scalar::{R8Uint, R8Unorm, ScalarTexture3D},
-        tractogram::Tractogram,
+        line::LineSet,
     },
     gpu::Gpu,
     renderer::environment::Environment,
@@ -22,7 +22,7 @@ impl TractogramRenderPipeline {
             pipeline: gpu.compute(
                 type_name::<Self>(),
                 &gpu.pipeline_layout(&[
-                    &Tractogram::layout(gpu, true),
+                    &LineSet::layout(gpu, true),
                     &Occupancy::layout(gpu, true),
                     &ScalarTexture3D::<R8Unorm>::layout(gpu),
                     &ScalarTexture3D::<R8Uint>::layout(gpu),
@@ -40,7 +40,7 @@ impl TractogramRenderPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        tractogram: &Tractogram,
+        tractogram: &LineSet,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Render"),

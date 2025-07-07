@@ -1,4 +1,4 @@
-use std::{any::type_name, marker::PhantomData, ops::Add};
+use std::{any::type_name, marker::PhantomData};
 
 use bytemuck::bytes_of;
 use glam::{Mat4, Vec3};
@@ -86,7 +86,7 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
     pub fn new(gpu: &Gpu, volume: u32, filter: FilterMode) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mip_level_count = volume.div_ceil(2).add(1).ilog2().max(1);
+        let mip_level_count = volume.ilog2();
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
             label,
