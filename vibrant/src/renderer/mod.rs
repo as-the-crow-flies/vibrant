@@ -2,6 +2,7 @@ pub mod environment;
 pub mod services;
 pub mod tractogram;
 pub mod ui;
+pub mod wgsl;
 
 use crate::renderer::tractogram::TractogramRenderer;
 use environment::Environment;

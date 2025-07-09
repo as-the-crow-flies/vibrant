@@ -1,6 +1,10 @@
-@group(0) @binding(0) var VOLUME: texture_3d<f32>;
-@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
-@group(2) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
+@group(0) @binding(0) var DENSITY: texture_3d<f32>;
+
+@group(1) @binding(0) var RGBA: texture_3d<f32>;
+@group(1) @binding(1) var RGBA_SAMPLER: sampler;
+
+@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(3) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
 
 @compute
 @workgroup_size(64, 1)
@@ -15,7 +19,7 @@ fn main(@builtin(workgroup_id) tile: vec3<u32>, @builtin(local_invocation_index)
 }
 
 fn compute(pixel: vec2<u32>) -> vec4<f32> {
-    let dim_u32 = vec3<u32>(textureDimensions(VOLUME));
+    let dim_u32 = vec3<u32>(textureDimensions(DENSITY));
     let dim = vec3<f32>(dim_u32);
 
     let radius = ENVIRONMENT.settings.streamline_radius / dim.x;
@@ -27,13 +31,13 @@ fn compute(pixel: vec2<u32>) -> vec4<f32> {
     let far = unproject(vec3<f32>(uv.xy, 1.0));
     let direction = normalize(far - near);
 
-    let value = raymarch(near + 0.5, direction, VOLUME);
+    let random = hash(uv);
 
-    return vec4<f32>(vec3<f32>(value), 1.0);
+    return raymarch(near + 0.5, direction, random);
 }
 
-fn raymarch(origin: vec3<f32>, direction: vec3<f32>, volume: texture_3d<f32>) -> f32 {
-    let dim = f32(textureDimensions(volume).x);
+fn raymarch(origin: vec3<f32>, direction: vec3<f32>, random: f32) -> vec4<f32> {
+    let dim = f32(textureDimensions(DENSITY).x);
     let dim_inv = 1.0 / dim;
 
     let delta = select(1.0 / direction, vec3<f32>(1E10), abs(direction) < vec3<f32>(1E-5));
@@ -45,10 +49,10 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, volume: texture_3d<f32>) ->
     let tEnter = maximum(min(tMinBounds, tMaxBounds)) + 1E-5;
     let tExit = minimum(max(tMinBounds, tMaxBounds)) - 1E-5;
 
-    if (tEnter >= tExit || tExit < 0.0) { return 0.0; }
+    if (tEnter >= tExit || tExit < 0.0) { return vec4<f32>(0.0); }
 
     var t = max(tEnter, 0.0);
-    var mip = textureNumLevels(volume) - 1;
+    var mip = textureNumLevels(DENSITY) - 1;
     var position = origin + direction * t;
     var voxel = vec3<u32>(floor(position * dim));
 
@@ -57,7 +61,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, volume: texture_3d<f32>) ->
         let voxel_at_mip = voxel >> vec3<u32>(mip);
 
         // Traverse down level if mip is occupied
-        if (textureLoad(volume, voxel_at_mip, i32(mip)).x > 0.0) {
+        if (textureLoad(DENSITY, voxel_at_mip, i32(mip)).a > 0.0) {
             if (mip == 0) { break; }
             else { mip--; }
 
@@ -83,34 +87,21 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, volume: texture_3d<f32>) ->
         voxel[axis] = next[axis] + boundary[axis] - 1;
     }
 
-    var absorbance = 0.0;
+    var color = vec4<f32>(0.0);
 
-    while (t < tExit) {
-        // Get the next voxel boundary
-        let next = voxel + boundary;
+    for (t += dim_inv * random; t < tExit; t += dim_inv) {
+        let position = origin + direction * t;
 
-        // Get minimum distance till next voxel boundaries
-        let d = abs((vec3<f32>(next) * dim_inv - position) * delta);
+        let sample = textureSampleLevel(RGBA, RGBA_SAMPLER, position, 0.0);
+        let alpha = saturate(precision_decode(sample.a));
+        let rgba = vec4<f32>(sample.rgb * alpha, alpha);
 
-        // Get axis of smallest distance
-        let axis = select(select(2u, 1u, d.y < d.z), 0u, d.x < min(d.y, d.z));
+        color += (1.0 - color.a) * rgba;
 
-        // Get Increment
-        let increment = max(d[axis], 1E-5);
-
-        // SHADE!!
-        let density = increment * dim * precision_decode(textureLoad(volume, voxel, 0).x);
-        absorbance += (1.0 - absorbance) * saturate(density);
-
-        if (absorbance > 0.99) { return 1.0; }
-
-        // Increment Ray Position
-        t += increment;
-        position += direction * increment;
-        voxel[axis] = next[axis] + boundary[axis] - 1;
+        if (color.a > 0.99) { return color; }
     }
 
-    return absorbance;
+    return color;
 }
 
 fn maximum(v: vec3<f32>) -> f32 {
@@ -124,4 +115,8 @@ fn minimum(v: vec3<f32>) -> f32 {
 fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
     return t.xyz / t.w;
+}
+
+fn hash(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }

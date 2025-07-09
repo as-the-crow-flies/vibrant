@@ -4,11 +4,11 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 
 use crate::{
     asset::{
-        scalar::{R16Uint, R8Unorm, ScalarTexture3D},
         line::LineSet,
+        scalar::{R16Uint, R8Unorm, Rgba8Unorm, ScalarTexture3D},
     },
     gpu::Gpu,
-    renderer::environment::Environment,
+    renderer::{environment::Environment, wgsl::VOXELIZE},
     surface::{density::Density, Frame},
 };
 
@@ -36,10 +36,7 @@ impl DensityPipeline {
                         ],
                         push_constant_ranges: &[],
                     }),
-                &gpu.shader(
-                    &(include_str!("../../wgsl/voxelize.wgsl").to_owned()
-                        + include_str!("voxelize.wgsl")),
-                ),
+                &gpu.shader(&(VOXELIZE.to_owned() + include_str!("voxelize.wgsl"))),
             ),
             copy: gpu.compute(
                 "Density::Copy",
@@ -50,6 +47,7 @@ impl DensityPipeline {
                             &Density::layout(gpu),
                             &ScalarTexture3D::<R8Unorm>::layout_write(gpu),
                             &ScalarTexture3D::<R16Uint>::layout_write(gpu),
+                            &ScalarTexture3D::<Rgba8Unorm>::layout_write(gpu),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -84,10 +82,10 @@ impl DensityPipeline {
             ..Default::default()
         });
 
-        let n = frame.density().texture().size().div_ceil(8);
+        let n = frame.density().density().size().div_ceil(8);
 
         pass.set_bind_group(0, frame.density().binding(), &[]);
-        pass.set_bind_group(1, frame.density().texture().binding(), &[]);
+        pass.set_bind_group(1, frame.density().density().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
 
@@ -96,16 +94,17 @@ impl DensityPipeline {
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, frame.density().binding(), &[]);
-        pass.set_bind_group(1, frame.density().texture().binding_write(), &[]);
+        pass.set_bind_group(1, frame.density().density().binding_write(), &[]);
         pass.set_bind_group(2, frame.density().count().binding_write(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(3, frame.density().color().binding_write(), &[]);
+        pass.set_bind_group(4, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.density().texture().size().div_ceil(8);
+        let mut mipmap = frame.density().density().size().div_ceil(8);
 
-        for binding in frame.density().texture().bindings_mipmap() {
+        for binding in frame.density().density().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

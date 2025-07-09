@@ -125,11 +125,10 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
 }
 
 fn intersect(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec4<f32> {
-    let color = gather(voxel, origin, direction, increment);
-    return vec4(color, select(0.0, 1.0, any(color > vec3<f32>())));
+    return gather(voxel, origin, direction, increment);
 }
 
-fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec3<f32> {
+fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec4<f32> {
     let count = textureLoad(COUNT, voxel, 0).x;
     let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
 
@@ -138,7 +137,7 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
     let r = RADIUS + increment_half;
 
     var closest = increment;
-    var color = vec3<f32>(0.0);
+    var color = vec4<f32>(0.0);
 
     for (var i = 0u; i < count; i++) {
         let index = INDEX[offset + i];
@@ -154,7 +153,20 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
             closest = hit;
 
             let position = origin + hit * direction;
-            color = capsule_normal(position, v0.xyz, v1.xyz, RADIUS) * 0.5 + 0.5;
+
+            let n0 = unpack4x8snorm(bitcast<u32>(v0.w)).xyz;
+            let n1 = unpack4x8snorm(bitcast<u32>(v1.w)).xyz;
+
+            let height = capsule_height(position, v0.xyz, v1.xyz);
+            let tangent = normalize(mix(n0, n1, height));
+
+            // let tangent = normalize(v1.xyz - v0.xyz);
+            let normal = capsule_normal(position, v0.xyz, v1.xyz, RADIUS);
+            let light = ENVIRONMENT.light;
+
+            let factor = mix(1.0, lambert(normal, light), ENVIRONMENT.settings.direct_light);
+
+            color = vec4<f32>(factor * abs(tangent), 1.0);
         }
     }
 
@@ -241,4 +253,11 @@ fn capsule_normal(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> vec3<f3
     let pa = pos - a;
     let h = saturate(dot(pa, ba) / dot(ba, ba));
     return (pa - h*ba) / r;
+}
+
+fn capsule_height(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>) -> f32
+{
+    let ba = b - a;
+    let pa = pos - a;
+    return saturate(dot(pa, ba) / dot(ba, ba));
 }

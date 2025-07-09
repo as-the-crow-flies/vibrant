@@ -4,8 +4,8 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{
-        scalar::{R8Uint, R8Unorm, ScalarTexture3D},
         line::LineSet,
+        scalar::{R8Uint, R8Unorm, ScalarTexture3D},
     },
     gpu::Gpu,
     renderer::environment::Environment,
@@ -52,7 +52,7 @@ impl TractogramRenderPipeline {
         pass.set_bind_group(1, frame.occupancy().binding(true), &[]);
         pass.set_bind_group(2, frame.occupancy().texture().binding(), &[]);
         pass.set_bind_group(3, frame.density().count().binding(), &[]);
-        pass.set_bind_group(4, frame.density().texture().binding(), &[]);
+        pass.set_bind_group(4, frame.density().density().binding(), &[]);
         pass.set_bind_group(5, environment.binding(), &[]);
         pass.set_bind_group(6, frame.color().binding(), &[]);
 

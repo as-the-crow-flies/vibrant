@@ -88,6 +88,15 @@ fn length2(a: vec3<f32>) -> f32 {
     return dot(a, a);
 }
 
+// Stalling et al. 1997 - Fast Display of Illuminated Field Lines
+fn stalling(tangent: vec3<f32>, light: vec3<f32>) -> f32 {
+    return max(0.0, sqrt(1.0 - pow(dot(light, tangent), 2.0)));
+}
+
+fn lambert(normal: vec3<f32>, light: vec3<f32>) -> f32 {
+    return max(0.0, dot(normal, light));
+}
+
 // Constants
 const GAMMA = 0.5;
 const GAMMA_INV = 1.0 / GAMMA;

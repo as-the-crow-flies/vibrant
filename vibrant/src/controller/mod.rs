@@ -97,17 +97,6 @@ impl Controller {
                         ShadingSetting::Density,
                         "Density",
                     );
-
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Occlusion,
-                        "Occlusion",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Occupancy,
-                        "Occupancy",
-                    );
                 });
 
             ui.separator();

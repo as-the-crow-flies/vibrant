@@ -53,7 +53,9 @@ pub fn density(criterion: &mut Criterion) {
         })
     });
 
-    let density: Vec<u32> = gpu.read_buffer(frame.density().buffer()).block_on();
+    let density: Vec<u32> = gpu
+        .read_buffer(frame.density().density_count_buffer())
+        .block_on();
     let u14_max = 2u32.pow(14) - 1;
 
     let counts: Vec<u32> = density

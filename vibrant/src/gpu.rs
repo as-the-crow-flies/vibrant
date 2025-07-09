@@ -11,6 +11,8 @@ use wgpu::{
     TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
 };
 
+use crate::renderer::wgsl::COMMON;
+
 pub struct Gpu {
     instance: wgpu::Instance,
     adapter: wgpu::Adapter,
@@ -79,11 +81,9 @@ impl Gpu {
     }
 
     pub fn shader(&self, source: &str) -> ShaderModule {
-        let common = include_str!("renderer/wgsl/common.wgsl");
-
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(common.to_string() + source)),
+            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + source)),
         })
     }
 

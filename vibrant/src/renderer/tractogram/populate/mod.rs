@@ -2,11 +2,11 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{
-        scalar::{R8Unorm, ScalarTexture3D},
         line::LineSet,
+        scalar::{R8Unorm, ScalarTexture3D},
     },
     gpu::Gpu,
-    renderer::environment::Environment,
+    renderer::{environment::Environment, wgsl::VOXELIZE},
     surface::{occupancy::Occupancy, Frame},
 };
 
@@ -25,10 +25,7 @@ impl PopulatePipeline {
                     &LineSet::layout(gpu, true),
                     &Environment::layout(gpu),
                 ]),
-                &gpu.shader(
-                    &(include_str!("../../wgsl/voxelize.wgsl").to_owned()
-                        + include_str!("populate.wgsl")),
-                ),
+                &gpu.shader(&(VOXELIZE.to_owned() + include_str!("populate.wgsl"))),
             ),
         }
     }

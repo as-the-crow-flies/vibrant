@@ -26,12 +26,7 @@ impl OcclusionPipeline {
         }
     }
 
-    pub fn render(
-        &self,
-        cmd: &mut CommandEncoder,
-        frame: &Frame,
-        environment: &Environment,
-    ) {
+    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Occlusion"),
             ..Default::default()
@@ -40,7 +35,7 @@ impl OcclusionPipeline {
         let n = frame.occlusion().texture().size().div_ceil(8);
 
         pass.set_pipeline(&self.occlusion);
-        pass.set_bind_group(0, frame.density().texture().binding(), &[]);
+        pass.set_bind_group(0, frame.density().density().binding(), &[]);
         pass.set_bind_group(1, frame.occlusion().texture().binding_write(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);

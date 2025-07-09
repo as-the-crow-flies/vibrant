@@ -66,18 +66,7 @@ impl TractogramRenderer {
 
         match settings.shading {
             ShadingSetting::Render => self.render.render(cmd, frame, environment, tractogram),
-            ShadingSetting::Density => {
-                self.volume
-                    .render(cmd, frame, frame.density().texture(), environment)
-            }
-            ShadingSetting::Occlusion => {
-                self.volume
-                    .render(cmd, frame, frame.occlusion().texture(), environment)
-            }
-            ShadingSetting::Occupancy => {
-                self.volume
-                    .render(cmd, frame, frame.occupancy().texture(), environment)
-            }
+            ShadingSetting::Density => self.volume.render(cmd, frame, environment),
         }
     }
 }

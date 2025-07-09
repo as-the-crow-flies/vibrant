@@ -9,8 +9,6 @@ pub enum GeometrySetting {
 pub enum ShadingSetting {
     Render,
     Density,
-    Occlusion,
-    Occupancy,
 }
 
 #[derive(Debug)]
@@ -38,20 +36,20 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            density: 256,
+            density: 128,
             occlusion: 128,
             memory: 256,
             streamline_radius: 0.12,
-            direct_light: 0.7,
+            direct_light: 0.25,
             culling_threshold: 4.0,
-            alpha: 1.0,
+            alpha: 0.9,
             level: 0.0,
             layer: 0,
             skip: 1,
             quality: false,
             smoothing: 0.5,
             geometry: GeometrySetting::Tube,
-            shading: ShadingSetting::Render,
+            shading: ShadingSetting::Density,
         }
     }
 }
