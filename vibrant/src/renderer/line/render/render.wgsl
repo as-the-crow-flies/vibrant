@@ -1,5 +1,6 @@
-@group(0) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
-@group(0) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<vec4<f32>>;
+@group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
+@group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> LINE_COUNT: atomic<u32>;
 
 @group(1) @binding(0) var<storage> OFFSET: array<u32>;
 @group(1) @binding(2) var<storage> INDEX: array<u32>;
@@ -34,7 +35,7 @@ var<private> ALPHA: f32;
 fn compute(pixel: vec2<u32>) -> vec4<f32> {
     DIM = f32(textureDimensions(DENSITY).x);
     DIM_INV = 1.0 / DIM;
-    RADIUS = ENVIRONMENT.settings.streamline_radius * DIM_INV;
+    RADIUS = ENVIRONMENT.settings.streamline_radius;
     ALPHA = ENVIRONMENT.settings.alpha;
 
     let uv = vec2<f32>(pixel) / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0;
@@ -112,7 +113,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         let increment = max(d[axis], 1E-5);
 
         // Accumulate Color
-        color += (1.0 - color.a) * intersect(voxel, position - 0.5, direction, increment);
+        color += (1.0 - color.a) * intersect(voxel, position * DIM, direction, increment * DIM);
         if (color.a > 0.95) { return color; }
 
         // Increment Ray Position
@@ -142,8 +143,8 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
     for (var i = 0u; i < count; i++) {
         let index = INDEX[offset + i];
 
-        let v0 = TRACTOGRAM_VERTICES[index + 0];
-        let v1 = TRACTOGRAM_VERTICES[index + 1];
+        let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
+        let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
 
         if (line_distance(midpoint, v0.xyz, v1.xyz) > r) { continue; }
 
@@ -154,14 +155,19 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
 
             let position = origin + hit * direction;
 
-            let n0 = unpack4x8snorm(bitcast<u32>(v0.w)).xyz;
-            let n1 = unpack4x8snorm(bitcast<u32>(v1.w)).xyz;
+            let delta = v1.xyz - v0.xyz;
 
-            let height = capsule_height(position, v0.xyz, v1.xyz);
-            let tangent = normalize(mix(n0, n1, height));
+            let pa = position - v0.xyz;
+            let height = saturate(dot(pa, delta) / dot(delta, delta));
+            let normal =  (pa - height * delta) / RADIUS;
 
-            // let tangent = normalize(v1.xyz - v0.xyz);
-            let normal = capsule_normal(position, v0.xyz, v1.xyz, RADIUS);
+            let delta_norm = normalize(delta);
+            let tangent = normalize(mix(
+                select(v0.clip, delta_norm, all(v0.clip == vec3<f32>())),
+                select(v1.clip, delta_norm, all(v1.clip == vec3<f32>())),
+                height
+            ));
+
             let light = ENVIRONMENT.light;
 
             let factor = mix(1.0, lambert(normal, light), ENVIRONMENT.settings.direct_light);
@@ -245,19 +251,4 @@ fn line_distance(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>) -> f32 {
   let ba = b - a;
   let h = clamp(dot(pa,ba) / dot(ba,ba), 0.0, 1.0);
   return length(pa - ba*h);
-}
-
-fn capsule_normal(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> vec3<f32>
-{
-    let ba = b - a;
-    let pa = pos - a;
-    let h = saturate(dot(pa, ba) / dot(ba, ba));
-    return (pa - h*ba) / r;
-}
-
-fn capsule_height(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>) -> f32
-{
-    let ba = b - a;
-    let pa = pos - a;
-    return saturate(dot(pa, ba) / dot(ba, ba));
 }

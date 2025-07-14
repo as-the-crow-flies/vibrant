@@ -7,12 +7,12 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::{R16Uint, R8Unorm, Rgba8Unorm, ScalarTexture3D},
+    asset::scalar::{R16Uint, R32Float, Rgba8Unorm, ScalarTexture3D},
     gpu::Gpu,
 };
 
 pub struct Density {
-    density: ScalarTexture3D<R8Unorm>,
+    density: ScalarTexture3D<R32Float>,
     count: ScalarTexture3D<R16Uint>,
     color: ScalarTexture3D<Rgba8Unorm>,
     density_count_buffer: Buffer,
@@ -94,7 +94,7 @@ impl Density {
         &self.color_buffer
     }
 
-    pub fn density(&self) -> &ScalarTexture3D<R8Unorm> {
+    pub fn density(&self) -> &ScalarTexture3D<R32Float> {
         &self.density
     }
 

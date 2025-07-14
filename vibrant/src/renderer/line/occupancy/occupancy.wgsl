@@ -7,7 +7,7 @@
 @group(2) @binding(0) var OCCLUSION: texture_3d<f32>;
 @group(2) @binding(1) var OCCLUSION_SAMPLER: sampler;
 
-@group(3) @binding(0) var OCCUPANCY: texture_storage_3d<r8unorm, read_write>;
+@group(3) @binding(0) var OCCUPANCY: texture_storage_3d<r32float, read_write>;
 
 var<workgroup> WORKGROUP_GLOBAL_OFFSET: u32;
 

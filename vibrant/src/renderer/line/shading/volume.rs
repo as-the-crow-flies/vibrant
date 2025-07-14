@@ -1,7 +1,7 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::scalar::{R8Unorm, Rgba8Unorm, ScalarTexture3D},
+    asset::scalar::{R32Float, Rgba8Unorm, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::Color, Frame},
@@ -17,7 +17,7 @@ impl VolumeRenderPipeline {
             pipeline: gpu.compute(
                 "Volume",
                 &gpu.pipeline_layout(&[
-                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
                     &ScalarTexture3D::<Rgba8Unorm>::layout(gpu),
                     &Environment::layout(gpu),
                     &Color::layout_write(gpu),

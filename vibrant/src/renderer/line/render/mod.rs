@@ -5,7 +5,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 use crate::{
     asset::{
         line::LineSet,
-        scalar::{R8Uint, R8Unorm, ScalarTexture3D},
+        scalar::{R32Float, R8Uint, ScalarTexture3D},
     },
     gpu::Gpu,
     renderer::environment::Environment,
@@ -24,9 +24,9 @@ impl TractogramRenderPipeline {
                 &gpu.pipeline_layout(&[
                     &LineSet::layout(gpu, true),
                     &Occupancy::layout(gpu, true),
-                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
                     &ScalarTexture3D::<R8Uint>::layout(gpu),
-                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
                     &Environment::layout(gpu),
                     &Color::layout_write(gpu),
                 ]),

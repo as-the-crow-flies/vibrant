@@ -1,10 +1,10 @@
 pub mod environment;
+pub mod line;
 pub mod services;
-pub mod tractogram;
 pub mod ui;
 pub mod wgsl;
 
-use crate::renderer::tractogram::TractogramRenderer;
+use crate::renderer::line::TractogramRenderer;
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;

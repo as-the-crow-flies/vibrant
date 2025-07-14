@@ -27,12 +27,23 @@ pub trait ScalarTextureFormat {
 pub struct R8Unorm {}
 pub struct Rgba8Unorm {}
 pub struct R8Uint {}
+pub struct R32Float {}
 pub struct R16Uint {}
 pub struct R32Uint {}
 
 impl ScalarTextureFormat for R8Unorm {
     fn format() -> TextureFormat {
         TextureFormat::R8Unorm
+    }
+
+    fn sample_type() -> TextureSampleType {
+        TextureSampleType::Float { filterable: true }
+    }
+}
+
+impl ScalarTextureFormat for R32Float {
+    fn format() -> TextureFormat {
+        TextureFormat::R32Float
     }
 
     fn sample_type() -> TextureSampleType {

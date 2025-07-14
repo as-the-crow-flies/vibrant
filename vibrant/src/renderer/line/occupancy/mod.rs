@@ -1,7 +1,7 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::scalar::{R16Uint, R8Unorm, ScalarTexture3D},
+    asset::scalar::{R16Uint, R32Float, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{occupancy::Occupancy, Frame},
@@ -22,7 +22,7 @@ impl OccupancyPipeline {
                 &gpu.pipeline_layout(&[
                     &Occupancy::layout(gpu, false),
                     &ScalarTexture3D::<R16Uint>::layout(gpu),
-                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("bin.wgsl")),
             ),
@@ -36,14 +36,14 @@ impl OccupancyPipeline {
                 &gpu.pipeline_layout(&[
                     &Occupancy::layout(gpu, false),
                     &ScalarTexture3D::<R16Uint>::layout(gpu),
-                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
-                    &ScalarTexture3D::<R8Unorm>::layout_write(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout_write(gpu),
                 ]),
                 &gpu.shader(include_str!("occupancy.wgsl")),
             ),
             mipmap: gpu.compute(
                 "Occupancy::Mipmap",
-                &gpu.pipeline_layout(&[&ScalarTexture3D::<R8Unorm>::layout_mipmap(gpu)]),
+                &gpu.pipeline_layout(&[&ScalarTexture3D::<R32Float>::layout_mipmap(gpu)]),
                 &gpu.shader(include_str!("mipmap.wgsl")),
             ),
         }

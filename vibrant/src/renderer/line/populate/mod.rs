@@ -3,7 +3,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 use crate::{
     asset::{
         line::LineSet,
-        scalar::{R8Unorm, ScalarTexture3D},
+        scalar::{R32Float, ScalarTexture3D},
     },
     gpu::Gpu,
     renderer::{environment::Environment, wgsl::VOXELIZE},
@@ -21,7 +21,7 @@ impl PopulatePipeline {
                 "Populate::Populate",
                 &gpu.pipeline_layout(&[
                     &Occupancy::layout(gpu, false),
-                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
                     &LineSet::layout(gpu, true),
                     &Environment::layout(gpu),
                 ]),

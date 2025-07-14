@@ -27,7 +27,6 @@ pub struct Settings {
     pub skip: u32,
     pub quality: bool,
     pub smoothing: f32,
-    pub geometry: GeometrySetting,
     pub shading: ShadingSetting,
 }
 
@@ -36,20 +35,19 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            density: 128,
+            density: 256,
             occlusion: 128,
             memory: 256,
-            streamline_radius: 0.12,
+            streamline_radius: 0.2,
             direct_light: 0.25,
             culling_threshold: 4.0,
-            alpha: 0.9,
+            alpha: 1.0,
             level: 0.0,
             layer: 0,
             skip: 1,
             quality: false,
             smoothing: 0.5,
-            geometry: GeometrySetting::Tube,
-            shading: ShadingSetting::Density,
+            shading: ShadingSetting::Render,
         }
     }
 }

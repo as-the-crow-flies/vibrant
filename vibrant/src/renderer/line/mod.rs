@@ -14,7 +14,7 @@ use crate::{
     asset::line::LineSet,
     controller::settings::{Settings, ShadingSetting},
     gpu::Gpu,
-    renderer::tractogram::{
+    renderer::line::{
         occlusion::OcclusionPipeline, occupancy::OccupancyPipeline, populate::PopulatePipeline,
         render::TractogramRenderPipeline, transform::TransformPipeline,
     },
@@ -55,10 +55,7 @@ impl TractogramRenderer {
         settings: &Settings,
         needs_preprocess: bool,
     ) {
-        if needs_preprocess {
-            self.transform.render(cmd, tractogram);
-        }
-
+        self.transform.render(cmd, environment, tractogram);
         self.density.render(cmd, frame, environment, tractogram);
         self.occlusion.render(cmd, frame, environment);
         self.occupancy.render(cmd, frame, environment);

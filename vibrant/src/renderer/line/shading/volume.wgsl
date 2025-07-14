@@ -93,8 +93,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, random: f32) -> vec4<f32> {
         let position = origin + direction * t;
 
         let sample = textureSampleLevel(RGBA, RGBA_SAMPLER, position, 0.0);
-        let alpha = saturate(precision_decode(sample.a));
-        let rgba = vec4<f32>(sample.rgb * alpha, alpha);
+        let rgba = vec4<f32>(sample.rgb * sample.a, sample.a);
 
         color += (1.0 - color.a) * rgba;
 

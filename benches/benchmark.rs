@@ -7,7 +7,7 @@ use vibrant::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        tractogram::{
+        line::{
             density::DensityPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
             populate::PopulatePipeline, render::TractogramRenderPipeline,
             transform::TransformPipeline,
@@ -36,7 +36,7 @@ pub fn density(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, tractogram);
+    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
 
@@ -78,7 +78,7 @@ pub fn occlusion(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, tractogram);
+    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
@@ -105,7 +105,7 @@ pub fn occupancy(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, tractogram);
+    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
@@ -133,7 +133,7 @@ pub fn populate(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, tractogram);
+    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
@@ -163,7 +163,7 @@ pub fn render(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, tractogram);
+    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     OccupancyPipeline::new(gpu).render(&mut cmd, frame, environment);
@@ -193,7 +193,7 @@ pub fn full(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, tractogram);
+    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
 

@@ -2,14 +2,10 @@
 @group(0) @binding(2) var<storage, read_write> INDEX: array<u32>;
 
 @group(1) @binding(0) var OCCUPANCY: texture_3d<f32>;
-@group(1) @binding(2) var<uniform> WORLD_TO_VOLUME: mat4x4<f32>;
 
-@group(2) @binding(0) var<uniform> TRACTOGRAM_TO_WORLD: mat4x4<f32>;
-@group(2) @binding(1) var<uniform> WORLD_TO_TRACTOGRAM: mat4x4<f32>;
-@group(2) @binding(2) var<storage> TRACTOGRAM_VERTICES: array<vec4<f32>>;
-@group(2) @binding(3) var<storage> TRACTOGRAM_INDICES: array<u32>;
-
-@group(2) @binding(4) var<storage, read_write> TRACTOGRAM_COUNT: atomic<u32>;
+@group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
+@group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
+@group(2) @binding(2) var<storage, read_write> LINE_COUNT: atomic<u32>;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -21,13 +17,12 @@ var<workgroup> WORKGROUP_OFFSET: u32;
 @compute
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
-    let n_indices = arrayLength(&TRACTOGRAM_INDICES);
+    let n_indices = arrayLength(&LINE_INDEX);
     let radius = ENVIRONMENT.settings.streamline_radius;
-    let TRANSFORM = WORLD_TO_VOLUME;
 
     loop {
         if (local == 0) {
-            WORKGROUP_OFFSET = atomicAdd(&TRACTOGRAM_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
+            WORKGROUP_OFFSET = atomicAdd(&LINE_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
         }
 
         let offset = workgroupUniformLoad(&WORKGROUP_OFFSET);
@@ -36,8 +31,8 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
         loop {
             var index = 0u;
-            var v0 = vec3<f32>();
-            var v1 = vec3<f32>();
+            var v0 = Vertex();
+            var v1 = Vertex();
 
             loop {
                 if (i >= CHUNK_SIZE) { return; }
@@ -46,13 +41,13 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
                 if (index_index >= n_indices) { return; }
 
-                index = TRACTOGRAM_INDICES[index_index];
-                v0 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 0]);
-                v1 = transform(TRANSFORM, TRACTOGRAM_VERTICES[index + 1]);
+                index = LINE_INDEX[index_index];
+                v0 = unpack_vertex(LINE_VERTEX[index + 0]);
+                v1 = unpack_vertex(LINE_VERTEX[index + 1]);
 
                 i++;
 
-                if (occupancy(v0, v1) > 0.0) { break; }
+                if (occupancy(v0.xyz, v1.xyz) > 0.0) { break; }
             }
 
             voxelize(index, v0, v1, radius);
@@ -60,7 +55,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
     }
 }
 
-fn visit_voxel(voxel: vec3<i32>, index: u32, v0: vec3<f32>, v1: vec3<f32>) {
+fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let should_write = textureLoad(OCCUPANCY, voxel, 0).x > 0.0;
 
     if (should_write) {

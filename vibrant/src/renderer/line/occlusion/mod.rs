@@ -1,7 +1,7 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::scalar::{R8Unorm, ScalarTexture3D},
+    asset::scalar::{R32Float, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::Frame,
@@ -17,8 +17,8 @@ impl OcclusionPipeline {
             occlusion: gpu.compute(
                 "Occlusion::Occlusion",
                 &gpu.pipeline_layout(&[
-                    &ScalarTexture3D::<R8Unorm>::layout(gpu),
-                    &ScalarTexture3D::<R8Unorm>::layout_write(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout_write(gpu),
                     &Environment::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("occlusion.wgsl")),

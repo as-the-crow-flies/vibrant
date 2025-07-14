@@ -1,7 +1,7 @@
 @group(0) @binding(0) var DENSITY: texture_3d<f32>;
 @group(0) @binding(1) var DENSITY_SAMPLER: sampler;
 
-@group(1) @binding(0) var OCCLUSION: texture_storage_3d<r8unorm, read_write>;
+@group(1) @binding(0) var OCCLUSION: texture_storage_3d<r32float, read_write>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -42,5 +42,5 @@ fn occlusion(position: vec3<f32>, direction: vec3<f32>) -> f32 {
 }
 
 fn density(sample: vec3<f32>, level: f32) -> f32 {
-    return 0.5 * precision_decode(textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x);
+    return 0.5 * textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x;
 }

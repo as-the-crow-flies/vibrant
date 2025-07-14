@@ -6,7 +6,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::{R8Unorm, ScalarTexture3D},
+    asset::scalar::{R32Float, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::Color, Frame},
@@ -28,7 +28,7 @@ impl VolumeShadingPipeline {
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label,
                     layout: Some(&gpu.pipeline_layout(&[
-                        &ScalarTexture3D::<R8Unorm>::layout(gpu),
+                        &ScalarTexture3D::<R32Float>::layout(gpu),
                         &Environment::layout(gpu),
                     ])),
                     vertex: VertexState {
@@ -59,7 +59,7 @@ impl VolumeShadingPipeline {
         &self,
         cmd: &mut CommandEncoder,
         frame: &Frame,
-        texture: &ScalarTexture3D<R8Unorm>,
+        texture: &ScalarTexture3D<R32Float>,
         environment: &Environment,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {

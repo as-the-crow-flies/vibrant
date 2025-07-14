@@ -76,10 +76,6 @@ fn block_index(voxel: vec3<u32>, dim: vec3<u32>) -> u32 {
     return block_index * BLOCK_SIZE_3 + local_index;
 }
 
-fn transform(m: mat4x4<f32>, v: vec4<f32>) -> vec3<f32> {
-    return (m * vec4<f32>(v.xyz, 1.0)).xyz;
-}
-
 fn div_ceil(a: u32, b: u32) -> u32 {
     return (a + b - 1) / b;
 }
@@ -97,16 +93,31 @@ fn lambert(normal: vec3<f32>, light: vec3<f32>) -> f32 {
     return max(0.0, dot(normal, light));
 }
 
-// Constants
-const GAMMA = 0.5;
-const GAMMA_INV = 1.0 / GAMMA;
+fn pack_clip_alpha(clip_alpha: vec4<f32>) -> f32 {
+    let clip = pack4x8snorm(vec4<f32>(clip_alpha.xyz, 0.0));
+    let alpha = pack4x8unorm(vec4<f32>(vec3<f32>(0.0), clip_alpha.a));
 
-fn precision_encode(x: f32) -> f32 {
-    return saturate(pow(saturate(x), GAMMA));
+    return bitcast<f32>(clip | alpha);
 }
 
-fn precision_decode(x: f32) -> f32 {
-    return saturate(pow(saturate(x), GAMMA_INV));
+fn unpack_clip_alpha(f: f32) -> vec4<f32> {
+    let u = bitcast<u32>(f);
+
+    let clip = unpack4x8snorm(u);
+    let alpha = unpack4x8unorm(u);
+
+    return vec4<f32>(clip.xyz, alpha.a);
+}
+
+struct Vertex {
+    xyz: vec3<f32>,
+    clip: vec3<f32>,
+    alpha: f32
+}
+
+fn unpack_vertex(v: vec4<f32>) -> Vertex {
+    let clip_alpha = unpack_clip_alpha(v.a);
+    return Vertex(v.xyz, clip_alpha.xyz, clip_alpha.a);
 }
 
 var<workgroup> WORKGROUP_EXCLUSIVE_ADD: array<u32, 32>;

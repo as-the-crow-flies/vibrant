@@ -7,7 +7,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::{R8Unorm, ScalarTexture3D},
+    asset::scalar::{R32Float, ScalarTexture3D},
     gpu::Gpu,
 };
 
@@ -17,7 +17,7 @@ pub struct Occupancy {
     index: Buffer,
     bin: Buffer,
     threshold: Buffer,
-    occupancy: ScalarTexture3D<R8Unorm>,
+    occupancy: ScalarTexture3D<R32Float>,
     binding_read: BindGroup,
     binding_write: BindGroup,
 }
@@ -61,7 +61,7 @@ impl Occupancy {
             mapped_at_creation: false,
         });
 
-        let occupancy: ScalarTexture3D<R8Unorm> =
+        let occupancy: ScalarTexture3D<R32Float> =
             ScalarTexture3D::new(gpu, volume, FilterMode::Linear);
 
         let entries = &[
@@ -148,7 +148,7 @@ impl Occupancy {
         &self.threshold
     }
 
-    pub fn texture(&self) -> &ScalarTexture3D<R8Unorm> {
+    pub fn texture(&self) -> &ScalarTexture3D<R32Float> {
         &self.occupancy
     }
 

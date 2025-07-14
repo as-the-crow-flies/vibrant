@@ -1,12 +1,12 @@
-fn voxelize(index: u32, v0_: vec3<f32>, v1_: vec3<f32>, radius: f32) {
-    let delta_ = v1_ - v0_;
+fn voxelize(index: u32, v0_: Vertex, v1_: Vertex, radius: f32) {
+    let delta_ = v1_.xyz - v0_.xyz;
     let direction = normalize(delta_);
     let axes = rank(abs(direction));
 
     // Extend by one radius in major direction to ensure caps are voxelized
     let extension = delta_ / abs(delta_[axes[0]]) * radius;
-    let v0 = select(v1_ + extension, v0_ - extension, direction[axes[0]] > 0.0);
-    let v1 = select(v0_ - extension, v1_ + extension, direction[axes[0]] > 0.0);
+    let v0 = select(v1_.xyz + extension, v0_.xyz - extension, direction[axes[0]] > 0.0);
+    let v1 = select(v0_.xyz - extension, v1_.xyz + extension, direction[axes[0]] > 0.0);
 
     // Find cylinder radii along the minor axes
     let r1 = radius / sqrt(1.0 - direction[axes[1]] * direction[axes[1]]);
@@ -37,7 +37,7 @@ fn voxelize(index: u32, v0_: vec3<f32>, v1_: vec3<f32>, radius: f32) {
         for (var j = j_min; j <= j_max; j++) {
             for (var k = k_min; k <= k_max; k++) {
                 let voxel = shuffle(vec3<i32>(i, j, k), axes);
-                visit_voxel(voxel, index, v0, v1);
+                visit_voxel(voxel, index, v0_, v1_);
             }
         }
 
