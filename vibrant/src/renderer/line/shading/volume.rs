@@ -19,6 +19,7 @@ impl VolumeRenderPipeline {
                 &gpu.pipeline_layout(&[
                     &ScalarTexture3D::<R32Float>::layout(gpu),
                     &ScalarTexture3D::<Rgba8Unorm>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
                     &Environment::layout(gpu),
                     &Color::layout_write(gpu),
                 ]),
@@ -36,8 +37,9 @@ impl VolumeRenderPipeline {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.density().density().binding(), &[]);
         pass.set_bind_group(1, frame.density().color().binding(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
-        pass.set_bind_group(3, frame.color().binding(), &[]);
+        pass.set_bind_group(2, frame.occlusion().texture().binding(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(4, frame.color().binding(), &[]);
 
         pass.dispatch_workgroups(
             frame.color().width().div_ceil(8),

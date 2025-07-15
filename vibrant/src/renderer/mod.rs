@@ -44,11 +44,8 @@ impl Renderer {
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {
-        let mut needs_preprocess = false;
-
         File::on_line(|tck| {
             self.asset.line = Some(LineSet::new(gpu, &tck));
-            needs_preprocess = true;
         });
 
         let surface = self.surface.maybe_resize(gpu, &controller.settings());
@@ -64,7 +61,6 @@ impl Renderer {
                 surface.buffer(),
                 tractogram,
                 controller.settings(),
-                needs_preprocess,
             );
         }
 

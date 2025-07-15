@@ -133,50 +133,59 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
     let count = textureLoad(COUNT, voxel, 0).x;
     let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
 
+    let increment_inv = 1.0 / increment;
     let increment_half = 0.5 * increment;
     let midpoint = origin + direction * increment_half;
     let r = RADIUS + increment_half;
 
-    var closest = increment;
-    var color = vec4<f32>(0.0);
+    var closest = U32_MAX;
 
     for (var i = 0u; i < count; i++) {
         let index = INDEX[offset + i];
 
-        let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
-        let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
+        let v0 = LINE_VERTEX[index + 0];
+        let v1 = LINE_VERTEX[index + 1];
 
         if (line_distance(midpoint, v0.xyz, v1.xyz) > r) { continue; }
 
         let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
 
-        if (hit < closest) {
-            closest = hit;
+        if (hit < 0 || hit >= increment) { continue; }
 
-            let position = origin + hit * direction;
+        let candidate = (u32((hit * increment_inv) * U16_MAX_f32) << 16) | i;
 
-            let delta = v1.xyz - v0.xyz;
-
-            let pa = position - v0.xyz;
-            let height = saturate(dot(pa, delta) / dot(delta, delta));
-            let normal =  (pa - height * delta) / RADIUS;
-
-            let delta_norm = normalize(delta);
-            let tangent = normalize(mix(
-                select(v0.clip, delta_norm, all(v0.clip == vec3<f32>())),
-                select(v1.clip, delta_norm, all(v1.clip == vec3<f32>())),
-                height
-            ));
-
-            let light = ENVIRONMENT.light;
-
-            let factor = mix(1.0, lambert(normal, light), ENVIRONMENT.settings.direct_light);
-
-            color = vec4<f32>(factor * abs(tangent), 1.0);
-        }
+        closest = min(closest, candidate);
     }
 
-    return color;
+    if (closest != U32_MAX) {
+        let hit = f32(closest >> 16) * U16_MAX_INV * increment;
+        let index = INDEX[offset + (closest & U16_MAX)];
+
+        let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
+        let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
+
+        let position = origin + hit * direction;
+
+        let delta = v1.xyz - v0.xyz;
+        let pa = position - v0.xyz;
+        let height = saturate(dot(pa, delta) / dot(delta, delta));
+        let normal =  (pa - height * delta) / RADIUS;
+
+        let delta_norm = normalize(delta);
+        let tangent = normalize(mix(
+            select(v0.clip, delta_norm, all(v0.clip == vec3<f32>())),
+            select(v1.clip, delta_norm, all(v1.clip == vec3<f32>())),
+            height
+        ));
+
+        let light = ENVIRONMENT.light;
+
+        let factor = mix(1.0, lambert(normal, light), ENVIRONMENT.settings.direct_light);
+
+        return vec4<f32>(factor * abs(tangent), 1.0);
+    }
+
+    return vec4<f32>(0.0);
 }
 
 fn clip(position: vec3<f32>, v0: vec4<f32>, v1: vec4<f32>) -> bool {

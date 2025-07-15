@@ -10,13 +10,20 @@
 const WORKGROUP_SIZE: u32 = 1024;
 const CHUNK_SIZE: u32 = 32;
 
+const PI: f32 = 3.14159265358979323846264338327950288;
+
 var<workgroup> OFFSET: u32;
+
+var<private> RADIUS: f32;
+var<private> DENSITY_MULTIPLIER: f32;
 
 @compute
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&LINE_INDEX);
-    let radius = ENVIRONMENT.settings.streamline_radius;
+
+    RADIUS = ENVIRONMENT.settings.streamline_radius;
+    DENSITY_MULTIPLIER = ENVIRONMENT.settings.alpha * PI * RADIUS * RADIUS * f32(U16_MAX);
 
     loop {
         if (local == 0) {
@@ -34,16 +41,22 @@ fn main(@builtin(local_invocation_index) local: u32) {
             let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
             let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
 
-            voxelize(index, v0, v1, radius);
+            voxelize(index, v0, v1, RADIUS);
         }
     }
 }
 
+fn visit_voxel_line(voxel: vec3<i32>, index: u32, length: f32) {
+    let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
+    let density_encoded = u32(DENSITY_MULTIPLIER * length) << U14_SHIFT;
+    atomicAdd(&DENSITY[idx], density_encoded + 1u);
+}
+
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let smoothing = ENVIRONMENT.settings.smoothing;
-    let radius = ENVIRONMENT.settings.streamline_radius;
-    let radius_clamp = max(smoothing, radius);
-    let radius_ratio = radius; // FIX ME
+
+    let radius_clamp = max(smoothing, RADIUS);
+    let radius_ratio = pow(RADIUS, 2.0) / radius_clamp;
 
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
 
@@ -55,15 +68,60 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let sample_v0 = sample - v0.xyz;
     let delta = v1.xyz - v0.xyz;
     let height = clamp(dot(sample_v0, delta) / dot(delta, delta), 0.0, 1.0);
-    let signed_distance = length(sample_v0 - delta * height) - radius_clamp;
 
-    let alpha = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - signed_distance);
+    let sdf = cylinder(sample, v0.xyz, v1.xyz, radius_clamp);
+
+    // let sdf = length(sample_v0 - delta * height) - radius_clamp;
+
+    let alpha = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
 
     let density_encoded = u32(alpha * coverage_multiplier) << U14_SHIFT;
 
     atomicAdd(&DENSITY[idx], density_encoded + 1u);
 }
 
-fn sphere(p: vec3<f32>, r: f32) -> f32 {
-  return length(p) - r;
+fn visit_voxel_ground_truth(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
+    let step = 0.2;
+
+    let delta = v1.xyz - v0.xyz;
+    let sample = vec3<f32>(voxel);
+
+    var count = 0u;
+
+    for (var x = 0.0; x <= 1.0; x+= step) {
+        for (var y = 0.0; y <= 1.0; y+= step) {
+            for (var z = 0.0; z <= 1.0; z+= step) {
+                let sample_v0 = sample + vec3<f32>(x, y, z) - v0.xyz;
+                let height = clamp(dot(sample_v0, delta) / dot(delta, delta), 0.0, 1.0);
+                let sdf = length(sample_v0 - delta * height);
+
+                if (sdf < RADIUS) {
+                    count++;
+                }
+            }
+        }
+    }
+
+    let density = ENVIRONMENT.settings.alpha * f32(count) * pow(step, 3.0);
+    let density_encoded = u32(density * U16_MAX_f32) << U14_SHIFT;
+
+    let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
+    atomicAdd(&DENSITY[idx], density_encoded + 1u);
+}
+
+fn cylinder(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
+  let ba = b - a;
+  let pa = p - a;
+  let baba = dot(ba,ba);
+  let paba = dot(pa,ba);
+  let x = length(pa*baba-ba*paba) - r*baba;
+  let y = abs(paba-baba*0.5) - baba*0.5;
+  let x2 = x*x;
+  let y2 = y*y*baba;
+  let d = select(
+    select(0.0, x2, x>0.0) + select(0.0, y2, y>0.0),
+    -min(x2,y2),
+    max(x,y) < 0.0
+ );
+  return sign(d) * sqrt(abs(d)) / baba;
 }

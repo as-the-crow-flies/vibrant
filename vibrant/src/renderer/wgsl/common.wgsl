@@ -1,12 +1,8 @@
 struct Settings {
     streamline_radius: f32,
     direct_light: f32,
-    culling_threshold: f32,
     alpha: f32,
     level: f32,
-    layer: u32,
-    skip: u32,
-    quality: u32,
     smoothing: f32
 }
 
@@ -21,14 +17,16 @@ struct Camera {
 struct Environment {
     surface: vec2<u32>,
     volume: u32,
-    occlusion: u32,
-    memory_: vec3<u32>,
     memory: u32,
     camera: Camera,
     light: vec3<f32>,
     light_: f32,
     settings: Settings
 }
+
+const U32_MAX: u32 = 4294967295;
+const U32_MAX_f32: f32 = f32(U32_MAX);
+const U32_MAX_INV: f32 = 1.0 / f32(U32_MAX);
 
 const U24_MAX: u32 = 16777215;
 const U24_MAX_f32: f32 = f32(U24_MAX);

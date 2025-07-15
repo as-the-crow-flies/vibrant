@@ -2,7 +2,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
 use vibrant::{
     asset::line::LineSet,
-    controller::{settings::Settings, Controller},
+    controller::{
+        settings::{Settings, VoxelizationSetting},
+        Controller,
+    },
     file::LineFile,
     gpu::Gpu,
     renderer::{
@@ -46,7 +49,13 @@ pub fn density(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            pipeline.render(&mut cmd, frame, environment, tractogram);
+            pipeline.render(
+                &mut cmd,
+                frame,
+                environment,
+                VoxelizationSetting::Tube,
+                tractogram,
+            );
 
             gpu.submit(cmd);
             gpu.wait();
@@ -79,7 +88,13 @@ pub fn occlusion(criterion: &mut Criterion) {
 
     let mut cmd = gpu.cmd();
     TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    DensityPipeline::new(gpu).render(
+        &mut cmd,
+        frame,
+        environment,
+        VoxelizationSetting::Tube,
+        tractogram,
+    );
     gpu.submit(cmd);
     gpu.wait();
 
@@ -106,7 +121,13 @@ pub fn occupancy(criterion: &mut Criterion) {
 
     let mut cmd = gpu.cmd();
     TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    DensityPipeline::new(gpu).render(
+        &mut cmd,
+        frame,
+        environment,
+        VoxelizationSetting::Tube,
+        tractogram,
+    );
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
     gpu.wait();
@@ -134,7 +155,13 @@ pub fn populate(criterion: &mut Criterion) {
 
     let mut cmd = gpu.cmd();
     TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    DensityPipeline::new(gpu).render(
+        &mut cmd,
+        frame,
+        environment,
+        VoxelizationSetting::Tube,
+        tractogram,
+    );
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
     gpu.wait();
@@ -147,7 +174,13 @@ pub fn populate(criterion: &mut Criterion) {
             let mut cmd = gpu.cmd();
 
             occupancy.render(&mut cmd, frame, environment);
-            populate.render(&mut cmd, frame, environment, tractogram);
+            populate.render(
+                &mut cmd,
+                frame,
+                environment,
+                VoxelizationSetting::Tube,
+                tractogram,
+            );
 
             gpu.submit(cmd);
             gpu.wait();
@@ -164,10 +197,22 @@ pub fn render(criterion: &mut Criterion) {
 
     let mut cmd = gpu.cmd();
     TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    DensityPipeline::new(gpu).render(
+        &mut cmd,
+        frame,
+        environment,
+        VoxelizationSetting::Tube,
+        tractogram,
+    );
     OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     OccupancyPipeline::new(gpu).render(&mut cmd, frame, environment);
-    PopulatePipeline::new(gpu).render(&mut cmd, frame, environment, tractogram);
+    PopulatePipeline::new(gpu).render(
+        &mut cmd,
+        frame,
+        environment,
+        VoxelizationSetting::Tube,
+        tractogram,
+    );
     gpu.submit(cmd);
     gpu.wait();
 
@@ -207,10 +252,22 @@ pub fn full(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            density.render(&mut cmd, frame, environment, tractogram);
+            density.render(
+                &mut cmd,
+                frame,
+                environment,
+                VoxelizationSetting::Tube,
+                tractogram,
+            );
             occlusion.render(&mut cmd, frame, environment);
             occupancy.render(&mut cmd, frame, environment);
-            populate.render(&mut cmd, frame, environment, tractogram);
+            populate.render(
+                &mut cmd,
+                frame,
+                environment,
+                VoxelizationSetting::Tube,
+                tractogram,
+            );
             render.render(&mut cmd, frame, environment, tractogram);
 
             gpu.submit(cmd);

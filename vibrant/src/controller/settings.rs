@@ -1,8 +1,8 @@
-#[derive(Debug, PartialEq, Eq)]
-pub enum GeometrySetting {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum VoxelizationSetting {
     Line,
+    Box,
     Tube,
-    Transparency,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -15,19 +15,15 @@ pub enum ShadingSetting {
 pub struct Settings {
     pub width: u32,
     pub height: u32,
-    pub density: u32,
-    pub occlusion: u32,
+    pub volume: u32,
     pub memory: u32,
     pub streamline_radius: f32,
     pub direct_light: f32,
-    pub culling_threshold: f32,
     pub alpha: f32,
     pub level: f32,
-    pub layer: u32,
-    pub skip: u32,
-    pub quality: bool,
     pub smoothing: f32,
     pub shading: ShadingSetting,
+    pub voxelization: VoxelizationSetting,
 }
 
 impl Settings {
@@ -35,19 +31,15 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            density: 256,
-            occlusion: 128,
+            volume: 256,
             memory: 256,
             streamline_radius: 0.2,
-            direct_light: 0.25,
-            culling_threshold: 4.0,
+            direct_light: 0.0,
             alpha: 1.0,
             level: 0.0,
-            layer: 0,
-            skip: 1,
-            quality: false,
-            smoothing: 0.5,
-            shading: ShadingSetting::Render,
+            smoothing: 0.67,
+            shading: ShadingSetting::Density,
+            voxelization: VoxelizationSetting::Tube,
         }
     }
 }

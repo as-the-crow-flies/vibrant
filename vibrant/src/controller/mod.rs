@@ -12,7 +12,7 @@ use settings::{Settings, ShadingSetting};
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
-use crate::file::File;
+use crate::{controller::settings::VoxelizationSetting, file::File};
 
 #[derive(Debug)]
 pub struct Controller {
@@ -99,28 +99,36 @@ impl Controller {
                     );
                 });
 
+            ComboBox::from_label("Voxelization")
+                .selected_text(format!("{:?}", self.settings.voxelization))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.settings.voxelization,
+                        VoxelizationSetting::Tube,
+                        "Tube",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.voxelization,
+                        VoxelizationSetting::Box,
+                        "Box",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.voxelization,
+                        VoxelizationSetting::Line,
+                        "Line",
+                    );
+                });
+
             ui.separator();
             ui.label("Resolutions");
             ui.separator();
 
             ComboBox::from_label("Density")
-                .selected_text(format!("{:?}", self.settings.density))
+                .selected_text(format!("{:?}", self.settings.volume))
                 .show_ui(ui, |ui| {
                     for power in 5u32..10 {
                         ui.selectable_value(
-                            &mut self.settings.density,
-                            2u32.pow(power),
-                            format!("{}", 2u32.pow(power)),
-                        );
-                    }
-                });
-
-            ComboBox::from_label("Occlusion")
-                .selected_text(format!("{:?}", self.settings.occlusion))
-                .show_ui(ui, |ui| {
-                    for power in 4u32..8 {
-                        ui.selectable_value(
-                            &mut self.settings.occlusion,
+                            &mut self.settings.volume,
                             2u32.pow(power),
                             format!("{}", 2u32.pow(power)),
                         );

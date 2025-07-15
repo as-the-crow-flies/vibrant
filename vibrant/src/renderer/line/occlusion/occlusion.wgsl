@@ -5,22 +5,23 @@
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-const TAN_CONE_ANGLE: f32 = 1.73205080757;
-
 @compute
 @workgroup_size(8, 8, 8)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let position = vec3<f32>(voxel) + 0.5;
 
-    let total =
-        occlusion(position, vec3<f32>( 0.0, 0.0, 1.0)) +
-        occlusion(position, vec3<f32>( 0.0, 0.0,-1.0)) +
-        occlusion(position, vec3<f32>( 0.0, 1.0, 0.0)) +
-        occlusion(position, vec3<f32>( 0.0,-1.0, 0.0)) +
-        occlusion(position, vec3<f32>( 1.0, 0.0, 0.0)) +
-        occlusion(position, vec3<f32>(-1.0, 0.0, 0.0));
+    var total = 0.0;
 
-    textureStore(OCCLUSION, voxel, vec4<f32>(0.17 * total));
+    if (density(position / vec3<f32>(textureDimensions(OCCLUSION)), 0.0) > 0.0) {
+        total += 0.17 * occlusion(position, vec3<f32>( 0.0, 0.0, 1.0));
+        total += 0.17 * occlusion(position, vec3<f32>( 0.0, 0.0,-1.0));
+        total += 0.17 * occlusion(position, vec3<f32>( 0.0, 1.0, 0.0));
+        total += 0.17 * occlusion(position, vec3<f32>( 0.0,-1.0, 0.0));
+        total += 0.17 * occlusion(position, vec3<f32>( 1.0, 0.0, 0.0));
+        total += 0.17 * occlusion(position, vec3<f32>(-1.0, 0.0, 0.0));
+    }
+
+    textureStore(OCCLUSION, voxel, vec4<f32>(total));
 }
 
 fn occlusion(position: vec3<f32>, direction: vec3<f32>) -> f32 {
@@ -38,9 +39,9 @@ fn occlusion(position: vec3<f32>, direction: vec3<f32>) -> f32 {
         occlusion += (1.0 - occlusion) * density(sample * one_over_dim, distance);
     }
 
-    return occlusion;
+    return occlusion / ENVIRONMENT.settings.alpha;
 }
 
 fn density(sample: vec3<f32>, level: f32) -> f32 {
-    return 0.5 * textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x;
+    return textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x;
 }

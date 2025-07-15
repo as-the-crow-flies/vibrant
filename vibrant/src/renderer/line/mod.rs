@@ -53,13 +53,14 @@ impl TractogramRenderer {
         frame: &Frame,
         tractogram: &LineSet,
         settings: &Settings,
-        needs_preprocess: bool,
     ) {
         self.transform.render(cmd, environment, tractogram);
-        self.density.render(cmd, frame, environment, tractogram);
+        self.density
+            .render(cmd, frame, environment, settings.voxelization, tractogram);
         self.occlusion.render(cmd, frame, environment);
         self.occupancy.render(cmd, frame, environment);
-        self.populate.render(cmd, frame, environment, tractogram);
+        self.populate
+            .render(cmd, frame, environment, settings.voxelization, tractogram);
 
         match settings.shading {
             ShadingSetting::Render => self.render.render(cmd, frame, environment, tractogram),

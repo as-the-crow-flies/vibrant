@@ -55,13 +55,22 @@ fn main(@builtin(local_invocation_index) local: u32) {
     }
 }
 
-fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
+fn visit_voxel_line(voxel: vec3<i32>, index: u32, length: f32) {
     let should_write = textureLoad(OCCUPANCY, voxel, 0).x > 0.0;
 
     if (should_write) {
-        let offset = &OFFSET[block_index(vec3<u32>(voxel), textureDimensions(OCCUPANCY))];
+        let idx = block_index(vec3<u32>(voxel), textureDimensions(OCCUPANCY));
+        let offset = &OFFSET[idx];
         INDEX[atomicAdd(offset, 1u)] = index;
     }
+}
+
+fn visit_voxel_ground_truth(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
+    visit_voxel_line(voxel, index, 0.0);
+}
+
+fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
+    visit_voxel_line(voxel, index, 0.0);
 }
 
 fn occupancy(v0: vec3<f32>, v1: vec3<f32>) -> f32 {

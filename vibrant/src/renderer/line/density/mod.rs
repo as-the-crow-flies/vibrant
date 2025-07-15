@@ -7,13 +7,16 @@ use crate::{
         line::LineSet,
         scalar::{R16Uint, R32Float, Rgba8Unorm, ScalarTexture3D},
     },
+    controller::settings::VoxelizationSetting,
     gpu::Gpu,
-    renderer::{environment::Environment, wgsl::VOXELIZE},
+    renderer::{environment::Environment, wgsl},
     surface::{density::Density, Frame},
 };
 
 pub struct DensityPipeline {
-    voxelize: ComputePipeline,
+    voxelize_tube: ComputePipeline,
+    voxelize_line: ComputePipeline,
+    voxelize_box: ComputePipeline,
     copy: ComputePipeline,
     color: ComputePipeline,
     mipmap: ComputePipeline,
@@ -23,20 +26,35 @@ impl DensityPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
+        let voxelize_layout = &gpu
+            .device()
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label,
+                bind_group_layouts: &[
+                    &Density::layout(gpu),
+                    &LineSet::layout(gpu, true),
+                    &Environment::layout(gpu),
+                ],
+                push_constant_ranges: &[],
+            });
+
+        let voxelize_shader_source = include_str!("voxelize.wgsl");
+
         Self {
-            voxelize: gpu.compute(
-                "Density::Voxelize",
-                &gpu.device()
-                    .create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label,
-                        bind_group_layouts: &[
-                            &Density::layout(gpu),
-                            &LineSet::layout(gpu, true),
-                            &Environment::layout(gpu),
-                        ],
-                        push_constant_ranges: &[],
-                    }),
-                &gpu.shader(&(VOXELIZE.to_owned() + include_str!("voxelize.wgsl"))),
+            voxelize_tube: gpu.compute(
+                "Density::Voxelize::Tube",
+                voxelize_layout,
+                &gpu.shader(&(wgsl::voxelize::TUBE.to_owned() + voxelize_shader_source)),
+            ),
+            voxelize_line: gpu.compute(
+                "Density::Voxelize::Line",
+                voxelize_layout,
+                &gpu.shader(&(wgsl::voxelize::LINE.to_owned() + voxelize_shader_source)),
+            ),
+            voxelize_box: gpu.compute(
+                "Density::Voxelize::Box",
+                voxelize_layout,
+                &gpu.shader(&(wgsl::voxelize::BOX.to_owned() + voxelize_shader_source)),
             ),
             copy: gpu.compute(
                 "Density::Copy",
@@ -85,6 +103,7 @@ impl DensityPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
+        setting: VoxelizationSetting,
         tractogram: &LineSet,
     ) {
         frame.density().clear(cmd);
@@ -101,7 +120,11 @@ impl DensityPipeline {
         pass.set_bind_group(1, tractogram.binding(true), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
 
-        pass.set_pipeline(&self.voxelize);
+        pass.set_pipeline(match setting {
+            VoxelizationSetting::Line => &self.voxelize_line,
+            VoxelizationSetting::Box => &self.voxelize_box,
+            VoxelizationSetting::Tube => &self.voxelize_tube,
+        });
         pass.dispatch_workgroups(64, 1, 1);
 
         pass.set_pipeline(&self.copy);

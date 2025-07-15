@@ -27,9 +27,9 @@ impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         Self {
             color: Color::new(gpu, settings.width, settings.height),
-            density: Density::new(gpu, settings.density),
-            occlusion: Occlusion::new(gpu, settings.occlusion),
-            occupancy: Occupancy::new(gpu, settings.density, settings.memory),
+            density: Density::new(gpu, settings.volume),
+            occlusion: Occlusion::new(gpu, settings.volume),
+            occupancy: Occupancy::new(gpu, settings.volume, settings.memory),
         }
     }
 
@@ -73,8 +73,7 @@ impl Surface {
     pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
         if settings.width == self.buffer.color().width()
             && settings.height == self.buffer.color().height()
-            && settings.density == self.buffer.density().resolution()
-            && settings.occlusion == self.buffer.occlusion().resolution()
+            && settings.volume == self.buffer.density().resolution()
         {
             return self;
         }

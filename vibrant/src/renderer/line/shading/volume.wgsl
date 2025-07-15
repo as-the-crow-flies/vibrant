@@ -3,8 +3,11 @@
 @group(1) @binding(0) var RGBA: texture_3d<f32>;
 @group(1) @binding(1) var RGBA_SAMPLER: sampler;
 
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
-@group(3) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
+@group(2) @binding(0) var OCCLUSION: texture_3d<f32>;
+@group(2) @binding(1) var OCCLUSION_SAMPLER: sampler;
+
+@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(4) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
 
 @compute
 @workgroup_size(64, 1)
@@ -89,11 +92,12 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, random: f32) -> vec4<f32> {
 
     var color = vec4<f32>(0.0);
 
-    for (t += dim_inv * random; t < tExit; t += dim_inv) {
+    for (t -= dim_inv * random; t < tExit; t += dim_inv) {
         let position = origin + direction * t;
 
+        let occlusion = max(0.0, 1.0 - ENVIRONMENT.settings.direct_light * textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, position, 0.0).x);
         let sample = textureSampleLevel(RGBA, RGBA_SAMPLER, position, 0.0);
-        let rgba = vec4<f32>(sample.rgb * sample.a, sample.a);
+        let rgba = vec4<f32>(occlusion * sample.rgb * sample.a, sample.a);
 
         color += (1.0 - color.a) * rgba;
 
