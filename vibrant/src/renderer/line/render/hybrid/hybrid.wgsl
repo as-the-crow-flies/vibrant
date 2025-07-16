@@ -195,8 +195,9 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
         let directional = 1.0 - textureSampleLevel(DIRECTIONAL_OCCLUSION, DIRECTIONAL_OCCLUSION_SAMPLER, sample, 0.0).x;
 
         let factor = mix(ambient, diffuse * directional, ENVIRONMENT.settings.direct_light);
+        let color = mix(vec3<f32>(1.0), abs(tangent), ENVIRONMENT.settings.tangent_color);
 
-        return vec4<f32>(factor * abs(tangent), 1.0);
+        return vec4<f32>(factor * color, 1.0);
     }
 
     return vec4<f32>(0.0);

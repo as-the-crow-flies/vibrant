@@ -158,6 +158,8 @@ impl Controller {
 
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
 
+            ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
+
             ui.add(
                 Slider::new(&mut self.settings.alpha, 0.0001..=1.0)
                     .logarithmic(true)

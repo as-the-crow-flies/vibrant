@@ -66,6 +66,7 @@ impl Environment {
                 bytes_of(&0u32),
                 bytes_of(&controller.settings().streamline_radius),
                 bytes_of(&controller.settings().direct_light),
+                bytes_of(&controller.settings().tangent_color),
                 bytes_of(&controller.settings().alpha),
                 bytes_of(&controller.settings().level),
                 bytes_of(&controller.settings().smoothing),

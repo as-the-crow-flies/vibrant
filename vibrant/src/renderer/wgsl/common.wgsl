@@ -1,6 +1,7 @@
 struct Settings {
     streamline_radius: f32,
     direct_light: f32,
+    tangent_color: f32,
     alpha: f32,
     level: f32,
     smoothing: f32
