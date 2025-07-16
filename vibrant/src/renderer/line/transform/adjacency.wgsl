@@ -23,19 +23,21 @@ fn main(@builtin(local_invocation_index) local: u32) {
             let index_index = offset + i * WORKGROUP_SIZE + local;
             if (index_index >= n_indices) { return; }
 
+            let vmi = LINE_INDEX[index_index - 1];
             let vi  = LINE_INDEX[index_index + 0];
             let vpi = LINE_INDEX[index_index + 1];
-            let vmi = LINE_INDEX[index_index - 1];
 
             let endpoint = vpi - vi != 1 || vi - vmi != 1;
 
+            let vm = LINE_VERTEX[vmi].xyz;
             let v  = LINE_VERTEX[vi ];
             let vp = LINE_VERTEX[vpi].xyz;
-            let vm = LINE_VERTEX[vmi].xyz;
 
             let clip = select(normalize(vp - vm), vec3<f32>(0), endpoint);
 
-            LINE_VERTEX[vi] = vec4<f32>(v.xyz, pack_clip_alpha(vec4<f32>(clip, v.a)));
+            let alpha = unpack_clip_alpha(v.a).a;
+
+            LINE_VERTEX[vi] = vec4<f32>(v.xyz, pack_clip_alpha(vec4<f32>(clip, alpha)));
         }
     }
 }

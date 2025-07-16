@@ -17,7 +17,7 @@ fn main(
     let count = textureLoad(COUNT, voxel, 0).x;
     let occlusion = textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, uv, 0.0).x;
 
-    let bin = u32(0.1 * saturate(occlusion) * U8_MAX_f32);
+    let bin = u32(0.5 * saturate(occlusion) * U8_MAX_f32);
 
     atomicAdd(&WORKGROUP_BIN[bin], count);
 

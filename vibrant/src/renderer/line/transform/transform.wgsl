@@ -33,7 +33,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
             LINE_VERTEX[index] = vec4<f32>(
                 (TRANSFORM * vec4<f32>(vertex.xyz, 1.0)).xzy * scale,
-                vertex.a
+                pack_clip_alpha(vec4<f32>(0.0, 0.0, 0.0, vertex.a))
             );
         }
     }
