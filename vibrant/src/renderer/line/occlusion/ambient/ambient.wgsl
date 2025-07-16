@@ -48,7 +48,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
                 let sample = (position + direction * distance) * one_over_dim;
                 let level = log2(TAN_CONE_ANGLE * distance);
 
-                occlusion += (1.0 - occlusion) * saturate(one_over_alpha * density(sample, level));
+                occlusion += (1.0 - occlusion) * density(sample, level);
 
                 if (occlusion > 0.99 || any(abs(sample - 0.5) >= vec3<f32>(0.5))) { break; }
             }

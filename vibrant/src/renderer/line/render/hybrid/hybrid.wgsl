@@ -173,16 +173,22 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
         let delta = v1.xyz - v0.xyz;
         let pa = position - v0.xyz;
         let height = saturate(dot(pa, delta) / dot(delta, delta));
-        let normal =  (pa - height * delta) / RADIUS;
+
+        let is_start = all(v0.clip == vec3<f32>());
+        let is_end = all(v1.clip == vec3<f32>());
 
         let delta_norm = normalize(delta);
         let tangent = normalize(mix(
-            select(v0.clip, delta_norm, all(v0.clip == vec3<f32>())),
-            select(v1.clip, delta_norm, all(v1.clip == vec3<f32>())),
+            select(v0.clip, delta_norm, is_start),
+            select(v1.clip, delta_norm, is_end),
             height
         ));
 
-        let diffuse = lambert(normal, ENVIRONMENT.light);
+        let normal = (pa - height * delta) / RADIUS;
+
+        let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
+        let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
+        let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
 
         let sample = position * DIM_INV;
         let ambient = 1.0 - textureSampleLevel(AMBIENT_OCCLUSION, AMBIENT_OCCLUSION_SAMPLER, sample, 0.0).x;
@@ -222,8 +228,8 @@ fn unproject(v: vec3<f32>) -> vec3<f32> {
     return t.xyz / t.w;
 }
 
-fn point_to_plane(point: vec3<f32>, plane_point: vec3<f32>, plane_normal: vec3<f32>) -> vec3<f32> {
-    return point - dot(point - plane_point, plane_normal) * plane_normal;
+fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
+    return normalize(normal - dot(normal, tangent) * tangent);
 }
 
 // https://iquilezles.org/articles/intersectors

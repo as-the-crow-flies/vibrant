@@ -20,6 +20,7 @@ impl VolumeLineRenderPipeline {
                     &ScalarTexture3D::<R32Float>::layout(gpu),
                     &ScalarTexture3D::<Rgba8Unorm>::layout(gpu),
                     &ScalarTexture3D::<R32Float>::layout(gpu),
+                    &ScalarTexture3D::<R32Float>::layout(gpu),
                     &Environment::layout(gpu),
                 ]),
                 Color::target_srgb(),
@@ -38,7 +39,8 @@ impl VolumeLineRenderPipeline {
         pass.set_bind_group(0, frame.density().density().binding(), &[]);
         pass.set_bind_group(1, frame.density().color().binding(), &[]);
         pass.set_bind_group(2, frame.occlusion().ambient().binding(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(3, frame.occlusion().directional().binding(), &[]);
+        pass.set_bind_group(4, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

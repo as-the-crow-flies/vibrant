@@ -21,7 +21,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         for (var distance = 1.0; distance < dim; distance += 1.0) {
             let sample = (position + direction * distance) * one_over_dim;
 
-            occlusion += (1.0 - occlusion) * saturate(one_over_alpha * density(sample, 0.0));
+            occlusion += (1.0 - occlusion) * density(sample, 0.0);
 
             if (occlusion > 0.99 || any(abs(sample - 0.5) >= vec3<f32>(0.5))) { break; }
         }
