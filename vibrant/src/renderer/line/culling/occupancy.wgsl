@@ -25,7 +25,7 @@ fn main(
     let uv = vec3<f32>(voxel) / vec3<f32>(dim);
 
     let count = textureLoad(COUNT, voxel, 0).x;
-    let occlusion = textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, uv, 0.0).x;
+    let occlusion = 0.1 * textureSampleLevel(OCCLUSION, OCCLUSION_SAMPLER, uv, 0.0).x;
 
     let occupancy = u32(occlusion < THRESHOLD) * count;
 

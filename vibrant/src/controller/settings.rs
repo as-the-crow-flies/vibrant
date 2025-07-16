@@ -1,14 +1,14 @@
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum VoxelizationSetting {
+pub enum LineVoxelizationMode {
     Line,
     Box,
     Tube,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ShadingSetting {
-    Render,
-    Density,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum LineRenderMode {
+    Hybrid,
+    Volume,
 }
 
 #[derive(Debug)]
@@ -22,8 +22,8 @@ pub struct Settings {
     pub alpha: f32,
     pub level: f32,
     pub smoothing: f32,
-    pub shading: ShadingSetting,
-    pub voxelization: VoxelizationSetting,
+    pub render: LineRenderMode,
+    pub voxelization: LineVoxelizationMode,
 }
 
 impl Settings {
@@ -31,15 +31,15 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            volume: 256,
+            volume: 128,
             memory: 256,
             streamline_radius: 0.2,
-            direct_light: 0.0,
+            direct_light: 0.67,
             alpha: 1.0,
             level: 0.0,
             smoothing: 0.67,
-            shading: ShadingSetting::Density,
-            voxelization: VoxelizationSetting::Tube,
+            render: LineRenderMode::Hybrid,
+            voxelization: LineVoxelizationMode::Tube,
         }
     }
 }

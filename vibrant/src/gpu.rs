@@ -4,11 +4,13 @@ use bytemuck::Pod;
 use futures::channel::oneshot::channel;
 use itertools::Itertools;
 use wgpu::{
-    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
-    ComputePipeline, ComputePipelineDescriptor, Extent3d, Features, Limits, MapMode, Origin3d,
-    PipelineLayout, PipelineLayoutDescriptor, PowerPreference, RequestAdapterOptions, ShaderModule,
-    ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo, TexelCopyBufferLayout,
-    TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
+    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
+    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Extent3d, Features,
+    FragmentState, Limits, MapMode, Origin3d, PipelineLayout, PipelineLayoutDescriptor,
+    PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo,
+    TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
+    VertexState,
 };
 
 use crate::renderer::wgsl::COMMON;
@@ -101,6 +103,40 @@ impl Gpu {
                 module,
                 entry_point: None,
                 compilation_options: Default::default(),
+                cache: None,
+            })
+    }
+
+    pub fn quad(
+        &self,
+        label: &str,
+        layout: &PipelineLayout,
+        target: ColorTargetState,
+        module: &ShaderModule,
+    ) -> RenderPipeline {
+        self.device()
+            .create_render_pipeline(&RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(layout),
+                vertex: VertexState {
+                    module,
+                    entry_point: Some("vertex"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                primitive: PrimitiveState {
+                    topology: PrimitiveTopology::TriangleStrip,
+                    ..Default::default()
+                },
+                fragment: Some(FragmentState {
+                    module,
+                    entry_point: Some("fragment"),
+                    targets: &[Some(target)],
+                    compilation_options: Default::default(),
+                }),
+                multisample: Default::default(),
+                depth_stencil: None,
+                multiview: None,
                 cache: None,
             })
     }

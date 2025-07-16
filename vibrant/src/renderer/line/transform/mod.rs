@@ -2,12 +2,12 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{asset::line::LineSet, gpu::Gpu, renderer::environment::Environment};
 
-pub struct TransformPipeline {
+pub struct LineTransformPipeline {
     transform: ComputePipeline,
     adjacency: ComputePipeline,
 }
 
-impl TransformPipeline {
+impl LineTransformPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             transform: gpu.compute(

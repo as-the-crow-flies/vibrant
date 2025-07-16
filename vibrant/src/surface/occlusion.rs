@@ -6,21 +6,27 @@ use crate::{
 };
 
 pub struct Occlusion {
-    occlusion: ScalarTexture3D<R32Float>,
+    ambient: ScalarTexture3D<R32Float>,
+    directional: ScalarTexture3D<R32Float>,
 }
 
 impl Occlusion {
-    pub fn new(gpu: &Gpu, volume: u32) -> Self {
+    pub fn new(gpu: &Gpu, resolution: u32) -> Self {
         Self {
-            occlusion: ScalarTexture3D::<R32Float>::new(gpu, volume, FilterMode::Linear),
+            ambient: ScalarTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear),
+            directional: ScalarTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear),
         }
     }
 
     pub fn resolution(&self) -> u32 {
-        self.texture().size()
+        self.ambient().size()
     }
 
-    pub fn texture(&self) -> &ScalarTexture3D<R32Float> {
-        &self.occlusion
+    pub fn ambient(&self) -> &ScalarTexture3D<R32Float> {
+        &self.ambient
+    }
+
+    pub fn directional(&self) -> &ScalarTexture3D<R32Float> {
+        &self.directional
     }
 }

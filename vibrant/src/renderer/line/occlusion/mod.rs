@@ -1,43 +1,34 @@
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::CommandEncoder;
 
 use crate::{
-    asset::scalar::{R32Float, ScalarTexture3D},
     gpu::Gpu,
-    renderer::environment::Environment,
+    renderer::{
+        environment::Environment,
+        line::occlusion::{
+            ambient::AmbientOcclusionPipeline, directional::DirectionalOcclusionPipeline,
+        },
+    },
     surface::Frame,
 };
 
-pub struct OcclusionPipeline {
-    occlusion: ComputePipeline,
+pub mod ambient;
+pub mod directional;
+
+pub struct LineOcclusionPipeline {
+    ambient: AmbientOcclusionPipeline,
+    directional: DirectionalOcclusionPipeline,
 }
 
-impl OcclusionPipeline {
+impl LineOcclusionPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            occlusion: gpu.compute(
-                "Occlusion::Occlusion",
-                &gpu.pipeline_layout(&[
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout_write(gpu),
-                    &Environment::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("occlusion.wgsl")),
-            ),
+            ambient: AmbientOcclusionPipeline::new(gpu),
+            directional: DirectionalOcclusionPipeline::new(gpu),
         }
     }
 
     pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Occlusion"),
-            ..Default::default()
-        });
-
-        let n = frame.occlusion().texture().size().div_ceil(8);
-
-        pass.set_pipeline(&self.occlusion);
-        pass.set_bind_group(0, frame.density().density().binding(), &[]);
-        pass.set_bind_group(1, frame.occlusion().texture().binding_write(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
-        pass.dispatch_workgroups(n, n, n);
+        self.ambient.render(cmd, frame, environment);
+        self.directional.render(cmd, frame, environment);
     }
 }

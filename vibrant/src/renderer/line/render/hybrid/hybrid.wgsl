@@ -6,25 +6,18 @@
 @group(1) @binding(2) var<storage> INDEX: array<u32>;
 
 @group(2) @binding(0) var OCCUPANCY: texture_3d<f32>;
-
 @group(3) @binding(0) var COUNT: texture_3d<u32>;
 
 @group(4) @binding(0) var DENSITY: texture_3d<f32>;
-@group(4) @binding(1) var SAMPLER: sampler;
+@group(4) @binding(1) var DENSITY_SAMPLER: sampler;
 
-@group(5) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(5) @binding(0) var AMBIENT_OCCLUSION: texture_3d<f32>;
+@group(5) @binding(1) var AMBIENT_OCCLUSION_SAMPLER: sampler;
 
-@group(6) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
+@group(6) @binding(0) var DIRECTIONAL_OCCLUSION: texture_3d<f32>;
+@group(6) @binding(1) var DIRECTIONAL_OCCLUSION_SAMPLER: sampler;
 
-@compute
-@workgroup_size(8, 8)
-fn main(@builtin(global_invocation_id) pixel: vec3<u32>) {
-    if (any(pixel.xy >= ENVIRONMENT.surface)) { return; }
-
-    let result = compute(pixel.xy);
-
-    textureStore(COLOR, vec2<u32>(pixel.x, ENVIRONMENT.surface.y - pixel.y), result);
-}
+@group(7) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
@@ -32,13 +25,24 @@ var<private> DIR_INV: f32;
 var<private> RADIUS: f32;
 var<private> ALPHA: f32;
 
-fn compute(pixel: vec2<u32>) -> vec4<f32> {
+@vertex
+fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
+    return vec4<f32>(
+        select(-1.0, 1.0, bool(index & 1)),
+        select(-1.0, 1.0, bool(index & 2)),
+        0.0,
+        1.0
+    );
+}
+
+@fragment
+fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     DIM = f32(textureDimensions(DENSITY).x);
     DIM_INV = 1.0 / DIM;
     RADIUS = ENVIRONMENT.settings.streamline_radius;
     ALPHA = ENVIRONMENT.settings.alpha;
 
-    let uv = vec2<f32>(pixel) / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0;
+    let uv = vec2<f32>(1.0, -1.0) * (pixel.xy / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0);
 
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));
@@ -178,9 +182,13 @@ fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: 
             height
         ));
 
-        let light = ENVIRONMENT.light;
+        let diffuse = lambert(normal, ENVIRONMENT.light);
 
-        let factor = mix(1.0, lambert(normal, light), ENVIRONMENT.settings.direct_light);
+        let sample = position * DIM_INV;
+        let ambient = 1.0 - textureSampleLevel(AMBIENT_OCCLUSION, AMBIENT_OCCLUSION_SAMPLER, sample, 0.0).x;
+        let directional = 1.0 - textureSampleLevel(DIRECTIONAL_OCCLUSION, DIRECTIONAL_OCCLUSION_SAMPLER, sample, 0.0).x;
+
+        let factor = mix(ambient, diffuse * directional, ENVIRONMENT.settings.direct_light);
 
         return vec4<f32>(factor * abs(tangent), 1.0);
     }

@@ -9,26 +9,25 @@
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 @group(4) @binding(0) var COLOR: texture_storage_2d<bgra8unorm, write>;
 
-@compute
-@workgroup_size(64, 1)
-fn main(@builtin(workgroup_id) tile: vec3<u32>, @builtin(local_invocation_index) local: u32) {
-    let pixel = tile.xy * 8 + vec2<u32>(local & 7, local >> 3);
-
-    if (any(pixel >= ENVIRONMENT.surface)) { return; }
-
-    let result = compute(pixel);
-
-    textureStore(COLOR, vec2<u32>(pixel.x, ENVIRONMENT.surface.y - pixel.y), result);
+@vertex
+fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
+    return vec4<f32>(
+        select(-1.0, 1.0, bool(index & 1)),
+        select(-1.0, 1.0, bool(index & 2)),
+        0.0,
+        1.0
+    );
 }
 
-fn compute(pixel: vec2<u32>) -> vec4<f32> {
+@fragment
+fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let dim_u32 = vec3<u32>(textureDimensions(DENSITY));
     let dim = vec3<f32>(dim_u32);
 
     let radius = ENVIRONMENT.settings.streamline_radius / dim.x;
     let alpha = ENVIRONMENT.settings.alpha;
 
-    let uv = vec2<f32>(pixel) / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0;
+    let uv = vec2<f32>(1.0, -1.0) * (pixel.xy / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0);
 
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));

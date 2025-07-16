@@ -56,7 +56,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
 }
 
 fn visit_voxel_line(voxel: vec3<i32>, index: u32, length: f32) {
-    let should_write = textureLoad(OCCUPANCY, voxel, 0).x > 0.0;
+    let should_write = textureLoad(OCCUPANCY, voxel, 0).x > 0.5;
 
     if (should_write) {
         let idx = block_index(vec3<u32>(voxel), textureDimensions(OCCUPANCY));

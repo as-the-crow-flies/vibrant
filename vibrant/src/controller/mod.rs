@@ -8,11 +8,11 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{Settings, ShadingSetting};
+use settings::{LineRenderMode, Settings};
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
-use crate::{controller::settings::VoxelizationSetting, file::File};
+use crate::{controller::settings::LineVoxelizationMode, file::File};
 
 #[derive(Debug)]
 pub struct Controller {
@@ -84,37 +84,37 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
-            ComboBox::from_label("Shading")
-                .selected_text(format!("{:?}", self.settings.shading))
+            ComboBox::from_label("Render Mode")
+                .selected_text(format!("{:?}", self.settings.render))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Render,
-                        "Render",
+                        &mut self.settings.render,
+                        LineRenderMode::Hybrid,
+                        "Hybrid",
                     );
                     ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Density,
-                        "Density",
+                        &mut self.settings.render,
+                        LineRenderMode::Volume,
+                        "Volume",
                     );
                 });
 
-            ComboBox::from_label("Voxelization")
+            ComboBox::from_label("Voxelization Mode")
                 .selected_text(format!("{:?}", self.settings.voxelization))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.settings.voxelization,
-                        VoxelizationSetting::Tube,
+                        LineVoxelizationMode::Tube,
                         "Tube",
                     );
                     ui.selectable_value(
                         &mut self.settings.voxelization,
-                        VoxelizationSetting::Box,
+                        LineVoxelizationMode::Box,
                         "Box",
                     );
                     ui.selectable_value(
                         &mut self.settings.voxelization,
-                        VoxelizationSetting::Line,
+                        LineVoxelizationMode::Line,
                         "Line",
                     );
                 });

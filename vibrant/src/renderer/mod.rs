@@ -4,7 +4,7 @@ pub mod services;
 pub mod ui;
 pub mod wgsl;
 
-use crate::renderer::line::TractogramRenderer;
+use crate::renderer::line::LineRenderer;
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
@@ -19,7 +19,7 @@ use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
 pub struct Renderer {
     surface: Surface,
-    tractogram: TractogramRenderer,
+    tractogram: LineRenderer,
     ui: UiRenderer,
     environment: Environment,
     asset: Asset,
@@ -29,7 +29,7 @@ impl Renderer {
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         Self {
             surface: Surface::new(gpu, window),
-            tractogram: TractogramRenderer::new(gpu),
+            tractogram: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
 
             environment: Environment::new(gpu),

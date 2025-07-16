@@ -1,86 +1,129 @@
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use std::any::type_name;
+
+use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayoutDescriptor};
 
 use crate::{
-    asset::scalar::{R16Uint, R32Float, ScalarTexture3D},
+    asset::{
+        line::LineSet,
+        scalar::{R16Uint, R32Float, ScalarTexture3D},
+    },
+    controller::settings::LineVoxelizationMode,
     gpu::Gpu,
-    renderer::environment::Environment,
-    surface::{occupancy::Occupancy, Frame},
+    renderer::{environment::Environment, wgsl},
+    surface::{density::Density, Frame},
 };
 
-pub struct OccupancyPipeline {
-    bin: ComputePipeline,
-    threshold: ComputePipeline,
-    occupancy: ComputePipeline,
+pub struct LineOccupancyPipeline {
+    voxelize_tube: ComputePipeline,
+    voxelize_line: ComputePipeline,
+    voxelize_box: ComputePipeline,
+    copy: ComputePipeline,
     mipmap: ComputePipeline,
 }
 
-impl OccupancyPipeline {
+impl LineOccupancyPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        let label = Some(type_name::<Self>());
+
+        let voxelize_layout = &gpu
+            .device()
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label,
+                bind_group_layouts: &[
+                    &Density::layout(gpu),
+                    &LineSet::layout(gpu, true),
+                    &Environment::layout(gpu),
+                ],
+                push_constant_ranges: &[],
+            });
+
+        let voxelize_shader_source = include_str!("voxelize.wgsl");
+
         Self {
-            bin: gpu.compute(
-                "Occupancy::Bin",
-                &gpu.pipeline_layout(&[
-                    &Occupancy::layout(gpu, false),
-                    &ScalarTexture3D::<R16Uint>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("bin.wgsl")),
+            voxelize_tube: gpu.compute(
+                "Density::Voxelize::Tube",
+                voxelize_layout,
+                &gpu.shader(&(wgsl::voxelize::TUBE.to_owned() + voxelize_shader_source)),
             ),
-            threshold: gpu.compute(
-                "Occupancy::Threshold",
-                &gpu.pipeline_layout(&[&Occupancy::layout(gpu, false), &Environment::layout(gpu)]),
-                &gpu.shader(include_str!("threshold.wgsl")),
+            voxelize_line: gpu.compute(
+                "Density::Voxelize::Line",
+                voxelize_layout,
+                &gpu.shader(&(wgsl::voxelize::LINE.to_owned() + voxelize_shader_source)),
             ),
-            occupancy: gpu.compute(
-                "Occupancy::Occupancy",
-                &gpu.pipeline_layout(&[
-                    &Occupancy::layout(gpu, false),
-                    &ScalarTexture3D::<R16Uint>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout_write(gpu),
-                ]),
-                &gpu.shader(include_str!("occupancy.wgsl")),
+            voxelize_box: gpu.compute(
+                "Density::Voxelize::Box",
+                voxelize_layout,
+                &gpu.shader(&(wgsl::voxelize::BOX.to_owned() + voxelize_shader_source)),
+            ),
+            copy: gpu.compute(
+                "Density::Copy",
+                &gpu.device()
+                    .create_pipeline_layout(&PipelineLayoutDescriptor {
+                        label,
+                        bind_group_layouts: &[
+                            &Density::layout(gpu),
+                            &ScalarTexture3D::<R32Float>::layout_write(gpu),
+                            &ScalarTexture3D::<R16Uint>::layout_write(gpu),
+                            &Environment::layout(gpu),
+                        ],
+                        push_constant_ranges: &[],
+                    }),
+                &gpu.shader(include_str!("copy.wgsl")),
             ),
             mipmap: gpu.compute(
-                "Occupancy::Mipmap",
-                &gpu.pipeline_layout(&[&ScalarTexture3D::<R32Float>::layout_mipmap(gpu)]),
+                "Density::MipMap",
+                &gpu.device()
+                    .create_pipeline_layout(&PipelineLayoutDescriptor {
+                        label,
+                        bind_group_layouts: &[&ScalarTexture3D::<R32Float>::layout_mipmap(gpu)],
+                        push_constant_ranges: &[],
+                    }),
                 &gpu.shader(include_str!("mipmap.wgsl")),
             ),
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
-        frame.occupancy().clear(cmd);
+    pub fn render(
+        &self,
+        cmd: &mut CommandEncoder,
+        frame: &Frame,
+        environment: &Environment,
+        setting: LineVoxelizationMode,
+        tractogram: &LineSet,
+    ) {
+        frame.density().clear(cmd);
+        tractogram.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Occupancy"),
+            label: Some("Density"),
             ..Default::default()
         });
 
-        let n = frame.density().resolution().div_ceil(8);
+        let n = frame.density().density().size().div_ceil(8);
 
-        pass.set_pipeline(&self.bin);
-        pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, frame.density().count().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().texture().binding(), &[]);
-        pass.dispatch_workgroups(n, n, n);
+        pass.set_bind_group(0, frame.density().binding(), &[]);
+        pass.set_bind_group(1, tractogram.binding(true), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
 
-        pass.set_pipeline(&self.threshold);
-        pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+        pass.set_pipeline(match setting {
+            LineVoxelizationMode::Line => &self.voxelize_line,
+            LineVoxelizationMode::Box => &self.voxelize_box,
+            LineVoxelizationMode::Tube => &self.voxelize_tube,
+        });
+        pass.dispatch_workgroups(64, 1, 1);
 
-        pass.set_pipeline(&self.occupancy);
-        pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, frame.density().count().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().texture().binding(), &[]);
-        pass.set_bind_group(3, frame.occupancy().texture().binding_write(), &[]);
+        pass.set_pipeline(&self.copy);
+        pass.set_bind_group(0, frame.density().binding(), &[]);
+        pass.set_bind_group(1, frame.density().density().binding_write(), &[]);
+        pass.set_bind_group(2, frame.density().count().binding_write(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.occupancy().texture().size().div_ceil(8);
-        for binding in frame.occupancy().texture().bindings_mipmap() {
+        let mut mipmap = frame.density().density().size().div_ceil(8);
+
+        for binding in frame.density().density().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

@@ -1,48 +1,44 @@
-pub mod density;
+pub mod culling;
 pub mod occlusion;
 pub mod occupancy;
 pub mod populate;
 pub mod render;
-pub mod shading;
 pub mod transform;
 
-use density::DensityPipeline;
-use shading::volume::VolumeRenderPipeline;
+use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineSet,
-    controller::settings::{Settings, ShadingSetting},
+    controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
-        occlusion::OcclusionPipeline, occupancy::OccupancyPipeline, populate::PopulatePipeline,
-        render::TractogramRenderPipeline, transform::TransformPipeline,
+        culling::LineCullingPipeline, occlusion::LineOcclusionPipeline, populate::PopulatePipeline,
+        render::LineRenderPipeline, transform::LineTransformPipeline,
     },
     surface::Frame,
 };
 
 use super::environment::Environment;
 
-pub struct TractogramRenderer {
-    transform: TransformPipeline,
-    density: DensityPipeline,
-    occlusion: OcclusionPipeline,
-    occupancy: OccupancyPipeline,
+pub struct LineRenderer {
+    transform: LineTransformPipeline,
+    occupancy: LineOccupancyPipeline,
+    occlusion: LineOcclusionPipeline,
+    culling: LineCullingPipeline,
     populate: PopulatePipeline,
-    volume: VolumeRenderPipeline,
-    render: TractogramRenderPipeline,
+    render: LineRenderPipeline,
 }
 
-impl TractogramRenderer {
+impl LineRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            transform: TransformPipeline::new(gpu),
-            density: DensityPipeline::new(gpu),
-            occlusion: OcclusionPipeline::new(gpu),
-            occupancy: OccupancyPipeline::new(gpu),
+            transform: LineTransformPipeline::new(gpu),
+            occupancy: LineOccupancyPipeline::new(gpu),
+            occlusion: LineOcclusionPipeline::new(gpu),
+            culling: LineCullingPipeline::new(gpu),
             populate: PopulatePipeline::new(gpu),
-            volume: VolumeRenderPipeline::new(gpu),
-            render: TractogramRenderPipeline::new(gpu),
+            render: LineRenderPipeline::new(gpu),
         }
     }
 
@@ -51,20 +47,18 @@ impl TractogramRenderer {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &Frame,
-        tractogram: &LineSet,
+        line: &LineSet,
         settings: &Settings,
     ) {
-        self.transform.render(cmd, environment, tractogram);
-        self.density
-            .render(cmd, frame, environment, settings.voxelization, tractogram);
+        self.transform.render(cmd, environment, line);
+        self.occupancy
+            .render(cmd, frame, environment, settings.voxelization, line);
         self.occlusion.render(cmd, frame, environment);
-        self.occupancy.render(cmd, frame, environment);
+        self.culling.render(cmd, frame, environment);
         self.populate
-            .render(cmd, frame, environment, settings.voxelization, tractogram);
+            .render(cmd, frame, environment, settings.voxelization, line);
 
-        match settings.shading {
-            ShadingSetting::Render => self.render.render(cmd, frame, environment, tractogram),
-            ShadingSetting::Density => self.volume.render(cmd, frame, environment),
-        }
+        self.render
+            .render(cmd, environment, frame, line, settings.render);
     }
 }

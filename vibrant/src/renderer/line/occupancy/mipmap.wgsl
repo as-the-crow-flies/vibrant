@@ -6,6 +6,5 @@
 @workgroup_size(8, 8, 8)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let sample = (2.0 * vec3<f32>(voxel) + 1.0) / vec3<f32>(textureDimensions(SOURCE));
-    let occupancy = f32(textureSampleLevel(SOURCE, SAMPLER, sample, 0.0).x > 0.0);
-    textureStore(DESTINATION, voxel, vec4<f32>(occupancy));
+    textureStore(DESTINATION, voxel, textureSampleLevel(SOURCE, SAMPLER, sample, 0.0));
 }

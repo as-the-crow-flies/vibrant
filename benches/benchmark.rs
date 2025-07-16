@@ -3,7 +3,7 @@ use pollster::FutureExt;
 use vibrant::{
     asset::line::LineSet,
     controller::{
-        settings::{Settings, VoxelizationSetting},
+        settings::{LineVoxelizationMode, Settings},
         Controller,
     },
     file::LineFile,
@@ -11,9 +11,9 @@ use vibrant::{
     renderer::{
         environment::Environment,
         line::{
-            density::DensityPipeline, occlusion::OcclusionPipeline, occupancy::OccupancyPipeline,
-            populate::PopulatePipeline, render::TractogramRenderPipeline,
-            transform::TransformPipeline,
+            culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
+            occupancy::LineOccupancyPipeline, populate::PopulatePipeline,
+            render::hybrid::HybridLineRenderPipeline, transform::LineTransformPipeline,
         },
     },
     surface::Frame,
@@ -39,11 +39,11 @@ pub fn density(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
+    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
 
-    let pipeline = DensityPipeline::new(gpu);
+    let pipeline = LineOccupancyPipeline::new(gpu);
 
     criterion.bench_function("density", |bencher| {
         bencher.iter(|| {
@@ -53,7 +53,7 @@ pub fn density(criterion: &mut Criterion) {
                 &mut cmd,
                 frame,
                 environment,
-                VoxelizationSetting::Tube,
+                LineVoxelizationMode::Tube,
                 tractogram,
             );
 
@@ -87,18 +87,18 @@ pub fn occlusion(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(
+    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
+    LineOccupancyPipeline::new(gpu).render(
         &mut cmd,
         frame,
         environment,
-        VoxelizationSetting::Tube,
+        LineVoxelizationMode::Tube,
         tractogram,
     );
     gpu.submit(cmd);
     gpu.wait();
 
-    let pipeline = OcclusionPipeline::new(gpu);
+    let pipeline = LineOcclusionPipeline::new(gpu);
 
     criterion.bench_function("occlusion", |bencher| {
         bencher.iter(|| {
@@ -120,19 +120,19 @@ pub fn occupancy(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(
+    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
+    LineOccupancyPipeline::new(gpu).render(
         &mut cmd,
         frame,
         environment,
-        VoxelizationSetting::Tube,
+        LineVoxelizationMode::Tube,
         tractogram,
     );
-    OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
+    LineOcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
     gpu.wait();
 
-    let pipeline = OccupancyPipeline::new(gpu);
+    let pipeline = LineCullingPipeline::new(gpu);
 
     criterion.bench_function("occupancy", |bencher| {
         bencher.iter(|| {
@@ -154,19 +154,19 @@ pub fn populate(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(
+    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
+    LineOccupancyPipeline::new(gpu).render(
         &mut cmd,
         frame,
         environment,
-        VoxelizationSetting::Tube,
+        LineVoxelizationMode::Tube,
         tractogram,
     );
-    OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
+    LineOcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     gpu.submit(cmd);
     gpu.wait();
 
-    let occupancy = OccupancyPipeline::new(gpu);
+    let occupancy = LineCullingPipeline::new(gpu);
     let populate = PopulatePipeline::new(gpu);
 
     criterion.bench_function("populate", |bencher| {
@@ -178,7 +178,7 @@ pub fn populate(criterion: &mut Criterion) {
                 &mut cmd,
                 frame,
                 environment,
-                VoxelizationSetting::Tube,
+                LineVoxelizationMode::Tube,
                 tractogram,
             );
 
@@ -196,27 +196,27 @@ pub fn render(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    DensityPipeline::new(gpu).render(
+    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
+    LineOccupancyPipeline::new(gpu).render(
         &mut cmd,
         frame,
         environment,
-        VoxelizationSetting::Tube,
+        LineVoxelizationMode::Tube,
         tractogram,
     );
-    OcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
-    OccupancyPipeline::new(gpu).render(&mut cmd, frame, environment);
+    LineOcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
+    LineCullingPipeline::new(gpu).render(&mut cmd, frame, environment);
     PopulatePipeline::new(gpu).render(
         &mut cmd,
         frame,
         environment,
-        VoxelizationSetting::Tube,
+        LineVoxelizationMode::Tube,
         tractogram,
     );
     gpu.submit(cmd);
     gpu.wait();
 
-    let pipeline = TractogramRenderPipeline::new(gpu);
+    let pipeline = HybridLineRenderPipeline::new(gpu);
 
     criterion.bench_function("render", |bencher| {
         bencher.iter(|| {
@@ -238,15 +238,15 @@ pub fn full(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    TransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
+    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
 
-    let density = DensityPipeline::new(gpu);
-    let occlusion = OcclusionPipeline::new(gpu);
-    let occupancy = OccupancyPipeline::new(gpu);
+    let density = LineOccupancyPipeline::new(gpu);
+    let occlusion = LineOcclusionPipeline::new(gpu);
+    let occupancy = LineCullingPipeline::new(gpu);
     let populate = PopulatePipeline::new(gpu);
-    let render = TractogramRenderPipeline::new(gpu);
+    let render = HybridLineRenderPipeline::new(gpu);
 
     criterion.bench_function("full", |bencher| {
         bencher.iter(|| {
@@ -256,7 +256,7 @@ pub fn full(criterion: &mut Criterion) {
                 &mut cmd,
                 frame,
                 environment,
-                VoxelizationSetting::Tube,
+                LineVoxelizationMode::Tube,
                 tractogram,
             );
             occlusion.render(&mut cmd, frame, environment);
@@ -265,7 +265,7 @@ pub fn full(criterion: &mut Criterion) {
                 &mut cmd,
                 frame,
                 environment,
-                VoxelizationSetting::Tube,
+                LineVoxelizationMode::Tube,
                 tractogram,
             );
             render.render(&mut cmd, frame, environment, tractogram);
@@ -282,91 +282,91 @@ criterion_main!(benches);
 pub fn get_tractogram(gpu: &Gpu) -> LineSet {
     LineSet::new(
         gpu,
-        // &TractogramFile::from_file("assets/HCP-100307/whole_brain1M.tck"),
-        &LineFile::from_file("assets/HCP-100307/whole_brain200k.tck"),
-        // &TractogramFile::join(vec![
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/AF_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/AF_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ATR_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ATR_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CG_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CG_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CST_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CST_right.tck"),
-        // ]),
-        // &TractogramFile::join(vec![
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/AF_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/AF_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ATR_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ATR_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CA.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC_1.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC_2.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC_3.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC_4.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC_5.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC_6.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC_7.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CC.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CG_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CG_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CST_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/CST_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/FPT_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/FPT_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/FX_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/FX_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ICP_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ICP_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/IFO_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/IFO_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ILF_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ILF_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/MCP.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/MLF_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/MLF_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/OR_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/OR_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/POPT_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/POPT_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SCP_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SCP_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SLF_I_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SLF_I_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SLF_II_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SLF_II_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SLF_III_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/SLF_III_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_FO_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_FO_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_OCC_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_OCC_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PAR_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PAR_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_POSTC_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_POSTC_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREC_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREC_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREF_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREF_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREM_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREM_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/STR_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/STR_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_OCC_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_OCC_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PAR_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PAR_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_POSTC_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_POSTC_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PREC_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PREC_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PREF_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PREF_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PREM_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/T_PREM_right.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/UF_left.tck"),
-        //     TractogramFile::from_file("assets/HCP-100307/TOM_trackings/UF_right.tck"),
+        // &LineFile::from_file("assets/HCP-100307/whole_brain1M.tck"),
+        // &LineFile::from_file("assets/HCP-100307/whole_brain200k.tck"),
+        &LineFile::join(vec![
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/AF_left.tck"),
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/AF_right.tck"),
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/ATR_left.tck"),
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/ATR_right.tck"),
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/CG_left.tck"),
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/CG_right.tck"),
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/CST_left.tck"),
+            LineFile::from_file("assets/HCP-100307/TOM_trackings/CST_right.tck"),
+        ]),
+        // &LineFile::join(vec![
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/AF_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/AF_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ATR_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ATR_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CA.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC_1.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC_2.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC_3.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC_4.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC_5.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC_6.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC_7.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CC.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CG_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CG_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CST_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/CST_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/FPT_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/FPT_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/FX_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/FX_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ICP_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ICP_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/IFO_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/IFO_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ILF_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ILF_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/MCP.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/MLF_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/MLF_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/OR_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/OR_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/POPT_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/POPT_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SCP_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SCP_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SLF_I_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SLF_I_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SLF_II_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SLF_II_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SLF_III_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/SLF_III_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_FO_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_FO_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_OCC_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_OCC_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PAR_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PAR_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_POSTC_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_POSTC_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREC_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREC_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREF_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREF_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREM_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/ST_PREM_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/STR_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/STR_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_OCC_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_OCC_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PAR_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PAR_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_POSTC_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_POSTC_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PREC_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PREC_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PREF_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PREF_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PREM_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/T_PREM_right.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/UF_left.tck"),
+        //     LineFile::from_file("assets/HCP-100307/TOM_trackings/UF_right.tck"),
         // ]),
     )
 }

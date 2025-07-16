@@ -1,70 +1,43 @@
-use std::any::type_name;
-
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::CommandEncoder;
 
 use crate::{
-    asset::{
-        line::LineSet,
-        scalar::{R32Float, R8Uint, ScalarTexture3D},
-    },
+    asset::line::LineSet,
+    controller::settings::LineRenderMode,
     gpu::Gpu,
-    renderer::environment::Environment,
-    surface::{color::Color, occupancy::Occupancy, Frame},
+    renderer::{
+        environment::Environment,
+        line::render::{hybrid::HybridLineRenderPipeline, volume::VolumeLineRenderPipeline},
+    },
+    surface::Frame,
 };
 
-pub struct TractogramRenderPipeline {
-    pipeline: ComputePipeline,
+pub mod hybrid;
+pub mod volume;
+
+pub struct LineRenderPipeline {
+    hybrid: HybridLineRenderPipeline,
+    volume: VolumeLineRenderPipeline,
 }
 
-impl TractogramRenderPipeline {
+impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            pipeline: gpu.compute(
-                type_name::<Self>(),
-                &gpu.pipeline_layout(&[
-                    &LineSet::layout(gpu, true),
-                    &Occupancy::layout(gpu, true),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<R8Uint>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &Environment::layout(gpu),
-                    &Color::layout_write(gpu),
-                ]),
-                &gpu.shader(include_str!("render.wgsl")),
-            ),
+            hybrid: HybridLineRenderPipeline::new(gpu),
+            volume: VolumeLineRenderPipeline::new(gpu),
         }
     }
 
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &Frame,
         environment: &Environment,
-        tractogram: &LineSet,
+        frame: &Frame,
+        line: &LineSet,
+        mode: LineRenderMode,
     ) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Render"),
-            ..Default::default()
-        });
-
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, tractogram.binding(true), &[]);
-        pass.set_bind_group(1, frame.occupancy().binding(true), &[]);
-        pass.set_bind_group(2, frame.occupancy().texture().binding(), &[]);
-        pass.set_bind_group(3, frame.density().count().binding(), &[]);
-        pass.set_bind_group(4, frame.density().density().binding(), &[]);
-        pass.set_bind_group(5, environment.binding(), &[]);
-        pass.set_bind_group(6, frame.color().binding(), &[]);
-
-        pass.dispatch_workgroups(
-            frame.color().width().div_ceil(8),
-            frame.color().height().div_ceil(8),
-            1,
-        );
+        match mode {
+            LineRenderMode::Hybrid => self.hybrid.render(cmd, frame, environment, line),
+            LineRenderMode::Volume => self.volume.render(cmd, frame, environment),
+        }
     }
-}
-
-mod test {
-    #[test]
-    fn test() {}
 }

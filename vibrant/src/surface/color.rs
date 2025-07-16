@@ -1,11 +1,9 @@
 use std::any::type_name;
 
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, ColorTargetState, ColorWrites, Extent3d,
-    LoadOp, Operations, RenderPassColorAttachment, ShaderStages, StorageTextureAccess, StoreOp,
-    Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor, TextureViewDimension,
+    ColorTargetState, ColorWrites, Extent3d, LoadOp, Operations, RenderPassColorAttachment,
+    StoreOp, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureView, TextureViewDescriptor,
 };
 
 use crate::gpu::Gpu;
@@ -13,11 +11,12 @@ use crate::gpu::Gpu;
 pub struct Color {
     texture: Texture,
     view: TextureView,
-    binding: BindGroup,
+    view_srgb: TextureView,
 }
 
 impl Color {
     pub const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
+    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());
@@ -34,10 +33,9 @@ impl Color {
             dimension: TextureDimension::D2,
             format: Self::FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT
-                | TextureUsages::STORAGE_BINDING
                 | TextureUsages::TEXTURE_BINDING
                 | TextureUsages::COPY_SRC,
-            view_formats: &[],
+            view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
         });
 
         let view = texture.create_view(&TextureViewDescriptor {
@@ -46,19 +44,16 @@ impl Color {
             ..Default::default()
         });
 
-        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+        let view_srgb = texture.create_view(&TextureViewDescriptor {
             label,
-            layout: &Self::layout_write(gpu),
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(&view),
-            }],
+            format: Some(Self::FORMAT_SRGB),
+            ..Default::default()
         });
 
         Self {
             texture,
             view,
-            binding,
+            view_srgb,
         }
     }
 
@@ -82,6 +77,14 @@ impl Color {
         }
     }
 
+    pub fn target_srgb() -> ColorTargetState {
+        ColorTargetState {
+            format: Self::FORMAT_SRGB,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        }
+    }
+
     pub fn attachment(&self) -> RenderPassColorAttachment {
         RenderPassColorAttachment {
             view: &self.view,
@@ -93,25 +96,15 @@ impl Color {
         }
     }
 
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
-    }
-
-    pub fn layout_write(gpu: &Gpu) -> BindGroupLayout {
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::StorageTexture {
-                        access: StorageTextureAccess::WriteOnly,
-                        format: Self::FORMAT,
-                        view_dimension: TextureViewDimension::D2,
-                    },
-                    count: None,
-                }],
-            })
+    pub fn attachment_srgb(&self) -> RenderPassColorAttachment {
+        RenderPassColorAttachment {
+            view: &self.view_srgb,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Load,
+                store: StoreOp::Store,
+            },
+        }
     }
 }
 

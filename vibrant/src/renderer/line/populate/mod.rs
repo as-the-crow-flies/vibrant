@@ -5,7 +5,7 @@ use crate::{
         line::LineSet,
         scalar::{R32Float, ScalarTexture3D},
     },
-    controller::settings::VoxelizationSetting,
+    controller::settings::LineVoxelizationMode,
     gpu::Gpu,
     renderer::{environment::Environment, wgsl},
     surface::{occupancy::Occupancy, Frame},
@@ -52,7 +52,7 @@ impl PopulatePipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        setting: VoxelizationSetting,
+        setting: LineVoxelizationMode,
         tractogram: &LineSet,
     ) {
         tractogram.clear_count(cmd);
@@ -63,9 +63,9 @@ impl PopulatePipeline {
         });
 
         pass.set_pipeline(match setting {
-            VoxelizationSetting::Line => &self.populate_line,
-            VoxelizationSetting::Box => &self.populate_box,
-            VoxelizationSetting::Tube => &self.populate_tube,
+            LineVoxelizationMode::Line => &self.populate_line,
+            LineVoxelizationMode::Box => &self.populate_box,
+            LineVoxelizationMode::Tube => &self.populate_tube,
         });
 
         pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
