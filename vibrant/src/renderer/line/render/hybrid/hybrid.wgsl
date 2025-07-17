@@ -117,7 +117,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         let increment = max(d[axis], 1E-5);
 
         // Accumulate Color
-        color += (1.0 - color.a) * intersect(voxel, position * DIM, direction, increment * DIM);
+        color += (1.0 - color.a) * visit(voxel, position * DIM, direction, increment * DIM);
         if (color.a > 0.95) { return color; }
 
         // Increment Ray Position
@@ -129,87 +129,122 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     return color;
 }
 
-fn intersect(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec4<f32> {
-    return gather(voxel, origin, direction, increment);
-}
-
-fn gather(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec4<f32> {
+fn visit(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec4<f32> {
     let count = textureLoad(COUNT, voxel, 0).x;
     let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
 
     let increment_inv = 1.0 / increment;
-    let increment_half = 0.5 * increment;
-    let midpoint = origin + direction * increment_half;
-    let r = RADIUS + increment_half;
 
-    var closest = U32_MAX;
 
-    for (var i = 0u; i < count; i++) {
+    var hit_count = 0u;
+    var hits = array<u32, 32>();
+
+    for (var i = 0u; i < count && hit_count < 32; i++) {
         let index = INDEX[offset + i];
 
-        let v0 = LINE_VERTEX[index + 0];
-        let v1 = LINE_VERTEX[index + 1];
+        let hit = hittest(index, origin, direction, increment);
 
-        if (line_distance(midpoint, v0.xyz, v1.xyz) > r) { continue; }
-
-        let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
-
-        if (hit < 0 || hit >= increment) { continue; }
+        if (hit < 0.0) { continue; }
 
         let candidate = (u32((hit * increment_inv) * U16_MAX_f32) << 16) | i;
 
-        closest = min(closest, candidate);
+        hits[hit_count] = candidate;
+        hit_count++;
     }
 
-    if (closest != U32_MAX) {
-        let hit = f32(closest >> 16) * U16_MAX_INV * increment;
-        let index = INDEX[offset + (closest & U16_MAX)];
+    if (hit_count > 0) {
+        sort(&hits, hit_count);
 
-        let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
-        let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
+        var color = vec4<f32>(0.0);
 
-        let position = origin + hit * direction;
+        for (var i=0u; i<hit_count; i++) {
+            let item = hits[i];
+            let index = INDEX[offset + (item & U16_MAX)];
 
-        let delta = v1.xyz - v0.xyz;
-        let pa = position - v0.xyz;
-        let height = saturate(dot(pa, delta) / dot(delta, delta));
+            let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
+            let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
 
-        let is_start = all(v0.clip == vec3<f32>());
-        let is_end = all(v1.clip == vec3<f32>());
+            let t_min = f32(item >> 16) * U16_MAX_INV * increment;
 
-        let delta_norm = normalize(delta);
-        let tangent = normalize(mix(
-            select(v0.clip, delta_norm, is_start),
-            select(v1.clip, delta_norm, is_end),
-            height
-        ));
+            let position = origin + t_min * direction;
 
-        let normal = (pa - height * delta) / RADIUS;
+            let c = shade(v0, v1, position);
 
-        let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
-        let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
-        let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
+            color += (1.0 - color.a) * vec4<f32>(c.rgb * c.a, c.a);
 
-        let sample = position * DIM_INV;
-        let ambient = 1.0 - textureSampleLevel(AMBIENT_OCCLUSION, AMBIENT_OCCLUSION_SAMPLER, sample, 0.0).x;
-        let directional = 1.0 - textureSampleLevel(DIRECTIONAL_OCCLUSION, DIRECTIONAL_OCCLUSION_SAMPLER, sample, 0.0).x;
+            if (color.a > 0.99) { break; }
+        }
 
-        let factor = mix(ambient, diffuse * directional, ENVIRONMENT.settings.direct_light);
-        let color = mix(vec3<f32>(1.0), abs(tangent), ENVIRONMENT.settings.tangent_color);
-
-        return vec4<f32>(factor * color, 1.0);
+        return color;
     }
 
     return vec4<f32>(0.0);
 }
 
-fn clip(position: vec3<f32>, v0: vec4<f32>, v1: vec4<f32>) -> bool {
-    let n0 = unpack4x8snorm(bitcast<u32>(v0.w));
-    let n1 = unpack4x8snorm(bitcast<u32>(v1.w));
+fn hittest(index: u32, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> f32 {
+    let v0 = LINE_VERTEX[index + 0];
+    let v1 = LINE_VERTEX[index + 1];
 
-    let clipped = dot(position - v0.xyz, n0.xyz) < 0.0 || dot(v1.xyz - position, n1.xyz) < 0.0;
+    let increment_half = 0.5 * increment;
+    let midpoint = origin + direction * increment_half;
+    let r = RADIUS + increment_half;
 
-    return clipped;
+    if (line_distance(midpoint, v0.xyz, v1.xyz) > r) { return -1.0; }
+
+    let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
+
+    return select(hit, -1.0, hit >= increment);
+}
+
+fn shade(v0: Vertex, v1: Vertex, position: vec3<f32>) -> vec4<f32> {
+    let clipped = dot(position - v0.xyz, v0.clip) < 0.0 || dot(v1.xyz - position, v1.clip) < 0.0;
+
+    if (clipped) { return vec4<f32>(0.0); }
+
+    let delta = v1.xyz - v0.xyz;
+    let pa = position - v0.xyz;
+    let height = saturate(dot(pa, delta) / dot(delta, delta));
+
+    let is_start = all(v0.clip == vec3<f32>());
+    let is_end = all(v1.clip == vec3<f32>());
+
+    let delta_norm = normalize(delta);
+    let tangent = normalize(mix(
+        select(v0.clip, delta_norm, is_start),
+        select(v1.clip, delta_norm, is_end),
+        height
+    ));
+
+    let normal = (pa - height * delta) / RADIUS;
+
+    let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
+    let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
+    let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
+
+    let sample = position * DIM_INV;
+    let ambient = 1.0 - textureSampleLevel(AMBIENT_OCCLUSION, AMBIENT_OCCLUSION_SAMPLER, sample, 0.0).x;
+    let directional = 1.0 - textureSampleLevel(DIRECTIONAL_OCCLUSION, DIRECTIONAL_OCCLUSION_SAMPLER, sample, 0.0).x;
+
+    let factor = mix(ambient, diffuse * directional, ENVIRONMENT.settings.direct_light);
+
+    let rgb = factor * mix(vec3<f32>(1.0), abs(tangent), ENVIRONMENT.settings.tangent_color);
+    let a = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height);
+
+    return vec4<f32>(rgb, a);
+}
+
+fn sort(data: ptr<function, array<u32, 32>>, count: u32) {
+    for (var i: u32 = 1u; i < count; i = i + 1u) {
+        let key = (*data)[i];
+        var j: i32 = i32(i) - 1;
+
+        while (j >= 0 && (*data)[u32(j)] > key) {
+            (*data)[u32(j + 1)] = (*data)[u32(j)];
+            j = j - 1;
+        }
+
+        (*data)[u32(j + 1)] = key;
+    }
 }
 
 fn maximum(v: vec3<f32>) -> f32 {
@@ -234,6 +269,7 @@ fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
 }
 
 // https://iquilezles.org/articles/intersectors
+// https://www.shadertoy.com/view/Xt3SzX
 fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32
 {
     let ba = pb - pa;
@@ -250,13 +286,12 @@ fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f3
     var c = baba*oaoa - baoa*baoa - r*r*baba;
     var h = b*b - a*c;
 
-    if (h>=0.0)
-    {
-        let t = (-b-sqrt(h))/a;
+    if (h>=0.0) {
+        let t = (-b - sqrt(h)) / a;
         let y = baoa + t*bard;
 
         // body
-        if( y>0.0 && y<baba ) { return t; }
+        if(y > 0.0 && y < baba) { return t; }
 
         // caps
         let oc = select(ro - pb, oa, y <= 0.0);
@@ -264,7 +299,42 @@ fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f3
         b = dot(rd, oc);
         c = dot(oc, oc) - r*r;
         h = b*b - c;
-        if (h>0.0) { return -b - sqrt(h); }
+        if (h > 0.0) { return -b - sqrt(h); }
+    }
+
+    return 1E6;
+}
+
+fn capsule_intersection_back(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32
+{
+    let ba = pb - pa;
+    let oa = ro - pa;
+
+    let baba = dot(ba,ba);
+    let bard = dot(ba,rd);
+    let baoa = dot(ba,oa);
+    let rdoa = dot(rd,oa);
+    let oaoa = dot(oa,oa);
+
+    var a = baba      - bard*bard;
+    var b = baba*rdoa - baoa*bard;
+    var c = baba*oaoa - baoa*baoa - r*r*baba;
+    var h = b*b - a*c;
+
+    if (h>=0.0) {
+        let t = (-b + sqrt(h)) / a;
+        let y = baoa + t*bard;
+
+        // body
+        if(y > 0.0 && y < baba) { return t; }
+
+        // caps
+        let oc = select(ro - pb, oa, y <= 0.0);
+
+        b = dot(rd, oc);
+        c = dot(oc, oc) - r*r;
+        h = b*b - c;
+        if (h > 0.0) { return -b + sqrt(h); }
     }
 
     return 1E6;
