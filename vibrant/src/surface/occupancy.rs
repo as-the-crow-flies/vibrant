@@ -1,231 +1,128 @@
-use std::{any::type_name, ops::Mul};
+use std::any::type_name;
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
+    BindGroupLayoutEntry, BindingResource, Buffer, BufferBinding, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandEncoder, FilterMode, ShaderStages,
 };
 
 use crate::{
-    asset::scalar::{R32Float, ScalarTexture3D},
+    asset::scalar::{R32Float, R32Uint, ScalarTexture3D},
     gpu::Gpu,
 };
 
-pub struct Occupancy {
-    offset: Buffer,
-    count: Buffer,
-    index: Buffer,
-    bin: Buffer,
-    threshold: Buffer,
+pub struct OccupancyBuffer {
     occupancy: ScalarTexture3D<R32Float>,
-    binding_read: BindGroup,
+    count: ScalarTexture3D<R32Uint>,
+    buffer: Buffer,
     binding_write: BindGroup,
+    binding_read: BindGroup,
 }
 
-impl Occupancy {
-    pub fn new(gpu: &Gpu, volume: u32, memory: u32) -> Self {
+impl OccupancyBuffer {
+    pub fn new(gpu: &Gpu, volume: u32) -> Self {
         let label = Some(type_name::<Self>());
 
-        let offset = gpu.device().create_buffer(&BufferDescriptor {
+        let n_voxels = volume * volume * volume;
+
+        let buffer = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: volume.pow(3).mul(4) as u64,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+            size: (n_voxels * 4) as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let count = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: 4,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let index = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: memory.mul(1024 * 1024) as u64,
-            usage: BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
-
-        let bin = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: 1024,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let threshold = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: 4,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let occupancy: ScalarTexture3D<R32Float> =
-            ScalarTexture3D::new(gpu, volume, FilterMode::Linear);
-
-        let entries = &[
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &offset,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &count,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &index,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &bin,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 4,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &threshold,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-        ];
+        let occupancy = ScalarTexture3D::new(gpu, volume, FilterMode::Linear);
+        let count = ScalarTexture3D::new(gpu, volume, FilterMode::Nearest);
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
-            layout: &Self::layout(gpu, true),
-            entries,
+            layout: &Self::layout_read(gpu),
+            entries: &[occupancy.binding_entries(0), count.binding_entries(2)].concat(),
         });
 
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
-            layout: &Self::layout(gpu, false),
-            entries,
+            layout: &Self::layout_write(gpu),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
         });
 
         Self {
-            offset,
-            count,
-            index,
-            bin,
-            threshold,
             occupancy,
+            count,
+            buffer,
             binding_read,
             binding_write,
         }
     }
 
     pub fn clear(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.count, 0, None);
-        cmd.clear_buffer(&self.bin, 0, None);
+        cmd.clear_buffer(&self.buffer, 0, None);
     }
 
-    pub fn count(&self) -> &Buffer {
-        &self.count
+    pub fn resolution(&self) -> u32 {
+        self.occupancy.size()
     }
 
-    pub fn bin(&self) -> &Buffer {
-        &self.bin
+    pub fn buffer(&self) -> &Buffer {
+        &self.buffer
     }
 
-    pub fn threshold(&self) -> &Buffer {
-        &self.threshold
-    }
-
-    pub fn texture(&self) -> &ScalarTexture3D<R32Float> {
+    pub fn density(&self) -> &ScalarTexture3D<R32Float> {
         &self.occupancy
     }
 
-    pub fn binding(&self, read_only: bool) -> &BindGroup {
-        if read_only {
-            &self.binding_read
-        } else {
-            &self.binding_write
-        }
+    pub fn count(&self) -> &ScalarTexture3D<R32Uint> {
+        &self.count
     }
 
-    pub fn layout(gpu: &Gpu, read_only: bool) -> BindGroupLayout {
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding_read
+    }
+
+    pub fn binding_write(&self) -> &BindGroup {
+        &self.binding_write
+    }
+
+    pub fn layout_read(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                    ScalarTexture3D::<R32Float>::layout_entries(0),
+                    ScalarTexture3D::<R32Uint>::layout_entries(2),
+                ]
+                .concat(),
+            })
+    }
+
+    pub fn layout_write(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 4,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
+                    count: None,
+                }],
             })
     }
 }
 
-impl Drop for Occupancy {
+impl Drop for OccupancyBuffer {
     fn drop(&mut self) {
-        self.offset.destroy();
-        self.count.destroy();
-        self.index.destroy();
-        self.bin.destroy();
-        self.threshold.destroy();
+        self.buffer.destroy();
     }
 }

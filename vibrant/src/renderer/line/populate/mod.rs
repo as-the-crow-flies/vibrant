@@ -8,7 +8,7 @@ use crate::{
     controller::settings::LineVoxelizationMode,
     gpu::Gpu,
     renderer::{environment::Environment, wgsl},
-    surface::{occupancy::Occupancy, Frame},
+    surface::{culling::CullingBuffer, Frame},
 };
 
 pub struct PopulatePipeline {
@@ -20,7 +20,7 @@ pub struct PopulatePipeline {
 impl PopulatePipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let layout = &gpu.pipeline_layout(&[
-            &Occupancy::layout(gpu, false),
+            &CullingBuffer::layout_write(gpu),
             &ScalarTexture3D::<R32Float>::layout(gpu),
             &LineSet::layout(gpu, true),
             &Environment::layout(gpu),
@@ -68,8 +68,8 @@ impl PopulatePipeline {
             LineVoxelizationMode::Tube => &self.populate_tube,
         });
 
-        pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, frame.occupancy().texture().binding(), &[]);
+        pass.set_bind_group(0, frame.culling().binding_write(), &[]);
+        pass.set_bind_group(1, frame.culling().texture().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);

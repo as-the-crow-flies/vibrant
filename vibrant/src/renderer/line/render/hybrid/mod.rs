@@ -3,13 +3,10 @@ use std::any::type_name;
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
-    asset::{
-        line::LineSet,
-        scalar::{R32Float, R8Uint, ScalarTexture3D},
-    },
+    asset::line::LineSet,
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::Color, occupancy::Occupancy, Frame},
+    surface::{color::ColorBuffer, culling::CullingBuffer, Frame},
 };
 
 pub struct HybridLineRenderPipeline {
@@ -23,15 +20,11 @@ impl HybridLineRenderPipeline {
                 type_name::<Self>(),
                 &gpu.pipeline_layout(&[
                     &LineSet::layout(gpu, true),
-                    &Occupancy::layout(gpu, true),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<R8Uint>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
+                    &CullingBuffer::layout_read(gpu),
+                    &Frame::layout(gpu),
                     &Environment::layout(gpu),
                 ]),
-                Color::target_srgb(),
+                ColorBuffer::target_srgb(),
                 &gpu.shader(include_str!("hybrid.wgsl")),
             ),
         }
@@ -51,13 +44,9 @@ impl HybridLineRenderPipeline {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, tractogram.binding(true), &[]);
-        pass.set_bind_group(1, frame.occupancy().binding(true), &[]);
-        pass.set_bind_group(2, frame.occupancy().texture().binding(), &[]);
-        pass.set_bind_group(3, frame.density().count().binding(), &[]);
-        pass.set_bind_group(4, frame.density().density().binding(), &[]);
-        pass.set_bind_group(5, frame.occlusion().ambient().binding(), &[]);
-        pass.set_bind_group(6, frame.occlusion().directional().binding(), &[]);
-        pass.set_bind_group(7, environment.binding(), &[]);
+        pass.set_bind_group(1, frame.culling().binding_read(), &[]);
+        pass.set_bind_group(2, frame.binding(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

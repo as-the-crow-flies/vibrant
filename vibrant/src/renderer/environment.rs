@@ -81,7 +81,7 @@ impl Environment {
                 label: Some(type_name::<Self>()),
                 entries: &[BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::all(),
+                    visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,

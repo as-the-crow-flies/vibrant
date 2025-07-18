@@ -33,7 +33,7 @@ impl Settings {
             width: 1920,
             height: 1080,
             volume: 128,
-            memory: 256,
+            memory: 64,
             streamline_radius: 0.2,
             direct_light: 0.67,
             tangent_color: 1.0,

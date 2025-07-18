@@ -18,16 +18,19 @@ fn main(@builtin(local_invocation_index) local: u32) {
     let n_vertices = arrayLength(&LINE_VERTEX);
     let scale = f32(ENVIRONMENT.volume);
 
-    loop {
+    var offset = 0u;
+
+    while (offset < n_vertices) {
         if (local == 0) {
             OFFSET = atomicAdd(&LINE_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
         }
 
-        let offset = workgroupUniformLoad(&OFFSET);
+        offset = workgroupUniformLoad(&OFFSET);
 
         for (var i = 0u; i < CHUNK_SIZE; i++) {
             let index = offset + i * WORKGROUP_SIZE + local;
-            if (index >= n_vertices) { return; }
+
+            if (index >= n_vertices) { continue; }
 
             let vertex = LINE_VERTEX_RAW[index];
 

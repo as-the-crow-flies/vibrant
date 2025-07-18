@@ -8,13 +8,13 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
-pub struct Color {
+pub struct ColorBuffer {
     texture: Texture,
     view: TextureView,
     view_srgb: TextureView,
 }
 
-impl Color {
+impl ColorBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
     pub const FORMAT_SRGB: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 
@@ -108,7 +108,7 @@ impl Color {
     }
 }
 
-impl Drop for Color {
+impl Drop for ColorBuffer {
     fn drop(&mut self) {
         self.texture.destroy();
     }

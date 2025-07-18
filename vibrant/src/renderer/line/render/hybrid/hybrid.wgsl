@@ -4,20 +4,18 @@
 
 @group(1) @binding(0) var<storage> OFFSET: array<u32>;
 @group(1) @binding(2) var<storage> INDEX: array<u32>;
+@group(1) @binding(3) var CULLING: texture_3d<f32>;
 
-@group(2) @binding(0) var OCCUPANCY: texture_3d<f32>;
-@group(3) @binding(0) var COUNT: texture_3d<u32>;
+@group(2) @binding(0) var DENSITY: texture_3d<f32>;
+@group(2) @binding(1) var DENSITY_SAMPLER: sampler;
+@group(2) @binding(2) var COUNT: texture_3d<u32>;
 
-@group(4) @binding(0) var DENSITY: texture_3d<f32>;
-@group(4) @binding(1) var DENSITY_SAMPLER: sampler;
+@group(2) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
+@group(2) @binding(5) var OCCLUSION_AMBIENT_SAMPLER: sampler;
+@group(2) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
+@group(2) @binding(7) var OCCLUSION_DIRECTIONAL_SAMPLER: sampler;
 
-@group(5) @binding(0) var AMBIENT_OCCLUSION: texture_3d<f32>;
-@group(5) @binding(1) var AMBIENT_OCCLUSION_SAMPLER: sampler;
-
-@group(6) @binding(0) var DIRECTIONAL_OCCLUSION: texture_3d<f32>;
-@group(6) @binding(1) var DIRECTIONAL_OCCLUSION_SAMPLER: sampler;
-
-@group(7) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
@@ -66,7 +64,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     if (tEnter >= tExit || tExit < 0.0) { return vec4<f32>(0.0); }
 
     var t = max(tEnter, 0.0);
-    var mip = textureNumLevels(OCCUPANCY) - 1;
+    var mip = textureNumLevels(CULLING) - 1;
     var position = origin + direction * t;
     var voxel = vec3<u32>(floor(position * DIM));
 
@@ -75,7 +73,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         let voxel_at_mip = voxel >> vec3<u32>(mip);
 
         // Traverse down level if mip is occupied
-        if (textureLoad(OCCUPANCY, voxel_at_mip, i32(mip)).x > 0.0) {
+        if (textureLoad(CULLING, voxel_at_mip, i32(mip)).x > 0.0) {
             if (mip == 0) { break; }
             else { mip--; }
 
@@ -222,8 +220,8 @@ fn shade(v0: Vertex, v1: Vertex, position: vec3<f32>) -> vec4<f32> {
     let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
 
     let sample = position * DIM_INV;
-    let ambient = 1.0 - textureSampleLevel(AMBIENT_OCCLUSION, AMBIENT_OCCLUSION_SAMPLER, sample, 0.0).x;
-    let directional = 1.0 - textureSampleLevel(DIRECTIONAL_OCCLUSION, DIRECTIONAL_OCCLUSION_SAMPLER, sample, 0.0).x;
+    let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, OCCLUSION_AMBIENT_SAMPLER, sample, 0.0).x;
+    let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, OCCLUSION_DIRECTIONAL_SAMPLER, sample, 0.0).x;
 
     let factor = mix(ambient, diffuse * directional, ENVIRONMENT.settings.direct_light);
 

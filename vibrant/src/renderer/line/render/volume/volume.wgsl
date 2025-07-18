@@ -1,16 +1,13 @@
 @group(0) @binding(0) var DENSITY: texture_3d<f32>;
 @group(0) @binding(1) var DENSITY_SAMPLER: sampler;
 
-@group(1) @binding(0) var RGBA: texture_3d<f32>;
-@group(1) @binding(1) var RGBA_SAMPLER: sampler;
+@group(1) @binding(0) var AMBIENT_OCCLUSION: texture_3d<f32>;
+@group(1) @binding(1) var AMBIENT_OCCLUSION_SAMPLER: sampler;
 
-@group(2) @binding(0) var AMBIENT_OCCLUSION: texture_3d<f32>;
-@group(2) @binding(1) var AMBIENT_OCCLUSION_SAMPLER: sampler;
+@group(2) @binding(0) var DIRECTIONAL_OCCLUSION: texture_3d<f32>;
+@group(2) @binding(1) var DIRECTIONAL_OCCLUSION_SAMPLER: sampler;
 
-@group(3) @binding(0) var DIRECTIONAL_OCCLUSION: texture_3d<f32>;
-@group(3) @binding(1) var DIRECTIONAL_OCCLUSION_SAMPLER: sampler;
-
-@group(4) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 @vertex
 fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
@@ -101,7 +98,6 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, random: f32) -> vec4<f32> {
         let directional = 1.0 - textureSampleLevel(DIRECTIONAL_OCCLUSION, DIRECTIONAL_OCCLUSION_SAMPLER, position, 0.0).x;
         let factor = mix(ambient, directional, ENVIRONMENT.settings.direct_light);
 
-        // let sample = textureSampleLevel(RGBA, RGBA_SAMPLER, position, 0.0);
         let sample = vec4<f32>(vec3<f32>(1.0), textureSampleLevel(DENSITY, DENSITY_SAMPLER, position, 0.0).x);
         let rgba = vec4<f32>(factor * sample.rgb * sample.a, sample.a);
 

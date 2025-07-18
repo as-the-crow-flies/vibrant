@@ -1,14 +1,11 @@
 use std::{any::type_name, marker::PhantomData};
 
-use bytemuck::bytes_of;
-use glam::{Mat4, Vec3};
 use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
-    BufferBinding, BufferBindingType, BufferUsages, Extent3d, FilterMode, SamplerBindingType,
-    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureDescriptor,
-    TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Extent3d,
+    FilterMode, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, StorageTextureAccess,
+    Texture, TextureDescriptor, TextureFormat, TextureSampleType, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -24,22 +21,9 @@ pub trait ScalarTextureFormat {
     }
 }
 
-pub struct R8Unorm {}
 pub struct Rgba8Unorm {}
-pub struct R8Uint {}
 pub struct R32Float {}
-pub struct R16Uint {}
 pub struct R32Uint {}
-
-impl ScalarTextureFormat for R8Unorm {
-    fn format() -> TextureFormat {
-        TextureFormat::R8Unorm
-    }
-
-    fn sample_type() -> TextureSampleType {
-        TextureSampleType::Float { filterable: true }
-    }
-}
 
 impl ScalarTextureFormat for R32Float {
     fn format() -> TextureFormat {
@@ -61,26 +45,6 @@ impl ScalarTextureFormat for Rgba8Unorm {
     }
 }
 
-impl ScalarTextureFormat for R8Uint {
-    fn format() -> TextureFormat {
-        TextureFormat::R8Uint
-    }
-
-    fn sample_type() -> TextureSampleType {
-        TextureSampleType::Uint
-    }
-}
-
-impl ScalarTextureFormat for R16Uint {
-    fn format() -> TextureFormat {
-        TextureFormat::R16Uint
-    }
-
-    fn sample_type() -> TextureSampleType {
-        TextureSampleType::Uint
-    }
-}
-
 impl ScalarTextureFormat for R32Uint {
     fn format() -> TextureFormat {
         TextureFormat::R32Uint
@@ -96,8 +60,8 @@ pub type ScalarTexture2D<Format> = ScalarTexture<2, Format>;
 
 pub struct ScalarTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
     texture: Texture,
-    transform: Buffer,
-    transform_inverse: Buffer,
+    view: TextureView,
+    sampler: Sampler,
     binding: BindGroup,
     binding_write: BindGroup,
     bindings_mipmap: Vec<BindGroup>,
@@ -144,20 +108,11 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
             ..Default::default()
         });
 
-        let scale = volume as f32;
-        let transform = Mat4::from_translation(Vec3::new(scale / 2.0, scale / 2.0, scale / 2.0))
-            * Mat4::from_scale(Vec3::new(scale, scale, scale));
-
-        let transform_inverse = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let view = texture.create_view(&TextureViewDescriptor {
             label,
-            contents: bytes_of(&transform.inverse()),
-            usage: BufferUsages::UNIFORM,
-        });
-
-        let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytes_of(&transform),
-            usage: BufferUsages::UNIFORM,
+            format: Some(Format::format()),
+            dimension: Some(Self::view_dimension()),
+            ..Default::default()
         });
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -166,34 +121,11 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&texture.create_view(
-                        &TextureViewDescriptor {
-                            label,
-                            format: Some(Format::format()),
-                            dimension: Some(Self::view_dimension()),
-                            ..Default::default()
-                        },
-                    )),
+                    resource: BindingResource::TextureView(&view),
                 },
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::Sampler(&sampler),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_inverse,
-                        offset: 0,
-                        size: None,
-                    }),
                 },
             ],
         });
@@ -217,22 +149,6 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::Sampler(&sampler),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform_inverse,
-                        offset: 0,
-                        size: None,
-                    }),
                 },
             ],
         });
@@ -281,8 +197,8 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
 
         Self {
             texture,
-            transform,
-            transform_inverse,
+            view,
+            sampler,
             binding,
             binding_write,
             bindings_mipmap,
@@ -298,53 +214,57 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
         &self.texture
     }
 
-    pub fn update(&self, gpu: &Gpu, transform: &Mat4) {
-        gpu.queue()
-            .write_buffer(&self.transform, 0, bytes_of(transform));
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
+    }
+
+    pub fn binding_write(&self) -> &BindGroup {
+        &self.binding_write
+    }
+
+    pub fn bindings_mipmap(&self) -> &[BindGroup] {
+        &self.bindings_mipmap
+    }
+
+    pub fn binding_entries(&self, offset: u32) -> Vec<BindGroupEntry> {
+        vec![
+            BindGroupEntry {
+                binding: offset + 0,
+                resource: BindingResource::TextureView(&self.view),
+            },
+            BindGroupEntry {
+                binding: offset + 1,
+                resource: BindingResource::Sampler(&self.sampler),
+            },
+        ]
+    }
+
+    pub fn layout_entries(offset: u32) -> Vec<BindGroupLayoutEntry> {
+        vec![
+            BindGroupLayoutEntry {
+                binding: offset + 0,
+                visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                ty: BindingType::Texture {
+                    sample_type: Format::sample_type(),
+                    view_dimension: Self::view_dimension(),
+                    multisampled: false,
+                },
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: offset + 1,
+                visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                ty: BindingType::Sampler(Format::sampler_type()),
+                count: None,
+            },
+        ]
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Texture {
-                            sample_type: Format::sample_type(),
-                            view_dimension: Self::view_dimension(),
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Sampler(Format::sampler_type()),
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
+                entries: &Self::layout_entries(0),
             })
     }
 
@@ -365,28 +285,8 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::all(),
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Sampler(Format::sampler_type()),
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: ShaderStages::all(),
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
                         count: None,
                     },
                 ],
@@ -428,18 +328,6 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
             })
     }
 
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
-    }
-
-    pub fn binding_write(&self) -> &BindGroup {
-        &self.binding_write
-    }
-
-    pub fn bindings_mipmap(&self) -> &[BindGroup] {
-        &self.bindings_mipmap
-    }
-
     fn view_dimension() -> TextureViewDimension {
         match DIMENSION {
             1 => wgpu::TextureViewDimension::D1,
@@ -453,7 +341,5 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
 impl<const DIMENSION: u32, Format: ScalarTextureFormat> Drop for ScalarTexture<DIMENSION, Format> {
     fn drop(&mut self) {
         self.texture.destroy();
-        self.transform.destroy();
-        self.transform_inverse.destroy();
     }
 }

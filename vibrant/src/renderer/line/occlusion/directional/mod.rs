@@ -35,7 +35,7 @@ impl DirectionalOcclusionPipeline {
         let n = frame.occlusion().directional().size().div_ceil(4);
 
         pass.set_pipeline(&self.occlusion);
-        pass.set_bind_group(0, frame.density().density().binding(), &[]);
+        pass.set_bind_group(0, frame.occupancy().density().binding(), &[]);
         pass.set_bind_group(1, frame.occlusion().directional().binding_write(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);

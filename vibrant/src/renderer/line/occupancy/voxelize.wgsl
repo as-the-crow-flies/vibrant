@@ -25,17 +25,19 @@ fn main(@builtin(local_invocation_index) local: u32) {
     RADIUS = ENVIRONMENT.settings.streamline_radius;
     DENSITY_MULTIPLIER = ENVIRONMENT.settings.alpha * PI * RADIUS * RADIUS * f32(U16_MAX);
 
-    loop {
+    var offset = 0u;
+
+    while (offset < n_indices) {
         if (local == 0) {
             OFFSET = atomicAdd(&LINE_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
         }
 
-        let offset = workgroupUniformLoad(&OFFSET);
+        offset = workgroupUniformLoad(&OFFSET);
 
         for (var i = 0u; i < CHUNK_SIZE; i++) {
             let index_index = offset + i * WORKGROUP_SIZE + local;
 
-            if (index_index >= n_indices) { return; }
+            if (index_index >= n_indices) { continue; }
 
             let index = LINE_INDEX[index_index];
             let v0 = unpack_vertex(LINE_VERTEX[index + 0]);

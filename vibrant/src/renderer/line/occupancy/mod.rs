@@ -5,12 +5,12 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 use crate::{
     asset::{
         line::LineSet,
-        scalar::{R16Uint, R32Float, ScalarTexture3D},
+        scalar::{R32Float, R32Uint, ScalarTexture3D},
     },
     controller::settings::LineVoxelizationMode,
     gpu::Gpu,
     renderer::{environment::Environment, wgsl},
-    surface::{density::Density, Frame},
+    surface::{occupancy::OccupancyBuffer, Frame},
 };
 
 pub struct LineOccupancyPipeline {
@@ -30,7 +30,7 @@ impl LineOccupancyPipeline {
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label,
                 bind_group_layouts: &[
-                    &Density::layout(gpu),
+                    &OccupancyBuffer::layout_write(gpu),
                     &LineSet::layout(gpu, true),
                     &Environment::layout(gpu),
                 ],
@@ -41,29 +41,29 @@ impl LineOccupancyPipeline {
 
         Self {
             voxelize_tube: gpu.compute(
-                "Density::Voxelize::Tube",
+                "Occupancy::Voxelize::Tube",
                 voxelize_layout,
                 &gpu.shader(&(wgsl::voxelize::TUBE.to_owned() + voxelize_shader_source)),
             ),
             voxelize_line: gpu.compute(
-                "Density::Voxelize::Line",
+                "Occupancy::Voxelize::Line",
                 voxelize_layout,
                 &gpu.shader(&(wgsl::voxelize::LINE.to_owned() + voxelize_shader_source)),
             ),
             voxelize_box: gpu.compute(
-                "Density::Voxelize::Box",
+                "Occupancy::Voxelize::Box",
                 voxelize_layout,
                 &gpu.shader(&(wgsl::voxelize::BOX.to_owned() + voxelize_shader_source)),
             ),
             copy: gpu.compute(
-                "Density::Copy",
+                "Occupancy::Copy",
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
                         bind_group_layouts: &[
-                            &Density::layout(gpu),
+                            &OccupancyBuffer::layout_write(gpu),
                             &ScalarTexture3D::<R32Float>::layout_write(gpu),
-                            &ScalarTexture3D::<R16Uint>::layout_write(gpu),
+                            &ScalarTexture3D::<R32Uint>::layout_write(gpu),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -71,7 +71,7 @@ impl LineOccupancyPipeline {
                 &gpu.shader(include_str!("copy.wgsl")),
             ),
             mipmap: gpu.compute(
-                "Density::MipMap",
+                "Occupancy::MipMap",
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
@@ -91,17 +91,17 @@ impl LineOccupancyPipeline {
         setting: LineVoxelizationMode,
         tractogram: &LineSet,
     ) {
-        frame.density().clear(cmd);
+        frame.occupancy().clear(cmd);
         tractogram.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Density"),
+            label: Some("Occupancy"),
             ..Default::default()
         });
 
-        let n = frame.density().density().size().div_ceil(8);
+        let n = frame.occupancy().density().size().div_ceil(8);
 
-        pass.set_bind_group(0, frame.density().binding(), &[]);
+        pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
         pass.set_bind_group(1, tractogram.binding(true), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
 
@@ -113,17 +113,17 @@ impl LineOccupancyPipeline {
         pass.dispatch_workgroups(64, 1, 1);
 
         pass.set_pipeline(&self.copy);
-        pass.set_bind_group(0, frame.density().binding(), &[]);
-        pass.set_bind_group(1, frame.density().density().binding_write(), &[]);
-        pass.set_bind_group(2, frame.density().count().binding_write(), &[]);
+        pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
+        pass.set_bind_group(1, frame.occupancy().density().binding_write(), &[]);
+        pass.set_bind_group(2, frame.occupancy().count().binding_write(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.density().density().size().div_ceil(8);
+        let mut mipmap = frame.occupancy().density().size().div_ceil(8);
 
-        for binding in frame.density().density().bindings_mipmap() {
+        for binding in frame.occupancy().density().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

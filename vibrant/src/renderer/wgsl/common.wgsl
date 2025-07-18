@@ -118,23 +118,3 @@ fn unpack_vertex(v: vec4<f32>) -> Vertex {
     let clip_alpha = unpack_clip_alpha(v.a);
     return Vertex(v.xyz, clip_alpha.xyz, clip_alpha.a);
 }
-
-var<workgroup> WORKGROUP_EXCLUSIVE_ADD: array<u32, 32>;
-fn workgroupExclusiveAdd(value: u32, local: u32, subgroup: u32, subgroup_size: u32) -> u32 {
-    let subgroup_id = local / subgroup_size;
-    let subgroup_cumsum = subgroupExclusiveAdd(value);
-
-    if (subgroup == subgroup_size - 1) {
-        WORKGROUP_EXCLUSIVE_ADD[subgroup_id] = subgroup_cumsum + value;
-    }
-
-    workgroupBarrier();
-
-    if (local < 32) {
-        WORKGROUP_EXCLUSIVE_ADD[local] = subgroupExclusiveAdd(WORKGROUP_EXCLUSIVE_ADD[local]);
-    }
-
-    workgroupBarrier();
-
-    return WORKGROUP_EXCLUSIVE_ADD[subgroup_id] + subgroup_cumsum;
-}

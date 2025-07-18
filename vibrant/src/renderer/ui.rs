@@ -4,7 +4,7 @@ use wgpu::{CommandEncoder, RenderPassDescriptor};
 
 use crate::{
     gpu::Gpu,
-    surface::{color::Color, Frame},
+    surface::{color::ColorBuffer, Frame},
 };
 
 pub struct UiRenderer {
@@ -14,7 +14,7 @@ pub struct UiRenderer {
 impl UiRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            egui: egui_wgpu::Renderer::new(gpu.device(), Color::FORMAT, None, 1, false),
+            egui: egui_wgpu::Renderer::new(gpu.device(), ColorBuffer::FORMAT, None, 1, false),
         }
     }
 

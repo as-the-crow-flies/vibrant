@@ -24,14 +24,14 @@ impl File {
             let file = rfd::AsyncFileDialog::new().pick_file().await;
 
             if let Some(file) = file {
-                Self::publish_tractogram(LineFile::from_bytes(&file.read().await));
+                Self::publish_line(LineFile::from_tck(&file.read().await));
             }
         });
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load() {
-        use std::{ffi::OsStr, fs};
+        use std::fs;
 
         let files = rfd::FileDialog::new().pick_files();
 
@@ -49,15 +49,6 @@ impl File {
 
             if !line_files.is_empty() {
                 Self::publish_line(LineFile::join(line_files));
-            }
-
-            if let Some(nifti) = files
-                .iter()
-                .filter(|file| file.extension() == Some(OsStr::new("gz")))
-                .map(|file| Nifti::from_bytes(&fs::read(file).unwrap()))
-                .next()
-            {
-                Self::publish_nifti(nifti);
             }
         }
     }
@@ -85,14 +76,6 @@ impl File {
         }
     }
 
-    pub fn on_nifti(callback: impl FnOnce(Nifti)) {
-        let mut data = QUEUE.lock().unwrap();
-
-        if let Some(nifti) = data.nifti.take() {
-            callback(nifti);
-        }
-    }
-
     pub fn about_to_save() -> bool {
         QUEUE.lock().unwrap().save.is_some()
     }
@@ -107,10 +90,6 @@ impl File {
 
     fn publish_line(tck: LineFile) {
         QUEUE.lock().unwrap().line = Some(tck);
-    }
-
-    fn publish_nifti(nifti: Nifti) {
-        QUEUE.lock().unwrap().nifti = Some(nifti);
     }
 
     fn publish_save_path(path: PathBuf) {

@@ -1,48 +1,32 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::scalar::{R16Uint, R32Float, ScalarTexture3D},
+    asset::scalar::{R32Float, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{occupancy::Occupancy, Frame},
+    surface::{culling::CullingBuffer, occupancy::OccupancyBuffer, Frame},
 };
 
 pub struct LineCullingPipeline {
-    bin: ComputePipeline,
-    threshold: ComputePipeline,
-    occupancy: ComputePipeline,
+    culling: ComputePipeline,
     mipmap: ComputePipeline,
 }
 
 impl LineCullingPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            bin: gpu.compute(
-                "Occupancy::Bin",
+            culling: gpu.compute(
+                "Culling::Culling",
                 &gpu.pipeline_layout(&[
-                    &Occupancy::layout(gpu, false),
-                    &ScalarTexture3D::<R16Uint>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("bin.wgsl")),
-            ),
-            threshold: gpu.compute(
-                "Occupancy::Threshold",
-                &gpu.pipeline_layout(&[&Occupancy::layout(gpu, false), &Environment::layout(gpu)]),
-                &gpu.shader(include_str!("threshold.wgsl")),
-            ),
-            occupancy: gpu.compute(
-                "Occupancy::Occupancy",
-                &gpu.pipeline_layout(&[
-                    &Occupancy::layout(gpu, false),
-                    &ScalarTexture3D::<R16Uint>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
+                    &OccupancyBuffer::layout_read(gpu),
                     &ScalarTexture3D::<R32Float>::layout_write(gpu),
+                    &CullingBuffer::layout_write(gpu),
+                    &Environment::layout(gpu),
                 ]),
-                &gpu.shader(include_str!("occupancy.wgsl")),
+                &gpu.shader(include_str!("culling.wgsl")),
             ),
             mipmap: gpu.compute(
-                "Occupancy::Mipmap",
+                "Culling::Mipmap",
                 &gpu.pipeline_layout(&[&ScalarTexture3D::<R32Float>::layout_mipmap(gpu)]),
                 &gpu.shader(include_str!("mipmap.wgsl")),
             ),
@@ -50,37 +34,26 @@ impl LineCullingPipeline {
     }
 
     pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
-        frame.occupancy().clear(cmd);
+        frame.culling().clear(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Occupancy"),
+            label: Some("Culling"),
             ..Default::default()
         });
 
-        let n = frame.density().resolution().div_ceil(8);
+        let n = frame.occupancy().resolution().div_ceil(4);
 
-        pass.set_pipeline(&self.bin);
-        pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, frame.density().count().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().ambient().binding(), &[]);
-        pass.dispatch_workgroups(n, n, n);
-
-        pass.set_pipeline(&self.threshold);
-        pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
-        pass.dispatch_workgroups(1, 1, 1);
-
-        pass.set_pipeline(&self.occupancy);
-        pass.set_bind_group(0, frame.occupancy().binding(false), &[]);
-        pass.set_bind_group(1, frame.density().count().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().ambient().binding(), &[]);
-        pass.set_bind_group(3, frame.occupancy().texture().binding_write(), &[]);
+        pass.set_pipeline(&self.culling);
+        pass.set_bind_group(0, frame.occupancy().binding(), &[]);
+        pass.set_bind_group(1, frame.culling().texture().binding_write(), &[]);
+        pass.set_bind_group(2, frame.culling().binding_write(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.occupancy().texture().size().div_ceil(8);
-        for binding in frame.occupancy().texture().bindings_mipmap() {
+        let mut mipmap = frame.culling().texture().size().div_ceil(8);
+        for binding in frame.culling().texture().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

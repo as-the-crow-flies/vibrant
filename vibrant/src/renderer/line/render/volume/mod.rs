@@ -1,10 +1,10 @@
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
-    asset::scalar::{R32Float, Rgba8Unorm, ScalarTexture3D},
+    asset::scalar::{R32Float, ScalarTexture3D},
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::Color, Frame},
+    surface::{color::ColorBuffer, Frame},
 };
 
 pub struct VolumeLineRenderPipeline {
@@ -18,12 +18,11 @@ impl VolumeLineRenderPipeline {
                 "Volume",
                 &gpu.pipeline_layout(&[
                     &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<Rgba8Unorm>::layout(gpu),
                     &ScalarTexture3D::<R32Float>::layout(gpu),
                     &ScalarTexture3D::<R32Float>::layout(gpu),
                     &Environment::layout(gpu),
                 ]),
-                Color::target_srgb(),
+                ColorBuffer::target_srgb(),
                 &gpu.shader(include_str!("volume.wgsl")),
             ),
         }
@@ -36,11 +35,10 @@ impl VolumeLineRenderPipeline {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.density().density().binding(), &[]);
-        pass.set_bind_group(1, frame.density().color().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().ambient().binding(), &[]);
-        pass.set_bind_group(3, frame.occlusion().directional().binding(), &[]);
-        pass.set_bind_group(4, environment.binding(), &[]);
+        pass.set_bind_group(0, frame.occupancy().density().binding(), &[]);
+        pass.set_bind_group(1, frame.occlusion().ambient().binding(), &[]);
+        pass.set_bind_group(2, frame.occlusion().directional().binding(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

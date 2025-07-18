@@ -12,16 +12,19 @@ var<workgroup> OFFSET: u32;
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&LINE_INDEX);
 
-    loop {
+    var offset = 0u;
+
+    while (offset < n_indices) {
         if (local == 0) {
             OFFSET = atomicAdd(&LINE_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
         }
 
-        let offset = workgroupUniformLoad(&OFFSET);
+        offset = workgroupUniformLoad(&OFFSET);
 
         for (var i = 0u; i < CHUNK_SIZE; i++) {
             let index_index = offset + i * WORKGROUP_SIZE + local;
-            if (index_index >= n_indices) { return; }
+
+            if (index_index >= n_indices) { continue; }
 
             let vmi = LINE_INDEX[index_index - 1];
             let vi  = LINE_INDEX[index_index + 0];

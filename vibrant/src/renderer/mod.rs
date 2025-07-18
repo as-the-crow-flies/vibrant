@@ -1,6 +1,5 @@
 pub mod environment;
 pub mod line;
-pub mod services;
 pub mod ui;
 pub mod wgsl;
 
