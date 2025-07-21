@@ -135,18 +135,6 @@ impl Controller {
                     }
                 });
 
-            ComboBox::from_label("Memory")
-                .selected_text(format!("{} MB", self.settings.memory))
-                .show_ui(ui, |ui| {
-                    for power in 4u32..8 {
-                        ui.selectable_value(
-                            &mut self.settings.memory,
-                            2u32.pow(power),
-                            format!("{} MB", 2u32.pow(power)),
-                        );
-                    }
-                });
-
             ui.separator();
             ui.label("Appearance");
             ui.separator();
@@ -159,6 +147,8 @@ impl Controller {
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
 
             ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
+
+            ui.add(Slider::new(&mut self.settings.shadows, 0.0..=1.0).text("Shadows"));
 
             ui.add(
                 Slider::new(&mut self.settings.alpha, 0.0001..=1.0)

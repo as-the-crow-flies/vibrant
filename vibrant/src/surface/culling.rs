@@ -3,35 +3,38 @@ use std::{any::type_name, ops::Mul};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoder, FilterMode, ShaderStages,
+    BufferDescriptor, BufferUsages, CommandEncoder, Extent3d, FilterMode, ShaderStages,
+    StorageTextureAccess, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::{
-    asset::scalar::{R32Float, ScalarTexture3D},
+    asset::texture::{MipTexture3D, R32Float},
     gpu::Gpu,
 };
 
 pub struct CullingBuffer {
     offset: Buffer,
-    count: Buffer,
+    offset_total: Buffer,
     index: Buffer,
-    culling: ScalarTexture3D<R32Float>,
+    culling: MipTexture3D<R32Float>,
+    erode: Texture,
     binding_read: BindGroup,
     binding_write: BindGroup,
 }
 
 impl CullingBuffer {
-    pub fn new(gpu: &Gpu, volume: u32, memory: u32) -> Self {
+    pub fn new(gpu: &Gpu, resolution: u32) -> Self {
         let label = Some(type_name::<Self>());
 
         let offset = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: volume.pow(3).mul(4) as u64,
+            size: resolution.pow(3).mul(4) as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
 
-        let count = gpu.device().create_buffer(&BufferDescriptor {
+        let offset_total = gpu.device().create_buffer(&BufferDescriptor {
             label,
             size: 4,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
@@ -45,8 +48,8 @@ impl CullingBuffer {
             mapped_at_creation: false,
         });
 
-        let culling: ScalarTexture3D<R32Float> =
-            ScalarTexture3D::new(gpu, volume, FilterMode::Linear);
+        let culling: MipTexture3D<R32Float> =
+            MipTexture3D::new(gpu, resolution, FilterMode::Linear);
 
         let entries = &[
             BindGroupEntry {
@@ -60,7 +63,7 @@ impl CullingBuffer {
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &count,
+                    buffer: &offset_total,
                     offset: 0,
                     size: None,
                 }),
@@ -81,31 +84,57 @@ impl CullingBuffer {
             entries: &[entries.to_vec(), culling.binding_entries(3)].concat(),
         });
 
+        let erode = gpu.device().create_texture(&TextureDescriptor {
+            label,
+            size: Extent3d {
+                width: resolution,
+                height: resolution,
+                depth_or_array_layers: resolution,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D3,
+            format: TextureFormat::R32Float,
+            usage: TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
+
+        let erode_view = erode.create_view(&TextureViewDescriptor {
+            label,
+            ..Default::default()
+        });
+
+        let erode_binding = BindGroupEntry {
+            binding: 3,
+            resource: BindingResource::TextureView(&erode_view),
+        };
+
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout_write(gpu),
-            entries,
+            entries: &[entries.to_vec(), vec![erode_binding]].concat(),
         });
 
         Self {
             offset,
-            count,
+            offset_total,
             index,
             culling,
+            erode,
             binding_read,
             binding_write,
         }
     }
 
     pub fn clear(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.count, 0, None);
+        cmd.clear_buffer(&self.offset_total, 0, None);
     }
 
     pub fn count(&self) -> &Buffer {
-        &self.count
+        &self.offset_total
     }
 
-    pub fn texture(&self) -> &ScalarTexture3D<R32Float> {
+    pub fn culling(&self) -> &MipTexture3D<R32Float> {
         &self.culling
     }
 
@@ -154,7 +183,7 @@ impl CullingBuffer {
                             count: None,
                         },
                     ],
-                    ScalarTexture3D::<R32Float>::layout_entries(3),
+                    MipTexture3D::<R32Float>::layout_entries(3),
                 ]
                 .concat(),
             })
@@ -195,6 +224,16 @@ impl CullingBuffer {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::ReadWrite,
+                            format: TextureFormat::R32Float,
+                            view_dimension: TextureViewDimension::D3,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -203,7 +242,8 @@ impl CullingBuffer {
 impl Drop for CullingBuffer {
     fn drop(&mut self) {
         self.offset.destroy();
-        self.count.destroy();
+        self.offset_total.destroy();
         self.index.destroy();
+        self.erode.destroy();
     }
 }

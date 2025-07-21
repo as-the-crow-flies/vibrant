@@ -5,20 +5,20 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::{R32Float, ScalarTexture3D},
+    asset::texture::{MipTexture3D, R32Float},
     gpu::Gpu,
 };
 
 pub struct OcclusionBuffer {
-    ambient: ScalarTexture3D<R32Float>,
-    directional: ScalarTexture3D<R32Float>,
+    ambient: MipTexture3D<R32Float>,
+    directional: MipTexture3D<R32Float>,
     binding: BindGroup,
 }
 
 impl OcclusionBuffer {
     pub fn new(gpu: &Gpu, resolution: u32) -> Self {
-        let ambient = ScalarTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear);
-        let directional = ScalarTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear);
+        let ambient = MipTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear);
+        let directional = MipTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -33,11 +33,11 @@ impl OcclusionBuffer {
         }
     }
 
-    pub fn ambient(&self) -> &ScalarTexture3D<R32Float> {
+    pub fn ambient(&self) -> &MipTexture3D<R32Float> {
         &self.ambient
     }
 
-    pub fn directional(&self) -> &ScalarTexture3D<R32Float> {
+    pub fn directional(&self) -> &MipTexture3D<R32Float> {
         &self.directional
     }
 
@@ -50,8 +50,8 @@ impl OcclusionBuffer {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    ScalarTexture3D::<R32Float>::layout_entries(0),
-                    ScalarTexture3D::<R32Float>::layout_entries(2),
+                    MipTexture3D::<R32Float>::layout_entries(0),
+                    MipTexture3D::<R32Float>::layout_entries(2),
                 ]
                 .concat(),
             })

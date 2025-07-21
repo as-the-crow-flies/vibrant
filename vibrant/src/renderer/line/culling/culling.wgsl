@@ -1,10 +1,10 @@
-@group(0) @binding(0) var DENSITY: texture_3d<f32>;
 @group(0) @binding(2) var COUNT: texture_3d<u32>;
 
 @group(1) @binding(0) var CULLING: texture_storage_3d<r32float, read_write>;
 
 @group(2) @binding(0) var<storage, read_write> OFFSET: array<u32>;
 @group(2) @binding(1) var<storage, read_write> OFFSET_TOTAL: atomic<u32>;
+@group(2) @binding(3) var DENSITY: texture_storage_3d<r32float, read_write>;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -17,49 +17,49 @@ fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
     let one_over_dim = 1.0 / dim_f32;
 
     let this_voxel_count = textureLoad(COUNT, this_voxel, 0).x;
-    let this_voxel_density = saturate(textureLoad(DENSITY, this_voxel, 0).x);
+    let this_voxel_density = saturate(textureLoad(DENSITY, this_voxel).x);
 
-    var keep = this_voxel_count > 0 && this_voxel_count < 256;
+    let max_density = 2.0;
+    let max_count = 2048u;
 
-    // let max_density = 4.0;
-    // let max_count = 4096u;
+    var keep = false;
 
-    // if (this_voxel_count > 0 && this_voxel_count < 256) {
-    //     let position = vec3<f32>(this_voxel) + 0.5;
-    //     let camera = dim_f32 * (ENVIRONMENT.camera.projection_inverse[3].xyz + 0.5);
+    if (this_voxel_count > 0 && this_voxel_count < 1024) {
+        let position = vec3<f32>(this_voxel) + 0.5;
+        let camera = dim_f32 * (ENVIRONMENT.camera.transform[3].xyz + 0.5);
 
-    //     let delta = camera - position;
+        let delta = camera - position;
 
-    //     let distance = length(delta);
-    //     let direction = delta / distance;
-    //     let voxel_boundaries = 1.0 / abs(direction);
-    //     let step = vec3<i32>(sign(direction));
-    //     var next = vec4<f32>(
-    //         one_if_zero(abs(fract(vec3<f32>(-step) * fract(position)))) * voxel_boundaries,
-    //         10.0
-    //     );
+        let distance = length(delta);
+        let direction = delta / distance;
+        let voxel_boundaries = 1.0 / abs(direction);
+        let step = vec3<i32>(sign(direction));
+        var next = vec4<f32>(
+            one_if_zero(abs(fract(vec3<f32>(-step) * fract(position)))) * voxel_boundaries,
+            10.0
+        );
 
-    //     var voxel = vec3<i32>(position);
+        var voxel = vec3<i32>(position);
 
-    //     var total_count = 0u;
-    //     var total_density = 0.0;
+        var total_count = 0u;
+        var total_density = 0.0;
 
-    //     while (next.w > 0.0 && total_density < max_density && total_count < max_count) {
-    //         let increment = minimum(next);
-    //         let mask = next == vec4<f32>(increment);
+        while (next.w > 0.0 && total_density < max_density && total_count < max_count) {
+            let increment = minimum(next);
+            let mask = next == vec4<f32>(increment);
 
-    //         voxel += step * vec3<i32>(mask.xyz);
-    //         next = select(next - increment, vec4<f32>(voxel_boundaries, 0.0), mask);
+            voxel += step * vec3<i32>(mask.xyz);
+            next = select(next - increment, vec4<f32>(voxel_boundaries, 0.0), mask);
 
-    //         let count = textureLoad(COUNT, voxel, 0).x;
-    //         let density = increment * saturate(textureLoad(DENSITY, voxel, 0).x);
+            let count = textureLoad(COUNT, voxel, 0).x;
+            let density = increment * saturate(textureLoad(DENSITY, voxel).x);
 
-    //         total_count += count;
-    //         total_density += density;
-    //     }
+            total_count += count;
+            total_density += density;
+        }
 
-    //     keep = total_density <= max_density && total_count <= max_count;
-    // }
+        keep = total_density <= max_density && total_count <= max_count;
+    }
 
     textureStore(CULLING, this_voxel, vec4<f32>(f32(keep)));
 

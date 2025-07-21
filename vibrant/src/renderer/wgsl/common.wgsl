@@ -2,6 +2,7 @@ struct Settings {
     streamline_radius: f32,
     direct_light: f32,
     tangent_color: f32,
+    shadows: f32,
     alpha: f32,
     level: f32,
     smoothing: f32
@@ -18,7 +19,7 @@ struct Camera {
 struct Environment {
     surface: vec2<u32>,
     volume: u32,
-    memory: u32,
+    _memory: u32,
     camera: Camera,
     light: vec3<f32>,
     light_: f32,

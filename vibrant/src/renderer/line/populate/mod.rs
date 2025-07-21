@@ -3,7 +3,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 use crate::{
     asset::{
         line::LineSet,
-        scalar::{R32Float, ScalarTexture3D},
+        texture::{MipTexture3D, R32Float},
     },
     controller::settings::LineVoxelizationMode,
     gpu::Gpu,
@@ -21,7 +21,7 @@ impl PopulatePipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let layout = &gpu.pipeline_layout(&[
             &CullingBuffer::layout_write(gpu),
-            &ScalarTexture3D::<R32Float>::layout(gpu),
+            &MipTexture3D::<R32Float>::layout(gpu),
             &LineSet::layout(gpu, true),
             &Environment::layout(gpu),
         ]);
@@ -69,7 +69,7 @@ impl PopulatePipeline {
         });
 
         pass.set_bind_group(0, frame.culling().binding_write(), &[]);
-        pass.set_bind_group(1, frame.culling().texture().binding(), &[]);
+        pass.set_bind_group(1, frame.culling().culling().binding(), &[]);
         pass.set_bind_group(2, tractogram.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);

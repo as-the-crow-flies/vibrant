@@ -1,5 +1,5 @@
 pub mod line;
-pub mod scalar;
+pub mod texture;
 
 use line::LineSet;
 

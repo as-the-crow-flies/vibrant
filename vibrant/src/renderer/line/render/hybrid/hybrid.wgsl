@@ -133,7 +133,6 @@ fn visit(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f
 
     let increment_inv = 1.0 / increment;
 
-
     var hit_count = 0u;
     var hits = array<u32, 32>();
 
@@ -166,7 +165,7 @@ fn visit(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f
 
             let position = origin + t_min * direction;
 
-            let c = shade(v0, v1, position);
+            let c = shade(v0, v1, position, direction);
 
             color += (1.0 - color.a) * vec4<f32>(c.rgb * c.a, c.a);
 
@@ -194,7 +193,7 @@ fn hittest(index: u32, origin: vec3<f32>, direction: vec3<f32>, increment: f32) 
     return select(hit, -1.0, hit >= increment);
 }
 
-fn shade(v0: Vertex, v1: Vertex, position: vec3<f32>) -> vec4<f32> {
+fn shade(v0: Vertex, v1: Vertex, position: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     let clipped = dot(position - v0.xyz, v0.clip) < 0.0 || dot(v1.xyz - position, v1.clip) < 0.0;
 
     if (clipped) { return vec4<f32>(0.0); }
@@ -222,13 +221,61 @@ fn shade(v0: Vertex, v1: Vertex, position: vec3<f32>) -> vec4<f32> {
     let sample = position * DIM_INV;
     let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, OCCLUSION_AMBIENT_SAMPLER, sample, 0.0).x;
     let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, OCCLUSION_DIRECTIONAL_SAMPLER, sample, 0.0).x;
+    let shadow = anyhit(sample, ENVIRONMENT.light);
 
-    let factor = mix(ambient, diffuse * directional, ENVIRONMENT.settings.direct_light);
+    let factor = mix(ambient, diffuse * min(directional, shadow), ENVIRONMENT.settings.direct_light);
 
     let rgb = factor * mix(vec3<f32>(1.0), abs(tangent), ENVIRONMENT.settings.tangent_color);
     let a = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height);
 
     return vec4<f32>(rgb, a);
+}
+
+fn anyhit(origin: vec3<f32>, direction: vec3<f32>) -> f32 {
+    let max_distance = ENVIRONMENT.settings.shadows;
+
+    if (max_distance == 0.0 || ENVIRONMENT.settings.alpha != 1.0) { return 1.0; }
+
+    let delta = select(1.0 / direction, vec3<f32>(1E10), abs(direction) < vec3<f32>(1E-5));
+    let boundary = select(vec3<u32>(0), vec3<u32>(1), direction >= vec3<f32>(0.0));
+
+    var t = 0.0;
+    var position = origin;
+    var voxel = vec3<u32>(floor(position * DIM));
+
+    while (t < max_distance) {
+        // Get the next voxel boundary
+        let next = voxel + boundary;
+
+        // Get minimum distance till next voxel boundaries
+        let d = abs((vec3<f32>(next) * DIM_INV - position) * delta);
+
+        // Get axis of smallest distance
+        let axis = select(select(2u, 1u, d.y < d.z), 0u, d.x < min(d.y, d.z));
+
+        // Get Increment
+        let increment = max(d[axis], 1E-5);
+        let increment_inv = 1.0 / increment;
+
+        // Check Any Hit
+        let count = textureLoad(COUNT, voxel, 0).x;
+        let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
+
+        for (var i = 0u; i < count; i++) {
+            let index = INDEX[offset + i];
+
+            let hit = hittest(index, position * DIM, direction, increment * DIM);
+
+            if (hit > 0.0) { return smoothstep(0.0, 1.0, t / max_distance); }
+        }
+
+        // Increment Ray Position
+        t += increment;
+        position += direction * increment;
+        voxel[axis] = next[axis] + boundary[axis] - 1;
+    }
+
+    return 1.0;
 }
 
 fn sort(data: ptr<function, array<u32, 32>>, count: u32) {

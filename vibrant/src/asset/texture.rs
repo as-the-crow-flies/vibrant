@@ -55,10 +55,10 @@ impl ScalarTextureFormat for R32Uint {
     }
 }
 
-pub type ScalarTexture3D<Format> = ScalarTexture<3, Format>;
-pub type ScalarTexture2D<Format> = ScalarTexture<2, Format>;
+pub type MipTexture3D<Format> = MipTexture<3, Format>;
+pub type MipTexture2D<Format> = MipTexture<2, Format>;
 
-pub struct ScalarTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
+pub struct MipTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
     texture: Texture,
     view: TextureView,
     sampler: Sampler,
@@ -68,7 +68,7 @@ pub struct ScalarTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
     phantom: PhantomData<Format>,
 }
 
-impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION, Format> {
+impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Format> {
     pub fn new(gpu: &Gpu, volume: u32, filter: FilterMode) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -338,7 +338,7 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> ScalarTexture<DIMENSION,
     }
 }
 
-impl<const DIMENSION: u32, Format: ScalarTextureFormat> Drop for ScalarTexture<DIMENSION, Format> {
+impl<const DIMENSION: u32, Format: ScalarTextureFormat> Drop for MipTexture<DIMENSION, Format> {
     fn drop(&mut self) {
         self.texture.destroy();
     }

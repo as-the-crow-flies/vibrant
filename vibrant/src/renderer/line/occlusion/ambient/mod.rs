@@ -1,7 +1,7 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::scalar::{R32Float, ScalarTexture3D},
+    asset::texture::{MipTexture3D, R32Float},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::Frame,
@@ -17,8 +17,8 @@ impl AmbientOcclusionPipeline {
             occlusion: gpu.compute(
                 "Occlusion::Ambient",
                 &gpu.pipeline_layout(&[
-                    &ScalarTexture3D::<R32Float>::layout(gpu),
-                    &ScalarTexture3D::<R32Float>::layout_write(gpu),
+                    &MipTexture3D::<R32Float>::layout(gpu),
+                    &MipTexture3D::<R32Float>::layout_write(gpu),
                     &Environment::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("ambient.wgsl")),

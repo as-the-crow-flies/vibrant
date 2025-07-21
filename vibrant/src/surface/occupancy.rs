@@ -7,13 +7,13 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::{R32Float, R32Uint, ScalarTexture3D},
+    asset::texture::{MipTexture3D, R32Float, R32Uint},
     gpu::Gpu,
 };
 
 pub struct OccupancyBuffer {
-    occupancy: ScalarTexture3D<R32Float>,
-    count: ScalarTexture3D<R32Uint>,
+    occupancy: MipTexture3D<R32Float>,
+    count: MipTexture3D<R32Uint>,
     buffer: Buffer,
     binding_write: BindGroup,
     binding_read: BindGroup,
@@ -32,8 +32,8 @@ impl OccupancyBuffer {
             mapped_at_creation: false,
         });
 
-        let occupancy = ScalarTexture3D::new(gpu, volume, FilterMode::Linear);
-        let count = ScalarTexture3D::new(gpu, volume, FilterMode::Nearest);
+        let occupancy = MipTexture3D::new(gpu, volume, FilterMode::Linear);
+        let count = MipTexture3D::new(gpu, volume, FilterMode::Nearest);
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
@@ -75,11 +75,11 @@ impl OccupancyBuffer {
         &self.buffer
     }
 
-    pub fn density(&self) -> &ScalarTexture3D<R32Float> {
+    pub fn density(&self) -> &MipTexture3D<R32Float> {
         &self.occupancy
     }
 
-    pub fn count(&self) -> &ScalarTexture3D<R32Uint> {
+    pub fn count(&self) -> &MipTexture3D<R32Uint> {
         &self.count
     }
 
@@ -96,8 +96,8 @@ impl OccupancyBuffer {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    ScalarTexture3D::<R32Float>::layout_entries(0),
-                    ScalarTexture3D::<R32Uint>::layout_entries(2),
+                    MipTexture3D::<R32Float>::layout_entries(0),
+                    MipTexture3D::<R32Uint>::layout_entries(2),
                 ]
                 .concat(),
             })

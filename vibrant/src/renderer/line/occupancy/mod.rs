@@ -5,7 +5,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 use crate::{
     asset::{
         line::LineSet,
-        scalar::{R32Float, R32Uint, ScalarTexture3D},
+        texture::{MipTexture3D, R32Float, R32Uint},
     },
     controller::settings::LineVoxelizationMode,
     gpu::Gpu,
@@ -62,8 +62,8 @@ impl LineOccupancyPipeline {
                         label,
                         bind_group_layouts: &[
                             &OccupancyBuffer::layout_write(gpu),
-                            &ScalarTexture3D::<R32Float>::layout_write(gpu),
-                            &ScalarTexture3D::<R32Uint>::layout_write(gpu),
+                            &MipTexture3D::<R32Float>::layout_write(gpu),
+                            &MipTexture3D::<R32Uint>::layout_write(gpu),
                             &Environment::layout(gpu),
                         ],
                         push_constant_ranges: &[],
@@ -75,7 +75,7 @@ impl LineOccupancyPipeline {
                 &gpu.device()
                     .create_pipeline_layout(&PipelineLayoutDescriptor {
                         label,
-                        bind_group_layouts: &[&ScalarTexture3D::<R32Float>::layout_mipmap(gpu)],
+                        bind_group_layouts: &[&MipTexture3D::<R32Float>::layout_mipmap(gpu)],
                         push_constant_ranges: &[],
                     }),
                 &gpu.shader(include_str!("mipmap.wgsl")),

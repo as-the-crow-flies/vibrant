@@ -16,7 +16,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::scalar::{R32Float, R32Uint, ScalarTexture3D},
+    asset::texture::{MipTexture3D, R32Float, R32Uint},
     controller::settings::Settings,
     surface::culling::CullingBuffer,
 };
@@ -36,7 +36,7 @@ impl Frame {
         let color = ColorBuffer::new(gpu, settings.width, settings.height);
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
-        let culling = CullingBuffer::new(gpu, settings.volume, settings.memory);
+        let culling = CullingBuffer::new(gpu, settings.volume);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -84,10 +84,10 @@ impl Frame {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    ScalarTexture3D::<R32Float>::layout_entries(0), // Occupancy - Density
-                    ScalarTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
-                    ScalarTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
-                    ScalarTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
+                    MipTexture3D::<R32Float>::layout_entries(0), // Occupancy - Density
+                    MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
+                    MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
+                    MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
                 ]
                 .concat(),
             })
