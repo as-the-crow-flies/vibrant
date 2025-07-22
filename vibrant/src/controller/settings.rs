@@ -40,7 +40,7 @@ impl Settings {
             alpha: 1.0,
             level: 0.0,
             smoothing: 0.67,
-            render: LineRenderMode::Hybrid,
+            render: LineRenderMode::Volume,
             voxelization: LineVoxelizationMode::Tube,
         }
     }

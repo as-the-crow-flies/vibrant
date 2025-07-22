@@ -69,17 +69,17 @@ pub struct MipTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
 }
 
 impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Format> {
-    pub fn new(gpu: &Gpu, volume: u32, filter: FilterMode) -> Self {
+    pub fn new(gpu: &Gpu, resolution: u32, filter: FilterMode) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mip_level_count = volume.ilog2();
+        let mip_level_count = resolution.ilog2();
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
             label,
             size: Extent3d {
-                width: volume,
-                height: volume,
-                depth_or_array_layers: volume,
+                width: resolution,
+                height: resolution,
+                depth_or_array_layers: resolution,
             },
             mip_level_count,
             sample_count: 1,
@@ -206,7 +206,7 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
         }
     }
 
-    pub fn size(&self) -> u32 {
+    pub fn resolution(&self) -> u32 {
         self.texture.width()
     }
 

@@ -12,7 +12,7 @@ use vibrant::{
         environment::Environment,
         line::{
             culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
-            occupancy::LineOccupancyPipeline, populate::PopulatePipeline,
+            occupancy::LineOccupancyPipeline, populate::LinePopulatePipeline,
             render::hybrid::HybridLineRenderPipeline, transform::LineTransformPipeline,
         },
     },
@@ -165,7 +165,7 @@ pub fn populate(criterion: &mut Criterion) {
     gpu.wait();
 
     let occupancy = LineCullingPipeline::new(gpu);
-    let populate = PopulatePipeline::new(gpu);
+    let populate = LinePopulatePipeline::new(gpu);
 
     criterion.bench_function("populate", |bencher| {
         bencher.iter(|| {
@@ -204,7 +204,7 @@ pub fn render(criterion: &mut Criterion) {
     );
     LineOcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
     LineCullingPipeline::new(gpu).render(&mut cmd, frame, environment);
-    PopulatePipeline::new(gpu).render(
+    LinePopulatePipeline::new(gpu).render(
         &mut cmd,
         frame,
         environment,
@@ -243,7 +243,7 @@ pub fn full(criterion: &mut Criterion) {
     let density = LineOccupancyPipeline::new(gpu);
     let occlusion = LineOcclusionPipeline::new(gpu);
     let occupancy = LineCullingPipeline::new(gpu);
-    let populate = PopulatePipeline::new(gpu);
+    let populate = LinePopulatePipeline::new(gpu);
     let render = HybridLineRenderPipeline::new(gpu);
 
     criterion.bench_function("full", |bencher| {

@@ -1,7 +1,6 @@
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
-    asset::texture::{MipTexture3D, R32Float},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::ColorBuffer, Frame},
@@ -16,12 +15,7 @@ impl VolumeLineRenderPipeline {
         Self {
             pipeline: gpu.quad(
                 "Volume",
-                &gpu.pipeline_layout(&[
-                    &MipTexture3D::<R32Float>::layout(gpu),
-                    &MipTexture3D::<R32Float>::layout(gpu),
-                    &MipTexture3D::<R32Float>::layout(gpu),
-                    &Environment::layout(gpu),
-                ]),
+                &gpu.pipeline_layout(&[&Frame::layout(gpu), &Environment::layout(gpu)]),
                 ColorBuffer::target_srgb(),
                 &gpu.shader(include_str!("volume.wgsl")),
             ),
@@ -35,10 +29,8 @@ impl VolumeLineRenderPipeline {
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, frame.occupancy().density().binding(), &[]);
-        pass.set_bind_group(1, frame.occlusion().ambient().binding(), &[]);
-        pass.set_bind_group(2, frame.occlusion().directional().binding(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(0, frame.binding(), &[]);
+        pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

@@ -68,7 +68,7 @@ impl LineCullingPipeline {
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.culling().culling().size().div_ceil(8);
+        let mut mipmap = frame.culling().culling().resolution().div_ceil(8);
         for binding in frame.culling().culling().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);

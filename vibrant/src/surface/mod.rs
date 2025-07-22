@@ -2,6 +2,7 @@ pub mod color;
 pub mod culling;
 pub mod occlusion;
 pub mod occupancy;
+pub mod tangent;
 
 use std::any::type_name;
 
@@ -16,9 +17,9 @@ use wgpu::{
 };
 
 use crate::{
-    asset::texture::{MipTexture3D, R32Float, R32Uint},
+    asset::texture::{MipTexture3D, R32Float, R32Uint, Rgba8Unorm},
     controller::settings::Settings,
-    surface::culling::CullingBuffer,
+    surface::{culling::CullingBuffer, tangent::TangentBuffer},
 };
 
 use super::gpu::Gpu;
@@ -28,6 +29,7 @@ pub struct Frame {
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
+    tangent: TangentBuffer,
     binding: BindGroup,
 }
 
@@ -37,6 +39,7 @@ impl Frame {
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
         let culling = CullingBuffer::new(gpu, settings.volume);
+        let tangent = TangentBuffer::new(gpu, settings.volume);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -46,6 +49,7 @@ impl Frame {
                 occupancy.count().binding_entries(2),
                 occlusion.ambient().binding_entries(4),
                 occlusion.directional().binding_entries(6),
+                tangent.tangent().binding_entries(8),
             ]
             .concat(),
         });
@@ -55,6 +59,7 @@ impl Frame {
             occupancy,
             occlusion,
             culling,
+            tangent,
             binding,
         }
     }
@@ -75,6 +80,10 @@ impl Frame {
         &self.culling
     }
 
+    pub fn tangent(&self) -> &TangentBuffer {
+        &self.tangent
+    }
+
     pub fn binding(&self) -> &BindGroup {
         &self.binding
     }
@@ -88,6 +97,7 @@ impl Frame {
                     MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
                     MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
                     MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
+                    MipTexture3D::<Rgba8Unorm>::layout_entries(8), // Tangent - Tangent
                 ]
                 .concat(),
             })

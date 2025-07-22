@@ -32,7 +32,7 @@ impl DirectionalOcclusionPipeline {
             ..Default::default()
         });
 
-        let n = frame.occlusion().directional().size().div_ceil(4);
+        let n = frame.occlusion().directional().resolution().div_ceil(4);
 
         pass.set_pipeline(&self.occlusion);
         pass.set_bind_group(0, frame.occupancy().density().binding(), &[]);

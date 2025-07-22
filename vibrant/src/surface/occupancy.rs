@@ -68,7 +68,7 @@ impl OccupancyBuffer {
     }
 
     pub fn resolution(&self) -> u32 {
-        self.occupancy.size()
+        self.occupancy.resolution()
     }
 
     pub fn buffer(&self) -> &Buffer {

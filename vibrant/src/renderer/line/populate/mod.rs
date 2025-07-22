@@ -11,13 +11,13 @@ use crate::{
     surface::{culling::CullingBuffer, Frame},
 };
 
-pub struct PopulatePipeline {
+pub struct LinePopulatePipeline {
     populate_tube: ComputePipeline,
     populate_line: ComputePipeline,
     populate_box: ComputePipeline,
 }
 
-impl PopulatePipeline {
+impl LinePopulatePipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let layout = &gpu.pipeline_layout(&[
             &CullingBuffer::layout_write(gpu),
