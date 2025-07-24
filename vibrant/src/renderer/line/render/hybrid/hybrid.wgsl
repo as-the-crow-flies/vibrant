@@ -9,11 +9,12 @@
 @group(2) @binding(0) var DENSITY: texture_3d<f32>;
 @group(2) @binding(1) var DENSITY_SAMPLER: sampler;
 @group(2) @binding(2) var COUNT: texture_3d<u32>;
-
-@group(2) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
-@group(2) @binding(5) var OCCLUSION_AMBIENT_SAMPLER: sampler;
-@group(2) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
-@group(2) @binding(7) var OCCLUSION_DIRECTIONAL_SAMPLER: sampler;
+@group(2) @binding(4) var TANGENT: texture_3d<f32>;
+@group(2) @binding(5) var TANGENT_SAMPLER: sampler;
+@group(2) @binding(6) var OCCLUSION_AMBIENT: texture_3d<f32>;
+@group(2) @binding(7) var OCCLUSION_AMBIENT_SAMPLER: sampler;
+@group(2) @binding(8) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
+@group(2) @binding(9) var OCCLUSION_DIRECTIONAL_SAMPLER: sampler;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 

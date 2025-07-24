@@ -1,5 +1,5 @@
 @group(0) @binding(0) var<storage, read_write> DENSITY: array<atomic<u32>>;
-@group(0) @binding(1) var<storage, read_write> COLOR: array<atomic<u32>>;
+@group(0) @binding(1) var<storage, read_write> TANGENT: array<atomic<u32>>;
 
 @group(1) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(1) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
@@ -62,24 +62,23 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
 
-    let coverage_multiplier = radius_ratio * U16_MAX_f32;
-
     let sample = vec3<f32>(voxel) + 0.5;
 
-    // TODO: endpoint spheres are now voxelized twice, take normal planes into account
     let sample_v0 = sample - v0.xyz;
     let delta = v1.xyz - v0.xyz;
     let height = clamp(dot(sample_v0, delta) / dot(delta, delta), 0.0, 1.0);
 
     let sdf = cylinder(sample, v0.xyz, v1.xyz, radius_clamp);
 
-    // let sdf = length(sample_v0 - delta * height) - radius_clamp;
+    let alpha = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
 
-    let alpha = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
+    let density_encoded = u32(alpha * U12_MAX_f32) << U14_SHIFT;
 
-    let density_encoded = u32(alpha * coverage_multiplier) << U14_SHIFT;
+    let tangent = alpha * abs(normalize(delta));
+    let tangent_encoded = vec3<u32>(tangent * U12_MAX_f32);
 
     atomicAdd(&DENSITY[idx], density_encoded + 1u);
+    atomicAdd(&TANGENT[idx], tangent_encoded.x << 16 | tangent_encoded.y);
 }
 
 fn visit_voxel_ground_truth(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {

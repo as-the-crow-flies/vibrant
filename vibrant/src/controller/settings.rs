@@ -32,7 +32,7 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            volume: 128,
+            volume: 256,
             streamline_radius: 0.2,
             direct_light: 0.67,
             tangent_color: 1.0,
@@ -40,7 +40,7 @@ impl Settings {
             alpha: 1.0,
             level: 0.0,
             smoothing: 0.67,
-            render: LineRenderMode::Volume,
+            render: LineRenderMode::Hybrid,
             voxelization: LineVoxelizationMode::Tube,
         }
     }

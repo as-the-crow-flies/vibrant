@@ -5,7 +5,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline, PipelineLayou
 use crate::{
     asset::{
         line::LineSet,
-        texture::{MipTexture3D, R32Float, R32Uint},
+        texture::{MipTexture3D, R32Float, R32Uint, Rgba8Unorm},
     },
     controller::settings::LineVoxelizationMode,
     gpu::Gpu,
@@ -64,7 +64,7 @@ impl LineOccupancyPipeline {
                             &OccupancyBuffer::layout_write(gpu),
                             &MipTexture3D::<R32Float>::layout_write(gpu),
                             &MipTexture3D::<R32Uint>::layout_write(gpu),
-                            &Environment::layout(gpu),
+                            &MipTexture3D::<Rgba8Unorm>::layout_write(gpu),
                         ],
                         push_constant_ranges: &[],
                     }),
@@ -116,7 +116,7 @@ impl LineOccupancyPipeline {
         pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
         pass.set_bind_group(1, frame.occupancy().density().binding_write(), &[]);
         pass.set_bind_group(2, frame.occupancy().count().binding_write(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(3, frame.occupancy().tangent().binding_write(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);

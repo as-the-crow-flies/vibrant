@@ -28,22 +28,28 @@ struct Environment {
 
 const U32_MAX: u32 = 4294967295;
 const U32_MAX_f32: f32 = f32(U32_MAX);
-const U32_MAX_INV: f32 = 1.0 / f32(U32_MAX);
+const U32_MAX_INV: f32 = 1.0 / U32_MAX_f32;
 
 const U24_MAX: u32 = 16777215;
 const U24_MAX_f32: f32 = f32(U24_MAX);
-const U24_MAX_INV: f32 = 1.0 / f32(U24_MAX);
+const U24_MAX_INV: f32 = 1.0 / U24_MAX_f32;
 
 const U16_MAX: u32 = 65535;
 const U16_MAX_f32: f32 = f32(U16_MAX);
-const U16_MAX_INV: f32 = 1.0 / f32(U16_MAX);
+const U16_MAX_INV: f32 = 1.0 / U16_MAX_f32;
 
 const U14_SHIFT: u32 = 14;
 const U14_MAX: u32 = 16383;
+const U14_MAX_f32: f32 = f32(U14_MAX);
+const U14_MAX_INV: f32 = 1.0 / U14_MAX_f32;
+
+const U12_MAX: u32 = 4096;
+const U12_MAX_f32: f32 = f32(U12_MAX);
+const U12_MAX_INV: f32 = 1.0 / U12_MAX_f32;
 
 const U8_MAX: u32 = 255;
 const U8_MAX_f32: f32 = f32(U8_MAX);
-const U8_MAX_INV: f32 = 0.003921568627;
+const U8_MAX_INV: f32 = 1.0 / U8_MAX_f32;
 
 const BLOCK_BITS: u32 = 3u;
 const BLOCK_SIZE: u32 = 8u;

@@ -51,7 +51,6 @@ impl Gpu {
                     ..Default::default()
                 },
                 required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                    | Features::BGRA8UNORM_STORAGE
                     | Features::FLOAT32_FILTERABLE
                     | Features::SUBGROUP,
                 ..Default::default()

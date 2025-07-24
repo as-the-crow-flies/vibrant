@@ -3,7 +3,6 @@ pub mod occlusion;
 pub mod occupancy;
 pub mod populate;
 pub mod render;
-pub mod tangent;
 pub mod transform;
 
 use occupancy::LineOccupancyPipeline;
@@ -15,7 +14,7 @@ use crate::{
     gpu::Gpu,
     renderer::line::{
         culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
-        populate::LinePopulatePipeline, render::LineRenderPipeline, tangent::LineTangentPipeline,
+        populate::LinePopulatePipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
     surface::Frame,
@@ -26,7 +25,6 @@ use super::environment::Environment;
 pub struct LineRenderer {
     transform: LineTransformPipeline,
     occupancy: LineOccupancyPipeline,
-    tangent: LineTangentPipeline,
     occlusion: LineOcclusionPipeline,
     culling: LineCullingPipeline,
     populate: LinePopulatePipeline,
@@ -38,7 +36,6 @@ impl LineRenderer {
         Self {
             transform: LineTransformPipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
-            tangent: LineTangentPipeline::new(gpu),
             occlusion: LineOcclusionPipeline::new(gpu),
             culling: LineCullingPipeline::new(gpu),
             populate: LinePopulatePipeline::new(gpu),
@@ -57,12 +54,10 @@ impl LineRenderer {
         self.transform.render(cmd, environment, line);
         self.occupancy
             .render(cmd, frame, environment, settings.voxelization, line);
-        self.tangent.render(cmd, frame);
         self.occlusion.render(cmd, frame, environment);
         self.culling.render(cmd, frame, environment);
         self.populate
             .render(cmd, frame, environment, settings.voxelization, line);
-
         self.render
             .render(cmd, environment, frame, line, settings.render);
     }

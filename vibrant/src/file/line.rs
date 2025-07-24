@@ -121,6 +121,18 @@ impl LineFile {
     }
 
     pub fn from_file(path: &str) -> LineFile {
-        Self::from_tck(&fs::read(path).expect(&format!("Couldn't read file {:?}", path)))
+        if let Some((_, extension)) = path.split_once(".") {
+            return match extension {
+                "tck" => LineFile::from_tck(
+                    &fs::read(path).expect(&format!("Couldn't read file {:?}", path)),
+                ),
+                "obj" => LineFile::from_obj(
+                    &fs::read_to_string(path).expect(&format!("Couldn't read file {:?}", path)),
+                ),
+                _ => panic!("unknown file type"),
+            };
+        }
+
+        panic!("")
     }
 }
