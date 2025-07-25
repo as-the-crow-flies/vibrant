@@ -4,26 +4,20 @@ use crate::{
     asset::line::LineSet,
     controller::settings::LineRenderMode,
     gpu::Gpu,
-    renderer::{
-        environment::Environment,
-        line::render::{hybrid::HybridLineRenderPipeline, volume::VolumeLineRenderPipeline},
-    },
+    renderer::{environment::Environment, line::render::ray::RayCastingLineRenderPipeline},
     surface::Frame,
 };
 
-pub mod hybrid;
-pub mod volume;
+pub mod ray;
 
 pub struct LineRenderPipeline {
-    hybrid: HybridLineRenderPipeline,
-    volume: VolumeLineRenderPipeline,
+    hybrid: RayCastingLineRenderPipeline,
 }
 
 impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            hybrid: HybridLineRenderPipeline::new(gpu),
-            volume: VolumeLineRenderPipeline::new(gpu),
+            hybrid: RayCastingLineRenderPipeline::new(gpu),
         }
     }
 
@@ -36,8 +30,7 @@ impl LineRenderPipeline {
         mode: LineRenderMode,
     ) {
         match mode {
-            LineRenderMode::Hybrid => self.hybrid.render(cmd, frame, environment, line),
-            LineRenderMode::Volume => self.volume.render(cmd, frame, environment),
+            LineRenderMode::RayCasting => self.hybrid.render(cmd, frame, environment, line),
         }
     }
 }

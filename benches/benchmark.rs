@@ -13,7 +13,7 @@ use vibrant::{
         line::{
             culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
             occupancy::LineOccupancyPipeline, populate::LinePopulatePipeline,
-            render::hybrid::HybridLineRenderPipeline, transform::LineTransformPipeline,
+            render::ray::RayCastingLineRenderPipeline, transform::LineTransformPipeline,
         },
     },
     surface::Frame,
@@ -216,7 +216,7 @@ pub fn render(criterion: &mut Criterion) {
     gpu.submit(cmd);
     gpu.wait();
 
-    let pipeline = HybridLineRenderPipeline::new(gpu);
+    let pipeline = RayCastingLineRenderPipeline::new(gpu);
 
     criterion.bench_function("render", |bencher| {
         bencher.iter(|| {
@@ -246,7 +246,7 @@ pub fn full(criterion: &mut Criterion) {
     let occlusion = LineOcclusionPipeline::new(gpu);
     let occupancy = LineCullingPipeline::new(gpu);
     let populate = LinePopulatePipeline::new(gpu);
-    let render = HybridLineRenderPipeline::new(gpu);
+    let render = RayCastingLineRenderPipeline::new(gpu);
 
     criterion.bench_function("full", |bencher| {
         bencher.iter(|| {

@@ -1,5 +1,4 @@
 @group(0) @binding(0) var<storage, read_write> DENSITY: array<atomic<u32>>;
-@group(0) @binding(1) var<storage, read_write> TANGENT: array<atomic<u32>>;
 
 @group(1) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(1) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
@@ -50,18 +49,16 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
 fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length: f32) {
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
-    let density = 2.0 * DENSITY_MULTIPLIER * length;
-    let tangent = density * normalize(abs(v1.xyz - v0.xyz));
+    let density = DENSITY_MULTIPLIER * length;
 
     atomicAdd(&DENSITY[idx], encode_density(density));
-    atomicAdd(&TANGENT[idx], encode_tangent(tangent));
 }
 
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let smoothing = ENVIRONMENT.settings.smoothing;
 
     let radius_clamp = max(smoothing, RADIUS);
-    let radius_ratio = RADIUS / radius_clamp;
+    let radius_ratio = pow(RADIUS / radius_clamp, 2.0);
 
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
 
@@ -74,19 +71,12 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let sdf = cylinder(sample, v0.xyz, v1.xyz, radius_clamp);
 
     let density = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
-    let tangent = density * abs(normalize(delta));
 
     atomicAdd(&DENSITY[idx], encode_density(density));
-    atomicAdd(&TANGENT[idx], encode_tangent(tangent));
 }
 
 fn encode_density(density: f32) -> u32 {
     return (u32(density * U12_MAX_f32) << U14_SHIFT) + 1;
-}
-
-fn encode_tangent(tangent: vec3<f32>) -> u32 {
-    let tangent_encoded = vec3<u32>(tangent * U12_MAX_f32);
-    return tangent_encoded.x << 16 | tangent_encoded.y;
 }
 
 fn cylinder(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {

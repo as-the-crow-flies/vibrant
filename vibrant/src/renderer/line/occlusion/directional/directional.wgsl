@@ -31,5 +31,5 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 }
 
 fn density(sample: vec3<f32>, level: f32) -> f32 {
-    return saturate(ENVIRONMENT.settings.alpha * textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x);
+    return textureSampleLevel(DENSITY, DENSITY_SAMPLER, sample, level).x;
 }

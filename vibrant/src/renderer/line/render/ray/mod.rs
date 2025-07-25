@@ -9,11 +9,11 @@ use crate::{
     surface::{color::ColorBuffer, culling::CullingBuffer, Frame},
 };
 
-pub struct HybridLineRenderPipeline {
+pub struct RayCastingLineRenderPipeline {
     pipeline: RenderPipeline,
 }
 
-impl HybridLineRenderPipeline {
+impl RayCastingLineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             pipeline: gpu.quad(
@@ -25,7 +25,7 @@ impl HybridLineRenderPipeline {
                     &Environment::layout(gpu),
                 ]),
                 ColorBuffer::target_srgb(),
-                &gpu.shader(include_str!("hybrid.wgsl")),
+                &gpu.shader(include_str!("ray.wgsl")),
             ),
         }
     }

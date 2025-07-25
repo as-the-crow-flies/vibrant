@@ -89,13 +89,8 @@ impl Controller {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.settings.render,
-                        LineRenderMode::Hybrid,
-                        "Hybrid",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.render,
-                        LineRenderMode::Volume,
-                        "Volume",
+                        LineRenderMode::RayCasting,
+                        "RayCasting",
                     );
                 });
 
@@ -148,13 +143,7 @@ impl Controller {
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Ambient/Shadow"));
             ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
             ui.add(Slider::new(&mut self.settings.shadows, 0.0..=1.0).text("Shadows"));
-
-            ui.add(
-                Slider::new(&mut self.settings.alpha, 0.0001..=1.0)
-                    .logarithmic(true)
-                    .text("Alpha"),
-            );
-
+            ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
             ui.checkbox(&mut self.settings.culling, "Enable Culling");
             ui.add(Slider::new(&mut self.settings.level, 0.0..=8.0).text("Mipmap Level"));
             ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));

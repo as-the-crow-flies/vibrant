@@ -16,7 +16,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::texture::{MipTexture3D, R32Float, R32Uint, Rgba8Unorm},
+    asset::texture::{MipTexture3D, R32Float, R32Uint},
     controller::settings::Settings,
     surface::culling::CullingBuffer,
 };
@@ -44,9 +44,8 @@ impl Frame {
             entries: &[
                 occupancy.density().binding_entries(0),
                 occupancy.count().binding_entries(2),
-                occupancy.tangent().binding_entries(4),
-                occlusion.ambient().binding_entries(6),
-                occlusion.directional().binding_entries(8),
+                occlusion.ambient().binding_entries(4),
+                occlusion.directional().binding_entries(6),
             ]
             .concat(),
         });
@@ -87,9 +86,8 @@ impl Frame {
                 entries: &[
                     MipTexture3D::<R32Float>::layout_entries(0), // Occupancy - Density
                     MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
-                    MipTexture3D::<Rgba8Unorm>::layout_entries(4), // Occupancy - Tangent
-                    MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Ambient
-                    MipTexture3D::<R32Float>::layout_entries(8), // Occlusion - Directional
+                    MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
+                    MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
                 ]
                 .concat(),
             })

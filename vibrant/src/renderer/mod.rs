@@ -18,7 +18,7 @@ use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
 pub struct Renderer {
     surface: Surface,
-    tractogram: LineRenderer,
+    line: LineRenderer,
     ui: UiRenderer,
     environment: Environment,
     asset: Asset,
@@ -28,7 +28,7 @@ impl Renderer {
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         Self {
             surface: Surface::new(gpu, window),
-            tractogram: LineRenderer::new(gpu),
+            line: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
 
             environment: Environment::new(gpu),
@@ -53,12 +53,12 @@ impl Renderer {
 
         let mut cmd = gpu.cmd();
 
-        if let Some(tractogram) = &self.asset.line {
-            self.tractogram.render(
+        if let Some(line) = &self.asset.line {
+            self.line.render(
                 &mut cmd,
                 &self.environment,
                 surface.buffer(),
-                tractogram,
+                line,
                 controller.settings(),
             );
         }

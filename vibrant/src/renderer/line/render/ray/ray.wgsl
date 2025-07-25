@@ -9,9 +9,8 @@
 @group(2) @binding(0) var DENSITY: texture_3d<f32>;
 @group(2) @binding(1) var SAMPLER: sampler;
 @group(2) @binding(2) var COUNT: texture_3d<u32>;
-@group(2) @binding(4) var TANGENT: texture_3d<f32>;
-@group(2) @binding(6) var OCCLUSION_AMBIENT: texture_3d<f32>;
-@group(2) @binding(8) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
+@group(2) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
+@group(2) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -128,23 +127,6 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         if (color.a > 0.9 || (count > 0 && culled)) { break; }
     }
 
-    for (t += DIM_INV; t < tExit; t += DIM_INV) {
-        let position = origin + direction * t;
-        let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, position, 0.0).x;
-        let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, position, 0.0).x;
-        let factor = mix(1.0, mix(ambient, directional,
-            ENVIRONMENT.settings.direct_light),
-            ENVIRONMENT.settings.lighting);
-
-        let tangent = mix(
-            vec3<f32>(1.0),
-            textureSampleLevel(TANGENT, SAMPLER, position, 0.0).xyz,
-            ENVIRONMENT.settings.tangent_color);
-        let alpha = saturate(ENVIRONMENT.settings.alpha * textureSampleLevel(DENSITY, SAMPLER, position, 0.0).x);
-        color += (1.0 - color.a) * vec4<f32>(factor * tangent * alpha, alpha);
-        if (color.a > 0.99) { return color; }
-    }
-
     return color;
 }
 
@@ -201,12 +183,6 @@ fn visit(count: u32, voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, 
 fn hittest(index: u32, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> f32 {
     let v0 = LINE_VERTEX[index + 0];
     let v1 = LINE_VERTEX[index + 1];
-
-    let increment_half = 0.5 * increment;
-    let midpoint = origin + direction * increment_half;
-    let r = RADIUS + increment_half;
-
-    if (line_distance(midpoint, v0.xyz, v1.xyz) > r) { return -1.0; }
 
     let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
 
@@ -411,4 +387,8 @@ fn line_distance(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>) -> f32 {
   let ba = b - a;
   let h = clamp(dot(pa,ba) / dot(ba,ba), 0.0, 1.0);
   return length(pa - ba*h);
+}
+
+fn hash(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
