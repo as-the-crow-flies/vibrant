@@ -144,10 +144,9 @@ impl Controller {
                     .text("Streamline Radius"),
             );
 
-            ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
-
+            ui.add(Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"));
+            ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Ambient/Shadow"));
             ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
-
             ui.add(Slider::new(&mut self.settings.shadows, 0.0..=1.0).text("Shadows"));
 
             ui.add(
@@ -156,6 +155,7 @@ impl Controller {
                     .text("Alpha"),
             );
 
+            ui.checkbox(&mut self.settings.culling, "Enable Culling");
             ui.add(Slider::new(&mut self.settings.level, 0.0..=8.0).text("Mipmap Level"));
             ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
         });

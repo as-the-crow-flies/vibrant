@@ -21,5 +21,5 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let t = vec2<f32>(vec2<u32>(tangent_encoded >> 16, tangent_encoded & U16_MAX)) * U12_MAX_INV;
     let tangent = normalize(vec3<f32>(t, sqrt(density * density - t.x * t.x - t.y * t.y)));
 
-    textureStore(TANGENT, voxel, vec4<f32>(tangent, density));
+    textureStore(TANGENT, voxel, vec4<f32>(tangent, saturate(density)));
 }

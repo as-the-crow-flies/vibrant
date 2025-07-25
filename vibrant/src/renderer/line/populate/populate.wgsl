@@ -54,7 +54,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
     }
 }
 
-fn visit_voxel_line(voxel: vec3<i32>, index: u32, length: f32) {
+fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length: f32) {
     let should_write = textureLoad(CULLING, voxel, 0).x > 0.5;
 
     if (should_write) {
@@ -64,12 +64,8 @@ fn visit_voxel_line(voxel: vec3<i32>, index: u32, length: f32) {
     }
 }
 
-fn visit_voxel_ground_truth(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
-    visit_voxel_line(voxel, index, 0.0);
-}
-
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
-    visit_voxel_line(voxel, index, 0.0);
+    visit_voxel_line(voxel, index, v0, v1, 0.0);
 }
 
 fn occupancy(v0: vec3<f32>, v1: vec3<f32>) -> f32 {

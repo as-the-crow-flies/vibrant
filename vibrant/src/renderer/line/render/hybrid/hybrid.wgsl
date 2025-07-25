@@ -7,14 +7,11 @@
 @group(1) @binding(3) var CULLING: texture_3d<f32>;
 
 @group(2) @binding(0) var DENSITY: texture_3d<f32>;
-@group(2) @binding(1) var DENSITY_SAMPLER: sampler;
+@group(2) @binding(1) var SAMPLER: sampler;
 @group(2) @binding(2) var COUNT: texture_3d<u32>;
 @group(2) @binding(4) var TANGENT: texture_3d<f32>;
-@group(2) @binding(5) var TANGENT_SAMPLER: sampler;
 @group(2) @binding(6) var OCCLUSION_AMBIENT: texture_3d<f32>;
-@group(2) @binding(7) var OCCLUSION_AMBIENT_SAMPLER: sampler;
 @group(2) @binding(8) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
-@group(2) @binding(9) var OCCLUSION_DIRECTIONAL_SAMPLER: sampler;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -115,21 +112,43 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         // Get Increment
         let increment = max(d[axis], 1E-5);
 
+        let count = textureLoad(COUNT, voxel, 0).x;
+        let culled = textureLoad(CULLING, voxel, 0).x < 0.5;
+
         // Accumulate Color
-        color += (1.0 - color.a) * visit(voxel, position * DIM, direction, increment * DIM);
-        if (color.a > 0.95) { return color; }
+        if (count > 0 && !culled) {
+            color += (1.0 - color.a) * visit(count, voxel, position * DIM, direction, increment * DIM);
+        }
 
         // Increment Ray Position
         t += increment;
         position += direction * increment;
         voxel[axis] = next[axis] + boundary[axis] - 1;
+
+        if (color.a > 0.9 || (count > 0 && culled)) { break; }
+    }
+
+    for (t += DIM_INV; t < tExit; t += DIM_INV) {
+        let position = origin + direction * t;
+        let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, position, 0.0).x;
+        let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, position, 0.0).x;
+        let factor = mix(1.0, mix(ambient, directional,
+            ENVIRONMENT.settings.direct_light),
+            ENVIRONMENT.settings.lighting);
+
+        let tangent = mix(
+            vec3<f32>(1.0),
+            textureSampleLevel(TANGENT, SAMPLER, position, 0.0).xyz,
+            ENVIRONMENT.settings.tangent_color);
+        let alpha = saturate(ENVIRONMENT.settings.alpha * textureSampleLevel(DENSITY, SAMPLER, position, 0.0).x);
+        color += (1.0 - color.a) * vec4<f32>(factor * tangent * alpha, alpha);
+        if (color.a > 0.99) { return color; }
     }
 
     return color;
 }
 
-fn visit(voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec4<f32> {
-    let count = textureLoad(COUNT, voxel, 0).x;
+fn visit(count: u32, voxel: vec3<u32>, origin: vec3<f32>, direction: vec3<f32>, increment: f32) -> vec4<f32> {
     let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
 
     let increment_inv = 1.0 / increment;
@@ -220,11 +239,13 @@ fn shade(v0: Vertex, v1: Vertex, position: vec3<f32>, direction: vec3<f32>) -> v
     let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
 
     let sample = position * DIM_INV;
-    let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, OCCLUSION_AMBIENT_SAMPLER, sample, 0.0).x;
-    let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, OCCLUSION_DIRECTIONAL_SAMPLER, sample, 0.0).x;
+    let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, sample, 0.0).x;
+    let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, sample, 0.0).x;
     let shadow = anyhit(sample, ENVIRONMENT.light);
 
-    let factor = mix(ambient, diffuse * min(directional, shadow), ENVIRONMENT.settings.direct_light);
+    let factor = mix(1.0, mix(ambient, diffuse * min(directional, shadow),
+        ENVIRONMENT.settings.direct_light),
+        ENVIRONMENT.settings.lighting);
 
     let rgb = factor * mix(vec3<f32>(1.0), abs(tangent), ENVIRONMENT.settings.tangent_color);
     let a = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height);
@@ -351,8 +372,7 @@ fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f3
     return 1E6;
 }
 
-fn capsule_intersection_back(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32
-{
+fn capsule_intersection_back(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32 {
     let ba = pb - pa;
     let oa = ro - pa;
 

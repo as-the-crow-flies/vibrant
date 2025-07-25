@@ -1,11 +1,13 @@
 struct Settings {
     streamline_radius: f32,
+    lighting: f32,
     direct_light: f32,
     tangent_color: f32,
     shadows: f32,
     alpha: f32,
     level: f32,
-    smoothing: f32
+    smoothing: f32,
+    culling: u32,
 }
 
 struct Camera {
@@ -43,7 +45,7 @@ const U14_MAX: u32 = 16383;
 const U14_MAX_f32: f32 = f32(U14_MAX);
 const U14_MAX_INV: f32 = 1.0 / U14_MAX_f32;
 
-const U12_MAX: u32 = 4096;
+const U12_MAX: u32 = 1024;
 const U12_MAX_f32: f32 = f32(U12_MAX);
 const U12_MAX_INV: f32 = 1.0 / U12_MAX_f32;
 

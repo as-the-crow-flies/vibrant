@@ -14,7 +14,7 @@ fn voxelize(index: u32, v0: Vertex, v1: Vertex, radius: f32) {
     while (next.w > 0.0) {
         let increment = minimum(next);
 
-        visit_voxel_line(voxel, index, increment);
+        visit_voxel_line(voxel, index, v0, v1, increment);
 
         let mask = next == vec4<f32>(increment);
         voxel += step * vec3<i32>(mask.xyz);

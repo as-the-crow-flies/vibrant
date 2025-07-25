@@ -1,12 +1,9 @@
 @group(0) @binding(0) var DENSITY: texture_3d<f32>;
-@group(0) @binding(1) var DENSITY_SAMPLER: sampler;
+@group(0) @binding(1) var SAMPLER: sampler;
 @group(0) @binding(2) var COUNT: texture_3d<u32>;
 @group(0) @binding(4) var TANGENT: texture_3d<f32>;
-@group(0) @binding(5) var TANGENT_SAMPLER: sampler;
 @group(0) @binding(6) var OCCLUSION_AMBIENT: texture_3d<f32>;
-@group(0) @binding(7) var OCCLUSION_AMBIENT_SAMPLER: sampler;
 @group(0) @binding(8) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
-@group(0) @binding(9) var OCCLUSION_DIRECTIONAL_SAMPLER: sampler;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -95,12 +92,19 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, random: f32) -> vec4<f32> {
     for (t -= dim_inv * random; t < tExit; t += dim_inv) {
         let position = origin + direction * t;
 
-        let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, OCCLUSION_AMBIENT_SAMPLER, position, 0.0).x;
-        let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, OCCLUSION_DIRECTIONAL_SAMPLER, position, 0.0).x;
-        let factor = mix(ambient, directional, ENVIRONMENT.settings.direct_light);
+        let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, position, 0.0).x;
+        let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, position, 0.0).x;
 
-        let tangent = textureSampleLevel(TANGENT, TANGENT_SAMPLER, position, 0.0).xyz;
-        let alpha = saturate(ENVIRONMENT.settings.alpha * textureSampleLevel(DENSITY, DENSITY_SAMPLER, position, 0.0).x);
+        let factor = mix(1.0, mix(ambient, directional,
+            ENVIRONMENT.settings.direct_light),
+            ENVIRONMENT.settings.lighting);
+
+        let tangent = mix(
+            vec3<f32>(1.0),
+            textureSampleLevel(TANGENT, SAMPLER, position, 0.0).xyz,
+            ENVIRONMENT.settings.tangent_color);
+
+        let alpha = saturate(ENVIRONMENT.settings.alpha * textureSampleLevel(DENSITY, SAMPLER, position, 0.0).x);
 
         let rgba = vec4<f32>(factor * tangent * alpha, alpha);
 

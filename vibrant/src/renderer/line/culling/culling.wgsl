@@ -20,11 +20,11 @@ fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
     let this_voxel_density = saturate(textureLoad(DENSITY, this_voxel).x);
 
     let max_density = 2.0;
-    let max_count = 2048u;
+    let max_count = 4096u;
 
-    var keep = false;
+    var keep = ENVIRONMENT.settings.culling == 0;
 
-    if (this_voxel_count > 0 && this_voxel_count < 1024) {
+    if (!keep && this_voxel_count > 0 && this_voxel_count < 1024) {
         let position = vec3<f32>(this_voxel) + 0.5;
         let camera = dim_f32 * (ENVIRONMENT.camera.transform[3].xyz + 0.5);
 

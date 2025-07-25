@@ -23,7 +23,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&LINE_INDEX);
 
     RADIUS = ENVIRONMENT.settings.streamline_radius;
-    DENSITY_MULTIPLIER = ENVIRONMENT.settings.alpha * PI * RADIUS * RADIUS * f32(U16_MAX);
+    DENSITY_MULTIPLIER = PI * RADIUS * RADIUS;
 
     var offset = 0u;
 
@@ -48,17 +48,20 @@ fn main(@builtin(local_invocation_index) local: u32) {
     }
 }
 
-fn visit_voxel_line(voxel: vec3<i32>, index: u32, length: f32) {
+fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length: f32) {
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
-    let density_encoded = u32(DENSITY_MULTIPLIER * length) << U14_SHIFT;
-    atomicAdd(&DENSITY[idx], density_encoded + 1u);
+    let density = 2.0 * DENSITY_MULTIPLIER * length;
+    let tangent = density * normalize(abs(v1.xyz - v0.xyz));
+
+    atomicAdd(&DENSITY[idx], encode_density(density));
+    atomicAdd(&TANGENT[idx], encode_tangent(tangent));
 }
 
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let smoothing = ENVIRONMENT.settings.smoothing;
 
     let radius_clamp = max(smoothing, RADIUS);
-    let radius_ratio = pow(RADIUS, 2.0) / radius_clamp;
+    let radius_ratio = RADIUS / radius_clamp;
 
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
 
@@ -70,44 +73,20 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 
     let sdf = cylinder(sample, v0.xyz, v1.xyz, radius_clamp);
 
-    let alpha = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
+    let density = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
+    let tangent = density * abs(normalize(delta));
 
-    let density_encoded = u32(alpha * U12_MAX_f32) << U14_SHIFT;
-
-    let tangent = alpha * abs(normalize(delta));
-    let tangent_encoded = vec3<u32>(tangent * U12_MAX_f32);
-
-    atomicAdd(&DENSITY[idx], density_encoded + 1u);
-    atomicAdd(&TANGENT[idx], tangent_encoded.x << 16 | tangent_encoded.y);
+    atomicAdd(&DENSITY[idx], encode_density(density));
+    atomicAdd(&TANGENT[idx], encode_tangent(tangent));
 }
 
-fn visit_voxel_ground_truth(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
-    let step = 0.2;
+fn encode_density(density: f32) -> u32 {
+    return (u32(density * U12_MAX_f32) << U14_SHIFT) + 1;
+}
 
-    let delta = v1.xyz - v0.xyz;
-    let sample = vec3<f32>(voxel);
-
-    var count = 0u;
-
-    for (var x = 0.0; x <= 1.0; x+= step) {
-        for (var y = 0.0; y <= 1.0; y+= step) {
-            for (var z = 0.0; z <= 1.0; z+= step) {
-                let sample_v0 = sample + vec3<f32>(x, y, z) - v0.xyz;
-                let height = clamp(dot(sample_v0, delta) / dot(delta, delta), 0.0, 1.0);
-                let sdf = length(sample_v0 - delta * height);
-
-                if (sdf < RADIUS) {
-                    count++;
-                }
-            }
-        }
-    }
-
-    let density = ENVIRONMENT.settings.alpha * f32(count) * pow(step, 3.0);
-    let density_encoded = u32(density * U16_MAX_f32) << U14_SHIFT;
-
-    let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
-    atomicAdd(&DENSITY[idx], density_encoded + 1u);
+fn encode_tangent(tangent: vec3<f32>) -> u32 {
+    let tangent_encoded = vec3<u32>(tangent * U12_MAX_f32);
+    return tangent_encoded.x << 16 | tangent_encoded.y;
 }
 
 fn cylinder(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
