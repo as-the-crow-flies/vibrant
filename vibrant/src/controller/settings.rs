@@ -8,6 +8,7 @@ pub enum LineVoxelizationMode {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineRenderMode {
     RayCasting,
+    Volume,
 }
 
 #[derive(Debug)]
@@ -33,8 +34,8 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            volume: 128,
-            streamline_radius: 0.2,
+            volume: 256,
+            streamline_radius: 0.4,
             lighting: 1.0,
             direct_light: 0.67,
             tangent_color: 1.0,
@@ -43,7 +44,7 @@ impl Settings {
             level: 0.0,
             smoothing: 0.67,
             culling: true,
-            render: LineRenderMode::RayCasting,
+            render: LineRenderMode::Volume,
             voxelization: LineVoxelizationMode::Tube,
         }
     }

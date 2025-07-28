@@ -68,7 +68,9 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let delta = v1.xyz - v0.xyz;
     let height = clamp(dot(sample_v0, delta) / dot(delta, delta), 0.0, 1.0);
 
-    let sdf = cylinder(sample, v0.xyz, v1.xyz, radius_clamp);
+    // let sdf = cylinder(sample, v0.xyz, v1.xyz, radius_clamp);
+
+    let sdf = capsule(sample, v0, v1, radius_clamp);
 
     let density = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
 
@@ -79,19 +81,18 @@ fn encode_density(density: f32) -> u32 {
     return (u32(density * U12_MAX_f32) << U14_SHIFT) + 1;
 }
 
-fn cylinder(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
-  let ba = b - a;
-  let pa = p - a;
-  let baba = dot(ba,ba);
-  let paba = dot(pa,ba);
-  let x = length(pa*baba-ba*paba) - r*baba;
-  let y = abs(paba-baba*0.5) - baba*0.5;
-  let x2 = x*x;
-  let y2 = y*y*baba;
-  let d = select(
-    select(0.0, x2, x>0.0) + select(0.0, y2, y>0.0),
-    -min(x2,y2),
-    max(x,y) < 0.0
- );
-  return sign(d) * sqrt(abs(d)) / baba;
+fn capsule(p: vec3<f32>, a: Vertex, b: Vertex, r: f32) -> f32 {
+    let ba = b.xyz - a.xyz;
+    let pa = p.xyz - a.xyz;
+    let pb = p.xyz - b.xyz;
+
+    let h = saturate(dot(pa, ba) / dot(ba, ba));
+    let sdf = length(pa - ba * h) - r;
+
+    if (ENVIRONMENT.settings.shadows > 0.5) { return sdf; }
+
+    let plane_a = dot(pa,-a.clip);
+    let plane_b = dot(pb, b.clip);
+
+    return max(sdf, max(plane_a, plane_b));
 }

@@ -18,6 +18,7 @@ impl AmbientOcclusionPipeline {
                 "Occlusion::Ambient",
                 &gpu.pipeline_layout(&[
                     &MipTexture3D::<R32Float>::layout(gpu),
+                    &MipTexture3D::<R32Float>::layout(gpu),
                     &MipTexture3D::<R32Float>::layout_write(gpu),
                     &Environment::layout(gpu),
                 ]),
@@ -36,8 +37,9 @@ impl AmbientOcclusionPipeline {
 
         pass.set_pipeline(&self.occlusion);
         pass.set_bind_group(0, frame.occupancy().density().binding(), &[]);
-        pass.set_bind_group(1, frame.occlusion().ambient().binding_write(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(1, frame.culling().culling().binding(), &[]);
+        pass.set_bind_group(2, frame.occlusion().ambient().binding_write(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
     }
 }

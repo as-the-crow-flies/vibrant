@@ -8,7 +8,7 @@ fn voxelize(index: u32, v0: Vertex, v1: Vertex, radius: f32) {
                 let voxel = vec3<i32>(x, y, z);
                 let sample = vec3<f32>(voxel) + 0.5;
 
-                let sdf = capsule(sample, v0.xyz, v1.xyz, radius);
+                let sdf = capsule_box(sample, v0.xyz, v1.xyz, radius);
 
                 if (sdf <= 1.22474487139) {
                     visit_voxel(voxel, index, v0, v1);
@@ -18,7 +18,7 @@ fn voxelize(index: u32, v0: Vertex, v1: Vertex, radius: f32) {
     }
 }
 
-fn capsule(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
+fn capsule_box(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
     let pa = p - a;
     let ba = b - a;
     let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);

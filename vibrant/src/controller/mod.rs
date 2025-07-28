@@ -92,6 +92,11 @@ impl Controller {
                         LineRenderMode::RayCasting,
                         "RayCasting",
                     );
+                    ui.selectable_value(
+                        &mut self.settings.render,
+                        LineRenderMode::Volume,
+                        "Volume",
+                    );
                 });
 
             ComboBox::from_label("Voxelization Mode")

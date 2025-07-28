@@ -54,8 +54,8 @@ impl LineRenderer {
         self.transform.render(cmd, environment, line);
         self.occupancy
             .render(cmd, frame, environment, settings.voxelization, line);
-        self.occlusion.render(cmd, frame, environment);
         self.culling.render(cmd, frame, environment);
+        self.occlusion.render(cmd, frame, environment);
         self.populate
             .render(cmd, frame, environment, settings.voxelization, line);
         self.render

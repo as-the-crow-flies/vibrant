@@ -1,23 +1,29 @@
+pub mod ray;
+pub mod volume;
+
 use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineSet,
     controller::settings::LineRenderMode,
     gpu::Gpu,
-    renderer::{environment::Environment, line::render::ray::RayCastingLineRenderPipeline},
+    renderer::{
+        environment::Environment,
+        line::render::{ray::RayCastingLineRenderPipeline, volume::VolumeLineRenderPipeline},
+    },
     surface::Frame,
 };
 
-pub mod ray;
-
 pub struct LineRenderPipeline {
-    hybrid: RayCastingLineRenderPipeline,
+    ray: RayCastingLineRenderPipeline,
+    volume: VolumeLineRenderPipeline,
 }
 
 impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            hybrid: RayCastingLineRenderPipeline::new(gpu),
+            ray: RayCastingLineRenderPipeline::new(gpu),
+            volume: VolumeLineRenderPipeline::new(gpu),
         }
     }
 
@@ -30,7 +36,8 @@ impl LineRenderPipeline {
         mode: LineRenderMode,
     ) {
         match mode {
-            LineRenderMode::RayCasting => self.hybrid.render(cmd, frame, environment, line),
+            LineRenderMode::RayCasting => self.ray.render(cmd, frame, environment, line),
+            LineRenderMode::Volume => self.volume.render(cmd, frame, environment),
         }
     }
 }
