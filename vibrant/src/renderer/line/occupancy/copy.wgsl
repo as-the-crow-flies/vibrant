@@ -9,8 +9,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let index = block_index(voxel, textureDimensions(DENSITY));
 
     let density_count_encoded = DENSITY_COUNT_BUFFER[index];
-    let density = saturate(ENVIRONMENT.settings.alpha * U12_MAX_INV * f32(density_count_encoded >> U14_SHIFT));
-    let count = density_count_encoded & U14_MAX;
+    let density = saturate(ENVIRONMENT.settings.alpha * U12_MAX_INV * f32(density_count_encoded >> U16_SHIFT));
+    let count = density_count_encoded & U16_MAX;
 
     textureStore(DENSITY, voxel, vec4<f32>(density));
     textureStore(COUNT, voxel, vec4<u32>(count));

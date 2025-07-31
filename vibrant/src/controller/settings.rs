@@ -16,7 +16,7 @@ pub struct Settings {
     pub width: u32,
     pub height: u32,
     pub volume: u32,
-    pub streamline_radius: f32,
+    pub radius: f32,
     pub lighting: f32,
     pub direct_light: f32,
     pub tangent_color: f32,
@@ -34,8 +34,8 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            volume: 256,
-            streamline_radius: 0.4,
+            volume: 128,
+            radius: 0.2,
             lighting: 1.0,
             direct_light: 0.67,
             tangent_color: 1.0,
@@ -44,7 +44,7 @@ impl Settings {
             level: 0.0,
             smoothing: 0.67,
             culling: true,
-            render: LineRenderMode::Volume,
+            render: LineRenderMode::RayCasting,
             voxelization: LineVoxelizationMode::Tube,
         }
     }

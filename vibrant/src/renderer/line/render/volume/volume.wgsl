@@ -21,7 +21,7 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let dim_u32 = vec3<u32>(textureDimensions(DENSITY));
     let dim = vec3<f32>(dim_u32);
 
-    let radius = ENVIRONMENT.settings.streamline_radius / dim.x;
+    let radius = ENVIRONMENT.settings.radius / dim.x;
     let alpha = ENVIRONMENT.settings.alpha;
 
     let uv = vec2<f32>(1.0, -1.0) * (pixel.xy / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0);

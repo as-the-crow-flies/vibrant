@@ -18,7 +18,7 @@ var<workgroup> WORKGROUP_OFFSET: u32;
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&LINE_INDEX);
-    let radius = ENVIRONMENT.settings.streamline_radius;
+    let radius = ENVIRONMENT.settings.radius;
 
     var offset = 0u;
 
@@ -46,7 +46,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
                 v0 = unpack_vertex(LINE_VERTEX[index + 0]);
                 v1 = unpack_vertex(LINE_VERTEX[index + 1]);
 
-                if (occupancy(v0.xyz, v1.xyz) > 0.0) { break; }
+                if (ENVIRONMENT.settings.culling == 1 && culling(v0.xyz, v1.xyz) > 0.0) { break; }
             }
 
             voxelize(index, v0, v1, radius);
@@ -59,8 +59,7 @@ fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length
 
     if (should_write) {
         let idx = block_index(vec3<u32>(voxel), textureDimensions(CULLING));
-        let offset = &OFFSET[idx];
-        INDEX[atomicAdd(offset, 1u)] = index;
+        INDEX[atomicAdd(&OFFSET[idx], 1u)] = index;
     }
 }
 
@@ -68,16 +67,19 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     visit_voxel_line(voxel, index, v0, v1, 0.0);
 }
 
-fn occupancy(v0: vec3<f32>, v1: vec3<f32>) -> f32 {
-    let level = maximum(32 - countLeadingZeros(vec3<u32>(v0) ^ vec3<u32>(v1)));
+fn culling(v0: vec3<f32>, v1: vec3<f32>) -> f32 {
+    let v_min = vec3<u32>(min(v0, v1) - ENVIRONMENT.settings.radius);
+    let v_max = vec3<u32>(max(v0, v1) + ENVIRONMENT.settings.radius);
+
+    let level = 32 - minimum3(countLeadingZeros(v_min ^ v_max));
 
     return select(
         1.0,
-        textureLoad(CULLING, vec3<u32>(v0) >> vec3<u32>(level), i32(level)).x,
+        textureLoad(CULLING, v_min >> vec3<u32>(level), i32(level)).x,
         level < textureNumLevels(CULLING)
     );
 }
 
-fn maximum(v: vec3<u32>) -> u32 {
-    return max(max(v.x, v.y), v.z);
+fn minimum3(v: vec3<u32>) -> u32 {
+    return min(min(v.x, v.y), v.z);
 }

@@ -21,7 +21,7 @@ var<private> DENSITY_MULTIPLIER: f32;
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = arrayLength(&LINE_INDEX);
 
-    RADIUS = ENVIRONMENT.settings.streamline_radius;
+    RADIUS = ENVIRONMENT.settings.radius;
     DENSITY_MULTIPLIER = PI * RADIUS * RADIUS;
 
     var offset = 0u;
@@ -62,15 +62,15 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 
     let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
 
-    let sample = vec3<f32>(voxel) + 0.5;
+    let p = vec3<f32>(voxel) + 0.5;
 
-    let sample_v0 = sample - v0.xyz;
     let delta = v1.xyz - v0.xyz;
-    let height = clamp(dot(sample_v0, delta) / dot(delta, delta), 0.0, 1.0);
+    let pv0 = p.xyz - v0.xyz;
+    let pv1 = p.xyz - v1.xyz;
 
-    // let sdf = cylinder(sample, v0.xyz, v1.xyz, radius_clamp);
+    let height = saturate(dot(pv0, delta) / dot(delta, delta));
 
-    let sdf = capsule(sample, v0, v1, radius_clamp);
+    let sdf = max(length(pv0 - delta * height) - radius_clamp, max(-dot(pv0, v0.clip), dot(pv1, v1.clip)));
 
     let density = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
 
@@ -78,21 +78,5 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 }
 
 fn encode_density(density: f32) -> u32 {
-    return (u32(density * U12_MAX_f32) << U14_SHIFT) + 1;
-}
-
-fn capsule(p: vec3<f32>, a: Vertex, b: Vertex, r: f32) -> f32 {
-    let ba = b.xyz - a.xyz;
-    let pa = p.xyz - a.xyz;
-    let pb = p.xyz - b.xyz;
-
-    let h = saturate(dot(pa, ba) / dot(ba, ba));
-    let sdf = length(pa - ba * h) - r;
-
-    if (ENVIRONMENT.settings.shadows > 0.5) { return sdf; }
-
-    let plane_a = dot(pa,-a.clip);
-    let plane_b = dot(pb, b.clip);
-
-    return max(sdf, max(plane_a, plane_b));
+    return (u32(density * U12_MAX_f32) << U16_SHIFT) + 1;
 }

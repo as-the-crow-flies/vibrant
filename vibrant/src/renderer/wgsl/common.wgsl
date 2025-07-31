@@ -1,5 +1,5 @@
 struct Settings {
-    streamline_radius: f32,
+    radius: f32,
     lighting: f32,
     direct_light: f32,
     tangent_color: f32,
@@ -36,6 +36,7 @@ const U24_MAX: u32 = 16777215;
 const U24_MAX_f32: f32 = f32(U24_MAX);
 const U24_MAX_INV: f32 = 1.0 / U24_MAX_f32;
 
+const U16_SHIFT: u32 = 16;
 const U16_MAX: u32 = 65535;
 const U16_MAX_f32: f32 = f32(U16_MAX);
 const U16_MAX_INV: f32 = 1.0 / U16_MAX_f32;

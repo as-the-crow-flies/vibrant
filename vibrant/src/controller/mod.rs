@@ -139,10 +139,7 @@ impl Controller {
             ui.label("Appearance");
             ui.separator();
 
-            ui.add(
-                Slider::new(&mut self.settings.streamline_radius, 0.01..=1.0)
-                    .text("Streamline Radius"),
-            );
+            ui.add(Slider::new(&mut self.settings.radius, 0.01..=1.0).text("Streamline Radius"));
 
             ui.add(Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"));
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Ambient/Shadow"));
