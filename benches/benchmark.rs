@@ -1,3 +1,5 @@
+use std::iter::zip;
+
 use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
 use vibrant::{
@@ -16,6 +18,7 @@ use vibrant::{
             render::ray::RayCastingLineRenderPipeline, transform::LineTransformPipeline,
         },
     },
+    sort::{KeyValuePair, SortPipeline},
     surface::Frame,
 };
 
@@ -29,6 +32,57 @@ pub fn empty(criterion: &mut Criterion) {
             gpu.wait();
         })
     });
+}
+
+pub fn sort(criterion: &mut Criterion) {
+    let gpu = &Gpu::new().block_on();
+
+    let sort = SortPipeline::new(gpu);
+
+    let data: Vec<u32> = [0, 0, 1, 5, 4, 3, 6, 8].repeat(256).into_iter().collect();
+
+    let mut bins = [0u32; 10];
+
+    let scan: Vec<u32> = data
+        .iter()
+        .map(|&x| {
+            let original = bins[x as usize];
+            bins[x as usize] += 1;
+            original
+        })
+        .collect();
+
+    let ping = KeyValuePair::new(gpu, data.len() as u32);
+    let pong = KeyValuePair::new(gpu, data.len() as u32);
+
+    gpu.queue()
+        .write_buffer(ping.value(), 0, bytemuck::cast_slice(&data));
+
+    gpu.queue().submit([]);
+
+    criterion.bench_function("sort", |bencher| {
+        bencher.iter(|| {
+            let mut cmd = gpu.cmd();
+
+            sort.dispatch(&mut cmd, ping.binding(), pong.binding(), ping.count());
+
+            gpu.submit(cmd);
+            gpu.wait();
+        })
+    });
+
+    // let histogram: Vec<u32> = gpu.read_buffer(sort.histogram()).block_on();
+    // dbg!(histogram);
+
+    let result: Vec<u32> = gpu.read_buffer(pong.value()).block_on();
+    // dbg!(&result);
+
+    let zipped: Vec<(u32, u32)> = zip(scan, result).collect();
+
+    println!("{:?}", &zipped[0..16]);
+
+    let test = zipped.iter().all(|(s, r)| s == r);
+    dbg!(test);
 }
 
 pub fn density(criterion: &mut Criterion) {
@@ -276,7 +330,7 @@ pub fn full(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, empty, density, occlusion, occupancy, populate, render, full);
+criterion_group!(benches, empty, sort, density, occlusion, occupancy, populate, render, full);
 criterion_main!(benches);
 
 pub fn get_tractogram(gpu: &Gpu) -> LineSet {
