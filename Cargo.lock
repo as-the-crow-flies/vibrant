@@ -3160,6 +3160,7 @@ dependencies = [
  "env_logger",
  "log",
  "pollster 0.3.0",
+ "rand",
  "vibrant",
  "wasm-bindgen",
  "wasm-bindgen-futures",

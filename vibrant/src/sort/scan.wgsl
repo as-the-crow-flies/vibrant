@@ -1,5 +1,5 @@
 @group(0) @binding(0) var<storage, read_write> HISTOGRAM: array<u32>;
-@group(0) @binding(1) var<storage, read_write> STATUS: array<u32>;
+@group(0) @binding(1) var<storage, read_write> STATUS: array<atomic<u32>>;
 @group(0) @binding(2) var<storage, read_write> OFFSET: array<atomic<u32>>;
 @group(0) @binding(3) var<storage> COUNT: u32;
 
@@ -21,9 +21,11 @@ const SUBGROUP_COUNT: u32 = 32;
 const CHUNK_SIZE: u32 = 32;
 
 var<workgroup> SUBGROUP_OFFSETS: array<atomic<u32>, RADIX * SUBGROUP_COUNT>;
-var<workgroup> WORKGROUP_OFFSETS: array<u32, RADIX>;
+var<workgroup> WORKGROUP_OFFSETS: array<atomic<u32>, RADIX>;
+var<workgroup> WORKGROUP_OFFSETS_FALLBACK: array<atomic<u32>, RADIX>;
 
 var<workgroup> WORKGROUP_OFFSET: u32;
+var<workgroup> WORKGROUP_FALLBACK: atomic<i32>;
 
 @compute
 @workgroup_size(WORKGROUP_SIZE, 1, 1)
@@ -41,6 +43,11 @@ fn main(
         if (workgroup_offset >= COUNT) { break; }
 
         workgroupBarrier();
+
+        // Clear Fallback Flag
+        if (local_index == 0) {
+            atomicStore(&WORKGROUP_FALLBACK, -1);
+        }
 
         // Clear Statusses & Workgroup Offsets
         if (local_index < RADIX) {
@@ -66,12 +73,16 @@ fn main(
 
         // Populate Subgroup Offsets for Data Chunk
         var offsets = array<u32, CHUNK_SIZE>();
-        var wave_flags = U32_MAX;
 
         // (Warp/Subgroup)-Level Multi Split
         for (var i = 0u; i < CHUNK_SIZE; i++) {
+            let radix = extract_byte(values[i], RADIX_SHIFT);
+            let subgroup_radix_index = subgroup_id * RADIX + radix;
+
+            var wave_flags = U32_MAX;
+
             for (var k = 0u; k < 8; k++) {
-                let t = bool((values[i] >> (k + RADIX_SHIFT)) & 1u);
+                let t = bool((radix >> k) & 1u);
                 wave_flags &= select(U32_MAX, 0u, t) ^ subgroupBallot(t).x;
             }
 
@@ -80,8 +91,7 @@ fn main(
             let lowest_rank_peer = countTrailingZeros(wave_flags);
 
             var subgroup_exclusive_total = 0u;
-            if (peer_bits == 0) {
-                let subgroup_radix_index = extract_byte(values[i], RADIX_SHIFT) + subgroup_id * RADIX;
+            if (subgroup_index == lowest_rank_peer) {
                 subgroup_exclusive_total = atomicAdd(&SUBGROUP_OFFSETS[subgroup_radix_index], total_bits);
             }
 
@@ -100,7 +110,7 @@ fn main(
 
             // Publish Workgroup Status
             if (subgroup_index == SUBGROUP_SIZE - 1) {
-                STATUS[workgroup_index * RADIX + radix] = ((offset + count) << 2) | STATUS_LOCAL;
+                atomicStore(&STATUS[workgroup_index * RADIX + radix], ((offset + count) << 2) | STATUS_LOCAL);
             }
 
             // Update Subgroup Offset
@@ -111,7 +121,7 @@ fn main(
 
         // Lookback
         if (local_index < RADIX) {
-            let count = STATUS[workgroup_index * RADIX + local_index] >> 2;
+            let count = atomicLoad(&STATUS[workgroup_index * RADIX + local_index]) >> 2;
             var offset = 0u;
 
             for (var i = i32(workgroup_index) - 1; i >= 0; i--) {
@@ -119,11 +129,13 @@ fn main(
 
                 offset += status.offset;
 
-                if (status.flag == STATUS_GLOBAL || status.flag == STATUS_NOPE) { break; }
+                if (status.flag == STATUS_GLOBAL || status.flag == STATUS_NOPE) {
+                    break;
+                }
             }
 
-            WORKGROUP_OFFSETS[local_index] = offset;
-            STATUS[workgroup_index * RADIX + local_index] = ((offset + count) << 2) | STATUS_GLOBAL;
+            atomicStore(&STATUS[workgroup_index * RADIX + local_index], ((offset + count) << 2) | STATUS_GLOBAL);
+            atomicStore(&WORKGROUP_OFFSETS[local_index], offset);
         }
 
         workgroupBarrier();
@@ -137,7 +149,7 @@ fn main(
             let radix_index = extract_byte(values[i], RADIX_SHIFT);
             let subgroup_radix_index = subgroup_id * RADIX + radix_index;
 
-            let global_radix_offset = HISTOGRAM[radix_index];
+            let global_radix_offset = HISTOGRAM[(RADIX_SHIFT >> 3) * RADIX + radix_index];
             let workgroup_offset = WORKGROUP_OFFSETS[radix_index];
             let subgroup_offset = SUBGROUP_OFFSETS[subgroup_radix_index];
 
@@ -150,7 +162,7 @@ fn main(
 
 fn aquire_workgroup_index(local_index: u32) -> u32 {
     if (local_index == 0) {
-        WORKGROUP_OFFSET = atomicAdd(&OFFSET[1], 1u);
+        WORKGROUP_OFFSET = atomicAdd(&OFFSET[1 + (RADIX_SHIFT >> 3)], 1u);
     }
 
     return workgroupUniformLoad(&WORKGROUP_OFFSET);
@@ -166,8 +178,8 @@ fn new_status(status: u32) -> Status {
 }
 
 fn aquire_radix_status(workgroup_index: u32, local_index: u32) -> Status {
-    for (var safety = 0u; safety < 32 * 1048576; safety++) {
-        let status = new_status(STATUS[workgroup_index * RADIX + local_index]);
+    for (var safety = 0u; safety < 1024; safety++) {
+        let status = new_status(atomicLoad(&STATUS[workgroup_index * RADIX + local_index]));
         if (status.flag != STATUS_NOPE) { return status; }
     }
 

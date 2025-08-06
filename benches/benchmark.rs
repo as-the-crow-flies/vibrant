@@ -1,7 +1,6 @@
-use std::iter::zip;
-
 use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
+use rand::Rng;
 use vibrant::{
     asset::line::LineSet,
     controller::{
@@ -39,18 +38,8 @@ pub fn sort(criterion: &mut Criterion) {
 
     let sort = SortPipeline::new(gpu);
 
-    let data: Vec<u32> = [0, 0, 1, 5, 4, 3, 6, 8].repeat(256).into_iter().collect();
-
-    let mut bins = [0u32; 10];
-
-    let scan: Vec<u32> = data
-        .iter()
-        .map(|&x| {
-            let original = bins[x as usize];
-            bins[x as usize] += 1;
-            original
-        })
-        .collect();
+    let mut rng = rand::rng();
+    let data: Vec<u32> = (0..39600000).map(|_| rng.random()).collect();
 
     let ping = KeyValuePair::new(gpu, data.len() as u32);
     let pong = KeyValuePair::new(gpu, data.len() as u32);
@@ -70,19 +59,6 @@ pub fn sort(criterion: &mut Criterion) {
             gpu.wait();
         })
     });
-
-    // let histogram: Vec<u32> = gpu.read_buffer(sort.histogram()).block_on();
-    // dbg!(histogram);
-
-    let result: Vec<u32> = gpu.read_buffer(pong.value()).block_on();
-    // dbg!(&result);
-
-    let zipped: Vec<(u32, u32)> = zip(scan, result).collect();
-
-    println!("{:?}", &zipped[0..16]);
-
-    let test = zipped.iter().all(|(s, r)| s == r);
-    dbg!(test);
 }
 
 pub fn density(criterion: &mut Criterion) {

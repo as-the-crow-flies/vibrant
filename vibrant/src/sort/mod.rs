@@ -43,7 +43,7 @@ impl SortPipeline {
 
         let offset = gpu.device().create_buffer(&BufferDescriptor {
             label: Some(type_name::<Self>()),
-            size: 8,
+            size: 20,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -141,10 +141,28 @@ impl SortPipeline {
         pass.dispatch_workgroups(4, 1, 1);
 
         pass.set_pipeline(&self.scan);
+
+        let n_workgroups = 18;
+
         pass.set_bind_group(1, self.shift_0.binding(), &[]);
         pass.set_bind_group(2, ping, &[]);
         pass.set_bind_group(3, pong, &[]);
-        pass.dispatch_workgroups(32, 1, 1);
+        pass.dispatch_workgroups(n_workgroups, 1, 1);
+
+        pass.set_bind_group(1, self.shift_8.binding(), &[]);
+        pass.set_bind_group(2, pong, &[]);
+        pass.set_bind_group(3, ping, &[]);
+        pass.dispatch_workgroups(n_workgroups, 1, 1);
+
+        pass.set_bind_group(1, self.shift_16.binding(), &[]);
+        pass.set_bind_group(2, ping, &[]);
+        pass.set_bind_group(3, pong, &[]);
+        pass.dispatch_workgroups(n_workgroups, 1, 1);
+
+        pass.set_bind_group(1, self.shift_24.binding(), &[]);
+        pass.set_bind_group(2, pong, &[]);
+        pass.set_bind_group(3, ping, &[]);
+        pass.dispatch_workgroups(n_workgroups, 1, 1);
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -383,7 +401,6 @@ pub mod test {
 
     use itertools::Itertools;
     use pollster::FutureExt;
-    use rand::Rng;
 
     use crate::{
         gpu::Gpu,
@@ -392,13 +409,11 @@ pub mod test {
 
     #[test]
     pub fn test() {
-        let gpu = &Gpu::new().block_on();
-
-        let mut rng = rand::rng();
-        let data: Vec<u32> = (0..239234).map(|_| rng.random_range(0..255)).collect();
+        let data: Vec<u32> = (0..8 * 1024 * 1024).map(|_| rand::random()).collect();
 
         let expected: Vec<u32> = data.iter().copied().sorted().collect();
 
+        let gpu = &Gpu::new().block_on();
         let ping = KeyValuePair::new(gpu, data.len() as u32);
         let pong = KeyValuePair::new(gpu, data.len() as u32);
 
@@ -416,12 +431,7 @@ pub mod test {
         gpu.submit(cmd);
         gpu.wait();
 
-        let status: Vec<u32> = gpu.read_buffer(sort.status()).block_on();
-
-        let histogram: Vec<u32> = gpu.read_buffer(sort.histogram()).block_on();
-        println!("{:?}", &histogram[0..10]);
-
-        let result: Vec<u32> = gpu.read_buffer(pong.value()).block_on();
+        let result: Vec<u32> = gpu.read_buffer(ping.value()).block_on();
         let zipped: Vec<(u32, u32)> = zip(expected, result).collect();
 
         assert!(zipped.iter().all(|(s, r)| s == r));
