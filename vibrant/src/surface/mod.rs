@@ -123,7 +123,7 @@ pub struct Surface {
 }
 
 impl Surface {
-    const FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+    const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
 
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         let surface = gpu

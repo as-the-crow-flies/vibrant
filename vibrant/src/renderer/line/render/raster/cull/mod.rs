@@ -24,13 +24,15 @@ pub struct LineRasterizationCullPipeline {
 
 impl LineRasterizationCullPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        let common = include_str!("../common.wgsl");
+
         let copy = gpu.compute(
             "Rasterization::Cull::Copy",
             &gpu.pipeline_layout(&[
                 &ColorBuffer::layout(gpu),
                 &MipTexture2D::<R32Float>::layout_write(gpu),
             ]),
-            &gpu.shader(include_str!("copy.wgsl")),
+            &gpu.shader(&(common.to_string() + include_str!("copy.wgsl"))),
         );
 
         let mipmap = gpu.compute(
@@ -47,7 +49,7 @@ impl LineRasterizationCullPipeline {
                 &Self::push_layout(gpu),
                 &Environment::layout(gpu),
             ]),
-            &gpu.shader(&(include_str!("../common.wgsl").to_string() + include_str!("cull.wgsl"))),
+            &gpu.shader(&(common.to_string() + include_str!("cull.wgsl"))),
         );
 
         let push = gpu.device().create_buffer(&BufferDescriptor {

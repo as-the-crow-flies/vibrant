@@ -12,5 +12,5 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>) {
         textureLoad(COLOR, 2u * pixel.xy + vec2<u32>(1, 0), 0).a),
         textureLoad(COLOR, 2u * pixel.xy + vec2<u32>(1, 1), 0).a);
 
-    textureStore(OPACITY, pixel.xy, vec4<f32>(f32(min_opacity > 0.95)));
+    textureStore(OPACITY, pixel.xy, vec4<f32>(f32(min_opacity > MAX_OPACITY)));
 }

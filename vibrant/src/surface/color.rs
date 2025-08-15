@@ -19,8 +19,8 @@ pub struct ColorBuffer {
 }
 
 impl ColorBuffer {
-    pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
-    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Rgba16Float;
+    pub const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
+    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());

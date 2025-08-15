@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
-use rand::Rng;
 use vibrant::{
     asset::line::LineSet,
     controller::{
@@ -34,15 +33,21 @@ pub fn empty(criterion: &mut Criterion) {
 }
 
 pub fn sort(criterion: &mut Criterion) {
+    fn quick_random(seed: &mut u32) -> u32 {
+        // Parameters from Numerical Recipes
+        *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+        *seed
+    }
+
+    let mut seed = 123456789;
+    let data: Vec<u32> = (0..39600000).map(|_| quick_random(&mut seed)).collect();
+
     let gpu = &Gpu::new().block_on();
-
-    let sort = SortPipeline::new(gpu);
-
-    let mut rng = rand::rng();
-    let data: Vec<u32> = (0..39600000).map(|_| rng.random()).collect();
 
     let ping = KeyValuePair::new(gpu, data.len() as u32);
     let pong = KeyValuePair::new(gpu, data.len() as u32);
+
+    let sort = SortPipeline::new(gpu);
 
     gpu.queue()
         .write_buffer(ping.value(), 0, bytemuck::cast_slice(&data));

@@ -1,4 +1,4 @@
-use wgpu::FilterMode;
+use wgpu::{CommandEncoder, FilterMode};
 
 use crate::{
     asset::texture::{MipTexture2D, R32Float},
@@ -20,6 +20,10 @@ impl OpacityBuffer {
                 FilterMode::Linear,
             ),
         }
+    }
+
+    pub fn clear(&self, cmd: &mut CommandEncoder) {
+        self.opacity.clear(cmd);
     }
 
     pub fn opacity(&self) -> &MipTexture2D<R32Float> {

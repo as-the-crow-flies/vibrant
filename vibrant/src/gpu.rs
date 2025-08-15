@@ -52,6 +52,7 @@ impl Gpu {
                 },
                 required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                     | Features::FLOAT32_FILTERABLE
+                    | Features::CLEAR_TEXTURE
                     | Features::SUBGROUP,
                 ..Default::default()
             })
@@ -83,9 +84,14 @@ impl Gpu {
     }
 
     pub fn shader(&self, source: &str) -> ShaderModule {
+        let directives = match self.adapter().get_info().backend {
+            wgpu::Backend::BrowserWebGpu => "enable subgroups;\n",
+            _ => "",
+        };
+
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + source)),
+            source: ShaderSource::Wgsl(Cow::Owned(directives.to_string() + COMMON + source)),
         })
     }
 

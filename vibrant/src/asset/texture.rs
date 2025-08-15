@@ -2,10 +2,10 @@ use std::{any::type_name, marker::PhantomData};
 
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Extent3d,
-    FilterMode, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, StorageTextureAccess,
-    Texture, TextureDescriptor, TextureFormat, TextureSampleType, TextureUsages, TextureView,
-    TextureViewDescriptor, TextureViewDimension,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, CommandEncoder,
+    Extent3d, FilterMode, ImageSubresourceRange, Sampler, SamplerBindingType, SamplerDescriptor,
+    ShaderStages, StorageTextureAccess, Texture, TextureAspect, TextureDescriptor, TextureFormat,
+    TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -237,6 +237,19 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
                 resource: BindingResource::Sampler(&self.sampler),
             },
         ]
+    }
+
+    pub fn clear(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_texture(
+            &self.texture,
+            &ImageSubresourceRange {
+                aspect: TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: None,
+                base_array_layer: 0,
+                array_layer_count: None,
+            },
+        );
     }
 
     pub fn layout_entries(offset: u32) -> Vec<BindGroupLayoutEntry> {

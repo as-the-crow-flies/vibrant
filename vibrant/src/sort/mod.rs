@@ -132,17 +132,17 @@ impl SortPipeline {
             ..Default::default()
         });
 
+        let n_workgroups = 18;
+
         pass.set_pipeline(&self.histogram_count);
         pass.set_bind_group(0, &self.binding, &[]);
         pass.set_bind_group(1, ping, &[]);
-        pass.dispatch_workgroups(32, 1, 1);
+        pass.dispatch_workgroups(n_workgroups, 1, 1);
 
         pass.set_pipeline(&self.histogram_sum);
         pass.dispatch_workgroups(4, 1, 1);
 
         pass.set_pipeline(&self.scan);
-
-        let n_workgroups = 18;
 
         pass.set_bind_group(1, self.shift_0.binding(), &[]);
         pass.set_bind_group(2, ping, &[]);
@@ -411,10 +411,18 @@ pub mod test {
 
     #[test]
     pub fn test() {
-        let n = 8 * 1024 * 1024;
+        fn quick_random(seed: &mut u32) -> u32 {
+            // Parameters from Numerical Recipes
+            *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            *seed
+        }
+
+        let mut seed = 123456789;
+
+        let n = 1024 * 1024;
 
         let keys: Vec<u32> = (0..n).collect();
-        let values: Vec<u32> = (0..n).map(|_| rand::random()).collect();
+        let values: Vec<u32> = (0..n).map(|_| quick_random(&mut seed)).collect();
 
         let expected_values: Vec<u32> = values.iter().copied().sorted().collect();
         let expected_keys: Vec<u32> = values

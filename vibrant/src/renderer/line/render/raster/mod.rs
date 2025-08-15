@@ -101,6 +101,7 @@ impl LineRasterizationPipeline {
         settings: &Settings,
     ) {
         frame.kbuffer().clear(cmd);
+        frame.opacity().clear(cmd);
 
         self.sort.dispatch(cmd, environment, line);
 

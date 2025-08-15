@@ -22,7 +22,6 @@ const CHUNK_SIZE: u32 = 32;
 
 var<workgroup> SUBGROUP_OFFSETS: array<atomic<u32>, RADIX * SUBGROUP_COUNT>;
 var<workgroup> WORKGROUP_OFFSETS: array<atomic<u32>, RADIX>;
-
 var<workgroup> WORKGROUP_OFFSET: u32;
 
 @compute

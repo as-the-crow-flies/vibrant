@@ -1,5 +1,7 @@
 const K: u32 = 8u;
 
+const MAX_OPACITY: f32 = 0.95;
+
 // Adapted from David Groß and Stefan Gumhold 2020
 fn generate_view_aligned_quad(eye: vec3<f32>, view: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> mat4x4<f32> {
 	let delta = normalize(pb - pa);

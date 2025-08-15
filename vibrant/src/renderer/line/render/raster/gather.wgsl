@@ -20,6 +20,7 @@ struct Fragment {
 @group(2) @binding(1) var SAMPLER: sampler;
 @group(2) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
 @group(2) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
+@group(2) @binding(8) var OPACITY: texture_2d<f32>;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -58,6 +59,8 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
 fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let pixel = vec2<u32>(fragment.clip.xy);
     let pixel_index = pixel.y * ENVIRONMENT.surface.x + pixel.x;
+
+    if (textureLoad(OPACITY, pixel >> vec2<u32>(1), 0).x > MAX_OPACITY) { discard; }
 
     let scale = 1.0 / f32(ENVIRONMENT.volume);
     let radius = ENVIRONMENT.settings.radius;
