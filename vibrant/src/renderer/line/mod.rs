@@ -10,7 +10,7 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineSet,
-    controller::settings::Settings,
+    controller::settings::{LineRenderMode, Settings},
     gpu::Gpu,
     renderer::line::{
         culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
@@ -56,9 +56,12 @@ impl LineRenderer {
             .render(cmd, frame, environment, settings.voxelization, line);
         self.culling.render(cmd, frame, environment);
         self.occlusion.render(cmd, frame, environment);
-        self.populate
-            .render(cmd, frame, environment, settings.voxelization, line);
-        self.render
-            .render(cmd, environment, frame, line, settings.render);
+
+        if settings.render == LineRenderMode::RayCasting {
+            self.populate
+                .render(cmd, frame, environment, settings.voxelization, line);
+        }
+
+        self.render.render(cmd, environment, frame, line, settings);
     }
 }

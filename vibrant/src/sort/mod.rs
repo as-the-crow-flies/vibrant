@@ -57,7 +57,7 @@ impl SortPipeline {
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
-            layout: &Self::layout_histogram(gpu),
+            layout: &Self::layout(gpu),
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -90,7 +90,7 @@ impl SortPipeline {
             shift_24: RadixShift::new(gpu, 24),
             histogram_count: gpu.compute(
                 "Sort::Histogram::Count",
-                &gpu.pipeline_layout(&[&Self::layout_histogram(gpu), &Self::layout(gpu)]),
+                &gpu.pipeline_layout(&[&Self::layout(gpu), &KeyValuePair::layout(gpu)]),
                 &gpu.shader(
                     &(include_str!("common.wgsl").to_string()
                         + include_str!("histogram_count.wgsl")),
@@ -98,7 +98,7 @@ impl SortPipeline {
             ),
             histogram_sum: gpu.compute(
                 "Sort::Histogram::Sum",
-                &gpu.pipeline_layout(&[&Self::layout_histogram(gpu)]),
+                &gpu.pipeline_layout(&[&Self::layout(gpu)]),
                 &gpu.shader(
                     &(include_str!("common.wgsl").to_string() + include_str!("histogram_sum.wgsl")),
                 ),
@@ -106,10 +106,10 @@ impl SortPipeline {
             scan: gpu.compute(
                 "Sort::Scan",
                 &gpu.pipeline_layout(&[
-                    &Self::layout_histogram(gpu),
+                    &Self::layout(gpu),
                     &RadixShift::layout(gpu),
-                    &Self::layout(gpu),
-                    &Self::layout(gpu),
+                    &KeyValuePair::layout(gpu),
+                    &KeyValuePair::layout(gpu),
                 ]),
                 &gpu.shader(&(include_str!("common.wgsl").to_string() + include_str!("scan.wgsl"))),
             ),
@@ -165,37 +165,6 @@ impl SortPipeline {
         pass.dispatch_workgroups(n_workgroups, 1, 1);
     }
 
-    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    // Keys
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Values
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            })
-    }
-
     pub fn histogram(&self) -> &Buffer {
         &self.histogram
     }
@@ -204,7 +173,7 @@ impl SortPipeline {
         &self.status
     }
 
-    fn layout_histogram(gpu: &Gpu) -> BindGroupLayout {
+    fn layout(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
@@ -261,7 +230,9 @@ impl SortPipeline {
 impl Drop for SortPipeline {
     fn drop(&mut self) {
         self.histogram.destroy();
+        self.status.destroy();
         self.offset.destroy();
+        self.count.destroy();
     }
 }
 
@@ -349,7 +320,7 @@ impl KeyValuePair {
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
-            layout: &SortPipeline::layout(gpu),
+            layout: &Self::layout(gpu),
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -385,6 +356,37 @@ impl KeyValuePair {
     pub fn binding(&self) -> &BindGroup {
         &self.binding
     }
+
+    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    // Keys
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Values
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            })
+    }
 }
 
 impl Drop for KeyValuePair {
@@ -409,16 +411,28 @@ pub mod test {
 
     #[test]
     pub fn test() {
-        let data: Vec<u32> = (0..8 * 1024 * 1024).map(|_| rand::random()).collect();
+        let n = 8 * 1024 * 1024;
 
-        let expected: Vec<u32> = data.iter().copied().sorted().collect();
+        let keys: Vec<u32> = (0..n).collect();
+        let values: Vec<u32> = (0..n).map(|_| rand::random()).collect();
+
+        let expected_values: Vec<u32> = values.iter().copied().sorted().collect();
+        let expected_keys: Vec<u32> = values
+            .iter()
+            .copied()
+            .enumerate()
+            .sorted_by_key(|&(_, v)| v)
+            .map(|(k, _)| k as u32)
+            .collect();
 
         let gpu = &Gpu::new().block_on();
-        let ping = KeyValuePair::new(gpu, data.len() as u32);
-        let pong = KeyValuePair::new(gpu, data.len() as u32);
+        let ping = KeyValuePair::new(gpu, values.len() as u32);
+        let pong = KeyValuePair::new(gpu, values.len() as u32);
 
         gpu.queue()
-            .write_buffer(ping.value(), 0, bytemuck::cast_slice(&data));
+            .write_buffer(ping.key(), 0, bytemuck::cast_slice(&keys));
+        gpu.queue()
+            .write_buffer(ping.value(), 0, bytemuck::cast_slice(&values));
 
         gpu.queue().submit([]);
 
@@ -431,9 +445,13 @@ pub mod test {
         gpu.submit(cmd);
         gpu.wait();
 
-        let result: Vec<u32> = gpu.read_buffer(ping.value()).block_on();
-        let zipped: Vec<(u32, u32)> = zip(expected, result).collect();
+        let resulting_keys: Vec<u32> = gpu.read_buffer(ping.key()).block_on();
+        let resulting_values: Vec<u32> = gpu.read_buffer(ping.value()).block_on();
 
-        assert!(zipped.iter().all(|(s, r)| s == r));
+        let zipped_keys: Vec<(u32, u32)> = zip(expected_keys, resulting_keys).collect();
+        let zipped_values: Vec<(u32, u32)> = zip(expected_values, resulting_values).collect();
+
+        assert!(zipped_keys.iter().all(|(s, r)| s == r));
+        assert!(zipped_values.iter().all(|(s, r)| s == r));
     }
 }

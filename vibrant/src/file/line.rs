@@ -1,7 +1,7 @@
 use glam::{Vec3, Vec4};
 use itertools::Itertools;
 
-use std::{collections::HashMap, fs, io::BufRead};
+use std::{collections::HashMap, fs, io::BufRead, path::Path};
 
 use super::bounds::Bounds;
 
@@ -121,12 +121,12 @@ impl LineFile {
     }
 
     pub fn from_file(path: &str) -> LineFile {
-        if let Some((_, extension)) = path.split_once(".") {
-            return match extension {
-                "tck" => LineFile::from_tck(
+        if let Some(extension) = Path::new(path).extension() {
+            return match extension.to_str() {
+                Some("tck") => LineFile::from_tck(
                     &fs::read(path).expect(&format!("Couldn't read file {:?}", path)),
                 ),
-                "obj" => LineFile::from_obj(
+                Some("obj") => LineFile::from_obj(
                     &fs::read_to_string(path).expect(&format!("Couldn't read file {:?}", path)),
                 ),
                 _ => panic!("unknown file type"),

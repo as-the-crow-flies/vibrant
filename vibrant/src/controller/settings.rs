@@ -7,6 +7,7 @@ pub enum LineVoxelizationMode {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineRenderMode {
+    Rasterization,
     RayCasting,
     Volume,
 }
@@ -25,6 +26,7 @@ pub struct Settings {
     pub level: f32,
     pub smoothing: f32,
     pub culling: bool,
+    pub slice_count: u32,
     pub render: LineRenderMode,
     pub voxelization: LineVoxelizationMode,
 }
@@ -40,11 +42,12 @@ impl Settings {
             direct_light: 0.67,
             tangent_color: 1.0,
             shadows: 0.0,
-            alpha: 1.0,
+            alpha: 0.35,
             level: 0.0,
             smoothing: 0.67,
             culling: true,
-            render: LineRenderMode::RayCasting,
+            slice_count: 10,
+            render: LineRenderMode::Rasterization,
             voxelization: LineVoxelizationMode::Tube,
         }
     }

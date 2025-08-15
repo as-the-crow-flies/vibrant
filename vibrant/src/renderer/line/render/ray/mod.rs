@@ -35,15 +35,16 @@ impl RayCastingLineRenderPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        tractogram: &LineSet,
+        line: &LineSet,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment_srgb_clear())],
+            label: Some("Ray"),
             ..Default::default()
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, tractogram.binding(true), &[]);
+        pass.set_bind_group(0, line.binding(true), &[]);
         pass.set_bind_group(1, frame.culling().binding_read(), &[]);
         pass.set_bind_group(2, frame.binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);

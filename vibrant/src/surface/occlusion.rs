@@ -17,8 +17,20 @@ pub struct OcclusionBuffer {
 
 impl OcclusionBuffer {
     pub fn new(gpu: &Gpu, resolution: u32) -> Self {
-        let ambient = MipTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear);
-        let directional = MipTexture3D::<R32Float>::new(gpu, resolution, FilterMode::Linear);
+        let ambient = MipTexture3D::<R32Float>::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            FilterMode::Linear,
+        );
+        let directional = MipTexture3D::<R32Float>::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            FilterMode::Linear,
+        );
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),

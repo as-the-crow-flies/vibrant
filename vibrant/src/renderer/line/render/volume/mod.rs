@@ -24,7 +24,8 @@ impl VolumeLineRenderPipeline {
 
     pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment_srgb_clear())],
+            label: Some("Volume"),
             ..Default::default()
         });
 

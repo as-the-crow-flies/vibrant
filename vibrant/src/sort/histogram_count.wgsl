@@ -21,7 +21,7 @@ fn main(
     let subgroup_id = local_index / SUBGROUP_SIZE;
 
     loop {
-        let workgroup_index = aquire_workgroup_index(local_index);
+        let workgroup_index = acquire_workgroup_index(local_index);
         let workgroup_offset = workgroup_index * CHUNK_SIZE * WORKGROUP_SIZE;
         let subgroup_offset = workgroup_offset + subgroup_id * SUBGROUP_SIZE * CHUNK_SIZE;
 
@@ -45,7 +45,7 @@ fn main(
     atomicAdd(&HISTOGRAM[local_index], atomicLoad(&HISTOGRAM_WORKGROUP[local_index]));
 }
 
-fn aquire_workgroup_index(local_index: u32) -> u32 {
+fn acquire_workgroup_index(local_index: u32) -> u32 {
     if (local_index == 0) {
         WORKGROUP_OFFSET = atomicAdd(&OFFSET[0], 1u);
     }

@@ -89,6 +89,11 @@ impl Controller {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.settings.render,
+                        LineRenderMode::Rasterization,
+                        "Rasterization",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.render,
                         LineRenderMode::RayCasting,
                         "RayCasting",
                     );
@@ -123,7 +128,7 @@ impl Controller {
             ui.label("Resolutions");
             ui.separator();
 
-            ComboBox::from_label("Density")
+            ComboBox::from_label("Volume")
                 .selected_text(format!("{:?}", self.settings.volume))
                 .show_ui(ui, |ui| {
                     for power in 5u32..10 {
@@ -140,15 +145,15 @@ impl Controller {
             ui.separator();
 
             ui.add(Slider::new(&mut self.settings.radius, 0.01..=1.0).text("Streamline Radius"));
-
             ui.add(Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"));
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Ambient/Shadow"));
             ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
             ui.add(Slider::new(&mut self.settings.shadows, 0.0..=1.0).text("Shadows"));
             ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
-            ui.checkbox(&mut self.settings.culling, "Enable Culling");
-            ui.add(Slider::new(&mut self.settings.level, 0.0..=8.0).text("Mipmap Level"));
             ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
+            ui.add(Slider::new(&mut self.settings.slice_count, 1..=64).text("Slices"));
+
+            ui.checkbox(&mut self.settings.culling, "Enable Culling");
         });
     }
 

@@ -22,10 +22,8 @@ const CHUNK_SIZE: u32 = 32;
 
 var<workgroup> SUBGROUP_OFFSETS: array<atomic<u32>, RADIX * SUBGROUP_COUNT>;
 var<workgroup> WORKGROUP_OFFSETS: array<atomic<u32>, RADIX>;
-var<workgroup> WORKGROUP_OFFSETS_FALLBACK: array<atomic<u32>, RADIX>;
 
 var<workgroup> WORKGROUP_OFFSET: u32;
-var<workgroup> WORKGROUP_FALLBACK: atomic<i32>;
 
 @compute
 @workgroup_size(WORKGROUP_SIZE, 1, 1)
@@ -36,18 +34,13 @@ fn main(
     let subgroup_id = local_index / SUBGROUP_SIZE;
 
     loop {
-        let workgroup_index = aquire_workgroup_index(local_index);
+        let workgroup_index = acquire_workgroup_index(local_index);
         let workgroup_offset = workgroup_index * CHUNK_SIZE * WORKGROUP_SIZE;
         let subgroup_offset = workgroup_offset + subgroup_id * SUBGROUP_SIZE * CHUNK_SIZE;
 
         if (workgroup_offset >= COUNT) { break; }
 
         workgroupBarrier();
-
-        // Clear Fallback Flag
-        if (local_index == 0) {
-            atomicStore(&WORKGROUP_FALLBACK, -1);
-        }
 
         // Clear Statusses & Workgroup Offsets
         if (local_index < RADIX) {
@@ -59,6 +52,7 @@ fn main(
         for (var i = 0u; i < 8u; i++) {
             atomicStore(&SUBGROUP_OFFSETS[WORKGROUP_SIZE * i + local_index], 0u);
         }
+
         workgroupBarrier();
 
         // Grab Values
@@ -125,7 +119,7 @@ fn main(
             var offset = 0u;
 
             for (var i = i32(workgroup_index) - 1; i >= 0; i--) {
-                let status = aquire_radix_status(u32(i), local_index);
+                let status = acquire_radix_status(u32(i), local_index);
 
                 offset += status.offset;
 
@@ -156,11 +150,12 @@ fn main(
             let offset = global_radix_offset + workgroup_offset + subgroup_offset + offsets[i];
 
             VALUES_OUT[offset] = values[i];
+            KEYS_OUT[offset] = KEYS_IN[index];
         }
     }
 }
 
-fn aquire_workgroup_index(local_index: u32) -> u32 {
+fn acquire_workgroup_index(local_index: u32) -> u32 {
     if (local_index == 0) {
         WORKGROUP_OFFSET = atomicAdd(&OFFSET[1 + (RADIX_SHIFT >> 3)], 1u);
     }
@@ -177,7 +172,7 @@ fn new_status(status: u32) -> Status {
     return Status(status & 3, status >> 2);
 }
 
-fn aquire_radix_status(workgroup_index: u32, local_index: u32) -> Status {
+fn acquire_radix_status(workgroup_index: u32, local_index: u32) -> Status {
     for (var safety = 0u; safety < 1024; safety++) {
         let status = new_status(atomicLoad(&STATUS[workgroup_index * RADIX + local_index]));
         if (status.flag != STATUS_NOPE) { return status; }

@@ -91,22 +91,6 @@ pub fn density(criterion: &mut Criterion) {
             gpu.wait();
         })
     });
-
-    let density: Vec<u32> = gpu
-        .read_buffer(frame.occupancy().occupancy_count_buffer())
-        .block_on();
-    let u14_max = 2u32.pow(14) - 1;
-
-    let counts: Vec<u32> = density
-        .iter()
-        .map(|value| value & u14_max)
-        .filter(|&value| value > 0)
-        .collect();
-
-    let max_count = counts.iter().max();
-    let mean_count = counts.iter().sum::<u32>() as usize / counts.len();
-
-    dbg!(max_count, mean_count);
 }
 
 pub fn occlusion(criterion: &mut Criterion) {
@@ -312,9 +296,9 @@ criterion_main!(benches);
 pub fn get_tractogram(gpu: &Gpu) -> LineSet {
     LineSet::new(
         gpu,
-        &LineFile::from_file("assets/3D_line_sets/ANEURYSM.obj"),
+        // &LineFile::from_file("assets/3D_line_sets/ANEURYSM.obj"),
         // &LineFile::from_file("assets/HCP-100307/whole_brain1M.tck"),
-        // &LineFile::from_file("assets/HCP-100307/whole_brain200k.tck"),
+        &LineFile::from_file("assets/HCP-100307/whole_brain200k.tck"),
         // &LineFile::join(vec![
         //     LineFile::from_file("assets/HCP-100307/TOM_trackings/AF_left.tck"),
         //     LineFile::from_file("assets/HCP-100307/TOM_trackings/AF_right.tck"),

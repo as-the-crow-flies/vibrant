@@ -32,8 +32,9 @@ impl OccupancyBuffer {
             mapped_at_creation: false,
         });
 
-        let density = MipTexture3D::new(gpu, resolution, FilterMode::Linear);
-        let count = MipTexture3D::new(gpu, resolution, FilterMode::Nearest);
+        let density =
+            MipTexture3D::new(gpu, resolution, resolution, resolution, FilterMode::Linear);
+        let count = MipTexture3D::new(gpu, resolution, resolution, resolution, FilterMode::Nearest);
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,

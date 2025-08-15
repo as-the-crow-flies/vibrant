@@ -14,7 +14,7 @@
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-const LOCAL_SORT_SIZE: u32 = 16;
+const LOCAL_SORT_SIZE: u32 = 32;
 
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
@@ -177,7 +177,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
 
         let position = origin * DIM + direction * hit.distance;
 
-        return shade(v0, v1, position, direction);
+        return shade(v0, v1, RADIUS, position, direction, position * DIM_INV, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
     }
 }
 
@@ -189,7 +189,7 @@ fn visit_transparency(count: u32, voxel: vec3<u32>, origin: vec3<f32>, direction
     var hit_count = 0u;
     var hits = array<u32, LOCAL_SORT_SIZE>();
 
-    for (var i = 0u; i < count && hit_count < 32; i++) {
+    for (var i = 0u; i < count; i++) {
         let index = INDEX[offset + i];
 
         let hit = hittest(index, origin, direction, increment);
@@ -198,13 +198,12 @@ fn visit_transparency(count: u32, voxel: vec3<u32>, origin: vec3<f32>, direction
 
         let candidate = (u32((hit * increment_inv) * U16_MAX_f32) << 16) | i;
 
-        hits[hit_count] = candidate;
+        insert_hit(&hits, hit_count, candidate);
+
         hit_count++;
     }
 
     if (hit_count > 0) {
-        sort(&hits, hit_count);
-
         var color = vec4<f32>(0.0);
 
         for (var i=0u; i<hit_count; i++) {
@@ -218,11 +217,9 @@ fn visit_transparency(count: u32, voxel: vec3<u32>, origin: vec3<f32>, direction
 
             let position = origin + t_min * direction;
 
-            let clipped = dot(position - v0.xyz, v0.clip) < 0.0 || dot(v1.xyz - position, v1.clip) < 0.0;
+            if (should_be_clipped(v0, v1, position)) { continue; }
 
-            if (clipped) { continue; }
-
-            let c = shade(v0, v1, position, direction);
+            let c = shade(v0, v1, RADIUS, position, direction, position * DIM_INV, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 
             color += (1.0 - color.a) * vec4<f32>(c.rgb * c.a, c.a);
 
@@ -263,42 +260,6 @@ fn hittest(index: u32, origin: vec3<f32>, direction: vec3<f32>, increment: f32) 
     let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
 
     return select(hit, -1.0, hit >= increment);
-}
-
-fn shade(v0: Vertex, v1: Vertex, position: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
-    let delta = v1.xyz - v0.xyz;
-    let pa = position - v0.xyz;
-    let height = saturate(dot(pa, delta) / dot(delta, delta));
-
-    let is_start = all(v0.clip == vec3<f32>());
-    let is_end = all(v1.clip == vec3<f32>());
-
-    let delta_norm = normalize(delta);
-    let tangent = normalize(mix(
-        select(v0.clip, delta_norm, is_start),
-        select(v1.clip, delta_norm, is_end),
-        height
-    ));
-
-    let normal = (pa - height * delta) / RADIUS;
-
-    let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
-    let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
-    let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
-
-    let sample = position * DIM_INV;
-    let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, sample, 0.0).x;
-    let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, sample, 0.0).x;
-    let shadow = anyhit(sample, ENVIRONMENT.light);
-
-    let factor = mix(1.0, mix(ambient, diffuse * min(directional, shadow),
-        ENVIRONMENT.settings.direct_light),
-        ENVIRONMENT.settings.lighting);
-
-    let rgb = factor * mix(vec3<f32>(1.0), abs(tangent), ENVIRONMENT.settings.tangent_color);
-    let a = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height);
-
-    return vec4<f32>(rgb, a);
 }
 
 fn anyhit(origin: vec3<f32>, direction: vec3<f32>) -> f32 {
@@ -362,6 +323,36 @@ fn sort(data: ptr<function, array<u32, LOCAL_SORT_SIZE>>, count: u32) {
     }
 }
 
+fn binary_search_insert_index(hits: ptr<function, array<u32, LOCAL_SORT_SIZE>>, hit_count: u32, value: u32) -> u32 {
+    var lo: u32 = 0u;
+    var hi: u32 = hit_count;
+
+    while (lo < hi) {
+        let mid: u32 = (lo + hi) / 2u;
+        if ((*hits)[mid] < value) {
+            lo = mid + 1u;
+        } else {
+            hi = mid;
+        }
+    }
+
+    return lo; // insertion point
+}
+
+fn insert_hit(hits: ptr<function, array<u32, LOCAL_SORT_SIZE>>, hit_count: u32, value: u32) {
+    let hit_count_clamped = min(hit_count, LOCAL_SORT_SIZE);
+
+    let idx = binary_search_insert_index(hits, hit_count_clamped, value);
+
+    // Shift elements to make room
+    for (var i = hit_count_clamped; i > idx; i--) {
+        (*hits)[i] = (*hits)[i - 1u];
+    }
+
+    // Insert and increment count
+    (*hits)[idx] = value;
+}
+
 fn maximum(v: vec3<f32>) -> f32 {
     return max(max(v.x, v.y), v.z);
 }
@@ -377,45 +368,4 @@ fn minimum(v: vec3<f32>) -> f32 {
 fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
     return t.xyz / t.w;
-}
-
-fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
-    return normalize(normal - dot(normal, tangent) * tangent);
-}
-
-// https://iquilezles.org/articles/intersectors
-// https://www.shadertoy.com/view/Xt3SzX
-fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32
-{
-    let ba = pb - pa;
-    let oa = ro - pa;
-
-    let baba = dot(ba,ba);
-    let bard = dot(ba,rd);
-    let baoa = dot(ba,oa);
-    let rdoa = dot(rd,oa);
-    let oaoa = dot(oa,oa);
-
-    var a = baba      - bard*bard;
-    var b = baba*rdoa - baoa*bard;
-    var c = baba*oaoa - baoa*baoa - r*r*baba;
-    var h = b*b - a*c;
-
-    if (h>=0.0) {
-        let t = (-b - sqrt(h)) / a;
-        let y = baoa + t*bard;
-
-        // body
-        if(y > 0.0 && y < baba) { return t; }
-
-        // caps
-        let oc = select(ro - pb, oa, y <= 0.0);
-
-        b = dot(rd, oc);
-        c = dot(oc, oc) - r*r;
-        h = b*b - c;
-        if (h > 0.0) { return -b - sqrt(h); }
-    }
-
-    return 1E6;
 }

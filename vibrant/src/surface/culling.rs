@@ -43,13 +43,13 @@ impl CullingBuffer {
 
         let index = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 2 * 1024 * 1024 * 1024,
+            size: 1024 * 1024 * 1024,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
 
         let culling: MipTexture3D<R32Float> =
-            MipTexture3D::new(gpu, resolution, FilterMode::Linear);
+            MipTexture3D::new(gpu, resolution, resolution, resolution, FilterMode::Linear);
 
         let entries = &[
             BindGroupEntry {

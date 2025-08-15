@@ -1,9 +1,12 @@
 use std::any::type_name;
 
 use wgpu::{
-    ColorTargetState, ColorWrites, Extent3d, LoadOp, Operations, RenderPassColorAttachment,
-    StoreOp, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureView, TextureViewDescriptor,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color,
+    ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
+    RenderPassColorAttachment, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp,
+    Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
+    TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -12,11 +15,12 @@ pub struct ColorBuffer {
     texture: Texture,
     view: TextureView,
     view_srgb: TextureView,
+    binding: BindGroup,
 }
 
 impl ColorBuffer {
-    pub const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
-    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+    pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Rgba16Float;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());
@@ -50,10 +54,37 @@ impl ColorBuffer {
             ..Default::default()
         });
 
+        let sampler = gpu.device().create_sampler(&SamplerDescriptor {
+            label,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
+            ..Default::default()
+        });
+
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &Self::layout(gpu),
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
         Self {
             texture,
             view,
             view_srgb,
+            binding,
         }
     }
 
@@ -67,6 +98,10 @@ impl ColorBuffer {
 
     pub fn texture(&self) -> &Texture {
         &self.texture
+    }
+
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
     }
 
     pub fn target() -> ColorTargetState {
@@ -105,6 +140,42 @@ impl ColorBuffer {
                 store: StoreOp::Store,
             },
         }
+    }
+
+    pub fn attachment_srgb_clear(&self) -> RenderPassColorAttachment {
+        RenderPassColorAttachment {
+            view: &self.view_srgb,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(Color::TRANSPARENT),
+                store: StoreOp::Store,
+            },
+        }
+    }
+
+    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            })
     }
 }
 

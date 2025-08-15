@@ -128,3 +128,111 @@ fn unpack_vertex(v: vec4<f32>) -> Vertex {
     let clip_alpha = unpack_clip_alpha(v.a);
     return Vertex(v.xyz, clip_alpha.xyz, clip_alpha.a);
 }
+
+// https://iquilezles.org/articles/intersectors
+// https://www.shadertoy.com/view/Xt3SzX
+fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32
+{
+    let ba = pb - pa;
+    let oa = ro - pa;
+
+    let baba = dot(ba,ba);
+    let bard = dot(ba,rd);
+    let baoa = dot(ba,oa);
+    let rdoa = dot(rd,oa);
+    let oaoa = dot(oa,oa);
+
+    var a = baba      - bard*bard;
+    var b = baba*rdoa - baoa*bard;
+    var c = baba*oaoa - baoa*baoa - r*r*baba;
+    var h = b*b - a*c;
+
+    if (h>=0.0) {
+        let t = (-b - sqrt(h)) / a;
+        let y = baoa + t*bard;
+
+        // body
+        if(y > 0.0 && y < baba) { return t; }
+
+        // caps
+        let oc = select(ro - pb, oa, y <= 0.0);
+
+        b = dot(rd, oc);
+        c = dot(oc, oc) - r*r;
+        h = b*b - c;
+        if (h > 0.0) { return -b - sqrt(h); }
+    }
+
+    return 1E6;
+}
+
+// https://iquilezles.org/articles/distfunctions/
+fn capsule_sdf(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
+  let pa = p - a;
+  let ba = b - a;
+  let h = saturate(dot(pa,ba) / dot(ba,ba));
+  return length(pa - ba*h) - r;
+}
+
+// https://www.shadertoy.com/view/MlGczG
+fn capsule_normal(pos: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> vec3<f32> {
+    let ba = b - a;
+    let pa = pos - a;
+    let h = saturate(dot(pa, ba) / dot(ba, ba));
+    return (pa - h*ba) / r;
+}
+
+fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
+    return normalize(normal - dot(normal, tangent) * tangent);
+}
+
+fn shade(
+    v0: Vertex,
+    v1: Vertex,
+    radius: f32,
+    position: vec3<f32>,
+    direction: vec3<f32>,
+    sample: vec3<f32>,
+    environment: Environment,
+    occlusion_ambient: texture_3d<f32>,
+    occlusion_directional: texture_3d<f32>,
+    occlusion_sampler: sampler
+) -> vec4<f32> {
+    let delta = v1.xyz - v0.xyz;
+    let pa = position - v0.xyz;
+    let height = saturate(dot(pa, delta) / dot(delta, delta));
+
+    let is_start = all(v0.clip == vec3<f32>());
+    let is_end = all(v1.clip == vec3<f32>());
+
+    let delta_norm = normalize(delta);
+    let tangent = normalize(mix(
+        select(v0.clip, delta_norm, is_start),
+        select(v1.clip, delta_norm, is_end),
+        height
+    ));
+
+    let normal = (pa - height * delta) / radius;
+
+    let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
+    let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
+    let diffuse = lambert(normal_smooth, environment.light);
+
+    let ambient = 1.0 - textureSampleLevel(occlusion_ambient, occlusion_sampler, sample, 0.0).x;
+    let directional = 1.0 - textureSampleLevel(occlusion_directional, occlusion_sampler, sample, 0.0).x;
+    // let shadow = anyhit(sample, environment.light);
+    let shadow = 1.0;
+
+    let factor = mix(1.0, mix(ambient, diffuse * min(directional, shadow),
+        environment.settings.direct_light),
+        environment.settings.lighting);
+
+    let rgb = factor * mix(vec3<f32>(1.0), abs(tangent), environment.settings.tangent_color);
+    let a = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
+
+    return vec4<f32>(rgb, a);
+}
+
+fn should_be_clipped(v0: Vertex, v1: Vertex, position: vec3<f32>) -> bool {
+    return dot(position - v0.xyz, v0.clip) < 0.0 || dot(v1.xyz - position, v1.clip) < 0.0;
+}

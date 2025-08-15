@@ -1,7 +1,10 @@
 pub mod color;
+pub mod copy;
 pub mod culling;
+pub mod kbuffer;
 pub mod occlusion;
 pub mod occupancy;
+pub mod opacity;
 
 use std::any::type_name;
 
@@ -11,20 +14,24 @@ use occlusion::OcclusionBuffer;
 use occupancy::OccupancyBuffer;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, CommandEncoder,
-    CompositeAlphaMode, Extent3d, Origin3d, PresentMode, SurfaceConfiguration, SurfaceTarget,
-    TexelCopyTextureInfo, TextureAspect, TextureUsages,
+    CompositeAlphaMode, PresentMode, SurfaceConfiguration, SurfaceTarget, TextureFormat,
+    TextureUsages,
 };
 
 use crate::{
-    asset::texture::{MipTexture3D, R32Float, R32Uint},
+    asset::texture::{MipTexture2D, MipTexture3D, R32Float, R32Uint},
     controller::settings::Settings,
-    surface::culling::CullingBuffer,
+    surface::{
+        copy::ColorCopyPipeline, culling::CullingBuffer, kbuffer::KBuffer, opacity::OpacityBuffer,
+    },
 };
 
 use super::gpu::Gpu;
 
 pub struct Frame {
     color: ColorBuffer,
+    kbuffer: KBuffer,
+    opacity: OpacityBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -34,6 +41,9 @@ pub struct Frame {
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         let color = ColorBuffer::new(gpu, settings.width, settings.height);
+        let kbuffer = KBuffer::new(gpu, settings.width, settings.height, 8);
+        let opacity = OpacityBuffer::new(gpu, settings.width, settings.height);
+
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
         let culling = CullingBuffer::new(gpu, settings.volume);
@@ -46,12 +56,15 @@ impl Frame {
                 occupancy.count().binding_entries(2),
                 occlusion.ambient().binding_entries(4),
                 occlusion.directional().binding_entries(6),
+                opacity.opacity().binding_entries(8),
             ]
             .concat(),
         });
 
         Self {
             color,
+            kbuffer,
+            opacity,
             occupancy,
             occlusion,
             culling,
@@ -61,6 +74,14 @@ impl Frame {
 
     pub fn color(&self) -> &ColorBuffer {
         &self.color
+    }
+
+    pub fn kbuffer(&self) -> &KBuffer {
+        &self.kbuffer
+    }
+
+    pub fn opacity(&self) -> &OpacityBuffer {
+        &self.opacity
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {
@@ -88,6 +109,7 @@ impl Frame {
                     MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
                     MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
                     MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
+                    MipTexture2D::<R32Float>::layout_entries(8), // Opacity
                 ]
                 .concat(),
             })
@@ -97,9 +119,12 @@ impl Frame {
 pub struct Surface {
     surface: wgpu::Surface<'static>,
     buffer: Frame,
+    copy: ColorCopyPipeline,
 }
 
 impl Surface {
+    const FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         let surface = gpu
             .instance()
@@ -111,6 +136,7 @@ impl Surface {
         Self {
             surface,
             buffer: Frame::new(gpu, &Settings::new()),
+            copy: ColorCopyPipeline::new(gpu),
         }
     }
 
@@ -131,25 +157,7 @@ impl Surface {
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
         if let Some(surface) = self.surface.get_current_texture().ok() {
-            cmd.copy_texture_to_texture(
-                TexelCopyTextureInfo {
-                    texture: self.buffer.color().texture(),
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: TextureAspect::All,
-                },
-                TexelCopyTextureInfo {
-                    texture: &surface.texture,
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: TextureAspect::All,
-                },
-                Extent3d {
-                    width: surface.texture.width(),
-                    height: surface.texture.height(),
-                    depth_or_array_layers: 1,
-                },
-            );
+            self.copy.render(&mut cmd, &self.buffer, &surface.texture);
 
             gpu.submit(cmd);
             surface.present();
@@ -161,13 +169,13 @@ impl Surface {
     fn config(width: u32, height: u32) -> SurfaceConfiguration {
         SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST,
-            format: ColorBuffer::FORMAT,
+            format: Self::FORMAT,
             width,
             height,
             present_mode: PresentMode::Fifo,
             desired_maximum_frame_latency: 2,
             alpha_mode: CompositeAlphaMode::Auto,
-            view_formats: vec![ColorBuffer::FORMAT],
+            view_formats: vec![Self::FORMAT],
         }
     }
 
