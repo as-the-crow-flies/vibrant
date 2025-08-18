@@ -47,8 +47,8 @@ impl Settings {
             smoothing: 0.67,
             culling: true,
             slice_count: 10,
-            render: LineRenderMode::RayCasting,
-            voxelization: LineVoxelizationMode::Line,
+            render: LineRenderMode::Rasterization,
+            voxelization: LineVoxelizationMode::Tube,
         }
     }
 }

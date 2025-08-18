@@ -2,14 +2,13 @@ fn voxelize(index: u32, v0_: Vertex, v1_: Vertex, radius: f32) {
     let delta = v1_.xyz - v0_.xyz;
     let axes = rank(abs(delta));
 
-    let direction = normalize(delta);
-
     // Extend by one radius in major direction to ensure caps are voxelized
     let extension = delta / abs(delta[axes[0]]) * radius;
-    let v0 = select(v1_.xyz + extension, v0_.xyz - extension, direction[axes[0]] > 0.0);
-    let v1 = select(v0_.xyz - extension, v1_.xyz + extension, direction[axes[0]] > 0.0);
+    let v0 = select(v1_.xyz + extension, v0_.xyz - extension, delta[axes[0]] > 0.0);
+    let v1 = select(v0_.xyz - extension, v1_.xyz + extension, delta[axes[0]] > 0.0);
 
     // Find cylinder radii along the minor axes
+    let direction = normalize(delta);
     let r1 = radius / sqrt(1.0 - direction[axes[1]] * direction[axes[1]]);
     let r2 = radius / sqrt(1.0 - direction[axes[2]] * direction[axes[2]]);
 
@@ -19,20 +18,20 @@ fn voxelize(index: u32, v0_: Vertex, v1_: Vertex, radius: f32) {
     let step = (v1 - v0) / (t_max - t_min);
 
     var t0 = t_min;
-    var s0 = v0;
+    var p0 = v0;
 
     while (t0 < t_max) {
         let t1 = min(t_max, floor(t0 + 1.0)); // Jump to the next voxel boundary or line end
-        let s1 = v0 + step * (t1 - t_min); // position along line at t1
+        let p1 = v0 + step * (t1 - t_min); // position along line at t1
 
         let i = i32(t0);
 
         // Compute bounding square along minor axes
-        let j_min = i32(min(s0[axes[1]], s1[axes[1]]) - r1);
-        let j_max = i32(max(s0[axes[1]], s1[axes[1]]) + r1);
+        let j_min = i32(min(p0[axes[1]], p1[axes[1]]) - r1);
+        let j_max = i32(max(p0[axes[1]], p1[axes[1]]) + r1);
 
-        let k_min = i32(min(s0[axes[2]], s1[axes[2]]) - r2);
-        let k_max = i32(max(s0[axes[2]], s1[axes[2]]) + r2);
+        let k_min = i32(min(p0[axes[2]], p1[axes[2]]) - r2);
+        let k_max = i32(max(p0[axes[2]], p1[axes[2]]) + r2);
 
         // Visit all voxels in bounding square
         for (var j = j_min; j <= j_max; j++) {
@@ -43,7 +42,7 @@ fn voxelize(index: u32, v0_: Vertex, v1_: Vertex, radius: f32) {
         }
 
         t0 = t1;
-        s0 = s1;
+        p0 = p1;
     }
 }
 

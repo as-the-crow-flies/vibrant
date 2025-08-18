@@ -39,18 +39,10 @@ fn fragment(@builtin(position) clip: vec4<f32>) -> @location(0) vec4<f32> {
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));
 
-    let origin = (ENVIRONMENT.camera.transform[3].xyz + 0.5) * f32(ENVIRONMENT.volume);
     let direction = normalize(far - near);
 
-    // let position = origin + direction * get_view_depth(depth) + 0.5;
-    // let position_voxel = position * f32(ENVIRONMENT.volume);
-
-    let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, radius);
-    let position_voxel = origin + hit * direction;
-    let position = position_voxel * scale;
-
-    // let color = vec4<f32>(vec3<f32>(get_view_depth(depth)), 1.0);
-    // let color = vec4<f32>(abs(normalize(v1.xyz - v0.xyz)), 1.0);
+    let position = unproject(vec3<f32>(uv, depth)) + 0.5;
+    let position_voxel = position * f32(ENVIRONMENT.volume);
 
     let color = shade(
         v0, v1, radius, position_voxel, direction, position,
@@ -59,16 +51,6 @@ fn fragment(@builtin(position) clip: vec4<f32>) -> @location(0) vec4<f32> {
     return color;
 }
 
-fn get_view_depth(ndc_depth: f32) -> f32 {
-    let near = ENVIRONMENT.camera.near;
-    let far = ENVIRONMENT.camera.far;
-
-    // Convert NDC depth [0, 1] to clip-space Z [-1, 1]
-    let z = ndc_depth * 2.0 - 1.0;
-
-    // Reverse the projection to get view-space Z
-    return (2.0 * near * far) / (far + near - z * (far - near));
-}
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
