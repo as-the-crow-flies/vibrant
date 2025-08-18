@@ -5,6 +5,7 @@ pub mod kbuffer;
 pub mod occlusion;
 pub mod occupancy;
 pub mod opacity;
+pub mod visibility;
 
 use std::any::type_name;
 
@@ -23,6 +24,7 @@ use crate::{
     controller::settings::Settings,
     surface::{
         copy::ColorCopyPipeline, culling::CullingBuffer, kbuffer::KBuffer, opacity::OpacityBuffer,
+        visibility::VisibilityBuffer,
     },
 };
 
@@ -35,6 +37,7 @@ pub struct Frame {
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
+    visibility: VisibilityBuffer,
     binding: BindGroup,
 }
 
@@ -47,6 +50,7 @@ impl Frame {
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
         let culling = CullingBuffer::new(gpu, settings.volume);
+        let visibility = VisibilityBuffer::new(gpu, settings.width, settings.height);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -68,6 +72,7 @@ impl Frame {
             occupancy,
             occlusion,
             culling,
+            visibility,
             binding,
         }
     }
@@ -94,6 +99,10 @@ impl Frame {
 
     pub fn culling(&self) -> &CullingBuffer {
         &self.culling
+    }
+
+    pub fn visibility(&self) -> &VisibilityBuffer {
+        &self.visibility
     }
 
     pub fn binding(&self) -> &BindGroup {

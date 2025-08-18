@@ -24,7 +24,7 @@ pub struct LineRasterizationCullPipeline {
 
 impl LineRasterizationCullPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let common = include_str!("../common.wgsl");
+        let common = include_str!("../../common.wgsl");
 
         let copy = gpu.compute(
             "Rasterization::Cull::Copy",

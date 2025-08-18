@@ -50,8 +50,6 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
     let position = quad[QUAD_INDEX[vertex_index]].xyz;
     let clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
 
-    let tangent = normalize(abs(v1s - v0s));
-
     return Fragment(clip, (position + 0.5) * f32(ENVIRONMENT.volume), v0, v1);
 }
 
