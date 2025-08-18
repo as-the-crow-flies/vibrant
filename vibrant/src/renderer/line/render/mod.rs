@@ -19,7 +19,7 @@ use crate::{
 };
 
 pub struct LineRenderPipeline {
-    // raster: LineRasterizationPipeline,
+    raster: LineRasterizationPipeline,
     ray: RayCastingLineRenderPipeline,
     volume: VolumeLineRenderPipeline,
 }
@@ -27,7 +27,7 @@ pub struct LineRenderPipeline {
 impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            // raster: LineRasterizationPipeline::new(gpu),
+            raster: LineRasterizationPipeline::new(gpu),
             ray: RayCastingLineRenderPipeline::new(gpu),
             volume: VolumeLineRenderPipeline::new(gpu),
         }
@@ -43,7 +43,7 @@ impl LineRenderPipeline {
     ) {
         match settings.render {
             LineRenderMode::Rasterization => {
-                // self.raster.render(cmd, frame, environment, line, settings)
+                self.raster.render(cmd, frame, environment, line, settings)
             }
             LineRenderMode::RayCasting => self.ray.render(cmd, frame, environment, line),
             LineRenderMode::Volume => self.volume.render(cmd, frame, environment),

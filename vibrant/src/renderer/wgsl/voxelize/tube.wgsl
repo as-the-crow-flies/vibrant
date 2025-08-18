@@ -2,10 +2,10 @@ fn voxelize(index: u32, v0_: Vertex, v1_: Vertex, radius: f32) {
     let delta = v1_.xyz - v0_.xyz;
     let axes = rank(abs(delta));
 
-    let direction = delta / abs(delta[axes[0]]);
+    let direction = normalize(delta);
 
     // Extend by one radius in major direction to ensure caps are voxelized
-    let extension = direction * radius;
+    let extension = delta / abs(delta[axes[0]]) * radius;
     let v0 = select(v1_.xyz + extension, v0_.xyz - extension, direction[axes[0]] > 0.0);
     let v1 = select(v0_.xyz - extension, v1_.xyz + extension, direction[axes[0]] > 0.0);
 

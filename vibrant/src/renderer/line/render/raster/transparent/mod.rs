@@ -12,9 +12,7 @@ use crate::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        line::render::raster::{
-            sort::LineRasterizationSortPipeline, transparent::cull::LineRasterizationCullPipeline,
-        },
+        line::render::raster::transparent::cull::LineRasterizationCullPipeline,
     },
     surface::{color::ColorBuffer, kbuffer::KBuffer, Frame},
 };
