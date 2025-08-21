@@ -8,7 +8,7 @@ pub enum LineVoxelizationMode {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineRenderMode {
     Rasterization,
-    RayCasting,
+    RayTracing,
     Volume,
 }
 

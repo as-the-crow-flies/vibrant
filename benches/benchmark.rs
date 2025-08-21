@@ -211,7 +211,8 @@ pub fn render(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &Settings::new());
+    let settings = &Settings::new();
+    let frame = &Frame::new(gpu, settings);
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
@@ -241,7 +242,7 @@ pub fn render(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            pipeline.render(&mut cmd, frame, environment, tractogram);
+            pipeline.render(&mut cmd, frame, environment, settings, tractogram);
 
             gpu.submit(cmd);
             gpu.wait();
@@ -253,6 +254,7 @@ pub fn full(criterion: &mut Criterion) {
     let gpu = &Gpu::new().block_on();
 
     let environment = &get_environment(gpu);
+    let settings = &Settings::new();
     let frame = &Frame::new(gpu, &Settings::new());
     let tractogram = &get_tractogram(gpu);
 
@@ -287,7 +289,7 @@ pub fn full(criterion: &mut Criterion) {
                 LineVoxelizationMode::Tube,
                 tractogram,
             );
-            render.render(&mut cmd, frame, environment, tractogram);
+            render.render(&mut cmd, frame, environment, settings, tractogram);
 
             gpu.submit(cmd);
             gpu.wait();

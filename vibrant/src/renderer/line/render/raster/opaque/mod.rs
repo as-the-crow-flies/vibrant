@@ -1,3 +1,5 @@
+mod cull;
+
 use wgpu::{
     ColorTargetState, ColorWrites, CommandEncoder, CompareFunction, DepthBiasState,
     DepthStencilState, FragmentState, LoadOp, MultisampleState, Operations,
@@ -10,11 +12,15 @@ use crate::{
     asset::line::LineSet,
     controller::settings::Settings,
     gpu::Gpu,
-    renderer::environment::Environment,
+    renderer::{
+        environment::Environment,
+        line::render::raster::opaque::cull::LineOpaqueRasterizationCullPipeline,
+    },
     surface::{color::ColorBuffer, visibility::VisibilityBuffer, Frame},
 };
 
 pub struct LineOpaqueRasterizationPipeline {
+    cull: LineOpaqueRasterizationCullPipeline,
     gather: RenderPipeline,
     resolve: RenderPipeline,
 }
@@ -25,6 +31,7 @@ impl LineOpaqueRasterizationPipeline {
         let gather_module = &gpu.shader(&(common.to_string() + include_str!("gather.wgsl")));
 
         Self {
+            cull: LineOpaqueRasterizationCullPipeline::new(gpu),
             gather: gpu
                 .device()
                 .create_render_pipeline(&RenderPipelineDescriptor {
@@ -92,6 +99,11 @@ impl LineOpaqueRasterizationPipeline {
             let start = (slice * slice_size).min(line.len());
             let end = ((slice + 1) * slice_size).min(line.len());
 
+            if settings.culling && slice != 0 {
+                self.cull
+                    .dispatch(cmd, frame, environment, line, start, end);
+            }
+
             self.render_slice(cmd, frame, environment, line, start, end);
         }
 
@@ -118,7 +130,7 @@ impl LineOpaqueRasterizationPipeline {
                 },
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: frame.visibility().depth_view(),
+                view: frame.visibility().depth_view_base(),
                 depth_ops: Some(Operations {
                     load: if start == 0 {
                         LoadOp::Clear(1.0)

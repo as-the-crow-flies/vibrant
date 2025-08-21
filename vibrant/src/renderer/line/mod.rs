@@ -57,7 +57,7 @@ impl LineRenderer {
         self.culling.render(cmd, frame, environment);
         self.occlusion.render(cmd, frame, environment);
 
-        if settings.render == LineRenderMode::RayCasting {
+        if settings.render == LineRenderMode::RayTracing {
             self.populate
                 .render(cmd, frame, environment, settings.voxelization, line);
         }

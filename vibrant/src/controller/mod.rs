@@ -94,8 +94,8 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.render,
-                        LineRenderMode::RayCasting,
-                        "RayCasting",
+                        LineRenderMode::RayTracing,
+                        "Ray Tracing",
                     );
                     ui.selectable_value(
                         &mut self.settings.render,

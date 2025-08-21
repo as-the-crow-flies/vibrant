@@ -24,9 +24,7 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
     let scale = 1.0 / f32(ENVIRONMENT.volume);
     let radius = ENVIRONMENT.settings.radius * scale;
 
-    // let culled = bool(LINE_CULL[instance_index]);
-
-    // if (culled) { return Fragment(); }
+    if (bool(LINE_CULL[instance_index])) { return Fragment(); }
 
     let index = LINE_INDEX[instance_index];
 

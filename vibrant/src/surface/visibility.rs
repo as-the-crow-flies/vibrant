@@ -2,9 +2,9 @@ use std::any::type_name;
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Extent3d, ShaderStages, Texture,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    TextureView, TextureViewDescriptor, TextureViewDimension,
+    BindGroupLayoutEntry, BindingResource, BindingType, Extent3d, ShaderStages,
+    StorageTextureAccess, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -12,6 +12,7 @@ use crate::gpu::Gpu;
 pub struct VisibilityBuffer {
     depth: Texture,
     depth_view: TextureView,
+    depth_view_base: TextureView,
     index: Texture,
     index_view: TextureView,
     binding: BindGroup,
@@ -22,6 +23,8 @@ impl VisibilityBuffer {
     pub const INDEX_FORMAT: TextureFormat = TextureFormat::R32Uint;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
+        let mip_level_count = width.min(height).ilog2();
+
         let depth = gpu.device().create_texture(&TextureDescriptor {
             label: Some("VisibilityBuffer::Depth"),
             size: Extent3d {
@@ -29,12 +32,17 @@ impl VisibilityBuffer {
                 height,
                 depth_or_array_layers: 1,
             },
-            mip_level_count: 1,
+            mip_level_count,
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+        });
+
+        let depth_view_base = depth.create_view(&TextureViewDescriptor {
+            mip_level_count: Some(1),
+            ..Default::default()
         });
 
         let depth_view = depth.create_view(&TextureViewDescriptor::default());
@@ -74,10 +82,15 @@ impl VisibilityBuffer {
         Self {
             depth,
             depth_view,
+            depth_view_base,
             index,
             index_view,
             binding,
         }
+    }
+
+    pub fn depth_view_base(&self) -> &TextureView {
+        &self.depth_view_base
     }
 
     pub fn depth_view(&self) -> &TextureView {
@@ -99,7 +112,7 @@ impl VisibilityBuffer {
                 entries: &[
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
+                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Depth,
                             view_dimension: TextureViewDimension::D2,
@@ -109,7 +122,7 @@ impl VisibilityBuffer {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
+                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Uint,
                             view_dimension: TextureViewDimension::D2,

@@ -12,13 +12,13 @@ use crate::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        line::render::raster::transparent::cull::LineRasterizationCullPipeline,
+        line::render::raster::transparent::cull::LineTransparentRasterizationCullPipeline,
     },
     surface::{color::ColorBuffer, kbuffer::KBuffer, Frame},
 };
 
 pub struct LineTransparentRasterizationPipeline {
-    cull: LineRasterizationCullPipeline,
+    cull: LineTransparentRasterizationCullPipeline,
     gather: RenderPipeline,
     resolve: RenderPipeline,
 }
@@ -46,7 +46,7 @@ impl LineTransparentRasterizationPipeline {
         };
 
         Self {
-            cull: LineRasterizationCullPipeline::new(gpu),
+            cull: LineTransparentRasterizationCullPipeline::new(gpu),
             gather: gpu
                 .device()
                 .create_render_pipeline(&RenderPipelineDescriptor {

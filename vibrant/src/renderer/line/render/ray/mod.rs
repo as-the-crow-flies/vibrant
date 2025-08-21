@@ -4,19 +4,23 @@ use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
     asset::line::LineSet,
+    controller::settings::Settings,
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::ColorBuffer, culling::CullingBuffer, Frame},
 };
 
 pub struct RayCastingLineRenderPipeline {
-    pipeline: RenderPipeline,
+    opaque: RenderPipeline,
+    transparent: RenderPipeline,
 }
 
 impl RayCastingLineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        let trace = include_str!("trace.wgsl");
+
         Self {
-            pipeline: gpu.quad(
+            opaque: gpu.quad(
                 type_name::<Self>(),
                 &gpu.pipeline_layout(&[
                     &LineSet::layout(gpu, true),
@@ -25,7 +29,18 @@ impl RayCastingLineRenderPipeline {
                     &Environment::layout(gpu),
                 ]),
                 ColorBuffer::target_srgb(),
-                &gpu.shader(include_str!("ray.wgsl")),
+                &gpu.shader(&(trace.to_string() + include_str!("opaque.wgsl"))),
+            ),
+            transparent: gpu.quad(
+                type_name::<Self>(),
+                &gpu.pipeline_layout(&[
+                    &LineSet::layout(gpu, true),
+                    &CullingBuffer::layout_read(gpu),
+                    &Frame::layout(gpu),
+                    &Environment::layout(gpu),
+                ]),
+                ColorBuffer::target_srgb(),
+                &gpu.shader(&(trace.to_string() + include_str!("transparent.wgsl"))),
             ),
         }
     }
@@ -35,6 +50,7 @@ impl RayCastingLineRenderPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
+        settings: &Settings,
         line: &LineSet,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -43,7 +59,12 @@ impl RayCastingLineRenderPipeline {
             ..Default::default()
         });
 
-        pass.set_pipeline(&self.pipeline);
+        if settings.alpha == 1.0 {
+            pass.set_pipeline(&self.opaque);
+        } else {
+            pass.set_pipeline(&self.transparent);
+        }
+
         pass.set_bind_group(0, line.binding(true), &[]);
         pass.set_bind_group(1, frame.culling().binding_read(), &[]);
         pass.set_bind_group(2, frame.binding(), &[]);

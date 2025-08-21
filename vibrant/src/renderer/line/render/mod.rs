@@ -45,7 +45,7 @@ impl LineRenderPipeline {
             LineRenderMode::Rasterization => {
                 self.raster.render(cmd, frame, environment, line, settings)
             }
-            LineRenderMode::RayCasting => self.ray.render(cmd, frame, environment, line),
+            LineRenderMode::RayTracing => self.ray.render(cmd, frame, environment, settings, line),
             LineRenderMode::Volume => self.volume.render(cmd, frame, environment),
         }
     }
