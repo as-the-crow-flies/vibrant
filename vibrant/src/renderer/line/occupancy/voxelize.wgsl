@@ -2,7 +2,8 @@
 
 @group(1) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(1) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
-@group(1) @binding(2) var<storage, read_write> LINE_COUNT: atomic<u32>;
+@group(1) @binding(2) var<storage> LINE_INDICES_LENGTH: u32;
+@group(1) @binding(3) var<storage, read_write> LINE_COUNT: atomic<u32>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -19,7 +20,8 @@ var<private> DENSITY_MULTIPLIER: f32;
 @compute
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
-    let n_indices = arrayLength(&LINE_INDEX);
+    let n_indices = LINE_INDICES_LENGTH;
+    let scale = f32(ENVIRONMENT.volume);
 
     RADIUS = ENVIRONMENT.settings.radius;
     DENSITY_MULTIPLIER = PI * RADIUS * RADIUS;
@@ -39,8 +41,8 @@ fn main(@builtin(local_invocation_index) local: u32) {
             if (index_index >= n_indices) { continue; }
 
             let index = LINE_INDEX[index_index];
-            let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
-            let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
+            let v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
+            let v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
 
             voxelize(index, v0, v1, RADIUS);
         }

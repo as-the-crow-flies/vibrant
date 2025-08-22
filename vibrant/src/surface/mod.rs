@@ -6,6 +6,7 @@ pub mod occlusion;
 pub mod occupancy;
 pub mod opacity;
 pub mod visibility;
+pub mod vrc;
 
 use std::any::type_name;
 

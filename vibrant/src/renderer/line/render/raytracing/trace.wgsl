@@ -32,9 +32,9 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 
 @fragment
 fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
-    DIM = f32(textureDimensions(DENSITY).x);
+    DIM = f32(ENVIRONMENT.volume);
     DIM_INV = 1.0 / DIM;
-    RADIUS = ENVIRONMENT.settings.radius;
+    RADIUS = ENVIRONMENT.settings.radius * DIM_INV;
     ALPHA = ENVIRONMENT.settings.alpha;
 
     let uv = vec2<f32>(1.0, -1.0) * (pixel.xy / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0);
@@ -42,10 +42,8 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));
 
-    let origin = near + 0.5;
+    let origin = near + 0.5; // 0-1 Space
     let direction = normalize(far - near);
-
-    let DIR_INV = 1.0 / direction;
 
     return raymarch(origin, direction);
 }
@@ -116,8 +114,8 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         if (count > 0) {
             let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
 
-            if (visit(count, offset, voxel, origin * DIM, direction, position * DIM, increment * DIM, (t + increment) * DIM)) {
-                return result(origin, direction);
+            if (visit(count, offset, origin - 0.5, direction, position - 0.5, increment, t + increment)) {
+                break;
             }
         }
 
@@ -127,7 +125,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         voxel[axis] = next[axis] + boundary[axis] - 1;
     }
 
-    return result(origin, direction);
+    return result(origin - 0.5, direction);
 }
 
 fn maximum(v: vec3<f32>) -> f32 {

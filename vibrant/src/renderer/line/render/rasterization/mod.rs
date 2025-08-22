@@ -6,7 +6,7 @@ use crate::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        line::render::raster::{
+        line::render::rasterization::{
             opaque::LineOpaqueRasterizationPipeline, sort::LineRasterizationSortPipeline,
             transparent::LineTransparentRasterizationPipeline,
         },

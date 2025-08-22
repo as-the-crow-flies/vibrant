@@ -12,56 +12,22 @@ use wgpu::{
 use crate::{file::LineFile, gpu::Gpu, sort::KeyValuePair};
 
 pub struct LineSet {
-    vertices_raw: Buffer,
-    vertices: Buffer,
-    indices: Buffer,
-    count: Buffer,
-    cull: Buffer,
+    buffer: LineBuffer,
     binding_read: BindGroup,
     binding_write: BindGroup,
     binding_raw: BindGroup,
     sorted: SortedLineSet,
+    vrc: VrcLineSet,
 }
 
 impl LineSet {
     pub fn new(gpu: &Gpu, line: &LineFile) -> Self {
         let label = Some(type_name::<Self>());
 
-        let vertices_raw = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.vertices()),
-            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
-        });
-
-        let vertices = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: vertices_raw.size(),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.indices()),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        });
-
-        let count = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: 4,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let cull = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: (line.indices().len() * 4) as u64,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let buffer = LineBuffer::new(gpu, line);
 
         let transform = Mat4::IDENTITY
-            * Mat4::from_translation(line.bounds().min)
+            * Mat4::from_translation(line.bounds().min + 0.5 * line.bounds().scale())
             * Mat4::from_scale(Vec3::splat(line.bounds().scale().max_element()));
 
         let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -70,51 +36,16 @@ impl LineSet {
             usage: BufferUsages::UNIFORM,
         });
 
-        let entries = &[
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &indices,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &vertices,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &count,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &cull,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-        ];
-
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu, true),
-            entries,
+            entries: &buffer.entries(&buffer.indices),
         });
 
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu, false),
-            entries,
+            entries: &buffer.entries(&buffer.indices),
         });
 
         let binding_raw = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -123,36 +54,31 @@ impl LineSet {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &vertices_raw,
-                        offset: 0,
-                        size: None,
-                    }),
+                    resource: buffer.indices_raw.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &transform,
-                        offset: 0,
-                        size: None,
-                    }),
+                    resource: buffer.vertices_raw.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: transform.as_entire_binding(),
                 },
             ],
         });
 
-        let sorted =
-            SortedLineSet::new(gpu, &vertices, &count, &cull, indices.size().div(4) as u32);
+        let len = line.indices().len() as u32;
+
+        let sorted = SortedLineSet::new(gpu, &buffer, len);
+        let vrc = VrcLineSet::new(gpu, len);
 
         Self {
-            vertices_raw,
-            vertices,
-            indices,
-            count,
-            cull,
+            buffer,
             binding_read,
             binding_write,
             binding_raw,
             sorted,
+            vrc,
         }
     }
 
@@ -165,27 +91,31 @@ impl LineSet {
     }
 
     pub fn len(&self) -> u32 {
-        self.indices.size().div(4) as u32
+        self.buffer.indices.size().div(4) as u32
     }
 
     pub fn indices(&self) -> &Buffer {
-        &self.indices
+        &self.buffer.indices
     }
 
     pub fn vertices(&self) -> &Buffer {
-        &self.vertices
+        &self.buffer.vertices
     }
 
     pub fn count(&self) -> &Buffer {
-        &self.count
+        &self.buffer.count
     }
 
     pub fn cull(&self) -> &Buffer {
-        &self.cull
+        &self.buffer.cull_vertex
     }
 
     pub fn sorted(&self) -> &SortedLineSet {
         &self.sorted
+    }
+
+    pub fn vrc(&self) -> &VrcLineSet {
+        &self.vrc
     }
 
     pub fn binding_raw(&self) -> &BindGroup {
@@ -193,11 +123,11 @@ impl LineSet {
     }
 
     pub fn clear_count(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.count, 0, None);
+        cmd.clear_buffer(&self.buffer.count, 0, None);
     }
 
     pub fn clear_cull(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.cull, 0, None);
+        cmd.clear_buffer(&self.buffer.cull_vertex, 0, None);
     }
 
     pub fn layout_raw(gpu: &Gpu) -> BindGroupLayout {
@@ -205,7 +135,7 @@ impl LineSet {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    // Vertices Raw
+                    // Indices Raw
                     BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
@@ -216,9 +146,20 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Transform
+                    // Vertices Raw
                     BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Transform
+                    BindGroupLayoutEntry {
+                        binding: 2,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
@@ -247,7 +188,7 @@ impl LineSet {
                         binding: 0,
                         visibility,
                         ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
+                            ty: BufferBindingType::Storage { read_only },
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
@@ -264,9 +205,20 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Count
+                    // Length
                     BindGroupLayoutEntry {
                         binding: 2,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Count
+                    BindGroupLayoutEntry {
+                        binding: 3,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: false },
@@ -275,12 +227,56 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Cull
+                    // Cull Vertex
                     BindGroupLayoutEntry {
-                        binding: 3,
+                        binding: 4,
                         visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Cull Line
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Line Ids
+                    BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Line Counts
+                    BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Line Offsets
+                    BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
@@ -291,12 +287,198 @@ impl LineSet {
     }
 }
 
-impl Drop for LineSet {
+struct LineBuffer {
+    vertices_raw: Buffer,
+    indices_raw: Buffer,
+    vertices: Buffer,
+    indices: Buffer,
+    length: Buffer,
+    count: Buffer,
+    cull_vertex: Buffer,
+    cull_line: Buffer,
+    line_ids: Buffer,
+    line_counts: Buffer,
+    line_offsets: Buffer,
+}
+
+impl LineBuffer {
+    fn new(gpu: &Gpu, line: &LineFile) -> Self {
+        let label = Some(type_name::<Self>());
+
+        let vertices_raw = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&line.vertices()),
+            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
+        });
+
+        let indices_raw = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&line.indices()),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let vertices = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: vertices_raw.size(),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&line.indices()),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let length = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::bytes_of(&(line.indices().len() as u32)),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let count = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 4,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        let cull_vertex = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: (line.indices().len() * 4) as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let cull_line = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: (line.line_counts().len() * 4) as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let line_ids = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&line.line_ids()),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let line_counts = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&line.line_counts()),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let line_offsets = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&line.line_offsets()),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        Self {
+            vertices_raw,
+            indices_raw,
+            vertices,
+            indices,
+            length,
+            count,
+            cull_vertex,
+            cull_line,
+            line_ids,
+            line_counts,
+            line_offsets,
+        }
+    }
+
+    fn entries<'a>(&'a self, indices: &'a Buffer) -> Vec<BindGroupEntry<'a>> {
+        vec![
+            BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &indices,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.vertices,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.length,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.count,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 4,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.cull_vertex,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 5,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.cull_line,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 6,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.line_ids,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 7,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.line_counts,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 8,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.line_offsets,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        ]
+    }
+}
+
+impl Drop for LineBuffer {
     fn drop(&mut self) {
         self.vertices_raw.destroy();
         self.vertices.destroy();
         self.indices.destroy();
+        self.length.destroy();
         self.count.destroy();
+        self.cull_vertex.destroy();
+        self.line_ids.destroy();
+        self.line_counts.destroy();
+        self.line_offsets.destroy();
     }
 }
 
@@ -309,7 +491,7 @@ pub struct SortedLineSet {
 }
 
 impl SortedLineSet {
-    pub fn new(gpu: &Gpu, vertices: &Buffer, count: &Buffer, cull: &Buffer, len: u32) -> Self {
+    fn new(gpu: &Gpu, buffer: &LineBuffer, len: u32) -> Self {
         let ping = KeyValuePair::new(gpu, len);
         let pong = KeyValuePair::new(gpu, len);
 
@@ -321,35 +503,16 @@ impl SortedLineSet {
             usage: BufferUsages::COPY_SRC,
         });
 
-        let entries = &[
-            BindGroupEntry {
-                binding: 0,
-                resource: ping.key().as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: vertices.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: count.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: cull.as_entire_binding(),
-            },
-        ];
-
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("LineSort::Line"),
             layout: &LineSet::layout(gpu, true),
-            entries,
+            entries: &buffer.entries(ping.key()),
         });
 
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("LineSort::Line"),
             layout: &LineSet::layout(gpu, false),
-            entries,
+            entries: &buffer.entries(ping.key()),
         });
 
         Self {
@@ -379,5 +542,27 @@ impl SortedLineSet {
 
     pub fn linear(&self) -> &Buffer {
         &self.linear
+    }
+}
+
+pub struct VrcLineSet {
+    ping: KeyValuePair,
+    pong: KeyValuePair,
+}
+
+impl VrcLineSet {
+    fn new(gpu: &Gpu, len: u32) -> Self {
+        let ping = KeyValuePair::new(gpu, len);
+        let pong = KeyValuePair::new(gpu, len);
+
+        Self { ping, pong }
+    }
+
+    pub fn ping(&self) -> &KeyValuePair {
+        &self.ping
+    }
+
+    pub fn pong(&self) -> &KeyValuePair {
+        &self.pong
     }
 }

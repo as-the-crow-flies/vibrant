@@ -1,11 +1,9 @@
-mod cull;
+pub mod cull;
 
 use wgpu::{
-    ColorTargetState, ColorWrites, CommandEncoder, CompareFunction, DepthBiasState,
-    DepthStencilState, FragmentState, LoadOp, MultisampleState, Operations,
-    PipelineCompilationOptions, PrimitiveState, PrimitiveTopology, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, StencilState, StoreOp, VertexState,
+    BlendComponent, BlendFactor, BlendOperation, BlendState, ColorTargetState, ColorWrites,
+    CommandEncoder, FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState,
+    PrimitiveTopology, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
 use crate::{
@@ -14,30 +12,49 @@ use crate::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        line::render::raster::opaque::cull::LineOpaqueRasterizationCullPipeline,
+        line::render::rasterization::transparent::cull::LineTransparentRasterizationCullPipeline,
     },
-    surface::{color::ColorBuffer, visibility::VisibilityBuffer, Frame},
+    surface::{color::ColorBuffer, kbuffer::KBuffer, Frame},
 };
 
-pub struct LineOpaqueRasterizationPipeline {
-    cull: LineOpaqueRasterizationCullPipeline,
+pub struct LineTransparentRasterizationPipeline {
+    cull: LineTransparentRasterizationCullPipeline,
     gather: RenderPipeline,
     resolve: RenderPipeline,
 }
 
-impl LineOpaqueRasterizationPipeline {
+impl LineTransparentRasterizationPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let common = include_str!("../common.wgsl");
         let gather_module = &gpu.shader(&(common.to_string() + include_str!("gather.wgsl")));
 
+        let target = ColorTargetState {
+            format: ColorBuffer::FORMAT_SRGB,
+            blend: Some(BlendState {
+                color: BlendComponent {
+                    src_factor: BlendFactor::OneMinusDstAlpha,
+                    dst_factor: BlendFactor::One,
+                    operation: BlendOperation::Add,
+                },
+                alpha: BlendComponent {
+                    src_factor: BlendFactor::OneMinusDstAlpha,
+                    dst_factor: BlendFactor::One,
+                    operation: BlendOperation::Add,
+                },
+            }),
+            write_mask: ColorWrites::all(),
+        };
+
         Self {
-            cull: LineOpaqueRasterizationCullPipeline::new(gpu),
+            cull: LineTransparentRasterizationCullPipeline::new(gpu),
             gather: gpu
                 .device()
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label: Some("Rasterization::Render"),
                     layout: Some(&gpu.pipeline_layout(&[
                         &LineSet::layout(gpu, true),
+                        &KBuffer::layout(gpu),
+                        &Frame::layout(gpu),
                         &Environment::layout(gpu),
                     ])),
                     vertex: VertexState {
@@ -50,19 +67,9 @@ impl LineOpaqueRasterizationPipeline {
                         module: gather_module,
                         entry_point: None,
                         compilation_options: PipelineCompilationOptions::default(),
-                        targets: &[Some(ColorTargetState {
-                            format: VisibilityBuffer::INDEX_FORMAT,
-                            blend: None,
-                            write_mask: ColorWrites::all(),
-                        })],
+                        targets: &[Some(target.clone())],
                     }),
-                    depth_stencil: Some(DepthStencilState {
-                        format: VisibilityBuffer::DEPTH_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare: CompareFunction::Less,
-                        stencil: StencilState::default(),
-                        bias: DepthBiasState::default(),
-                    }),
+                    depth_stencil: None,
                     primitive: PrimitiveState {
                         topology: PrimitiveTopology::TriangleList,
                         ..Default::default()
@@ -73,13 +80,8 @@ impl LineOpaqueRasterizationPipeline {
                 }),
             resolve: gpu.quad(
                 "Rasterization::Resolve",
-                &gpu.pipeline_layout(&[
-                    &LineSet::layout(gpu, true),
-                    &VisibilityBuffer::layout(gpu),
-                    &Frame::layout(gpu),
-                    &Environment::layout(gpu),
-                ]),
-                ColorBuffer::target_srgb(),
+                &gpu.pipeline_layout(&[&KBuffer::layout(gpu), &Environment::layout(gpu)]),
+                target,
                 &gpu.shader(&(common.to_string() + include_str!("resolve.wgsl"))),
             ),
         }
@@ -93,6 +95,9 @@ impl LineOpaqueRasterizationPipeline {
         line: &LineSet,
         settings: &Settings,
     ) {
+        frame.kbuffer().clear(cmd);
+        frame.opacity().clear(cmd);
+
         let slice_size = line.len().div_ceil(settings.slice_count);
 
         for slice in 0..settings.slice_count {
@@ -107,7 +112,7 @@ impl LineOpaqueRasterizationPipeline {
             self.render_slice(cmd, frame, environment, line, start, end);
         }
 
-        self.resolve(cmd, frame, environment, line);
+        self.resolve(cmd, frame, environment);
     }
 
     fn render_slice(
@@ -119,55 +124,36 @@ impl LineOpaqueRasterizationPipeline {
         start: u32,
         end: u32,
     ) {
+        let attachment = if start == 0 {
+            frame.color().attachment_srgb_clear()
+        } else {
+            frame.color().attachment_srgb()
+        };
+
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+            color_attachments: &[Some(attachment)],
             label: Some("Rasterization"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: frame.visibility().index_view(),
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Load,
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: frame.visibility().depth_view_base(),
-                depth_ops: Some(Operations {
-                    load: if start == 0 {
-                        LoadOp::Clear(1.0)
-                    } else {
-                        LoadOp::Load
-                    },
-                    store: StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
             ..Default::default()
         });
 
         pass.set_pipeline(&self.gather);
         pass.set_bind_group(0, line.sorted().binding(true), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(1, frame.kbuffer().binding(), &[]);
+        pass.set_bind_group(2, frame.binding(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
         pass.draw(0..6, start..end);
     }
 
-    fn resolve(
-        &self,
-        cmd: &mut CommandEncoder,
-        frame: &Frame,
-        environment: &Environment,
-        line: &LineSet,
-    ) {
+    fn resolve(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_srgb_clear())],
+            color_attachments: &[Some(frame.color().attachment_srgb())],
             label: Some("Rasterization"),
             ..Default::default()
         });
 
         pass.set_pipeline(&self.resolve);
-        pass.set_bind_group(0, line.sorted().binding(true), &[]);
-        pass.set_bind_group(1, frame.visibility().binding(), &[]);
-        pass.set_bind_group(2, frame.binding(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(0, frame.kbuffer().binding(), &[]);
+        pass.set_bind_group(1, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

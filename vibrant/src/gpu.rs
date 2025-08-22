@@ -48,6 +48,8 @@ impl Gpu {
                     max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
                     max_buffer_size: limits.max_buffer_size,
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
+                    max_storage_buffers_per_shader_stage: limits
+                        .max_storage_buffers_per_shader_stage,
                     ..Default::default()
                 },
                 required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

@@ -10,12 +10,12 @@ use crate::{
     surface::{color::ColorBuffer, culling::CullingBuffer, Frame},
 };
 
-pub struct RayCastingLineRenderPipeline {
+pub struct RayTracingLineRenderPipeline {
     opaque: RenderPipeline,
     transparent: RenderPipeline,
 }
 
-impl RayCastingLineRenderPipeline {
+impl RayTracingLineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let trace = include_str!("trace.wgsl");
 

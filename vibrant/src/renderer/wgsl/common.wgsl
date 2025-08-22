@@ -129,6 +129,12 @@ fn unpack_vertex(v: vec4<f32>) -> Vertex {
     return Vertex(v.xyz, clip_alpha.xyz, clip_alpha.a);
 }
 
+fn unpack_vertex_scale(v: vec4<f32>, scale: f32) -> Vertex {
+    var vertex = unpack_vertex(v);
+    vertex.xyz = (vertex.xyz + 0.5) * scale;
+    return vertex;
+}
+
 // https://iquilezles.org/articles/intersectors
 // https://www.shadertoy.com/view/Xt3SzX
 fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, r: f32) -> f32
@@ -191,8 +197,6 @@ fn shade(
     v1: Vertex,
     radius: f32,
     position: vec3<f32>,
-    direction: vec3<f32>,
-    sample: vec3<f32>,
     environment: Environment,
     occlusion_ambient: texture_3d<f32>,
     occlusion_directional: texture_3d<f32>,
@@ -218,12 +222,10 @@ fn shade(
     let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
     let diffuse = lambert(normal_smooth, environment.light);
 
-    let ambient = 1.0 - textureSampleLevel(occlusion_ambient, occlusion_sampler, sample, 0.0).x;
-    let directional = 1.0 - textureSampleLevel(occlusion_directional, occlusion_sampler, sample, 0.0).x;
-    // let shadow = anyhit(sample, environment.light);
-    let shadow = 1.0;
+    let ambient = 1.0 - textureSampleLevel(occlusion_ambient, occlusion_sampler, position + 0.5, 0.0).x;
+    let directional = 1.0 - textureSampleLevel(occlusion_directional, occlusion_sampler, position + 0.5, 0.0).x;
 
-    let factor = mix(1.0, mix(ambient, diffuse * min(directional, shadow),
+    let factor = mix(1.0, mix(ambient, diffuse * directional,
         environment.settings.direct_light),
         environment.settings.lighting);
 

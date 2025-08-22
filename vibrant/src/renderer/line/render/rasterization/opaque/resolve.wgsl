@@ -21,8 +21,7 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 
 @fragment
 fn fragment(@builtin(position) clip: vec4<f32>) -> @location(0) vec4<f32> {
-    let radius = ENVIRONMENT.settings.radius;
-    let scale = 1.0 / f32(ENVIRONMENT.volume);
+    let radius = ENVIRONMENT.settings.radius / f32(ENVIRONMENT.volume);
 
     let pixel = vec2<u32>(clip.xy);
 
@@ -36,17 +35,12 @@ fn fragment(@builtin(position) clip: vec4<f32>) -> @location(0) vec4<f32> {
     let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
 
     let uv = vec2<f32>(1.0, -1.0) * (clip.xy / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0);
-    let near = unproject(vec3<f32>(uv.xy, 0.0));
-    let far = unproject(vec3<f32>(uv.xy, 1.0));
-
-    let direction = normalize(far - near);
-
-    let position = unproject(vec3<f32>(uv, depth)) + 0.5;
-    let position_voxel = position * f32(ENVIRONMENT.volume);
+    let position = unproject(vec3<f32>(uv, depth));
 
     let color = shade(
-        v0, v1, radius, position_voxel, direction, position,
-        ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
+        v0, v1, radius, position,
+        ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER
+    );
 
     return color;
 }

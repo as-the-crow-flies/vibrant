@@ -5,7 +5,8 @@
 
 @group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
-@group(2) @binding(2) var<storage, read_write> LINE_COUNT: atomic<u32>;
+@group(2) @binding(2) var<storage> LINE_INDICES_LENGTH: u32;
+@group(2) @binding(3) var<storage, read_write> LINE_COUNT: atomic<u32>;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -17,7 +18,8 @@ var<workgroup> WORKGROUP_OFFSET: u32;
 @compute
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
-    let n_indices = arrayLength(&LINE_INDEX);
+    let n_indices = LINE_INDICES_LENGTH;
+    let scale = f32(ENVIRONMENT.volume);
     let radius = ENVIRONMENT.settings.radius;
 
     var offset = 0u;
@@ -43,8 +45,8 @@ fn main(@builtin(local_invocation_index) local: u32) {
                 if (index_index >= n_indices) { continue; }
 
                 index = LINE_INDEX[index_index];
-                v0 = unpack_vertex(LINE_VERTEX[index + 0]);
-                v1 = unpack_vertex(LINE_VERTEX[index + 1]);
+                v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
+                v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
 
                 if (ENVIRONMENT.settings.culling == 1 && culling(v0.xyz, v1.xyz) > 0.0) { break; }
             }

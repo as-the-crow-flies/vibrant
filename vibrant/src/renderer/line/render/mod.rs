@@ -1,5 +1,5 @@
-pub mod raster;
-pub mod ray;
+pub mod rasterization;
+pub mod raytracing;
 pub mod volume;
 
 use wgpu::CommandEncoder;
@@ -11,7 +11,7 @@ use crate::{
     renderer::{
         environment::Environment,
         line::render::{
-            raster::LineRasterizationPipeline, ray::RayCastingLineRenderPipeline,
+            rasterization::LineRasterizationPipeline, raytracing::RayTracingLineRenderPipeline,
             volume::VolumeLineRenderPipeline,
         },
     },
@@ -20,7 +20,7 @@ use crate::{
 
 pub struct LineRenderPipeline {
     raster: LineRasterizationPipeline,
-    ray: RayCastingLineRenderPipeline,
+    ray: RayTracingLineRenderPipeline,
     volume: VolumeLineRenderPipeline,
 }
 
@@ -28,7 +28,7 @@ impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             raster: LineRasterizationPipeline::new(gpu),
-            ray: RayCastingLineRenderPipeline::new(gpu),
+            ray: RayTracingLineRenderPipeline::new(gpu),
             volume: VolumeLineRenderPipeline::new(gpu),
         }
     }

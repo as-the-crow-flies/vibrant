@@ -8,7 +8,6 @@ var<private> HIT: Hit = Hit(0.0, U32_MAX);
 fn visit(
     count: u32,
     offset: u32,
-    voxel: vec3<u32>,
     origin: vec3<f32>,
     direction: vec3<f32>,
     position: vec3<f32>,
@@ -39,7 +38,7 @@ fn result(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     let v0 = unpack_vertex(LINE_VERTEX[HIT.index + 0]);
     let v1 = unpack_vertex(LINE_VERTEX[HIT.index + 1]);
 
-    let position = origin * DIM + direction * HIT.distance;
+    let position = origin + direction * HIT.distance;
 
-    return shade(v0, v1, RADIUS, position, direction, position * DIM_INV, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
+    return shade(v0, v1, RADIUS, position, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 }

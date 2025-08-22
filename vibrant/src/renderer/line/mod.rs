@@ -3,7 +3,9 @@ pub mod occlusion;
 pub mod occupancy;
 pub mod populate;
 pub mod render;
+pub mod segment;
 pub mod transform;
+pub mod vrc;
 
 use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;

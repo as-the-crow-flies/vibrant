@@ -2,9 +2,9 @@ use std::any::type_name;
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Extent3d, ShaderStages,
-    StorageTextureAccess, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
+    BindGroupLayoutEntry, BindingResource, BindingType, Extent3d, ShaderStages, Texture,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
+    TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;

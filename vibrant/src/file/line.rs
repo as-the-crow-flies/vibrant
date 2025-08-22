@@ -9,6 +9,9 @@ use super::bounds::Bounds;
 pub struct LineFile {
     vertices: Vec<Vec4>,
     indices: Vec<u32>,
+    line_ids: Vec<u32>,
+    line_counts: Vec<u32>,
+    line_offsets: Vec<u32>,
     bounds: Bounds,
 }
 
@@ -21,6 +24,18 @@ impl LineFile {
         &self.indices
     }
 
+    pub fn line_ids(&self) -> &[u32] {
+        &self.line_ids
+    }
+
+    pub fn line_counts(&self) -> &[u32] {
+        &self.line_counts
+    }
+
+    pub fn line_offsets(&self) -> &[u32] {
+        &self.line_offsets
+    }
+
     pub fn bounds(&self) -> &Bounds {
         &self.bounds
     }
@@ -28,6 +43,9 @@ impl LineFile {
     pub fn from_obj(data: &String) -> LineFile {
         let mut vertices: Vec<Vec4> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
+        let mut line_ids: Vec<u32> = Vec::new();
+        let mut line_counts: Vec<u32> = Vec::new();
+        let mut line_offsets: Vec<u32> = Vec::new();
 
         for line in data.lines() {
             match line.split_once(" ") {
@@ -40,14 +58,22 @@ impl LineFile {
                         v.next().unwrap().parse().unwrap(),
                         1.0,
                     ));
+
+                    line_ids.push(line_counts.len() as u32);
                 }
                 Some(("l", index)) => {
-                    indices.extend(
-                        index
-                            .split_whitespace()
-                            .map(|i| i.parse::<u32>().unwrap() - 1),
-                    );
-                    indices.pop();
+                    let mut line_indices: Vec<u32> = index
+                        .split_whitespace()
+                        .map(|i| i.parse::<u32>().unwrap() - 1)
+                        .collect();
+
+                    line_indices.pop();
+
+                    let count = line_indices.len() as u32;
+
+                    line_offsets.push(line_counts.last().copied().unwrap_or_default() + count);
+                    line_counts.push(count);
+                    indices.extend(line_indices);
                 }
                 _ => {}
             }
@@ -57,6 +83,9 @@ impl LineFile {
             bounds: Bounds::from_vertices(&vertices),
             vertices,
             indices,
+            line_ids,
+            line_counts,
+            line_offsets,
         }
     }
 
@@ -89,34 +118,63 @@ impl LineFile {
             .map(|v| Vec4::new(v.x, v.y, v.z, 1.0))
             .collect_vec();
 
-        let indices: Vec<u32> = vertices
-            .iter()
-            .enumerate()
-            .filter_map(|(index, &vertex)| vertex.is_finite().then_some(index as u32))
-            .collect();
+        let mut indices: Vec<u32> = Vec::new();
+        let mut line_ids: Vec<u32> = Vec::new();
+        let mut line_counts: Vec<u32> = Vec::new();
+        let mut line_offsets: Vec<u32> = Vec::new();
+
+        let mut line_count = 0;
+
+        for (index, vertex) in vertices.iter().enumerate() {
+            if !vertex.is_finite() {
+                line_offsets.push(line_counts.last().copied().unwrap_or_default() + line_count);
+                line_counts.push(line_count);
+                line_count = 0;
+            } else {
+                indices.push(index as u32);
+                line_ids.push(line_ids.len() as u32);
+                line_count += 1;
+            }
+        }
 
         LineFile {
             bounds: Bounds::from_vertices(&vertices),
             vertices,
             indices,
+            line_ids,
+            line_counts,
+            line_offsets,
         }
     }
 
     pub fn join(tcks: Vec<LineFile>) -> LineFile {
-        tcks.into_iter().fold(LineFile::default(), |x, y| LineFile {
-            indices: [
-                x.indices,
-                y.indices
-                    .iter()
-                    .map(|i| i + x.vertices.len() as u32)
-                    .collect(),
-            ]
-            .concat(),
-            vertices: [x.vertices, y.vertices].concat(),
-            bounds: Bounds {
-                min: y.bounds.min.min(x.bounds.min),
-                max: y.bounds.max.max(x.bounds.max),
-            },
+        tcks.into_iter().fold(LineFile::default(), |x, y| {
+            let n_vertices_x = x.vertices.len() as u32;
+            let n_lines_x = x.line_ids.len() as u32;
+
+            LineFile {
+                indices: [
+                    x.indices,
+                    y.indices.iter().map(|i| i + n_vertices_x).collect(),
+                ]
+                .concat(),
+                line_ids: [
+                    x.line_ids,
+                    y.line_ids.iter().map(|i| i + n_lines_x).collect(),
+                ]
+                .concat(),
+                line_offsets: [
+                    x.line_offsets,
+                    y.line_offsets.iter().map(|i| i + n_vertices_x).collect(),
+                ]
+                .concat(),
+                vertices: [x.vertices, y.vertices].concat(),
+                line_counts: [x.line_counts, y.line_counts].concat(),
+                bounds: Bounds {
+                    min: y.bounds.min.min(x.bounds.min),
+                    max: y.bounds.max.max(x.bounds.max),
+                },
+            }
         })
     }
 

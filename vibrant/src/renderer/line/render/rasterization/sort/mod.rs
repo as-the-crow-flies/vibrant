@@ -69,7 +69,7 @@ mod test {
         renderer::{
             environment::Environment,
             line::{
-                render::raster::sort::LineRasterizationSortPipeline,
+                render::rasterization::sort::LineRasterizationSortPipeline,
                 transform::LineTransformPipeline,
             },
         },

@@ -12,7 +12,7 @@ struct Fragment {
 
 @group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
-@group(0) @binding(3) var<storage> LINE_CULL: array<u32>;
+@group(0) @binding(4) var<storage> LINE_CULL: array<u32>;
 
 @group(1) @binding(0) var<storage, read_write> KBUFFER: array<KBufferItem>;
 @group(1) @binding(1) var<storage, read_write> LOCK: array<atomic<u32>>;
@@ -31,26 +31,21 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
     let scale = 1.0 / f32(ENVIRONMENT.volume);
     let radius = ENVIRONMENT.settings.radius * scale;
 
-    let culled = bool(LINE_CULL[instance_index]);
-
-    if (culled) { return Fragment(); }
+    if (bool(LINE_CULL[instance_index])) { return Fragment(); }
 
     let index = LINE_INDEX[instance_index];
 
     let v0 = LINE_VERTEX[index + 0];
     let v1 = LINE_VERTEX[index + 1];
 
-    let v0s = v0.xyz * scale - 0.5;
-    let v1s = v1.xyz * scale - 0.5;
-
     let eye = ENVIRONMENT.camera.transform[3].xyz;
     let view = normalize(-ENVIRONMENT.camera.transform[2].xyz);
-    let quad = generate_aligned_box_billboard(eye, v0s, v1s, radius);
+    let quad = generate_aligned_box_billboard(eye, v0.xyz, v1.xyz, radius);
 
     let position = quad[QUAD_INDEX[vertex_index]].xyz;
     let clip = ENVIRONMENT.camera.projection * vec4<f32>(position, 1.0);
 
-    return Fragment(clip, (position + 0.5) * f32(ENVIRONMENT.volume), v0, v1);
+    return Fragment(clip, position, v0, v1);
 }
 
 @fragment
@@ -60,24 +55,21 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     if (textureLoad(OPACITY, pixel >> vec2<u32>(1), 0).x > MAX_OPACITY) { discard; }
 
-    let scale = 1.0 / f32(ENVIRONMENT.volume);
-    let radius = ENVIRONMENT.settings.radius;
+    let radius = ENVIRONMENT.settings.radius / f32(ENVIRONMENT.volume);
 
-    let origin = (ENVIRONMENT.camera.transform[3].xyz + 0.5) * f32(ENVIRONMENT.volume);
+    let origin = ENVIRONMENT.camera.transform[3].xyz;
     let direction = normalize(fragment.position - origin);
-
-    let hit = capsule_intersection(origin, direction, fragment.v0.xyz, fragment.v1.xyz, radius);
-
-    let position = origin + hit * direction;
-
-    if (hit == 1E6) { discard; }
 
     let v0 = unpack_vertex(fragment.v0);
     let v1 = unpack_vertex(fragment.v1);
 
-    if (should_be_clipped(v0, v1, position)) { discard; }
+    let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, radius);
 
-    let color = shade(v0, v1, radius, position, direction, position * scale, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
+    let position = origin + hit * direction;
+
+    if (hit == 1E6 || should_be_clipped(v0, v1, position)) { discard; }
+
+    let color = shade(v0, v1, radius, position, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 
     let color_packed = pack4x8unorm(vec4<f32>(color.rgb * color.a, color.a));
 

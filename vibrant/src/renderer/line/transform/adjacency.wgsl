@@ -1,6 +1,7 @@
-@group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
+@group(0) @binding(0) var<storage, read_write> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage, read_write> LINE_VERTEX: array<vec4<f32>>;
-@group(0) @binding(2) var<storage, read_write> LINE_COUNT: atomic<u32>;
+@group(0) @binding(2) var<storage> LINE_LENGTH: u32;
+@group(0) @binding(3) var<storage, read_write> LINE_COUNT: atomic<u32>;
 
 const WORKGROUP_SIZE: u32 = 1024;
 const CHUNK_SIZE: u32 = 32;

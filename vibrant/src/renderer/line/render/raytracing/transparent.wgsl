@@ -5,7 +5,6 @@ var<private> COLOR: vec4<f32>;
 fn visit(
     count: u32,
     offset: u32,
-    voxel: vec3<u32>,
     origin: vec3<f32>,
     direction: vec3<f32>,
     position: vec3<f32>,
@@ -46,7 +45,7 @@ fn visit(
             let hit = f32(item >> 16) * U16_MAX_INV * increment;
             let hit_position = position + hit * direction;
 
-            let c = shade(v0, v1, RADIUS, hit_position, direction, hit_position * DIM_INV, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
+            let c = shade(v0, v1, RADIUS, hit_position, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 
             COLOR += (1.0 - COLOR.a) * vec4<f32>(c.rgb * c.a, c.a);
 
