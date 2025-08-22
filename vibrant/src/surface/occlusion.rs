@@ -1,62 +1,71 @@
-use glam::{Mat4, Quat, Vec3};
-use wgpu::FilterMode;
+use std::any::type_name;
+
+use wgpu::{
+    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, FilterMode,
+};
 
 use crate::{
-    asset::scalar::{ScalarTexture2D, ScalarTexture3D},
+    asset::texture::{MipTexture3D, R32Float},
     gpu::Gpu,
 };
 
-pub struct Occlusion {
-    volume: ScalarTexture3D,
-    threshold: ScalarTexture2D,
-    hiz: ScalarTexture2D,
+pub struct OcclusionBuffer {
+    ambient: MipTexture3D<R32Float>,
+    directional: MipTexture3D<R32Float>,
+    binding: BindGroup,
 }
 
-impl Occlusion {
-    pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32) -> Self {
-        let projection_to_occlusion = Mat4::from_scale_rotation_translation(
-            Vec3::new(0.5 * width as f32, 0.5 * height as f32, depth as f32),
-            Quat::IDENTITY,
-            Vec3::new(0.5 * width as f32 - 0.5, 0.5 * height as f32 - 0.5, -0.5),
+impl OcclusionBuffer {
+    pub fn new(gpu: &Gpu, resolution: u32) -> Self {
+        let ambient = MipTexture3D::<R32Float>::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            FilterMode::Linear,
+        );
+        let directional = MipTexture3D::<R32Float>::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            FilterMode::Linear,
         );
 
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some(type_name::<Self>()),
+            layout: &Self::layout(gpu),
+            entries: &[ambient.binding_entries(0), directional.binding_entries(2)].concat(),
+        });
+
         Self {
-            volume: ScalarTexture3D::new(
-                gpu,
-                width,
-                height,
-                depth,
-                projection_to_occlusion,
-                FilterMode::Linear,
-            ),
-            threshold: ScalarTexture2D::new(
-                gpu,
-                width,
-                height,
-                1,
-                projection_to_occlusion,
-                FilterMode::Nearest,
-            ),
-            hiz: ScalarTexture2D::new(
-                gpu,
-                width,
-                height,
-                1,
-                projection_to_occlusion,
-                FilterMode::Nearest,
-            ),
+            ambient,
+            directional,
+            binding,
         }
     }
 
-    pub fn volume(&self) -> &ScalarTexture3D {
-        &self.volume
+    pub fn ambient(&self) -> &MipTexture3D<R32Float> {
+        &self.ambient
     }
 
-    pub fn threshold(&self) -> &ScalarTexture2D {
-        &self.threshold
+    pub fn directional(&self) -> &MipTexture3D<R32Float> {
+        &self.directional
     }
 
-    pub fn hiz(&self) -> &ScalarTexture2D {
-        &self.hiz
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
+    }
+
+    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    MipTexture3D::<R32Float>::layout_entries(0),
+                    MipTexture3D::<R32Float>::layout_entries(2),
+                ]
+                .concat(),
+            })
     }
 }

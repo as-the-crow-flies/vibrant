@@ -4,15 +4,20 @@ use bytemuck::Pod;
 use futures::channel::oneshot::channel;
 use itertools::Itertools;
 use wgpu::{
-    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
-    ComputePipeline, ComputePipelineDescriptor, Extent3d, Features, Limits, MapMode, Origin3d,
-    PipelineLayout, PipelineLayoutDescriptor, PowerPreference, RequestAdapterOptions, ShaderModule,
-    ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo, TexelCopyBufferLayout,
-    TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
+    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
+    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Extent3d, Features,
+    FragmentState, Limits, MapMode, Origin3d, PipelineLayout, PipelineLayoutDescriptor,
+    PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo,
+    TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
+    VertexState,
 };
+
+use crate::renderer::wgsl::COMMON;
 
 pub struct Gpu {
     instance: wgpu::Instance,
+    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
@@ -32,33 +37,33 @@ impl Gpu {
         let limits = adapter.limits();
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some(type_name::<Self>()),
-                    required_limits: Limits {
-                        max_bind_groups: limits.max_bind_groups,
-                        max_compute_invocations_per_workgroup: limits
-                            .max_compute_invocations_per_workgroup,
-                        max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
-                        max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y,
-                        max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
-                        max_buffer_size: limits.max_buffer_size,
-                        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
-                        ..Default::default()
-                    },
-                    required_features: Features::empty()
-                        | Features::FLOAT32_FILTERABLE
-                        | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | Features::SUBGROUP,
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some(type_name::<Self>()),
+                required_limits: Limits {
+                    max_bind_groups: limits.max_bind_groups,
+                    max_compute_invocations_per_workgroup: limits
+                        .max_compute_invocations_per_workgroup,
+                    max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
+                    max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y,
+                    max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
+                    max_buffer_size: limits.max_buffer_size,
+                    max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
+                    max_storage_buffers_per_shader_stage: limits
+                        .max_storage_buffers_per_shader_stage,
                     ..Default::default()
                 },
-                None,
-            )
+                required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | Features::FLOAT32_FILTERABLE
+                    | Features::CLEAR_TEXTURE
+                    | Features::SUBGROUP,
+                ..Default::default()
+            })
             .await
             .expect("Could not acquire GPU Device");
 
         Self {
             instance,
+            adapter,
             device,
             queue,
         }
@@ -66,6 +71,10 @@ impl Gpu {
 
     pub fn instance(&self) -> &wgpu::Instance {
         &self.instance
+    }
+
+    pub fn adapter(&self) -> &wgpu::Adapter {
+        &self.adapter
     }
 
     pub fn device(&self) -> &wgpu::Device {
@@ -77,11 +86,14 @@ impl Gpu {
     }
 
     pub fn shader(&self, source: &str) -> ShaderModule {
-        let common = include_str!("common.wgsl");
+        let directives = match self.adapter().get_info().backend {
+            wgpu::Backend::BrowserWebGpu => "enable subgroups;\n",
+            _ => "",
+        };
 
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(common.to_string() + source)),
+            source: ShaderSource::Wgsl(Cow::Owned(directives.to_string() + COMMON + source)),
         })
     }
 
@@ -90,15 +102,48 @@ impl Gpu {
         label: &str,
         layout: &PipelineLayout,
         module: &ShaderModule,
-        entry_point: &str,
     ) -> ComputePipeline {
         self.device()
             .create_compute_pipeline(&ComputePipelineDescriptor {
                 label: Some(label),
                 layout: Some(layout),
                 module,
-                entry_point: Some(entry_point),
+                entry_point: None,
                 compilation_options: Default::default(),
+                cache: None,
+            })
+    }
+
+    pub fn quad(
+        &self,
+        label: &str,
+        layout: &PipelineLayout,
+        target: ColorTargetState,
+        module: &ShaderModule,
+    ) -> RenderPipeline {
+        self.device()
+            .create_render_pipeline(&RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(layout),
+                vertex: VertexState {
+                    module,
+                    entry_point: Some("vertex"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                primitive: PrimitiveState {
+                    topology: PrimitiveTopology::TriangleStrip,
+                    ..Default::default()
+                },
+                fragment: Some(FragmentState {
+                    module,
+                    entry_point: Some("fragment"),
+                    targets: &[Some(target)],
+                    compilation_options: Default::default(),
+                }),
+                multisample: Default::default(),
+                depth_stencil: None,
+                multiview: None,
                 cache: None,
             })
     }
@@ -123,8 +168,8 @@ impl Gpu {
         self.queue.submit([cmd.finish()]);
     }
 
-    pub fn wait(&self) {
-        self.device.poll(wgpu::MaintainBase::Wait);
+    pub fn wait(&self) -> bool {
+        self.device.poll(wgpu::MaintainBase::Wait).is_ok()
     }
 
     pub async fn read_buffer<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
@@ -150,7 +195,7 @@ impl Gpu {
             let _ = sender.send(x);
         });
 
-        self.device.poll(wgpu::MaintainBase::Wait);
+        let _ = self.device.poll(wgpu::MaintainBase::Wait).is_ok();
 
         receiver
             .await

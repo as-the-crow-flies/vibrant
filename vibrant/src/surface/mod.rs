@@ -1,84 +1,140 @@
 pub mod color;
-pub mod density;
-pub mod gbuffer;
+pub mod copy;
+pub mod culling;
+pub mod kbuffer;
 pub mod occlusion;
+pub mod occupancy;
+pub mod opacity;
+pub mod visibility;
+pub mod vrc;
 
-use color::Color;
-use density::Density;
-use gbuffer::GBuffer;
+use std::any::type_name;
+
+use color::ColorBuffer;
 use log::warn;
-use occlusion::Occlusion;
+use occlusion::OcclusionBuffer;
+use occupancy::OccupancyBuffer;
 use wgpu::{
-    CommandEncoder, CompositeAlphaMode, Extent3d, Origin3d, PresentMode, SurfaceConfiguration,
-    SurfaceTarget, TexelCopyTextureInfo, TextureAspect, TextureUsages,
+    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, CommandEncoder,
+    CompositeAlphaMode, PresentMode, SurfaceConfiguration, SurfaceTarget, TextureFormat,
+    TextureUsages,
+};
+
+use crate::{
+    asset::texture::{MipTexture2D, MipTexture3D, R32Float, R32Uint},
+    controller::settings::Settings,
+    surface::{
+        copy::ColorCopyPipeline, culling::CullingBuffer, kbuffer::KBuffer, opacity::OpacityBuffer,
+        visibility::VisibilityBuffer,
+    },
 };
 
 use super::gpu::Gpu;
 
-pub struct SurfaceBuffer {
-    width: u32,
-    height: u32,
-    volume: u32,
-    tile: u32,
-    color: Color,
-    density: Density,
-    occlusion: Occlusion,
-    gbuffer: GBuffer,
+pub struct Frame {
+    color: ColorBuffer,
+    kbuffer: KBuffer,
+    opacity: OpacityBuffer,
+    occupancy: OccupancyBuffer,
+    occlusion: OcclusionBuffer,
+    culling: CullingBuffer,
+    visibility: VisibilityBuffer,
+    binding: BindGroup,
 }
 
-impl SurfaceBuffer {
-    pub fn new(gpu: &Gpu, width: u32, height: u32, volume: u32, tile: u32) -> Self {
+impl Frame {
+    pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
+        let color = ColorBuffer::new(gpu, settings.width, settings.height);
+        let kbuffer = KBuffer::new(gpu, settings.width, settings.height, 8);
+        let opacity = OpacityBuffer::new(gpu, settings.width, settings.height);
+
+        let occupancy = OccupancyBuffer::new(gpu, settings.volume);
+        let occlusion = OcclusionBuffer::new(gpu, settings.volume);
+        let culling = CullingBuffer::new(gpu, settings.volume);
+        let visibility = VisibilityBuffer::new(gpu, settings.width, settings.height);
+
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some(type_name::<Self>()),
+            layout: &Self::layout(gpu),
+            entries: &[
+                occupancy.density().binding_entries(0),
+                occupancy.count().binding_entries(2),
+                occlusion.ambient().binding_entries(4),
+                occlusion.directional().binding_entries(6),
+                opacity.opacity().binding_entries(8),
+            ]
+            .concat(),
+        });
+
         Self {
-            width,
-            height,
-            volume,
-            tile,
-            color: Color::new(gpu, width, height),
-            density: Density::new(gpu, volume),
-            occlusion: Occlusion::new(gpu, width.div_ceil(tile), height.div_ceil(tile), 2 * volume),
-            gbuffer: GBuffer::new(gpu, width, height),
+            color,
+            kbuffer,
+            opacity,
+            occupancy,
+            occlusion,
+            culling,
+            visibility,
+            binding,
         }
     }
 
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    pub fn volume(&self) -> u32 {
-        self.volume
-    }
-
-    pub fn tile(&self) -> u32 {
-        self.tile
-    }
-
-    pub fn color(&self) -> &Color {
+    pub fn color(&self) -> &ColorBuffer {
         &self.color
     }
 
-    pub fn density(&self) -> &Density {
-        &self.density
+    pub fn kbuffer(&self) -> &KBuffer {
+        &self.kbuffer
     }
 
-    pub fn occlusion(&self) -> &Occlusion {
+    pub fn opacity(&self) -> &OpacityBuffer {
+        &self.opacity
+    }
+
+    pub fn occupancy(&self) -> &OccupancyBuffer {
+        &self.occupancy
+    }
+
+    pub fn occlusion(&self) -> &OcclusionBuffer {
         &self.occlusion
     }
 
-    pub fn gbuffer(&self) -> &GBuffer {
-        &self.gbuffer
+    pub fn culling(&self) -> &CullingBuffer {
+        &self.culling
+    }
+
+    pub fn visibility(&self) -> &VisibilityBuffer {
+        &self.visibility
+    }
+
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
+    }
+
+    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    MipTexture3D::<R32Float>::layout_entries(0), // Occupancy - Density
+                    MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
+                    MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
+                    MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
+                    MipTexture2D::<R32Float>::layout_entries(8), // Opacity
+                ]
+                .concat(),
+            })
     }
 }
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
-    buffer: SurfaceBuffer,
+    buffer: Frame,
+    copy: ColorCopyPipeline,
 }
 
 impl Surface {
+    const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
+
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         let surface = gpu
             .instance()
@@ -89,54 +145,29 @@ impl Surface {
 
         Self {
             surface,
-            buffer: SurfaceBuffer::new(gpu, 1, 1, 1, 1),
+            buffer: Frame::new(gpu, &Settings::new()),
+            copy: ColorCopyPipeline::new(gpu),
         }
     }
 
-    pub fn maybe_resize(
-        &mut self,
-        gpu: &Gpu,
-        width: u32,
-        height: u32,
-        volume: u32,
-        tile: u32,
-    ) -> &Self {
-        if width == self.buffer.width()
-            && height == self.buffer.height()
-            && volume == self.buffer.volume()
-            && tile == self.buffer.tile()
+    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
+        if settings.width == self.buffer.color().width()
+            && settings.height == self.buffer.color().height()
+            && settings.volume == self.buffer.occupancy().resolution()
         {
             return self;
         }
 
-        self.buffer = SurfaceBuffer::new(gpu, width, height, volume, tile);
+        self.buffer = Frame::new(gpu, &settings);
         self.surface
-            .configure(gpu.device(), &Self::config(width, height));
+            .configure(gpu.device(), &Self::config(settings.width, settings.height));
 
         self
     }
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
         if let Some(surface) = self.surface.get_current_texture().ok() {
-            cmd.copy_texture_to_texture(
-                TexelCopyTextureInfo {
-                    texture: self.buffer.color().texture(),
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: TextureAspect::All,
-                },
-                TexelCopyTextureInfo {
-                    texture: &surface.texture,
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: TextureAspect::All,
-                },
-                Extent3d {
-                    width: surface.texture.width(),
-                    height: surface.texture.height(),
-                    depth_or_array_layers: 1,
-                },
-            );
+            self.copy.render(&mut cmd, &self.buffer, &surface.texture);
 
             gpu.submit(cmd);
             surface.present();
@@ -148,17 +179,17 @@ impl Surface {
     fn config(width: u32, height: u32) -> SurfaceConfiguration {
         SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST,
-            format: Color::FORMAT,
+            format: Self::FORMAT,
             width,
             height,
             present_mode: PresentMode::Fifo,
             desired_maximum_frame_latency: 2,
             alpha_mode: CompositeAlphaMode::Auto,
-            view_formats: vec![Color::FORMAT],
+            view_formats: vec![Self::FORMAT],
         }
     }
 
-    pub fn buffer(&self) -> &SurfaceBuffer {
+    pub fn buffer(&self) -> &Frame {
         &self.buffer
     }
 }

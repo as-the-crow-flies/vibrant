@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{Vec3, Vec4, Vec4Swizzles};
 
 #[derive(Debug)]
 pub struct Bounds {
@@ -7,11 +7,11 @@ pub struct Bounds {
 }
 
 impl Bounds {
-    pub fn scale(&self) -> f32 {
-        2.0 * self.min.abs().max_element().max(self.max.max_element())
+    pub fn scale(&self) -> Vec3 {
+        self.max - self.min
     }
 
-    pub fn from_vertices(vertices: &[Vec3]) -> Bounds {
+    pub fn from_vertices(vertices: &[Vec4]) -> Bounds {
         vertices
             .iter()
             .filter(|&vertex| vertex.is_finite())
@@ -21,17 +21,17 @@ impl Bounds {
                     max: Vec3::MIN,
                 },
                 |bounds, vertex| Bounds {
-                    min: bounds.min.min(*vertex),
-                    max: bounds.max.max(*vertex),
+                    min: bounds.min.min(vertex.xyz()),
+                    max: bounds.max.max(vertex.xyz()),
                 },
             )
-            .grow(1.01)
+            .expand()
     }
 
-    pub fn grow(&self, factor: f32) -> Bounds {
+    fn expand(self) -> Self {
         Bounds {
-            min: self.min * factor,
-            max: self.max * factor,
+            min: self.min - self.scale() * 0.05,
+            max: self.max + self.scale() * 0.05,
         }
     }
 }

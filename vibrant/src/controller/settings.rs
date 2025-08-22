@@ -1,47 +1,54 @@
-#[derive(Debug, PartialEq, Eq)]
-pub enum GeometrySetting {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum LineVoxelizationMode {
     Line,
+    Box,
     Tube,
-    Transparency,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ShadingSetting {
-    Simple,
-    GBuffer,
-    Culling,
-    Density,
-    Occlusion,
-    Tracing,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum LineRenderMode {
+    Rasterization,
+    RayTracing,
+    Volume,
 }
 
 #[derive(Debug)]
 pub struct Settings {
-    pub streamline_radius: f32,
+    pub width: u32,
+    pub height: u32,
+    pub volume: u32,
+    pub radius: f32,
+    pub lighting: f32,
     pub direct_light: f32,
-    pub culling_threshold: f32,
+    pub tangent_color: f32,
+    pub shadows: f32,
     pub alpha: f32,
     pub level: f32,
-    pub skip: u32,
-    pub quality: bool,
     pub smoothing: f32,
-    pub geometry: GeometrySetting,
-    pub shading: ShadingSetting,
+    pub culling: bool,
+    pub slice_count: u32,
+    pub render: LineRenderMode,
+    pub voxelization: LineVoxelizationMode,
 }
 
 impl Settings {
     pub fn new() -> Self {
         Self {
-            streamline_radius: 0.25,
-            direct_light: 0.72,
-            culling_threshold: 2.0,
+            width: 1920,
+            height: 1080,
+            volume: 128,
+            radius: 0.2,
+            lighting: 1.0,
+            direct_light: 0.67,
+            tangent_color: 1.0,
+            shadows: 0.0,
             alpha: 1.0,
             level: 0.0,
-            skip: 1,
-            quality: true,
-            smoothing: 1.0,
-            geometry: GeometrySetting::Tube,
-            shading: ShadingSetting::Tracing,
+            smoothing: 0.67,
+            culling: true,
+            slice_count: 10,
+            render: LineRenderMode::RayTracing,
+            voxelization: LineVoxelizationMode::Tube,
         }
     }
 }

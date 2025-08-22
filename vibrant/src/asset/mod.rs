@@ -1,9 +1,8 @@
-pub mod filter;
-pub mod scalar;
-pub mod tractogram;
+pub mod line;
+pub mod texture;
 
-use tractogram::Tractogram;
+use line::LineSet;
 
 pub struct Asset {
-    pub tractogram: Option<Tractogram>,
+    pub line: Option<LineSet>,
 }

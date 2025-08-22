@@ -8,18 +8,14 @@ use camera::Camera;
 use egui::{ComboBox, FontId, Layout, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{GeometrySetting, Settings, ShadingSetting};
+use settings::{LineRenderMode, Settings};
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
-use crate::file::File;
+use crate::{controller::settings::LineVoxelizationMode, file::File};
 
 #[derive(Debug)]
 pub struct Controller {
-    width: u32,
-    height: u32,
-    volume: u32,
-    tile: u32,
     state: ControllerState,
     camera: Camera,
     light: Light,
@@ -31,10 +27,6 @@ pub struct Controller {
 impl Controller {
     pub fn new() -> Self {
         Self {
-            width: 1920,
-            height: 1080,
-            volume: 256,
-            tile: 4,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -44,12 +36,8 @@ impl Controller {
         }
     }
 
-    pub fn test(width: u32, height: u32, volume: u32, tile: u32) -> Self {
+    pub fn test() -> Self {
         let mut controller = Self {
-            width,
-            height,
-            volume,
-            tile,
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
@@ -57,7 +45,10 @@ impl Controller {
             show_side_panel: false,
         };
 
-        controller.event(Event::Resized(width, height));
+        controller.event(Event::Resized(
+            controller.settings.width,
+            controller.settings.height,
+        ));
 
         controller
     }
@@ -93,114 +84,77 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
-            ComboBox::from_label("Geometry")
-                .selected_text(format!("{:?}", self.settings.geometry))
+            ComboBox::from_label("Render Mode")
+                .selected_text(format!("{:?}", self.settings.render))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Line, "Line");
-                    ui.selectable_value(&mut self.settings.geometry, GeometrySetting::Tube, "Tube");
                     ui.selectable_value(
-                        &mut self.settings.geometry,
-                        GeometrySetting::Transparency,
-                        "Transparency",
+                        &mut self.settings.render,
+                        LineRenderMode::Rasterization,
+                        "Rasterization",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.render,
+                        LineRenderMode::RayTracing,
+                        "Ray Tracing",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.render,
+                        LineRenderMode::Volume,
+                        "Volume",
                     );
                 });
 
-            ComboBox::from_label("Shading")
-                .selected_text(format!("{:?}", self.settings.shading))
+            ComboBox::from_label("Voxelization Mode")
+                .selected_text(format!("{:?}", self.settings.voxelization))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Simple,
-                        "Simple",
+                        &mut self.settings.voxelization,
+                        LineVoxelizationMode::Tube,
+                        "Tube",
                     );
                     ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::GBuffer,
-                        "GBuffer",
+                        &mut self.settings.voxelization,
+                        LineVoxelizationMode::Box,
+                        "Box",
                     );
                     ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Density,
-                        "Density",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Occlusion,
-                        "Occlusion",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Culling,
-                        "Culling",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.shading,
-                        ShadingSetting::Tracing,
-                        "Tracing",
+                        &mut self.settings.voxelization,
+                        LineVoxelizationMode::Line,
+                        "Line",
                     );
                 });
 
-            ComboBox::from_label("Volume Resolution")
-                .selected_text(format!("{:?}", self.volume))
+            ui.separator();
+            ui.label("Resolutions");
+            ui.separator();
+
+            ComboBox::from_label("Volume")
+                .selected_text(format!("{:?}", self.settings.volume))
                 .show_ui(ui, |ui| {
                     for power in 5u32..10 {
                         ui.selectable_value(
-                            &mut self.volume,
+                            &mut self.settings.volume,
                             2u32.pow(power),
                             format!("{}", 2u32.pow(power)),
                         );
                     }
                 });
 
-            ComboBox::from_label("Tile Size")
-                .selected_text(format!("{:?}", self.tile))
-                .show_ui(ui, |ui| {
-                    for power in 1u32..6 {
-                        ui.selectable_value(
-                            &mut self.tile,
-                            2u32.pow(power),
-                            format!("{}", 2u32.pow(power)),
-                        );
-                    }
-                });
+            ui.separator();
+            ui.label("Appearance");
+            ui.separator();
 
-            ui.add(
-                Slider::new(&mut self.settings.streamline_radius, 0.1..=1.0)
-                    .text("Streamline Radius"),
-            );
+            ui.add(Slider::new(&mut self.settings.radius, 0.01..=1.0).text("Streamline Radius"));
+            ui.add(Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"));
+            ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Ambient/Shadow"));
+            ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
+            ui.add(Slider::new(&mut self.settings.shadows, 0.0..=1.0).text("Shadows"));
+            ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
+            ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
+            ui.add(Slider::new(&mut self.settings.slice_count, 1..=64).text("Slices"));
 
-            ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Direct Light"));
-
-            ui.add(
-                Slider::new(&mut self.settings.alpha, 0.0001..=1.0)
-                    .logarithmic(true)
-                    .text("Alpha"),
-            );
-
-            ui.add(
-                Slider::new(&mut self.settings.culling_threshold, 0.0..=10.0)
-                    .text("Culling Threshold"),
-            );
-
-            ui.add(Slider::new(&mut self.settings.level, 0.0..=16.0).text("Level"));
-            ui.checkbox(&mut self.settings.quality, "Quality");
+            ui.checkbox(&mut self.settings.culling, "Enable Culling");
         });
-    }
-
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    pub fn volume(&self) -> u32 {
-        self.volume
-    }
-
-    pub fn tile(&self) -> u32 {
-        self.tile
     }
 
     pub fn camera(&self) -> &Camera {
@@ -216,7 +170,7 @@ impl Controller {
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.width = size.width;
-        self.height = size.height;
+        self.settings.width = size.width;
+        self.settings.height = size.height;
     }
 }

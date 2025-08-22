@@ -1,16 +1,16 @@
 pub mod environment;
-pub mod services;
-pub mod tractogram;
+pub mod line;
 pub mod ui;
+pub mod wgsl;
 
-use crate::renderer::tractogram::TractogramRenderer;
+use crate::renderer::line::LineRenderer;
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
 use wgpu::SurfaceTarget;
 
 use crate::{
-    asset::{tractogram::Tractogram, Asset},
+    asset::{line::LineSet, Asset},
     file::File,
 };
 
@@ -18,7 +18,7 @@ use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
 pub struct Renderer {
     surface: Surface,
-    tractogram: TractogramRenderer,
+    line: LineRenderer,
     ui: UiRenderer,
     environment: Environment,
     asset: Asset,
@@ -28,11 +28,11 @@ impl Renderer {
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         Self {
             surface: Surface::new(gpu, window),
-            tractogram: TractogramRenderer::new(gpu),
+            line: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
 
             environment: Environment::new(gpu),
-            asset: Asset { tractogram: None },
+            asset: Asset { line: None },
         }
     }
 
@@ -43,26 +43,22 @@ impl Renderer {
         ctx: &egui::Context,
         output: egui::FullOutput,
     ) {
-        File::on_tck(|tck| self.asset.tractogram = Some(Tractogram::new(gpu, &tck)));
+        File::on_line(|tck| {
+            self.asset.line = Some(LineSet::new(gpu, &tck));
+        });
 
-        let surface = self.surface.maybe_resize(
-            gpu,
-            controller.width(),
-            controller.height(),
-            controller.volume(),
-            controller.tile(),
-        );
+        let surface = self.surface.maybe_resize(gpu, &controller.settings());
 
         self.environment.update(gpu, &controller);
 
         let mut cmd = gpu.cmd();
 
-        if let Some(tractogram) = &self.asset.tractogram {
-            self.tractogram.render(
+        if let Some(line) = &self.asset.line {
+            self.line.render(
                 &mut cmd,
                 &self.environment,
                 surface.buffer(),
-                tractogram,
+                line,
                 controller.settings(),
             );
         }

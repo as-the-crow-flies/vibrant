@@ -27,8 +27,8 @@ impl Camera {
             distance: 0.75,
             pan: Vec3::ZERO,
             fov: PI / 3.0,
-            near: 0.1,
-            far: 1.0,
+            near: 0.01,
+            far: 10.0,
         }
     }
 
@@ -55,11 +55,6 @@ impl Camera {
         }
 
         self.zoom(-0.1 * state.scroll.y);
-
-        let distance_to_corners = 1.0;
-
-        self.near = (self.distance - distance_to_corners).max(0.001);
-        self.far = self.distance + distance_to_corners;
     }
 
     pub fn aspect(&self) -> f32 {

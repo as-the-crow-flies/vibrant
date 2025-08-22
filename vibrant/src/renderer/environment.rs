@@ -15,40 +15,6 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn wgsl() -> String {
-        "
-        struct Settings {
-            streamline_radius: f32,
-            direct_light: f32,
-            culling_threshold: f32,
-            alpha: f32,
-            level: f32,
-            skip: u32,
-            quality: u32,
-            smoothing: f32
-        }
-
-        struct Camera {
-            transform: mat4x4<f32>,
-            projection: mat4x4<f32>,
-            projection_inverse: mat4x4<f32>,
-            near: f32,
-            far: f32,
-        }
-
-        struct Environment {
-            surface: vec2<u32>,
-            volume: u32,
-            tile: u32,
-            camera: Camera,
-            light: vec3<f32>,
-            light_: f32,
-            settings: Settings
-        }
-        "
-        .to_string()
-    }
-
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -84,8 +50,12 @@ impl Environment {
             &self.buffer,
             0,
             &[
-                bytes_of(&[controller.width(), controller.height()]),
-                bytes_of(&[controller.volume(), controller.tile()]),
+                bytes_of(&[
+                    controller.settings().width,
+                    controller.settings().height,
+                    controller.settings().volume,
+                    0,
+                ]),
                 bytes_of(&controller.camera().transform()),
                 bytes_of(&controller.camera().projection()),
                 bytes_of(&controller.camera().projection().inverse()),
@@ -94,14 +64,15 @@ impl Environment {
                 bytes_of(&0u64),
                 bytes_of(&controller.light().direction()),
                 bytes_of(&0u32),
-                bytes_of(&controller.settings().streamline_radius),
+                bytes_of(&controller.settings().radius),
+                bytes_of(&controller.settings().lighting),
                 bytes_of(&controller.settings().direct_light),
-                bytes_of(&controller.settings().culling_threshold),
+                bytes_of(&controller.settings().tangent_color),
+                bytes_of(&controller.settings().shadows),
                 bytes_of(&controller.settings().alpha),
                 bytes_of(&controller.settings().level),
-                bytes_of(&controller.settings().skip),
-                bytes_of(&(controller.settings().quality as u32)),
                 bytes_of(&controller.settings().smoothing),
+                bytes_of(&(controller.settings().culling as u32)),
             ]
             .concat(),
         );
@@ -113,7 +84,7 @@ impl Environment {
                 label: Some(type_name::<Self>()),
                 entries: &[BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::all(),
+                    visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
