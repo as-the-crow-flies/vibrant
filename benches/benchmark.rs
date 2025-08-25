@@ -12,8 +12,7 @@ use vibrant::{
         environment::Environment,
         line::{
             culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
-            occupancy::LineOccupancyPipeline, populate::LinePopulatePipeline,
-            render::raytracing::RayTracingLineRenderPipeline, transform::LineTransformPipeline,
+            occupancy::LineOccupancyPipeline, transform::LineTransformPipeline,
         },
     },
     sort::{KeyValuePair, SortPipeline},
@@ -74,7 +73,7 @@ pub fn density(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
+    LineTransformPipeline::new(gpu).dispatch(&mut cmd, environment, tractogram);
     gpu.submit(cmd);
     gpu.wait();
 
@@ -84,7 +83,7 @@ pub fn density(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            pipeline.render(
+            pipeline.dispatch(
                 &mut cmd,
                 frame,
                 environment,
@@ -106,8 +105,8 @@ pub fn occlusion(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    LineOccupancyPipeline::new(gpu).render(
+    LineTransformPipeline::new(gpu).dispatch(&mut cmd, environment, tractogram);
+    LineOccupancyPipeline::new(gpu).dispatch(
         &mut cmd,
         frame,
         environment,
@@ -123,7 +122,7 @@ pub fn occlusion(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            pipeline.render(&mut cmd, frame, environment);
+            pipeline.dispatch(&mut cmd, frame, environment);
 
             gpu.submit(cmd);
             gpu.wait();
@@ -139,15 +138,15 @@ pub fn occupancy(criterion: &mut Criterion) {
     let tractogram = &get_tractogram(gpu);
 
     let mut cmd = gpu.cmd();
-    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    LineOccupancyPipeline::new(gpu).render(
+    LineTransformPipeline::new(gpu).dispatch(&mut cmd, environment, tractogram);
+    LineOccupancyPipeline::new(gpu).dispatch(
         &mut cmd,
         frame,
         environment,
         LineVoxelizationMode::Tube,
         tractogram,
     );
-    LineOcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
+    LineOcclusionPipeline::new(gpu).dispatch(&mut cmd, frame, environment);
     gpu.submit(cmd);
     gpu.wait();
 
@@ -157,7 +156,7 @@ pub fn occupancy(criterion: &mut Criterion) {
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            pipeline.render(&mut cmd, frame, environment);
+            pipeline.dispatch(&mut cmd, frame, environment);
 
             gpu.submit(cmd);
             gpu.wait();
@@ -165,139 +164,7 @@ pub fn occupancy(criterion: &mut Criterion) {
     });
 }
 
-pub fn populate(criterion: &mut Criterion) {
-    let gpu = &Gpu::new().block_on();
-
-    let environment = &get_environment(gpu);
-    let frame = &Frame::new(gpu, &Settings::new());
-    let tractogram = &get_tractogram(gpu);
-
-    let mut cmd = gpu.cmd();
-    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    LineOccupancyPipeline::new(gpu).render(
-        &mut cmd,
-        frame,
-        environment,
-        LineVoxelizationMode::Tube,
-        tractogram,
-    );
-    LineOcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
-    gpu.submit(cmd);
-    gpu.wait();
-
-    let occupancy = LineCullingPipeline::new(gpu);
-    let populate = LinePopulatePipeline::new(gpu);
-
-    criterion.bench_function("populate", |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-
-            occupancy.render(&mut cmd, frame, environment);
-            populate.render(
-                &mut cmd,
-                frame,
-                environment,
-                LineVoxelizationMode::Tube,
-                tractogram,
-            );
-
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-pub fn render(criterion: &mut Criterion) {
-    let gpu = &Gpu::new().block_on();
-
-    let environment = &get_environment(gpu);
-    let settings = &Settings::new();
-    let frame = &Frame::new(gpu, settings);
-    let tractogram = &get_tractogram(gpu);
-
-    let mut cmd = gpu.cmd();
-    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    LineOccupancyPipeline::new(gpu).render(
-        &mut cmd,
-        frame,
-        environment,
-        LineVoxelizationMode::Tube,
-        tractogram,
-    );
-    LineOcclusionPipeline::new(gpu).render(&mut cmd, frame, environment);
-    LineCullingPipeline::new(gpu).render(&mut cmd, frame, environment);
-    LinePopulatePipeline::new(gpu).render(
-        &mut cmd,
-        frame,
-        environment,
-        LineVoxelizationMode::Tube,
-        tractogram,
-    );
-    gpu.submit(cmd);
-    gpu.wait();
-
-    let pipeline = RayTracingLineRenderPipeline::new(gpu);
-
-    criterion.bench_function("render", |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-
-            pipeline.render(&mut cmd, frame, environment, settings, tractogram);
-
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-pub fn full(criterion: &mut Criterion) {
-    let gpu = &Gpu::new().block_on();
-
-    let environment = &get_environment(gpu);
-    let settings = &Settings::new();
-    let frame = &Frame::new(gpu, &Settings::new());
-    let tractogram = &get_tractogram(gpu);
-
-    let mut cmd = gpu.cmd();
-    LineTransformPipeline::new(gpu).render(&mut cmd, environment, tractogram);
-    gpu.submit(cmd);
-    gpu.wait();
-
-    let density = LineOccupancyPipeline::new(gpu);
-    let occlusion = LineOcclusionPipeline::new(gpu);
-    let occupancy = LineCullingPipeline::new(gpu);
-    let populate = LinePopulatePipeline::new(gpu);
-    let render = RayTracingLineRenderPipeline::new(gpu);
-
-    criterion.bench_function("full", |bencher| {
-        bencher.iter(|| {
-            let mut cmd = gpu.cmd();
-
-            density.render(
-                &mut cmd,
-                frame,
-                environment,
-                LineVoxelizationMode::Tube,
-                tractogram,
-            );
-            occlusion.render(&mut cmd, frame, environment);
-            occupancy.render(&mut cmd, frame, environment);
-            populate.render(
-                &mut cmd,
-                frame,
-                environment,
-                LineVoxelizationMode::Tube,
-                tractogram,
-            );
-            render.render(&mut cmd, frame, environment, settings, tractogram);
-
-            gpu.submit(cmd);
-            gpu.wait();
-        })
-    });
-}
-
-criterion_group!(benches, empty, sort, density, occlusion, occupancy, populate, render, full);
+criterion_group!(benches, empty, sort, density, occlusion, occupancy);
 criterion_main!(benches);
 
 pub fn get_tractogram(gpu: &Gpu) -> LineSet {

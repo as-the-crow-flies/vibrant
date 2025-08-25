@@ -20,7 +20,7 @@ const SUBGROUP_SIZE: u32 = 32;
 const SUBGROUP_COUNT: u32 = 32;
 const CHUNK_SIZE: u32 = 32;
 
-var<workgroup> SUBGROUP_OFFSETS: array<atomic<u32>, RADIX * SUBGROUP_COUNT>;
+var<workgroup> SUBGROUP_OFFSETS: array<atomic<u32>, RADIX * SUBGROUP_COUNT / 2>;
 var<workgroup> WORKGROUP_OFFSETS: array<atomic<u32>, RADIX>;
 var<workgroup> WORKGROUP_OFFSET: u32;
 
@@ -48,7 +48,7 @@ fn main(
         }
 
         // Clear Subgroup Offsets
-        for (var i = 0u; i < 8u; i++) {
+        for (var i = 0u; i < 4u; i++) {
             atomicStore(&SUBGROUP_OFFSETS[WORKGROUP_SIZE * i + local_index], 0u);
         }
 
@@ -85,7 +85,8 @@ fn main(
 
             var subgroup_exclusive_total = 0u;
             if (subgroup_index == lowest_rank_peer) {
-                subgroup_exclusive_total = atomicAdd(&SUBGROUP_OFFSETS[subgroup_radix_index], total_bits);
+                // subgroup_exclusive_total = atomicAdd(&SUBGROUP_OFFSETS[subgroup_radix_index], total_bits);
+                subgroup_exclusive_total = subgroup_offset_atomic_add(subgroup_radix_index, total_bits);
             }
 
             offsets[i] = subgroupShuffle(subgroup_exclusive_total, lowest_rank_peer) + peer_bits;
@@ -94,20 +95,26 @@ fn main(
         workgroupBarrier();
 
         // (Block/Workgroup)-Wide Scan
-        for (var i = 0u; i < 8u; i++) {
-            let radix = subgroup_id * 8 + i;
+        for (var i = 0u; i < 8u; i += 2u) {
+            let radix = subgroup_id * 8u + i;
             let subgroup_offset_index = subgroup_index * RADIX + radix;
 
-            let count = atomicLoad(&SUBGROUP_OFFSETS[subgroup_offset_index]);
-            let offset = subgroupExclusiveAdd(count);
+            // let count = atomicLoad(&SUBGROUP_OFFSETS[subgroup_offset_index]);
+            // let offset = subgroupExclusiveAdd(count);
+
+            let counts = subgroup_offset_load_2(subgroup_offset_index); // 2 radices at a time
+            let offsets = subgroupExclusiveAdd(counts);
 
             // Publish Workgroup Status
             if (subgroup_index == SUBGROUP_SIZE - 1) {
-                atomicStore(&STATUS[workgroup_index * RADIX + radix], ((offset + count) << 2) | STATUS_LOCAL);
+                let status_index = workgroup_index * RADIX + radix;
+                atomicStore(&STATUS[status_index + 0u], ((offsets[0] + counts[0]) << 2) | STATUS_LOCAL);
+                atomicStore(&STATUS[status_index + 1u], ((offsets[1] + counts[1]) << 2) | STATUS_LOCAL);
             }
 
             // Update Subgroup Offset
-            atomicStore(&SUBGROUP_OFFSETS[subgroup_offset_index], offset);
+            // atomicStore(&SUBGROUP_OFFSETS[subgroup_offset_index], offset);
+            subgroup_offset_store(subgroup_offset_index, offsets);
         }
 
         workgroupBarrier();
@@ -144,7 +151,7 @@ fn main(
 
             let global_radix_offset = HISTOGRAM[(RADIX_SHIFT >> 3) * RADIX + radix_index];
             let workgroup_offset = WORKGROUP_OFFSETS[radix_index];
-            let subgroup_offset = SUBGROUP_OFFSETS[subgroup_radix_index];
+            let subgroup_offset = subgroup_offset_load(subgroup_radix_index);
 
             let offset = global_radix_offset + workgroup_offset + subgroup_offset + offsets[i];
 
@@ -178,4 +185,23 @@ fn acquire_radix_status(workgroup_index: u32, local_index: u32) -> Status {
     }
 
     return Status();
+}
+
+fn subgroup_offset_atomic_add(index: u32, value: u32) -> u32 {
+    let shift = select(0u, 16u, bool(index & 1u));
+    return (atomicAdd(&SUBGROUP_OFFSETS[index >> 1u], value << shift) >> shift) & U16_MAX;
+}
+
+fn subgroup_offset_load_2(index: u32) -> vec2<u32> {
+    let value = atomicLoad(&SUBGROUP_OFFSETS[index >> 1u]);
+    return vec2<u32>(value & U16_MAX, (value >> 16u) & U16_MAX);
+}
+
+fn subgroup_offset_load(index: u32) -> u32 {
+    let shift = select(0u, 16u, bool(index & 1u));
+    return (atomicLoad(&SUBGROUP_OFFSETS[index >> 1u]) >> shift) & U16_MAX;
+}
+
+fn subgroup_offset_store(index: u32, value: vec2<u32>) {
+    atomicStore(&SUBGROUP_OFFSETS[index >> 1u], value.x | (value.y << 16u));
 }

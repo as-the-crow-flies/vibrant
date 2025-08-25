@@ -17,4 +17,6 @@ fn main(@builtin(global_invocation_id) global: u32) {
 
     if (line_id >= arrayLength(LINE_LENGTH)) { return; }
 
+
+
 }

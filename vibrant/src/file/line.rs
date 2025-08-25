@@ -71,7 +71,7 @@ impl LineFile {
 
                     let count = line_indices.len() as u32;
 
-                    line_offsets.push(line_counts.last().copied().unwrap_or_default() + count);
+                    line_offsets.push(line_offsets.last().copied().unwrap_or_default() + count);
                     line_counts.push(count);
                     indices.extend(line_indices);
                 }
@@ -127,12 +127,12 @@ impl LineFile {
 
         for (index, vertex) in vertices.iter().enumerate() {
             if !vertex.is_finite() {
-                line_offsets.push(line_counts.last().copied().unwrap_or_default() + line_count);
+                line_offsets.push(line_offsets.last().copied().unwrap_or_default() + line_count);
                 line_counts.push(line_count);
                 line_count = 0;
             } else {
                 indices.push(index as u32);
-                line_ids.push(line_ids.len() as u32);
+                line_ids.push(line_counts.len() as u32);
                 line_count += 1;
             }
         }

@@ -27,7 +27,7 @@ impl LineOcclusionPipeline {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
+    pub fn dispatch(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
         self.ambient.render(cmd, frame, environment);
         self.directional.render(cmd, frame, environment);
     }

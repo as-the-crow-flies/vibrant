@@ -94,7 +94,7 @@ mod test {
             .device()
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
-        transform.render(&mut cmd, &environment, &line);
+        transform.dispatch(&mut cmd, &environment, &line);
         sort.dispatch(&mut cmd, &environment, &line);
 
         gpu.submit(cmd);

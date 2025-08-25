@@ -43,7 +43,7 @@ impl LineCullingPipeline {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
+    pub fn dispatch(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
         frame.culling().clear(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {

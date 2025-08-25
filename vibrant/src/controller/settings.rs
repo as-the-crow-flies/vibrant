@@ -41,7 +41,7 @@ impl Settings {
             lighting: 1.0,
             direct_light: 0.67,
             tangent_color: 1.0,
-            shadows: 0.0,
+            shadows: 1.0,
             alpha: 1.0,
             level: 0.0,
             smoothing: 0.67,

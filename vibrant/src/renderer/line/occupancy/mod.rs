@@ -83,7 +83,7 @@ impl LineOccupancyPipeline {
         }
     }
 
-    pub fn render(
+    pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
         frame: &Frame,
@@ -110,7 +110,7 @@ impl LineOccupancyPipeline {
             LineVoxelizationMode::Box => &self.voxelize_box,
             LineVoxelizationMode::Tube => &self.voxelize_tube,
         });
-        pass.dispatch_workgroups(64, 1, 1);
+        pass.dispatch_workgroups(18, 1, 1);
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);

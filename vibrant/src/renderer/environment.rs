@@ -62,6 +62,8 @@ impl Environment {
                 bytes_of(&controller.camera().near()),
                 bytes_of(&controller.camera().far()),
                 bytes_of(&0u64),
+                bytes_of(&controller.segment().position()),
+                bytes_of(&controller.segment().radius()),
                 bytes_of(&controller.light().direction()),
                 bytes_of(&0u32),
                 bytes_of(&controller.settings().radius),

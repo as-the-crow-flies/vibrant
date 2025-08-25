@@ -27,7 +27,7 @@ impl LineTransformPipeline {
         }
     }
 
-    pub fn render(&self, cmd: &mut CommandEncoder, environment: &Environment, line: &LineSet) {
+    pub fn dispatch(&self, cmd: &mut CommandEncoder, environment: &Environment, line: &LineSet) {
         self.transform(cmd, line, environment);
         self.adjacency(cmd, line);
     }

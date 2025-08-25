@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod event;
 pub mod light;
+pub mod segment;
 pub mod settings;
 pub mod state;
 
@@ -12,13 +13,17 @@ use settings::{LineRenderMode, Settings};
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
-use crate::{controller::settings::LineVoxelizationMode, file::File};
+use crate::{
+    controller::{segment::Segment, settings::LineVoxelizationMode},
+    file::File,
+};
 
 #[derive(Debug)]
 pub struct Controller {
     state: ControllerState,
     camera: Camera,
     light: Light,
+    segment: Segment,
     settings: Settings,
 
     show_side_panel: bool,
@@ -30,6 +35,7 @@ impl Controller {
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
+            segment: Segment::new(),
             settings: Settings::new(),
 
             show_side_panel: false,
@@ -41,6 +47,7 @@ impl Controller {
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
+            segment: Segment::new(),
             settings: Settings::new(),
             show_side_panel: false,
         };
@@ -55,8 +62,11 @@ impl Controller {
 
     pub fn event(&mut self, event: Event) {
         self.state = self.state.update(event);
-        self.camera.update(&self.state);
-        self.light.update(&self.state);
+
+        if !self.segment.update(&self.state, &self.camera) {
+            self.camera.update(&self.state);
+            self.light.update(&self.state);
+        }
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {
@@ -163,6 +173,10 @@ impl Controller {
 
     pub fn light(&self) -> &Light {
         &self.light
+    }
+
+    pub fn segment(&self) -> &Segment {
+        &self.segment
     }
 
     pub fn settings(&self) -> &Settings {

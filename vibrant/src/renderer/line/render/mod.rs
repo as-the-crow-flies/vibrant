@@ -33,7 +33,7 @@ impl LineRenderPipeline {
         }
     }
 
-    pub fn render(
+    pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,

@@ -122,6 +122,10 @@ impl LineSet {
         &self.binding_raw
     }
 
+    pub fn clear_total_count(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_buffer(&self.buffer.total_count, 0, None);
+    }
+
     pub fn clear_count(&self, cmd: &mut CommandEncoder) {
         cmd.clear_buffer(&self.buffer.count, 0, None);
     }
@@ -205,7 +209,7 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Length
+                    // Total Count
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
@@ -292,7 +296,7 @@ struct LineBuffer {
     indices_raw: Buffer,
     vertices: Buffer,
     indices: Buffer,
-    length: Buffer,
+    total_count: Buffer,
     count: Buffer,
     cull_vertex: Buffer,
     cull_line: Buffer,
@@ -330,10 +334,10 @@ impl LineBuffer {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
-        let length = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let total_count = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::bytes_of(&(line.indices().len() as u32)),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
         });
 
         let count = gpu.device().create_buffer(&BufferDescriptor {
@@ -380,7 +384,7 @@ impl LineBuffer {
             indices_raw,
             vertices,
             indices,
-            length,
+            total_count,
             count,
             cull_vertex,
             cull_line,
@@ -411,7 +415,7 @@ impl LineBuffer {
             BindGroupEntry {
                 binding: 2,
                 resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.length,
+                    buffer: &self.total_count,
                     offset: 0,
                     size: None,
                 }),
@@ -473,7 +477,7 @@ impl Drop for LineBuffer {
         self.vertices_raw.destroy();
         self.vertices.destroy();
         self.indices.destroy();
-        self.length.destroy();
+        self.total_count.destroy();
         self.count.destroy();
         self.cull_vertex.destroy();
         self.line_ids.destroy();

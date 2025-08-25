@@ -47,7 +47,7 @@ impl LinePopulatePipeline {
         }
     }
 
-    pub fn render(
+    pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
         frame: &Frame,

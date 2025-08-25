@@ -1,10 +1,10 @@
 pub mod culling;
 pub mod occlusion;
 pub mod occupancy;
-pub mod populate;
 pub mod render;
 pub mod segment;
 pub mod transform;
+pub mod ui;
 pub mod vrc;
 
 use occupancy::LineOccupancyPipeline;
@@ -12,12 +12,11 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineSet,
-    controller::settings::{LineRenderMode, Settings},
+    controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
-        culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
-        populate::LinePopulatePipeline, render::LineRenderPipeline,
-        transform::LineTransformPipeline,
+        culling::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
+        segment::LineSegmentPipeline, transform::LineTransformPipeline, ui::LineUiPipeline,
     },
     surface::Frame,
 };
@@ -26,22 +25,24 @@ use super::environment::Environment;
 
 pub struct LineRenderer {
     transform: LineTransformPipeline,
+    segment: LineSegmentPipeline,
     occupancy: LineOccupancyPipeline,
     occlusion: LineOcclusionPipeline,
     culling: LineCullingPipeline,
-    populate: LinePopulatePipeline,
     render: LineRenderPipeline,
+    ui: LineUiPipeline,
 }
 
 impl LineRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             transform: LineTransformPipeline::new(gpu),
+            segment: LineSegmentPipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
             occlusion: LineOcclusionPipeline::new(gpu),
             culling: LineCullingPipeline::new(gpu),
-            populate: LinePopulatePipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
+            ui: LineUiPipeline::new(gpu),
         }
     }
 
@@ -53,17 +54,17 @@ impl LineRenderer {
         line: &LineSet,
         settings: &Settings,
     ) {
-        self.transform.render(cmd, environment, line);
+        self.transform.dispatch(cmd, environment, line);
+        self.segment.dispatch(cmd, environment, line);
+
         self.occupancy
-            .render(cmd, frame, environment, settings.voxelization, line);
-        self.culling.render(cmd, frame, environment);
-        self.occlusion.render(cmd, frame, environment);
+            .dispatch(cmd, frame, environment, settings.voxelization, line);
+        self.culling.dispatch(cmd, frame, environment);
+        self.occlusion.dispatch(cmd, frame, environment);
 
-        if settings.render == LineRenderMode::RayTracing {
-            self.populate
-                .render(cmd, frame, environment, settings.voxelization, line);
-        }
+        self.render
+            .dispatch(cmd, environment, frame, line, settings);
 
-        self.render.render(cmd, environment, frame, line, settings);
+        // self.ui.dispatch(cmd, frame, environment);
     }
 }
