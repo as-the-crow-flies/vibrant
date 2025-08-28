@@ -1,15 +1,27 @@
+@group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
+@group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
+@group(2) @binding(2) var<storage, read_write> LINE_COUNT: atomic<u32>;
+
+@group(3) @binding(0) var<storage> OFFSET: array<u32>;
+@group(3) @binding(2) var<storage> INDEX: array<u32>;
+
 const LOCAL_SORT_SIZE: u32 = 32;
 
 var<private> COLOR: vec4<f32>;
 
 fn visit(
-    count: u32,
-    offset: u32,
+    voxel: vec3<u32>,
     origin: vec3<f32>,
     direction: vec3<f32>,
     position: vec3<f32>,
     increment: f32,
     distance: f32) -> bool {
+
+    let count = textureLoad(COUNT, voxel, 0).x;
+
+    if (count == 0) { return false; }
+
+    let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
 
     let increment_inv = 1.0 / increment;
 

@@ -60,6 +60,10 @@ const U8_MAX: u32 = 255;
 const U8_MAX_f32: f32 = f32(U8_MAX);
 const U8_MAX_INV: f32 = 1.0 / U8_MAX_f32;
 
+const U6_MAX: u32 = 63;
+const U6_MAX_f32: f32 = f32(U6_MAX);
+const U6_MAX_INV: f32 = 1.0 / U6_MAX_f32;
+
 const BLOCK_BITS: u32 = 3u;
 const BLOCK_SIZE: u32 = 8u;
 const BLOCK_SIZE_2: u32 = BLOCK_SIZE * BLOCK_SIZE;
@@ -243,4 +247,107 @@ fn shade(
 
 fn should_be_clipped(v0: Vertex, v1: Vertex, position: vec3<f32>) -> bool {
     return dot(position - v0.xyz, v0.clip) < 0.0 || dot(v1.xyz - position, v1.clip) < 0.0;
+}
+
+fn morton_encode(p: vec3<u32>) -> u32 {
+    return (p.z << 20u) + (p.y << 10u) + p.x;
+}
+
+fn morton_decode(code: u32) -> vec3<u32> {
+    return vec3<u32>(code & 1023u, (code >> 10u) & 1023u, (code >> 20u) & 1023u);
+}
+
+// fn morton_encode(p: vec3<u32>) -> u32 {
+//     let xx = expand_bits(p.x);
+//     let yy = expand_bits(p.y) << 1u;
+//     let zz = expand_bits(p.z) << 2u;
+//     return xx | yy | zz;
+// }
+
+// fn morton_decode(code: u32) -> vec3<u32> {
+//     let x = compact_bits(code);
+//     let y = compact_bits(code >> 1u);
+//     let z = compact_bits(code >> 2u);
+//     return vec3<u32>(x, y, z);
+// }
+
+const MORTON_MAGIC_BITS: array<u32, 5> = array<u32, 5>(0x000003ff, 0x30000ff, 0x0300f00f, 0x30c30c3, 0x9249249);
+
+fn expand_bits(v: u32) -> u32 {
+    var x = v & MORTON_MAGIC_BITS[0];
+    x = (x | (x << 16u)) & MORTON_MAGIC_BITS[1];
+    x = (x | (x << 8u))  & MORTON_MAGIC_BITS[2];
+    x = (x | (x << 4u))  & MORTON_MAGIC_BITS[3];
+    x = (x | (x << 2u))  & MORTON_MAGIC_BITS[4];
+    return x;
+}
+
+fn compact_bits(v: u32) -> u32 {
+    var x = v & MORTON_MAGIC_BITS[4];
+    x = (x ^ (x >> 2u))  & MORTON_MAGIC_BITS[3];
+    x = (x ^ (x >> 4u))  & MORTON_MAGIC_BITS[2];
+    x = (x ^ (x >> 8u))  & MORTON_MAGIC_BITS[1];
+    x = (x ^ (x >> 16u)) & MORTON_MAGIC_BITS[0];
+    return x;
+}
+
+struct VoxelSegment {
+    v0: vec3<f32>,
+    v1: vec3<f32>
+}
+
+fn encode_segment(voxel: vec3<u32>, v0: vec3<f32>, v0_axis: u32, v1: vec3<f32>, v1_axis: u32) -> u32 {
+    return
+        (encode_segment_vertex(voxel, v0, v0_axis) << 16u) |
+         encode_segment_vertex(voxel, v1, v1_axis);
+}
+
+fn decode_segment(voxel: vec3<u32>, segment: u32) -> VoxelSegment {
+    return VoxelSegment(
+        decode_segment_vertex(voxel, segment >> 16u),
+        decode_segment_vertex(voxel, segment & U16_MAX),
+    );
+}
+
+fn encode_segment_vertex(voxel: vec3<u32>, vertex: vec3<f32>, axis: u32) -> u32 {
+    let epsilon = vec3<f32>(1E-16);
+
+    let local = saturate(vertex - vec3<f32>(voxel));
+
+    let face_bits = (1u << (axis + 1u)) + u32(local[axis] > 0.5);
+
+    let axes = select(select(
+        vec2<u32>(0, 1),
+        vec2<u32>(0, 2), axis == 1),
+        vec2<u32>(1, 2), axis == 0);
+
+    let axis_0_bits = encode_segment_axis(local[axes[0]]);
+    let axis_1_bits = encode_segment_axis(local[axes[1]]);
+
+    return (face_bits << 12u) | (axis_0_bits << 6u) | axis_1_bits;
+}
+
+fn decode_segment_vertex(voxel: vec3<u32>, segment: u32) -> vec3<f32> {
+    let face_bits = segment >> 12u;
+
+    let axis_0 = decode_segment_axis(segment >> 6u);
+    let axis_1 = decode_segment_axis(segment);
+    let axis_2 = f32(face_bits & 1u);
+
+    let direction_0 = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), bool((face_bits >> 1u) & 1u));
+    let direction_1 = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.0, 1.0, 0.0), bool((face_bits >> 3u) & 1u));
+    let direction_2 = vec3<f32>(1.0) - direction_0 - direction_1;
+
+    return vec3<f32>(voxel) +
+        direction_0 * axis_0 +
+        direction_1 * axis_1 +
+        direction_2 * axis_2;
+}
+
+fn encode_segment_axis(local: f32) -> u32 {
+    return clamp(u32(local * U6_MAX_f32), 0u, U6_MAX);
+}
+
+fn decode_segment_axis(axis: u32) -> f32 {
+    return f32(axis & U6_MAX) * U6_MAX_INV;
 }

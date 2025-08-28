@@ -12,11 +12,12 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineSet,
-    controller::settings::Settings,
+    controller::settings::{LineRenderMode, Settings},
     gpu::Gpu,
     renderer::line::{
         culling::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
         segment::LineSegmentPipeline, transform::LineTransformPipeline, ui::LineUiPipeline,
+        vrc::LineVrcVoxelizationPipeline,
     },
     surface::Frame,
 };
@@ -26,6 +27,7 @@ use super::environment::Environment;
 pub struct LineRenderer {
     transform: LineTransformPipeline,
     segment: LineSegmentPipeline,
+    vrc: LineVrcVoxelizationPipeline,
     occupancy: LineOccupancyPipeline,
     occlusion: LineOcclusionPipeline,
     culling: LineCullingPipeline,
@@ -38,6 +40,7 @@ impl LineRenderer {
         Self {
             transform: LineTransformPipeline::new(gpu),
             segment: LineSegmentPipeline::new(gpu),
+            vrc: LineVrcVoxelizationPipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
             occlusion: LineOcclusionPipeline::new(gpu),
             culling: LineCullingPipeline::new(gpu),
@@ -55,10 +58,15 @@ impl LineRenderer {
         settings: &Settings,
     ) {
         self.transform.dispatch(cmd, environment, line);
-        self.segment.dispatch(cmd, environment, line);
+        // self.segment.dispatch(cmd, environment, line);
 
-        self.occupancy
-            .dispatch(cmd, frame, environment, settings.voxelization, line);
+        if settings.render == LineRenderMode::Vrc {
+            self.vrc.dispatch(cmd, frame, environment, line);
+        } else {
+            self.occupancy
+                .dispatch(cmd, frame, environment, settings.voxelization, line);
+        }
+
         self.culling.dispatch(cmd, frame, environment);
         self.occlusion.dispatch(cmd, frame, environment);
 

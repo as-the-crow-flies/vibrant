@@ -6,8 +6,8 @@
 @group(1) @binding(1) var<storage, read_write> LINE_VERTEX: array<vec4<f32>>;
 @group(1) @binding(2) var<storage, read_write> LINE_TOTAL_COUNT: atomic<u32>;
 
-@group(1) @binding(7) var<storage> LINE_LENGTH: array<u32>;
-@group(1) @binding(8) var<storage> LINE_OFFSET: array<u32>;
+@group(1) @binding(5) var<storage> LINE_LENGTH: array<u32>;
+@group(1) @binding(6) var<storage> LINE_OFFSET: array<u32>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 

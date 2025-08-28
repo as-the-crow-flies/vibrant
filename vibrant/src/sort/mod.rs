@@ -293,6 +293,7 @@ pub struct KeyValuePair {
     key: Buffer,
     value: Buffer,
     count: Buffer,
+    offset: Buffer,
     binding: BindGroup,
 }
 
@@ -315,7 +316,14 @@ impl KeyValuePair {
         let count = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label: Some(type_name::<Self>()),
             contents: bytes_of(&size),
-            usage: BufferUsages::COPY_SRC,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+        });
+
+        let offset = gpu.device().create_buffer(&BufferDescriptor {
+            label: Some(type_name::<Self>()),
+            size: 4,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -330,6 +338,14 @@ impl KeyValuePair {
                     binding: 1,
                     resource: value.as_entire_binding(),
                 },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: count.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: offset.as_entire_binding(),
+                },
             ],
         });
 
@@ -337,6 +353,7 @@ impl KeyValuePair {
             key,
             value,
             count,
+            offset,
             binding,
         }
     }
@@ -353,11 +370,25 @@ impl KeyValuePair {
         &self.count
     }
 
+    pub fn offset(&self) -> &Buffer {
+        &self.offset
+    }
+
     pub fn binding(&self) -> &BindGroup {
         &self.binding
     }
 
+    pub fn clear_count(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_buffer(&self.count, 0, None);
+    }
+
+    pub fn clear_offset(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_buffer(&self.offset, 0, None);
+    }
+
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+        let visibility = ShaderStages::COMPUTE | ShaderStages::FRAGMENT;
+
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
@@ -365,7 +396,7 @@ impl KeyValuePair {
                     // Keys
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::COMPUTE,
+                        visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
@@ -376,7 +407,29 @@ impl KeyValuePair {
                     // Values
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::COMPUTE,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Count
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Offset
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
@@ -394,6 +447,7 @@ impl Drop for KeyValuePair {
         self.key.destroy();
         self.value.destroy();
         self.count.destroy();
+        self.offset.destroy();
     }
 }
 

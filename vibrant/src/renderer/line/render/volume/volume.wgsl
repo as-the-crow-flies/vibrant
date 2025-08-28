@@ -1,6 +1,6 @@
 @group(0) @binding(0) var DENSITY: texture_3d<f32>;
 @group(0) @binding(1) var SAMPLER: sampler;
-@group(0) @binding(2) var COUNT: texture_3d<u32>;
+
 @group(0) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
 @group(0) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
 

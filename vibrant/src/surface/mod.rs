@@ -25,7 +25,7 @@ use crate::{
     controller::settings::Settings,
     surface::{
         copy::ColorCopyPipeline, culling::CullingBuffer, kbuffer::KBuffer, opacity::OpacityBuffer,
-        visibility::VisibilityBuffer,
+        visibility::VisibilityBuffer, vrc::VrcBuffer,
     },
 };
 
@@ -39,6 +39,7 @@ pub struct Frame {
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
     visibility: VisibilityBuffer,
+    vrc: VrcBuffer,
     binding: BindGroup,
 }
 
@@ -52,6 +53,7 @@ impl Frame {
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
         let culling = CullingBuffer::new(gpu, settings.volume);
         let visibility = VisibilityBuffer::new(gpu, settings.width, settings.height);
+        let vrc = VrcBuffer::new(gpu, settings.volume);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -74,6 +76,7 @@ impl Frame {
             occlusion,
             culling,
             visibility,
+            vrc,
             binding,
         }
     }
@@ -104,6 +107,10 @@ impl Frame {
 
     pub fn visibility(&self) -> &VisibilityBuffer {
         &self.visibility
+    }
+
+    pub fn vrc(&self) -> &VrcBuffer {
+        &self.vrc
     }
 
     pub fn binding(&self) -> &BindGroup {

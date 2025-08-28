@@ -107,6 +107,7 @@ impl Controller {
                         LineRenderMode::RayTracing,
                         "Ray Tracing",
                     );
+                    ui.selectable_value(&mut self.settings.render, LineRenderMode::Vrc, "Vrc");
                     ui.selectable_value(
                         &mut self.settings.render,
                         LineRenderMode::Volume,

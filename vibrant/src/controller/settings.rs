@@ -10,6 +10,7 @@ pub enum LineRenderMode {
     Rasterization,
     RayTracing,
     Volume,
+    Vrc,
 }
 
 #[derive(Debug)]
@@ -47,7 +48,7 @@ impl Settings {
             smoothing: 0.67,
             culling: true,
             slice_count: 10,
-            render: LineRenderMode::RayTracing,
+            render: LineRenderMode::Vrc,
             voxelization: LineVoxelizationMode::Tube,
         }
     }

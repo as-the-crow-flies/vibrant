@@ -23,19 +23,11 @@ pub struct LineOccupancyPipeline {
 
 impl LineOccupancyPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let label = Some(type_name::<Self>());
-
-        let voxelize_layout = &gpu
-            .device()
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label,
-                bind_group_layouts: &[
-                    &OccupancyBuffer::layout_write(gpu),
-                    &LineSet::layout(gpu, true),
-                    &Environment::layout(gpu),
-                ],
-                push_constant_ranges: &[],
-            });
+        let voxelize_layout = &gpu.pipeline_layout(&[
+            &OccupancyBuffer::layout_write(gpu),
+            &LineSet::layout(gpu, true),
+            &Environment::layout(gpu),
+        ]);
 
         let voxelize_shader_source = include_str!("voxelize.wgsl");
 
@@ -57,27 +49,17 @@ impl LineOccupancyPipeline {
             ),
             copy: gpu.compute(
                 "Occupancy::Copy",
-                &gpu.device()
-                    .create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label,
-                        bind_group_layouts: &[
-                            &OccupancyBuffer::layout_write(gpu),
-                            &MipTexture3D::<R32Float>::layout_write(gpu),
-                            &MipTexture3D::<R32Uint>::layout_write(gpu),
-                            &Environment::layout(gpu),
-                        ],
-                        push_constant_ranges: &[],
-                    }),
+                &gpu.pipeline_layout(&[
+                    &OccupancyBuffer::layout_write(gpu),
+                    &MipTexture3D::<R32Float>::layout_write(gpu),
+                    &MipTexture3D::<R32Uint>::layout_write(gpu),
+                    &Environment::layout(gpu),
+                ]),
                 &gpu.shader(include_str!("copy.wgsl")),
             ),
             mipmap: gpu.compute(
                 "Occupancy::MipMap",
-                &gpu.device()
-                    .create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label,
-                        bind_group_layouts: &[&MipTexture3D::<R32Float>::layout_mipmap(gpu)],
-                        push_constant_ranges: &[],
-                    }),
+                &gpu.pipeline_layout(&[&MipTexture3D::<R32Float>::layout_mipmap(gpu)]),
                 &gpu.shader(include_str!("mipmap.wgsl")),
             ),
         }

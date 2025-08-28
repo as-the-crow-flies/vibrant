@@ -39,13 +39,13 @@ impl LineSet {
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu, true),
-            entries: &buffer.entries(&buffer.indices),
+            entries: &buffer.entries(&buffer.indices, &buffer.vertices),
         });
 
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu, false),
-            entries: &buffer.entries(&buffer.indices),
+            entries: &buffer.entries(&buffer.indices, &buffer.vertices),
         });
 
         let binding_raw = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -242,31 +242,9 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Cull Line
-                    BindGroupLayoutEntry {
-                        binding: 5,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Line Ids
-                    BindGroupLayoutEntry {
-                        binding: 6,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                     // Line Counts
                     BindGroupLayoutEntry {
-                        binding: 7,
+                        binding: 5,
                         visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
@@ -277,7 +255,7 @@ impl LineSet {
                     },
                     // Line Offsets
                     BindGroupLayoutEntry {
-                        binding: 8,
+                        binding: 6,
                         visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
@@ -299,8 +277,6 @@ struct LineBuffer {
     total_count: Buffer,
     count: Buffer,
     cull_vertex: Buffer,
-    cull_line: Buffer,
-    line_ids: Buffer,
     line_counts: Buffer,
     line_offsets: Buffer,
 }
@@ -354,19 +330,6 @@ impl LineBuffer {
             mapped_at_creation: false,
         });
 
-        let cull_line = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: (line.line_counts().len() * 4) as u64,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let line_ids = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.line_ids()),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        });
-
         let line_counts = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&line.line_counts()),
@@ -387,19 +350,17 @@ impl LineBuffer {
             total_count,
             count,
             cull_vertex,
-            cull_line,
-            line_ids,
             line_counts,
             line_offsets,
         }
     }
 
-    fn entries<'a>(&'a self, indices: &'a Buffer) -> Vec<BindGroupEntry<'a>> {
+    fn entries<'a>(&'a self, indices: &'a Buffer, vertices: &'a Buffer) -> Vec<BindGroupEntry<'a>> {
         vec![
             BindGroupEntry {
                 binding: 0,
                 resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &indices,
+                    buffer: indices,
                     offset: 0,
                     size: None,
                 }),
@@ -407,7 +368,7 @@ impl LineBuffer {
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.vertices,
+                    buffer: vertices,
                     offset: 0,
                     size: None,
                 }),
@@ -439,29 +400,13 @@ impl LineBuffer {
             BindGroupEntry {
                 binding: 5,
                 resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.cull_line,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 6,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.line_ids,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 7,
-                resource: BindingResource::Buffer(BufferBinding {
                     buffer: &self.line_counts,
                     offset: 0,
                     size: None,
                 }),
             },
             BindGroupEntry {
-                binding: 8,
+                binding: 6,
                 resource: BindingResource::Buffer(BufferBinding {
                     buffer: &self.line_offsets,
                     offset: 0,
@@ -480,7 +425,6 @@ impl Drop for LineBuffer {
         self.total_count.destroy();
         self.count.destroy();
         self.cull_vertex.destroy();
-        self.line_ids.destroy();
         self.line_counts.destroy();
         self.line_offsets.destroy();
     }
@@ -510,13 +454,13 @@ impl SortedLineSet {
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("LineSort::Line"),
             layout: &LineSet::layout(gpu, true),
-            entries: &buffer.entries(ping.key()),
+            entries: &buffer.entries(ping.key(), &buffer.vertices),
         });
 
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("LineSort::Line"),
             layout: &LineSet::layout(gpu, false),
-            entries: &buffer.entries(ping.key()),
+            entries: &buffer.entries(ping.key(), &buffer.vertices),
         });
 
         Self {
@@ -556,8 +500,8 @@ pub struct VrcLineSet {
 
 impl VrcLineSet {
     fn new(gpu: &Gpu, len: u32) -> Self {
-        let ping = KeyValuePair::new(gpu, len);
-        let pong = KeyValuePair::new(gpu, len);
+        let ping = KeyValuePair::new(gpu, len * 16);
+        let pong = KeyValuePair::new(gpu, len * 16);
 
         Self { ping, pong }
     }

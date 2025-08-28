@@ -1,18 +1,10 @@
-@group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
-@group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
-@group(0) @binding(2) var<storage, read_write> LINE_COUNT: atomic<u32>;
+@group(0) @binding(0) var DENSITY: texture_3d<f32>;
+@group(0) @binding(1) var SAMPLER: sampler;
+@group(0) @binding(2) var COUNT: texture_3d<u32>;
+@group(0) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
+@group(0) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
 
-@group(1) @binding(0) var<storage> OFFSET: array<u32>;
-@group(1) @binding(2) var<storage> INDEX: array<u32>;
-@group(1) @binding(3) var CULLING: texture_3d<f32>;
-
-@group(2) @binding(0) var DENSITY: texture_3d<f32>;
-@group(2) @binding(1) var SAMPLER: sampler;
-@group(2) @binding(2) var COUNT: texture_3d<u32>;
-@group(2) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
-@group(2) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
-
-@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
@@ -61,7 +53,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     if (t_min >= t_max || t_max < 0.0) { return vec4<f32>(0.0); }
 
     var t = max(t_min, 0.0);
-    var mip = textureNumLevels(CULLING) - 1;
+    var mip = textureNumLevels(DENSITY) - 1;
     var position = origin + direction * t;
     var voxel = vec3<u32>(floor(position * DIM));
 
@@ -70,7 +62,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         let voxel_at_mip = voxel >> vec3<u32>(mip);
 
         // Traverse down level if mip is occupied
-        if (textureLoad(CULLING, voxel_at_mip, i32(mip)).x > 0.0) {
+        if (textureLoad(DENSITY, voxel_at_mip, i32(mip)).x > 0.0) {
             if (mip == 0) { break; }
             else { mip--; }
 
@@ -109,14 +101,8 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         // Get Increment
         let increment = max(d[axis], 1E-5);
 
-        let count = textureLoad(COUNT, voxel, 0).x;
-
-        if (count > 0) {
-            let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
-
-            if (visit(count, offset, origin - 0.5, direction, position - 0.5, increment, t + increment)) {
-                break;
-            }
+        if (visit(voxel, origin - 0.5, direction, position - 0.5, increment, t + increment)) {
+            break;
         }
 
         // Increment Ray Position
