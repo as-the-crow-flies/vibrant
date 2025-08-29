@@ -21,6 +21,30 @@ fn visit(
 
     HIT = Hit(distance, vec3<u32>(), U32_MAX);
 
+    if (ENVIRONMENT.settings.shadows > 0.5) {
+        for (var x = -1; x <= 1; x++) {
+            for (var y = -1; y <= 1; y++) {
+                for (var z = -1; z <= 1; z++) {
+                    let vxl = vec3<u32>(vec3<i32>(voxel) + vec3<i32>(x, y, z));
+                    visit_voxel(vxl, origin, direction, position, increment, distance);
+                }
+            }
+        }
+    } else {
+        visit_voxel(voxel, origin, direction, position, increment, distance);
+    }
+
+    return HIT.index != U32_MAX;
+}
+
+fn visit_voxel(
+    voxel: vec3<u32>,
+    origin: vec3<f32>,
+    direction: vec3<f32>,
+    position: vec3<f32>,
+    increment: f32,
+    distance: f32) {
+
     let start = textureLoad(START, voxel).x;
     let end = textureLoad(END, voxel).x;
 
@@ -36,9 +60,7 @@ fn visit(
             HIT = Hit(intersection, voxel, index);
         }
     }
-
-    return HIT.index != U32_MAX;
-}
+};
 
 fn result(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     if (HIT.index == U32_MAX) { return vec4<f32>(0.0); }

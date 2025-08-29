@@ -27,17 +27,17 @@ fn main(@builtin(global_invocation_id) global: vec3<u32>) {
     var last_axis = 0u;
     var last_position = vec3<f32>(-1.0);
 
-    for (var i = line_start; i < line_end - 1; i++) {
+    for (var i = line_start; i < line_end; i++) {
         let index = LINE_INDEX[i];
 
         let v0 = (LINE_VERTEX[index + 0].xyz + 0.5) * scale;
         let v1 = (LINE_VERTEX[index + 1].xyz + 0.5) * scale;
 
-        quantize2(v0, v1, &last_position, &last_axis);
+        quantize(v0, v1, &last_position, &last_axis);
     }
 }
 
-fn quantize2(v0: vec3<f32>, v1: vec3<f32>, last_position: ptr<function, vec3<f32>>, last_axis: ptr<function, u32>) {
+fn quantize(v0: vec3<f32>, v1: vec3<f32>, last_position: ptr<function, vec3<f32>>, last_axis: ptr<function, u32>) {
     let scale = 1.0 / f32(ENVIRONMENT.volume);
 
     let delta = v1 - v0;
@@ -69,7 +69,7 @@ fn quantize2(v0: vec3<f32>, v1: vec3<f32>, last_position: ptr<function, vec3<f32
         t += increment;
         position += direction * increment;
 
-        if (t < distance) {
+        if (t > 0.0 && t < distance) {
             if (last_position.x >= 0.0) {
                 let index = atomicAdd(&COUNT, 1u);
                 KEY[index] = encode_segment(voxel, *last_position, *last_axis, position, axis);

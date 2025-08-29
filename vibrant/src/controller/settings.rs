@@ -9,8 +9,13 @@ pub enum LineVoxelizationMode {
 pub enum LineRenderMode {
     Rasterization,
     RayTracing,
+    QuantizedRayCasting,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum LineDisplayMode {
+    Geometry,
     Volume,
-    Vrc,
 }
 
 #[derive(Debug)]
@@ -29,6 +34,7 @@ pub struct Settings {
     pub culling: bool,
     pub slice_count: u32,
     pub render: LineRenderMode,
+    pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
 }
 
@@ -48,7 +54,8 @@ impl Settings {
             smoothing: 0.67,
             culling: true,
             slice_count: 10,
-            render: LineRenderMode::Vrc,
+            render: LineRenderMode::RayTracing,
+            display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }
     }

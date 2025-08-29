@@ -250,26 +250,18 @@ fn should_be_clipped(v0: Vertex, v1: Vertex, position: vec3<f32>) -> bool {
 }
 
 fn morton_encode(p: vec3<u32>) -> u32 {
-    return (p.z << 20u) + (p.y << 10u) + p.x;
+    let xx = expand_bits(p.x);
+    let yy = expand_bits(p.y) << 1u;
+    let zz = expand_bits(p.z) << 2u;
+    return xx | yy | zz;
 }
 
 fn morton_decode(code: u32) -> vec3<u32> {
-    return vec3<u32>(code & 1023u, (code >> 10u) & 1023u, (code >> 20u) & 1023u);
+    let x = compact_bits(code);
+    let y = compact_bits(code >> 1u);
+    let z = compact_bits(code >> 2u);
+    return vec3<u32>(x, y, z);
 }
-
-// fn morton_encode(p: vec3<u32>) -> u32 {
-//     let xx = expand_bits(p.x);
-//     let yy = expand_bits(p.y) << 1u;
-//     let zz = expand_bits(p.z) << 2u;
-//     return xx | yy | zz;
-// }
-
-// fn morton_decode(code: u32) -> vec3<u32> {
-//     let x = compact_bits(code);
-//     let y = compact_bits(code >> 1u);
-//     let z = compact_bits(code >> 2u);
-//     return vec3<u32>(x, y, z);
-// }
 
 const MORTON_MAGIC_BITS: array<u32, 5> = array<u32, 5>(0x000003ff, 0x30000ff, 0x0300f00f, 0x30c30c3, 0x9249249);
 

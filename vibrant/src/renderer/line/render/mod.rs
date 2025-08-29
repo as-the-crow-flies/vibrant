@@ -7,7 +7,7 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineSet,
-    controller::settings::{LineRenderMode, Settings},
+    controller::settings::{LineDisplayMode, LineRenderMode, Settings},
     gpu::Gpu,
     renderer::{
         environment::Environment,
@@ -44,13 +44,19 @@ impl LineRenderPipeline {
         line: &LineSet,
         settings: &Settings,
     ) {
-        match settings.render {
-            LineRenderMode::Rasterization => {
-                self.raster.render(cmd, frame, environment, line, settings)
-            }
-            LineRenderMode::RayTracing => self.ray.render(cmd, frame, environment, settings, line),
-            LineRenderMode::Volume => self.volume.render(cmd, frame, environment),
-            LineRenderMode::Vrc => self.vrc.render(cmd, frame, environment, settings, line),
+        match settings.display {
+            LineDisplayMode::Geometry => match settings.render {
+                LineRenderMode::Rasterization => {
+                    self.raster.render(cmd, frame, environment, line, settings)
+                }
+                LineRenderMode::RayTracing => {
+                    self.ray.render(cmd, frame, environment, settings, line)
+                }
+                LineRenderMode::QuantizedRayCasting => {
+                    self.vrc.render(cmd, frame, environment, settings, line)
+                }
+            },
+            LineDisplayMode::Volume => self.volume.render(cmd, frame, environment),
         }
     }
 }

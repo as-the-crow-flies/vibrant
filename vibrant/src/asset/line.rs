@@ -500,8 +500,8 @@ pub struct VrcLineSet {
 
 impl VrcLineSet {
     fn new(gpu: &Gpu, len: u32) -> Self {
-        let ping = KeyValuePair::new(gpu, len * 16);
-        let pong = KeyValuePair::new(gpu, len * 16);
+        let ping = KeyValuePair::new(gpu, len * 8);
+        let pong = KeyValuePair::new(gpu, len * 8);
 
         Self { ping, pong }
     }

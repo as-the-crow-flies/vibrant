@@ -1,6 +1,6 @@
 use glam::{Vec3, Vec4};
 
-use std::{collections::HashMap, fs, io::BufRead, path::Path};
+use std::{collections::HashMap, fs, io::BufRead, path::Path, vec};
 
 use super::bounds::Bounds;
 
@@ -35,55 +35,27 @@ impl LineFile {
     }
 
     pub fn from_obj(data: &String) -> LineFile {
-        let mut vertices: Vec<Vec4> = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
-        let mut line_counts: Vec<u32> = Vec::new();
+        let mut lines: Vec<Vec<Vec3>> = vec![vec![]];
 
         for line in data.lines() {
             match line.split_once(" ") {
                 Some(("v", vertex)) => {
                     let mut v = vertex.split_whitespace();
 
-                    vertices.push(Vec4::new(
+                    lines.last_mut().unwrap().push(Vec3::new(
                         v.next().unwrap().parse().unwrap(),
                         v.next().unwrap().parse().unwrap(),
                         v.next().unwrap().parse().unwrap(),
-                        1.0,
                     ));
                 }
-                Some(("l", index)) => {
-                    let mut line_indices: Vec<u32> = index
-                        .split_whitespace()
-                        .map(|i| i.parse::<u32>().unwrap() - 1)
-                        .collect();
-
-                    line_indices.pop();
-
-                    let count = line_indices.len() as u32;
-
-                    line_counts.push(count);
-                    indices.extend(line_indices);
+                Some(("l", _)) => {
+                    lines.push(Vec::new());
                 }
                 _ => {}
             }
         }
 
-        let line_offsets = line_counts
-            .iter()
-            .scan(0, |state, &x| {
-                let result = *state;
-                *state += x;
-                Some(result)
-            })
-            .collect();
-
-        LineFile {
-            bounds: Bounds::from_vertices(&vertices),
-            vertices,
-            indices,
-            line_counts,
-            line_offsets,
-        }
+        Self::from_lines(lines)
     }
 
     pub fn from_tck(bytes: &[u8]) -> LineFile {
@@ -105,29 +77,30 @@ impl LineFile {
             .parse()
             .expect("Couldn't parse 'file' entry in .tck header as usize");
 
-        let vertices_raw: Vec<Vec3> = bytemuck::try_cast_slice(&bytes[offset..])
+        let lines: Vec<Vec3> = bytemuck::try_cast_slice(&bytes[offset..])
             .map(|slice| slice.to_vec())
             // Fallback to copy when vertices are not aligned properly
             .unwrap_or_else(|_| bytemuck::cast_slice(&bytes[offset..].to_owned()).to_vec());
 
-        let mut vertices: Vec<Vec4> = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
-        let mut line_counts: Vec<u32> = Vec::new();
+        Self::from_lines(
+            lines
+                .split(|vertex| !vertex.is_finite())
+                .map(|x| x.to_vec())
+                .collect(),
+        )
+    }
 
-        let mut line_index = 0;
-        let mut line_count = 0;
+    pub fn from_lines(lines: Vec<Vec<Vec3>>) -> Self {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        let mut line_counts = Vec::new();
 
-        for vertex in vertices_raw.iter() {
-            if vertex.is_finite() {
-                vertices.push(Vec4::new(vertex.x, vertex.y, vertex.z, 1.0));
-                indices.push(line_index);
-                line_count += 1;
-                line_index += 1;
-            } else {
-                line_counts.push(line_count);
-                indices.pop();
-                line_count = 0;
-            }
+        for line in lines.iter().filter(|line| line.len() >= 2) {
+            let index_length = line.len() - 1;
+
+            indices.extend((vertices.len()..vertices.len() + index_length).map(|i| i as u32));
+            vertices.extend(line.iter().map(|v| Vec4::new(v.x, v.y, v.z, 1.0)));
+            line_counts.push(index_length as u32);
         }
 
         let line_offsets = line_counts
@@ -139,7 +112,7 @@ impl LineFile {
             })
             .collect();
 
-        LineFile {
+        Self {
             bounds: Bounds::from_vertices(&vertices),
             vertices,
             indices,
@@ -150,17 +123,18 @@ impl LineFile {
 
     pub fn join(tcks: Vec<LineFile>) -> LineFile {
         tcks.into_iter().fold(LineFile::default(), |x, y| {
-            let n_vertices_x = x.vertices.len() as u32;
+            let n_vertices = x.vertices.len() as u32;
+            let n_indices = x.indices.len() as u32;
 
             LineFile {
                 indices: [
                     x.indices,
-                    y.indices.iter().map(|i| i + n_vertices_x).collect(),
+                    y.indices.iter().map(|i| i + n_vertices).collect(),
                 ]
                 .concat(),
                 line_offsets: [
                     x.line_offsets,
-                    y.line_offsets.iter().map(|i| i + n_vertices_x).collect(),
+                    y.line_offsets.iter().map(|i| i + n_indices).collect(),
                 ]
                 .concat(),
                 vertices: [x.vertices, y.vertices].concat(),

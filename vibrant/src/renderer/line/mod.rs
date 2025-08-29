@@ -60,7 +60,7 @@ impl LineRenderer {
         self.transform.dispatch(cmd, environment, line);
         // self.segment.dispatch(cmd, environment, line);
 
-        if settings.render == LineRenderMode::Vrc {
+        if settings.render == LineRenderMode::QuantizedRayCasting {
             self.vrc.dispatch(cmd, frame, environment, line);
         } else {
             self.occupancy

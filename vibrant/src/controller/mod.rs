@@ -14,7 +14,10 @@ use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    controller::{segment::Segment, settings::LineVoxelizationMode},
+    controller::{
+        segment::Segment,
+        settings::{LineDisplayMode, LineVoxelizationMode},
+    },
     file::File,
 };
 
@@ -107,10 +110,24 @@ impl Controller {
                         LineRenderMode::RayTracing,
                         "Ray Tracing",
                     );
-                    ui.selectable_value(&mut self.settings.render, LineRenderMode::Vrc, "Vrc");
                     ui.selectable_value(
                         &mut self.settings.render,
-                        LineRenderMode::Volume,
+                        LineRenderMode::QuantizedRayCasting,
+                        "Vrc",
+                    );
+                });
+
+            ComboBox::from_label("Display Mode")
+                .selected_text(format!("{:?}", self.settings.display))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.settings.display,
+                        LineDisplayMode::Geometry,
+                        "Rasterization",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.display,
+                        LineDisplayMode::Volume,
                         "Volume",
                     );
                 });

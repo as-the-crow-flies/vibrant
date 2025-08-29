@@ -4,7 +4,7 @@ use wgpu::{
     wgt::TextureViewDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Extent3d,
     ShaderStages, StorageTextureAccess, Texture, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureView, TextureViewDimension,
+    TextureFormat, TextureUsages, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
