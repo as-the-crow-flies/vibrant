@@ -16,8 +16,8 @@ use occlusion::OcclusionBuffer;
 use occupancy::OccupancyBuffer;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, CommandEncoder,
-    CompositeAlphaMode, PresentMode, SurfaceConfiguration, SurfaceTarget, TextureFormat,
-    TextureUsages,
+    CompositeAlphaMode, Extent3d, Origin3d, PresentMode, SurfaceConfiguration, SurfaceTarget,
+    TexelCopyTextureInfo, TextureAspect, TextureFormat, TextureUsages,
 };
 
 use crate::{
@@ -174,7 +174,25 @@ impl Surface {
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
         if let Some(surface) = self.surface.get_current_texture().ok() {
-            self.copy.render(&mut cmd, &self.buffer, &surface.texture);
+            cmd.copy_texture_to_texture(
+                TexelCopyTextureInfo {
+                    texture: self.buffer.color().texture(),
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                TexelCopyTextureInfo {
+                    texture: &surface.texture,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                Extent3d {
+                    width: surface.texture.width(),
+                    height: surface.texture.height(),
+                    depth_or_array_layers: 1,
+                },
+            );
 
             gpu.submit(cmd);
             surface.present();

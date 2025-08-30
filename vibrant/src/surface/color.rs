@@ -131,6 +131,17 @@ impl ColorBuffer {
         }
     }
 
+    pub fn attachment_clear(&self) -> RenderPassColorAttachment {
+        RenderPassColorAttachment {
+            view: &self.view,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(Color::TRANSPARENT),
+                store: StoreOp::Store,
+            },
+        }
+    }
+
     pub fn attachment_srgb(&self) -> RenderPassColorAttachment {
         RenderPassColorAttachment {
             view: &self.view_srgb,

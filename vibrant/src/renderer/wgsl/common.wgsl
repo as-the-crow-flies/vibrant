@@ -95,6 +95,30 @@ fn block_index(voxel: vec3<u32>, dim: vec3<u32>) -> u32 {
     return block_index * BLOCK_SIZE_3 + local_index;
 }
 
+fn block_index_2d(voxel: vec2<u32>, dim: vec2<u32>, log2_block: u32) -> u32 {
+    // block size = 2^log2_block
+    let block_size: u32 = 1u << log2_block;
+    let block_mask: u32 = block_size - 1u;
+
+    // Which block this voxel belongs to (fast division by block_size)
+    let block_id = voxel >> vec2<u32>(log2_block, log2_block);
+
+    // Local offset inside the block (fast modulus by block_size)
+    let local_id = voxel & vec2<u32>(block_mask, block_mask);
+
+    // Number of blocks per dimension (ceil division)
+    let blocks_per_dim = (dim + vec2<u32>(block_mask, block_mask)) >> vec2<u32>(log2_block, log2_block);
+
+    // Flatten block index in row-major order
+    let block_linear = block_id.y * blocks_per_dim.x + block_id.x;
+
+    // Flatten local index inside the block
+    let local_linear = (local_id.y << log2_block) + local_id.x;
+
+    // Each block stores (block_size^2) elements = 1 << (2 * log2_block)
+    return (block_linear << (log2_block * 2u)) + local_linear;
+}
+
 fn div_ceil(a: u32, b: u32) -> u32 {
     return (a + b - 1) / b;
 }
@@ -342,4 +366,53 @@ fn encode_segment_axis(local: f32) -> u32 {
 
 fn decode_segment_axis(axis: u32) -> f32 {
     return f32(axis & U6_MAX) * U6_MAX_INV;
+}
+
+const INSERTION_SORT_SIZE: u32 = 32;
+
+fn insertion_sort_insert(hits: ptr<function, array<u32, INSERTION_SORT_SIZE>>, hit_count: u32, value: u32) {
+    let hit_count_clamped = min(hit_count, INSERTION_SORT_SIZE);
+    let idx = insertion_sort_insertion_index(hits, hit_count_clamped, value);
+
+    for (var i = hit_count_clamped; i > idx; i--) {
+        (*hits)[i] = (*hits)[i - 1u];
+    }
+
+    (*hits)[idx] = value;
+}
+
+fn insertion_sort_insertion_index(hits: ptr<function, array<u32, INSERTION_SORT_SIZE>>, hit_count: u32, value: u32) -> u32 {
+    var lo: u32 = 0u;
+    var hi: u32 = hit_count;
+
+    while (lo < hi) {
+        let mid: u32 = (lo + hi) / 2u;
+        if ((*hits)[mid] < value) {
+            lo = mid + 1u;
+        } else {
+            hi = mid;
+        }
+    }
+
+    return lo;
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    return select(
+        c * 12.92,
+        1.055 * pow(c, 1.0 / 2.4) - 0.055,
+        c > 0.0031308
+    );
+}
+
+fn linear_to_srgb_vec3(c: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        linear_to_srgb(c.r),
+        linear_to_srgb(c.g),
+        linear_to_srgb(c.b)
+    );
+}
+
+fn linear_to_srgb_rgba(c: vec4<f32>) -> vec4<f32> {
+    return vec4<f32>(linear_to_srgb_vec3(c.rgb), c.a);
 }

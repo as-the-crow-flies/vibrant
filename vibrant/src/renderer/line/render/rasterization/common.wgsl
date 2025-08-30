@@ -111,3 +111,16 @@ fn generate_aligned_box_billboard(eye: vec3<f32>, pa: vec3<f32>, pb: vec3<f32>, 
 fn ortho_vec(v: vec3<f32>) -> vec3<f32> {
     return select(vec3<f32>(0.0, -v.z, v.y), vec3<f32>(-v.y, v.x, 0.0), abs(v.x) > abs(v.z));
 }
+
+fn get_pixel_index(pixel: vec2<u32>, dim: vec2<u32>) -> u32 {
+    return block_index_2d(pixel, dim, 2u);
+}
+
+fn pack_color_kbuffer(color: vec4<f32>) -> u32 {
+    return pack4x8unorm(color);
+}
+
+fn unpack_color_kbuffer(packed: u32) -> vec4<f32> {
+    let color = unpack4x8unorm(packed);
+    return vec4<f32>(color.rgb * color.a, color.a);
+}

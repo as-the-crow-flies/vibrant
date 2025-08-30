@@ -71,9 +71,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     let color = shade(v0, v1, radius, position, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 
-    let color_packed = pack4x8unorm(vec4<f32>(color.rgb * color.a, color.a));
-
-    var current = KBufferItem(hit, color_packed);
+    var current = KBufferItem(hit, pack_color_kbuffer(color));
 
     if (try_lock(pixel_index)) {
         for (var k=0u; k<K; k++) {
@@ -90,7 +88,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         release_lock(pixel_index);
     }
 
-    return unpack4x8unorm(current.color);
+    return unpack_color_kbuffer(current.color);
 }
 
 fn try_lock(index: u32) -> bool {

@@ -48,7 +48,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
                 v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
                 v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
 
-                if (ENVIRONMENT.settings.culling == 1 && culling(v0.xyz, v1.xyz) > 0.0) { break; }
+                if (culling(v0.xyz, v1.xyz) > 0.0) { break; }
             }
 
             voxelize(index, v0, v1, radius);

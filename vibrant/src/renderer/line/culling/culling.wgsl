@@ -19,9 +19,9 @@ fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
     let this_voxel_count = textureLoad(COUNT, this_voxel, 0).x;
     let this_voxel_density = saturate(textureLoad(DENSITY, this_voxel).x);
 
-    let max_density = 4.0;
+    let max_density = 2.0;
 
-    var keep = ENVIRONMENT.settings.culling == 0;
+    var keep = ENVIRONMENT.settings.culling == 0 && this_voxel_count > 0;
 
     if (!keep && this_voxel_count > 0) {
         let position = vec3<f32>(this_voxel) + 0.5;
@@ -42,16 +42,14 @@ fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
 
         var total_density = 0.0;
 
-        while (next.w > 0.0 && total_density < max_density) {
+        while (next.w > 0.0 && total_density <= max_density) {
             let increment = minimum(next);
             let mask = next == vec4<f32>(increment);
 
             voxel += step * vec3<i32>(mask.xyz);
             next = select(next - increment, vec4<f32>(voxel_boundaries, 0.0), mask);
 
-            let density = increment * textureLoad(DENSITY, voxel).x;
-
-            total_density += density;
+            total_density += increment * textureLoad(DENSITY, voxel).x;
         }
 
         keep = total_density <= max_density;

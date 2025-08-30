@@ -11,7 +11,7 @@ use crate::{
     },
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::ColorBuffer, Frame},
+    surface::{kbuffer::KBuffer, Frame},
 };
 
 pub struct LineTransparentRasterizationCullPipeline {
@@ -29,7 +29,7 @@ impl LineTransparentRasterizationCullPipeline {
         let copy = gpu.compute(
             "Rasterization::Cull::Copy",
             &gpu.pipeline_layout(&[
-                &ColorBuffer::layout(gpu),
+                &KBuffer::layout_resolve(gpu),
                 &MipTexture2D::<R32Float>::layout_write(gpu),
             ]),
             &gpu.shader(&(common.to_string() + include_str!("copy.wgsl"))),
@@ -100,7 +100,7 @@ impl LineTransparentRasterizationCullPipeline {
         let mut height = frame.color().height().div_ceil(2).div_ceil(32);
 
         pass.set_pipeline(&self.copy);
-        pass.set_bind_group(0, frame.color().binding(), &[]);
+        pass.set_bind_group(0, frame.kbuffer().binding_resolve(), &[]);
         pass.set_bind_group(1, frame.opacity().opacity().binding_write(), &[]);
         pass.dispatch_workgroups(width, height, 1);
 

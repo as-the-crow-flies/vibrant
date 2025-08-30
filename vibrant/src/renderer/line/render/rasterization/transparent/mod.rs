@@ -1,7 +1,6 @@
 pub mod cull;
 
 use wgpu::{
-    BlendComponent, BlendFactor, BlendOperation, BlendState, ColorTargetState, ColorWrites,
     CommandEncoder, FragmentState, MultisampleState, PipelineCompilationOptions, PrimitiveState,
     PrimitiveTopology, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
@@ -28,23 +27,6 @@ impl LineTransparentRasterizationPipeline {
         let common = include_str!("../common.wgsl");
         let gather_module = &gpu.shader(&(common.to_string() + include_str!("gather.wgsl")));
 
-        let target = ColorTargetState {
-            format: ColorBuffer::FORMAT_SRGB,
-            blend: Some(BlendState {
-                color: BlendComponent {
-                    src_factor: BlendFactor::OneMinusDstAlpha,
-                    dst_factor: BlendFactor::One,
-                    operation: BlendOperation::Add,
-                },
-                alpha: BlendComponent {
-                    src_factor: BlendFactor::OneMinusDstAlpha,
-                    dst_factor: BlendFactor::One,
-                    operation: BlendOperation::Add,
-                },
-            }),
-            write_mask: ColorWrites::all(),
-        };
-
         Self {
             cull: LineTransparentRasterizationCullPipeline::new(gpu),
             gather: gpu
@@ -67,7 +49,7 @@ impl LineTransparentRasterizationPipeline {
                         module: gather_module,
                         entry_point: None,
                         compilation_options: PipelineCompilationOptions::default(),
-                        targets: &[Some(target.clone())],
+                        targets: &[Some(KBuffer::target())],
                     }),
                     depth_stencil: None,
                     primitive: PrimitiveState {
@@ -80,8 +62,12 @@ impl LineTransparentRasterizationPipeline {
                 }),
             resolve: gpu.quad(
                 "Rasterization::Resolve",
-                &gpu.pipeline_layout(&[&KBuffer::layout(gpu), &Environment::layout(gpu)]),
-                target,
+                &gpu.pipeline_layout(&[
+                    &KBuffer::layout(gpu),
+                    &Environment::layout(gpu),
+                    &KBuffer::layout_resolve(gpu),
+                ]),
+                ColorBuffer::target_srgb(),
                 &gpu.shader(&(common.to_string() + include_str!("resolve.wgsl"))),
             ),
         }
@@ -125,9 +111,9 @@ impl LineTransparentRasterizationPipeline {
         end: u32,
     ) {
         let attachment = if start == 0 {
-            frame.color().attachment_srgb_clear()
+            frame.kbuffer().attachment_clear()
         } else {
-            frame.color().attachment_srgb()
+            frame.kbuffer().attachment()
         };
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -145,8 +131,10 @@ impl LineTransparentRasterizationPipeline {
     }
 
     fn resolve(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
+        println!("resolve");
+
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment_srgb_clear())],
             label: Some("Rasterization"),
             ..Default::default()
         });
@@ -154,6 +142,7 @@ impl LineTransparentRasterizationPipeline {
         pass.set_pipeline(&self.resolve);
         pass.set_bind_group(0, frame.kbuffer().binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(2, frame.kbuffer().binding_resolve(), &[]);
         pass.draw(0..4, 0..1);
     }
 }
