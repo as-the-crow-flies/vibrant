@@ -4,7 +4,7 @@ use crate::{
     asset::line::LineSet,
     gpu::Gpu,
     renderer::environment::Environment,
-    sort::{KeyValuePair, SortPipeline},
+    sort::{KeyValuePair, SortPipeline, SortPipelineRadix},
 };
 
 pub struct LineRasterizationSortPipeline {
@@ -37,6 +37,7 @@ impl LineRasterizationSortPipeline {
             line.sorted().ping().binding(),
             line.sorted().pong().binding(),
             line.sorted().ping().count(),
+            SortPipelineRadix::R32,
         );
     }
 
@@ -53,62 +54,5 @@ impl LineRasterizationSortPipeline {
         pass.set_bind_group(1, line.sorted().ping().binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(18, 1, 1);
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use pollster::FutureExt;
-    use wgpu::wgt::CommandEncoderDescriptor;
-
-    use crate::{
-        asset::line::LineSet,
-        controller::Controller,
-        file::LineFile,
-        gpu::Gpu,
-        renderer::{
-            environment::Environment,
-            line::{
-                render::rasterization::sort::LineRasterizationSortPipeline,
-                transform::LineTransformPipeline,
-            },
-        },
-    };
-
-    #[test]
-    fn test() {
-        let gpu = &Gpu::new().block_on();
-
-        let line = LineSet::new(
-            gpu,
-            &LineFile::from_file("../assets/HCP-100307/TOM_trackings/AF_left.tck"),
-        );
-
-        let environment = Environment::new(&gpu);
-        environment.update(&gpu, &Controller::new());
-
-        let transform = LineTransformPipeline::new(gpu);
-        let sort = LineRasterizationSortPipeline::new(gpu);
-
-        let mut cmd = gpu
-            .device()
-            .create_command_encoder(&CommandEncoderDescriptor::default());
-
-        transform.dispatch(&mut cmd, &environment, &line);
-        sort.dispatch(&mut cmd, &environment, &line);
-
-        gpu.submit(cmd);
-        gpu.wait();
-
-        let indices: Vec<u32> = gpu.read_buffer(line.indices()).block_on();
-        let depths_sorted: Vec<u32> = gpu.read_buffer(line.sorted().ping().value()).block_on();
-        let indices_sorted: Vec<u32> = gpu.read_buffer(line.sorted().ping().key()).block_on();
-
-        let count: Vec<u32> = gpu.read_buffer(line.count()).block_on();
-
-        dbg!(&indices[0..64]);
-        dbg!(&indices_sorted[0..64]);
-        dbg!(&depths_sorted[0..64]);
-        dbg!(&count);
     }
 }

@@ -16,8 +16,7 @@ use crate::{
     gpu::Gpu,
     renderer::line::{
         culling::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
-        segment::LineSegmentPipeline, transform::LineTransformPipeline, ui::LineUiPipeline,
-        vrc::LineVrcVoxelizationPipeline,
+        transform::LineTransformPipeline, vrc::VrcLineVoxelizationPipeline,
     },
     surface::Frame,
 };
@@ -26,26 +25,22 @@ use super::environment::Environment;
 
 pub struct LineRenderer {
     transform: LineTransformPipeline,
-    segment: LineSegmentPipeline,
-    vrc: LineVrcVoxelizationPipeline,
+    vrc: VrcLineVoxelizationPipeline,
     occupancy: LineOccupancyPipeline,
     occlusion: LineOcclusionPipeline,
     culling: LineCullingPipeline,
     render: LineRenderPipeline,
-    ui: LineUiPipeline,
 }
 
 impl LineRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             transform: LineTransformPipeline::new(gpu),
-            segment: LineSegmentPipeline::new(gpu),
-            vrc: LineVrcVoxelizationPipeline::new(gpu),
+            vrc: VrcLineVoxelizationPipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
             occlusion: LineOcclusionPipeline::new(gpu),
             culling: LineCullingPipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
-            ui: LineUiPipeline::new(gpu),
         }
     }
 
@@ -58,7 +53,6 @@ impl LineRenderer {
         settings: &Settings,
     ) {
         self.transform.dispatch(cmd, environment, line);
-        // self.segment.dispatch(cmd, environment, line);
 
         if settings.render == LineRenderMode::QuantizedRayCasting {
             self.vrc.dispatch(cmd, frame, environment, line);
@@ -72,7 +66,5 @@ impl LineRenderer {
 
         self.render
             .dispatch(cmd, environment, frame, line, settings);
-
-        // self.ui.dispatch(cmd, frame, environment);
     }
 }

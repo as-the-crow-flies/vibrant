@@ -1,3 +1,5 @@
+const SQRT_3_DIV_2: f32 = 0.8660254038;
+
 fn voxelize(index: u32, v0: Vertex, v1: Vertex, radius: f32) {
     let aabb_min = vec3<i32>(min(v0.xyz, v1.xyz) - radius);
     let aabb_max = vec3<i32>(max(v0.xyz, v1.xyz) + radius);
@@ -10,7 +12,7 @@ fn voxelize(index: u32, v0: Vertex, v1: Vertex, radius: f32) {
 
                 let sdf = capsule_box(sample, v0.xyz, v1.xyz, radius);
 
-                if (sdf <= 1.22474487139) {
+                if (sdf <= SQRT_3_DIV_2) {
                     visit_voxel(voxel, index, v0, v1);
                 }
             }

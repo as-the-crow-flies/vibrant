@@ -1,9 +1,7 @@
 pub mod bounds;
 pub mod line;
-pub mod nifti;
 
 pub use line::*;
-pub use nifti::*;
 
 use std::{
     path::PathBuf,
@@ -13,7 +11,6 @@ use std::{
 #[derive(Default)]
 pub struct File {
     pub line: Option<LineFile>,
-    pub nifti: Option<Nifti>,
     pub save: Option<PathBuf>,
 }
 
@@ -71,8 +68,8 @@ impl File {
     pub fn on_line(callback: impl FnOnce(LineFile)) {
         let mut data = QUEUE.lock().unwrap();
 
-        if let Some(tractogram) = data.line.take() {
-            callback(tractogram);
+        if let Some(line) = data.line.take() {
+            callback(line);
         }
     }
 

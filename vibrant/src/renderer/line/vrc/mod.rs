@@ -9,11 +9,11 @@ use crate::{
     },
     gpu::Gpu,
     renderer::environment::Environment,
-    sort::{KeyValuePair, SortPipeline},
+    sort::{KeyValuePair, SortPipeline, SortPipelineRadix},
     surface::{vrc::VrcBuffer, Frame},
 };
 
-pub struct LineVrcVoxelizationPipeline {
+pub struct VrcLineVoxelizationPipeline {
     quantize: ComputePipeline,
     sort: SortPipeline,
     scan: ComputePipeline,
@@ -22,7 +22,7 @@ pub struct LineVrcVoxelizationPipeline {
     mipmap: ComputePipeline,
 }
 
-impl LineVrcVoxelizationPipeline {
+impl VrcLineVoxelizationPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             quantize: gpu.compute(
@@ -80,6 +80,7 @@ impl LineVrcVoxelizationPipeline {
             line.vrc().ping().binding(),
             line.vrc().pong().binding(),
             line.vrc().ping().count(),
+            SortPipelineRadix::R32,
         );
         self.scan(cmd, frame, line);
         self.occupancy(cmd, frame, environment, line);

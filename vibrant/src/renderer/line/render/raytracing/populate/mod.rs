@@ -53,9 +53,9 @@ impl LinePopulatePipeline {
         frame: &Frame,
         environment: &Environment,
         setting: LineVoxelizationMode,
-        tractogram: &LineSet,
+        line: &LineSet,
     ) {
-        tractogram.clear_count(cmd);
+        line.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Populate"),
@@ -70,7 +70,7 @@ impl LinePopulatePipeline {
 
         pass.set_bind_group(0, frame.culling().binding_write(), &[]);
         pass.set_bind_group(1, frame.culling().culling().binding(), &[]);
-        pass.set_bind_group(2, tractogram.binding(true), &[]);
+        pass.set_bind_group(2, line.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }

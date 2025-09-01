@@ -45,20 +45,17 @@ impl Controller {
         }
     }
 
-    pub fn test() -> Self {
+    pub fn from_settings(settings: &Settings) -> Self {
         let mut controller = Self {
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
             segment: Segment::new(),
-            settings: Settings::new(),
+            settings: settings.clone(),
             show_side_panel: false,
         };
 
-        controller.event(Event::Resized(
-            controller.settings.width,
-            controller.settings.height,
-        ));
+        controller.event(Event::Resized(settings.width, settings.height));
 
         controller
     }
@@ -66,10 +63,8 @@ impl Controller {
     pub fn event(&mut self, event: Event) {
         self.state = self.state.update(event);
 
-        if !self.segment.update(&self.state, &self.camera) {
-            self.camera.update(&self.state);
-            self.light.update(&self.state);
-        }
+        self.camera.update(&self.state);
+        self.light.update(&self.state);
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {

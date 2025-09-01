@@ -69,10 +69,10 @@ impl LineOccupancyPipeline {
         frame: &Frame,
         environment: &Environment,
         setting: LineVoxelizationMode,
-        tractogram: &LineSet,
+        line: &LineSet,
     ) {
         frame.occupancy().clear(cmd);
-        tractogram.clear_count(cmd);
+        line.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Occupancy"),
@@ -82,7 +82,7 @@ impl LineOccupancyPipeline {
         let n = frame.occupancy().density().resolution().div_ceil(8);
 
         pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
-        pass.set_bind_group(1, tractogram.binding(true), &[]);
+        pass.set_bind_group(1, line.binding(true), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
 
         pass.set_pipeline(match setting {

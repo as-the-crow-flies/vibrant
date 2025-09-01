@@ -37,5 +37,5 @@ web-sys = { version = "0.3", features = [
 criterion = "0.3"
 
 [[bench]]
-name = "benchmark"
+name = "main"
 harness = false

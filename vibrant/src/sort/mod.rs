@@ -10,6 +10,14 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
+#[derive(PartialEq, Eq)]
+pub enum SortPipelineRadix {
+    R8,
+    R16,
+    R24,
+    R32,
+}
+
 pub struct SortPipeline {
     histogram: Buffer,
     status: Buffer,
@@ -122,6 +130,7 @@ impl SortPipeline {
         ping: &BindGroup,
         pong: &BindGroup,
         count: &Buffer,
+        radix: SortPipelineRadix,
     ) {
         cmd.clear_buffer(&self.histogram, 0, None);
         cmd.clear_buffer(&self.offset, 0, None);
@@ -149,15 +158,27 @@ impl SortPipeline {
         pass.set_bind_group(3, pong, &[]);
         pass.dispatch_workgroups(n_workgroups, 1, 1);
 
+        if radix == SortPipelineRadix::R8 {
+            return;
+        }
+
         pass.set_bind_group(1, self.shift_8.binding(), &[]);
         pass.set_bind_group(2, pong, &[]);
         pass.set_bind_group(3, ping, &[]);
         pass.dispatch_workgroups(n_workgroups, 1, 1);
 
+        if radix == SortPipelineRadix::R16 {
+            return;
+        }
+
         pass.set_bind_group(1, self.shift_16.binding(), &[]);
         pass.set_bind_group(2, ping, &[]);
         pass.set_bind_group(3, pong, &[]);
         pass.dispatch_workgroups(n_workgroups, 1, 1);
+
+        if radix == SortPipelineRadix::R24 {
+            return;
+        }
 
         pass.set_bind_group(1, self.shift_24.binding(), &[]);
         pass.set_bind_group(2, pong, &[]);
@@ -460,7 +481,7 @@ pub mod test {
 
     use crate::{
         gpu::Gpu,
-        sort::{KeyValuePair, SortPipeline},
+        sort::{KeyValuePair, SortPipeline, SortPipelineRadix},
     };
 
     #[test]
@@ -502,7 +523,13 @@ pub mod test {
 
         let mut cmd = gpu.cmd();
 
-        sort.dispatch(&mut cmd, ping.binding(), pong.binding(), ping.count());
+        sort.dispatch(
+            &mut cmd,
+            ping.binding(),
+            pong.binding(),
+            ping.count(),
+            SortPipelineRadix::R32,
+        );
 
         gpu.submit(cmd);
         gpu.wait();

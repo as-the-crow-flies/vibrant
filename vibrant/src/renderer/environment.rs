@@ -41,6 +41,12 @@ impl Environment {
         Self { binding, buffer }
     }
 
+    pub fn from_controller(gpu: &Gpu, controller: &Controller) -> Self {
+        let environment = Environment::new(&gpu);
+        environment.update(&gpu, controller);
+        return environment;
+    }
+
     pub fn binding(&self) -> &BindGroup {
         &self.binding
     }

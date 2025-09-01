@@ -32,8 +32,8 @@ impl LineTransformPipeline {
         self.adjacency(cmd, line);
     }
 
-    fn transform(&self, cmd: &mut CommandEncoder, tractogram: &LineSet, environment: &Environment) {
-        tractogram.clear_count(cmd);
+    fn transform(&self, cmd: &mut CommandEncoder, line: &LineSet, environment: &Environment) {
+        line.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Transform"),
@@ -41,14 +41,14 @@ impl LineTransformPipeline {
         });
 
         pass.set_pipeline(&self.transform);
-        pass.set_bind_group(0, tractogram.binding_raw(), &[]);
-        pass.set_bind_group(1, tractogram.binding(false), &[]);
+        pass.set_bind_group(0, line.binding_raw(), &[]);
+        pass.set_bind_group(1, line.binding(false), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }
 
-    fn adjacency(&self, cmd: &mut CommandEncoder, tractogram: &LineSet) {
-        tractogram.clear_count(cmd);
+    fn adjacency(&self, cmd: &mut CommandEncoder, line: &LineSet) {
+        line.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Adjacency"),
@@ -56,7 +56,7 @@ impl LineTransformPipeline {
         });
 
         pass.set_pipeline(&self.adjacency);
-        pass.set_bind_group(0, tractogram.binding(false), &[]);
+        pass.set_bind_group(0, line.binding(false), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }
 }

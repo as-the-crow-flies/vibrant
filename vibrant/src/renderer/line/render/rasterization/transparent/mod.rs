@@ -131,8 +131,6 @@ impl LineTransparentRasterizationPipeline {
     }
 
     fn resolve(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
-        println!("resolve");
-
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             color_attachments: &[Some(frame.color().attachment_srgb_clear())],
             label: Some("Rasterization"),

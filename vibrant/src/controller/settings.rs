@@ -1,24 +1,37 @@
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineVoxelizationMode {
+    #[default]
+    Tube,
     Line,
     Box,
-    Tube,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+impl LineVoxelizationMode {
+    pub fn iter() -> Vec<LineVoxelizationMode> {
+        vec![
+            LineVoxelizationMode::Tube,
+            LineVoxelizationMode::Line,
+            LineVoxelizationMode::Box,
+        ]
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineRenderMode {
-    Rasterization,
+    #[default]
     RayTracing,
+    Rasterization,
     QuantizedRayCasting,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineDisplayMode {
+    #[default]
     Geometry,
     Volume,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Settings {
     pub width: u32,
     pub height: u32,
@@ -49,12 +62,12 @@ impl Settings {
             direct_light: 0.67,
             tangent_color: 1.0,
             shadows: 1.0,
-            alpha: 0.5,
+            alpha: 1.0,
             level: 0.0,
-            smoothing: 0.67,
+            smoothing: 0.5,
             culling: true,
             slice_count: 10,
-            render: LineRenderMode::Rasterization,
+            render: LineRenderMode::RayTracing,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }

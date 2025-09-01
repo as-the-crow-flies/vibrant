@@ -1,5 +1,4 @@
 pub mod color;
-pub mod copy;
 pub mod culling;
 pub mod kbuffer;
 pub mod occlusion;
@@ -24,7 +23,7 @@ use crate::{
     asset::texture::{MipTexture2D, MipTexture3D, R32Float, R32Uint},
     controller::settings::Settings,
     surface::{
-        copy::ColorCopyPipeline, culling::CullingBuffer, kbuffer::KBuffer, opacity::OpacityBuffer,
+        culling::CullingBuffer, kbuffer::KBuffer, opacity::OpacityBuffer,
         visibility::VisibilityBuffer, vrc::VrcBuffer,
     },
 };
@@ -136,7 +135,6 @@ impl Frame {
 pub struct Surface {
     surface: wgpu::Surface<'static>,
     buffer: Frame,
-    copy: ColorCopyPipeline,
 }
 
 impl Surface {
@@ -153,7 +151,6 @@ impl Surface {
         Self {
             surface,
             buffer: Frame::new(gpu, &Settings::new()),
-            copy: ColorCopyPipeline::new(gpu),
         }
     }
 
