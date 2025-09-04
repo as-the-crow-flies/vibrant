@@ -102,13 +102,18 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.render,
+                        LineRenderMode::RayTracingAlt,
+                        "RayTracingAlt",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.render,
                         LineRenderMode::RayTracing,
-                        "Ray Tracing",
+                        "RayTracing",
                     );
                     ui.selectable_value(
                         &mut self.settings.render,
                         LineRenderMode::QuantizedRayCasting,
-                        "Vrc",
+                        "QuantizedRayCasting",
                     );
                 });
 

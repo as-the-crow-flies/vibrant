@@ -15,6 +15,7 @@ use vibrant::{
         environment::Environment,
         line::{
             culling::LineCullingPipeline, occupancy::LineOccupancyPipeline,
+            occupancy_alt::LineOccupancyAltPipeline,
             render::raytracing::populate::LinePopulatePipeline, transform::LineTransformPipeline,
             vrc::VrcLineVoxelizationPipeline,
         },
@@ -89,6 +90,51 @@ pub fn abuffer_benchmark_ours(
     );
 }
 
+pub fn abuffer_benchmark_alt(
+    criterion: &mut Criterion,
+    gpu: &Gpu,
+    set: BenchmarkLineSet,
+    line: &LineSet,
+    volume: u32,
+    voxelization: LineVoxelizationMode,
+) {
+    let settings = get_settings(volume, voxelization, false);
+    let controller = &Controller::from_settings(&settings);
+    let environment = &Environment::from_controller(gpu, controller);
+    let frame = &Frame::new(gpu, &settings);
+
+    let mut cmd = gpu.cmd();
+    LineTransformPipeline::new(gpu).dispatch(&mut cmd, environment, line);
+    gpu.submit(cmd);
+    gpu.wait();
+
+    let occpancy_alt = LineOccupancyAltPipeline::new(gpu);
+
+    // criterion.bench_function(
+    //     &format!(
+    //         "abuffer - alt - {:?} - {:?} - {:?}",
+    //         set, volume, voxelization
+    //     ),
+    //     |bencher| {
+    //         bencher.iter(|| {
+    let mut cmd = gpu.cmd();
+
+    occpancy_alt.dispatch(&mut cmd, frame, environment, settings.voxelization, line);
+
+    gpu.submit(cmd);
+    gpu.wait();
+    //         })
+    //     },
+    // );
+
+    let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
+
+    println!(
+        "abuffer - alt - {:?} - {:?} - {:?}: {:?}",
+        set, volume, voxelization, fragment_count[0]
+    )
+}
+
 pub fn abuffer_benchmark_vrc(
     criterion: &mut Criterion,
     gpu: &Gpu,
@@ -108,19 +154,26 @@ pub fn abuffer_benchmark_vrc(
 
     let vrc = VrcLineVoxelizationPipeline::new(gpu);
 
-    criterion.bench_function(
-        &format!("abuffer - vrc - {:?} - {:?}", set, volume),
-        |bencher| {
-            bencher.iter(|| {
-                let mut cmd = gpu.cmd();
+    // criterion.bench_function(
+    //     &format!("abuffer - vrc - {:?} - {:?}", set, volume),
+    //     |bencher| {
+    //         bencher.iter(|| {
+    let mut cmd = gpu.cmd();
 
-                vrc.dispatch(&mut cmd, frame, environment, line);
+    vrc.dispatch(&mut cmd, frame, environment, line);
 
-                gpu.submit(cmd);
-                gpu.wait();
-            })
-        },
-    );
+    gpu.submit(cmd);
+    gpu.wait();
+    //         })
+    //     },
+    // );
+
+    let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
+
+    println!(
+        "abuffer - vrc - {:?} - {:?}: {:?}",
+        set, volume, fragment_count[0]
+    )
 }
 
 pub fn abuffer_experiment(criterion: &mut Criterion) {
@@ -133,42 +186,32 @@ pub fn abuffer_experiment(criterion: &mut Criterion) {
 
         for volume in [128, 256] {
             abuffer_benchmark_vrc(criterion, gpu, set, line, volume);
-            abuffer_benchmark_ours(
+            abuffer_benchmark_alt(
                 criterion,
                 gpu,
                 set,
                 line,
                 volume,
                 LineVoxelizationMode::Tube,
-                false,
             );
-            abuffer_benchmark_ours(
-                criterion,
-                gpu,
-                set,
-                line,
-                volume,
-                LineVoxelizationMode::Tube,
-                true,
-            );
-            abuffer_benchmark_ours(
-                criterion,
-                gpu,
-                set,
-                line,
-                volume,
-                LineVoxelizationMode::Line,
-                false,
-            );
-            abuffer_benchmark_ours(
-                criterion,
-                gpu,
-                set,
-                line,
-                volume,
-                LineVoxelizationMode::Line,
-                true,
-            );
+            // abuffer_benchmark_ours(
+            //     criterion,
+            //     gpu,
+            //     set,
+            //     line,
+            //     volume,
+            //     LineVoxelizationMode::Tube,
+            //     false,
+            // );
+            // abuffer_benchmark_ours(
+            //     criterion,
+            //     gpu,
+            //     set,
+            //     line,
+            //     volume,
+            //     LineVoxelizationMode::Tube,
+            //     true,
+            // );
         }
     }
 }

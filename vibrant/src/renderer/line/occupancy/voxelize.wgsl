@@ -72,7 +72,10 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 
     let height = saturate(dot(pv0, delta) / dot(delta, delta));
 
-    let sdf = max(length(pv0 - delta * height) - radius_clamp, max(-dot(pv0, v0.clip), dot(pv1, v1.clip)));
+    let sdf = select(
+        max(length(pv0 - delta * height) - radius_clamp, max(-dot(pv0, v0.clip), dot(pv1, v1.clip))),
+        length(pv0 - delta * height) - radius_clamp,
+        ENVIRONMENT.settings.shadows > 0.5);
 
     let density = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
 
@@ -80,5 +83,5 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 }
 
 fn encode_density(density: f32) -> u32 {
-    return (u32(density * U12_MAX_f32) << U16_SHIFT) + 1;
+    return (max(u32(density * U12_MAX_f32), 1u) << U16_SHIFT) + 1;
 }

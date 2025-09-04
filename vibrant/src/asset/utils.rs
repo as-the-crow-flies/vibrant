@@ -27,8 +27,8 @@ pub fn load_line(gpu: &Gpu, set: BenchmarkLineSet) -> LineSet {
     match set {
         BenchmarkLineSet::Aneurysm => load_line_aneurysm(gpu),
         BenchmarkLineSet::Turbulence => load_line_turbulence(gpu),
-        BenchmarkLineSet::Brain200k => load_line_brain_200k(gpu),
-        BenchmarkLineSet::Brain1M => load_line_brain_1m(gpu),
+        BenchmarkLineSet::Brain200k => load_line_brain_200k(gpu, 1),
+        BenchmarkLineSet::Brain1M => load_line_brain_1m(gpu, 1),
         BenchmarkLineSet::BundlesSmall => load_line_brain_bundles_small(gpu),
         BenchmarkLineSet::BundlesBig => load_line_brain_bundles_big(gpu),
     }
@@ -48,17 +48,17 @@ pub fn load_line_turbulence(gpu: &Gpu) -> LineSet {
     )
 }
 
-pub fn load_line_brain_200k(gpu: &Gpu) -> LineSet {
+pub fn load_line_brain_200k(gpu: &Gpu, stride: usize) -> LineSet {
     LineSet::new(
         gpu,
-        &LineFile::from_file("assets/HCP-100307/whole_brain200k.tck"),
+        &LineFile::from_tck_file("assets/HCP-100307/whole_brain200k.tck", stride),
     )
 }
 
-pub fn load_line_brain_1m(gpu: &Gpu) -> LineSet {
+pub fn load_line_brain_1m(gpu: &Gpu, stride: usize) -> LineSet {
     LineSet::new(
         gpu,
-        &LineFile::from_file("assets/HCP-100307/whole_brain1M.tck"),
+        &LineFile::from_tck_file("assets/HCP-100307/whole_brain1M.tck", stride),
     )
 }
 

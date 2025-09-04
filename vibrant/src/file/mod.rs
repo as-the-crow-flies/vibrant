@@ -21,7 +21,7 @@ impl File {
             let file = rfd::AsyncFileDialog::new().pick_file().await;
 
             if let Some(file) = file {
-                Self::publish_line(LineFile::from_tck(&file.read().await));
+                Self::publish_line(LineFile::from_tck(&file.read().await, 1));
             }
         });
     }
@@ -37,7 +37,7 @@ impl File {
                 .iter()
                 .filter_map(
                     |file| match file.extension().map(|ext| ext.to_str()).flatten() {
-                        Some("tck") => Some(LineFile::from_tck(&fs::read(file).unwrap())),
+                        Some("tck") => Some(LineFile::from_tck(&fs::read(file).unwrap(), 1)),
                         Some("obj") => Some(LineFile::from_obj(&fs::read_to_string(file).unwrap())),
                         _ => None,
                     },

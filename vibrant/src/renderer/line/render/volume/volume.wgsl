@@ -91,8 +91,8 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>, random: f32) -> vec4<f32> {
     for (t -= dim_inv * random; t < tExit; t += dim_inv) {
         let position = origin + direction * t;
 
-        let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, position, 0.0).x;
-        let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, position, 0.0).x;
+        let ambient = saturate(1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, position, 0.0).x);
+        let directional = saturate(1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, position, 0.0).x);
 
         let factor = mix(1.0, mix(ambient, directional,
             ENVIRONMENT.settings.direct_light),

@@ -3,7 +3,7 @@ use pollster::FutureExt;
 use vibrant::{
     asset::{
         line::LineSet,
-        utils::{load_line, BenchmarkLineSet},
+        utils::{load_line, load_line_brain_1m, BenchmarkLineSet},
     },
     controller::{
         settings::{LineDisplayMode, LineRenderMode, LineVoxelizationMode, Settings},
@@ -48,6 +48,7 @@ pub fn occupancy_benchmark(
     line: &LineSet,
     volume: u32,
     voxelization: LineVoxelizationMode,
+    stride: usize,
 ) {
     let settings = get_settings(volume, voxelization);
     let controller = &Controller::from_settings(&settings);
@@ -61,7 +62,10 @@ pub fn occupancy_benchmark(
 
     let pipeline = LineOccupancyPipeline::new(gpu);
 
-    let id = format!("occupancy {:?} - {:?} - {:?}", set, volume, voxelization);
+    let id = format!(
+        "occupancy {:?} - {:?} - {:?} - {:?}",
+        set, volume, voxelization, stride
+    );
 
     criterion.bench_function(&id, |bencher| {
         bencher.iter(|| {
@@ -74,13 +78,32 @@ pub fn occupancy_benchmark(
         })
     });
 
-    let counts: Vec<u32> = gpu
-        .read_buffer(frame.occupancy().occupancy_count_buffer())
-        .block_on();
+    // let fragment_counts: Vec<u32> = gpu
+    //     .read_buffer(frame.occupancy().occupancy_count_buffer())
+    //     .block_on();
 
-    let total_count: u32 = counts.iter().map(|&count| count & u16::MAX as u32).sum();
+    // let total_fragment_count: u32 = fragment_counts
+    //     .iter()
+    //     .map(|&count| count & u16::MAX as u32)
+    //     .sum();
 
-    println!("{} - {}", id, total_count);
+    // let vertices: Vec<Vec4> = gpu.read_buffer(line.vertices()).block_on();
+    // let indices: Vec<u32> = gpu.read_buffer(line.indices()).block_on();
+
+    // let total_length: f32 = indices
+    //     .iter()
+    //     .map(|&i| (vertices[(i + 1) as usize].xyz() - vertices[i as usize].xyz()).length())
+    //     .sum();
+
+    // let segment_length = total_length / (indices.len() as f32) * (settings.volume as f32);
+
+    // println!(
+    //     "{} - {} - {} - {}",
+    //     id,
+    //     indices.len(),
+    //     total_fragment_count,
+    //     segment_length
+    // );
 }
 
 pub fn occupancy_experiment(criterion: &mut Criterion) {
@@ -93,8 +116,25 @@ pub fn occupancy_experiment(criterion: &mut Criterion) {
 
         for volume in [128, 256, 512] {
             for voxelization in LineVoxelizationMode::iter() {
-                occupancy_benchmark(criterion, gpu, set, line, volume, voxelization);
+                occupancy_benchmark(criterion, gpu, set, line, volume, voxelization, 1);
             }
+        }
+    }
+
+    for stride in 1..=13 {
+        let line = &load_line_brain_1m(gpu, stride);
+        let volume = 256;
+
+        for voxelization in LineVoxelizationMode::iter() {
+            occupancy_benchmark(
+                criterion,
+                gpu,
+                BenchmarkLineSet::Brain200k,
+                line,
+                volume,
+                voxelization,
+                stride,
+            );
         }
     }
 }

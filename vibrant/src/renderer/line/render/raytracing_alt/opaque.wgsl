@@ -1,8 +1,9 @@
-@group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
 
-@group(3) @binding(0) var<storage> OFFSET: array<u32>;
-@group(3) @binding(2) var<storage> INDEX: array<u32>;
+@group(3) @binding(0) var<storage, read_write> LINE_INDEX: array<u32>;
+
+@group(4) @binding(0) var START: texture_storage_3d<r32uint, read_write>;
+@group(4) @binding(1) var END: texture_storage_3d<r32uint, read_write>;
 
 struct Hit {
     distance: f32,
@@ -19,16 +20,17 @@ fn visit(
     increment: f32,
     distance: f32) -> bool {
 
-    let count = textureLoad(COUNT, voxel, 0).x;
+    let start = textureLoad(START, voxel).x;
+    let end = textureLoad(END, voxel).x;
+
+    let count = end - start;
 
     if (count == 0) { return false; }
-
-    let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
 
     HIT = Hit(distance, U32_MAX);
 
     for (var i = 0u; i < count; i++) {
-        let index = INDEX[offset + i];
+        let index = LINE_INDEX[start + i];
 
         let v0 = LINE_VERTEX[index + 0];
         let v1 = LINE_VERTEX[index + 1];

@@ -31,11 +31,11 @@ fn main(@builtin(local_invocation_index) local: u32) {
             let vi  = LINE_INDEX[index_index + 0];
             let vpi = LINE_INDEX[index_index + 1];
 
-            let endpoint = vpi - vi != 1 || vi - vmi != 1;
+            let endpoint = abs(vi - vmi) != 1;
 
-            let vm = LINE_VERTEX[vmi].xyz;
+            let vm = LINE_VERTEX[vi - 1].xyz;
             let v  = LINE_VERTEX[vi ];
-            let vp = LINE_VERTEX[vpi].xyz;
+            let vp = LINE_VERTEX[vi + 1].xyz;
 
             let clip = select(normalize(vp - vm), vec3<f32>(0), endpoint);
 

@@ -300,14 +300,14 @@ impl LineBuffer {
         let vertices = gpu.device().create_buffer(&BufferDescriptor {
             label,
             size: vertices_raw.size(),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&line.indices()),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
         });
 
         let total_count = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -500,8 +500,8 @@ pub struct VrcLineSet {
 
 impl VrcLineSet {
     fn new(gpu: &Gpu, len: u32) -> Self {
-        let ping = KeyValuePair::new(gpu, len * 8);
-        let pong = KeyValuePair::new(gpu, len * 8);
+        let ping = KeyValuePair::new(gpu, len * 32);
+        let pong = KeyValuePair::new(gpu, len * 32);
 
         Self { ping, pong }
     }
