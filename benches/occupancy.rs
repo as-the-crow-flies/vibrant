@@ -3,7 +3,7 @@ use pollster::FutureExt;
 use vibrant::{
     asset::{
         line::LineSet,
-        utils::{load_line, load_line_brain_1m, BenchmarkLineSet},
+        utils::{load_line, load_line_brain_1m, load_line_brain_200k, BenchmarkLineSet},
     },
     controller::{
         settings::{LineDisplayMode, LineRenderMode, LineVoxelizationMode, Settings},
@@ -139,4 +139,18 @@ pub fn occupancy_experiment(criterion: &mut Criterion) {
     }
 }
 
-criterion_group!(occupancy, occupancy_experiment);
+pub fn occupancy_experiment_2(criterion: &mut Criterion) {
+    let gpu = &Gpu::new().block_on();
+
+    occupancy_benchmark(
+        criterion,
+        gpu,
+        BenchmarkLineSet::Brain200k,
+        &load_line_brain_200k(gpu, 1),
+        256,
+        LineVoxelizationMode::Tube,
+        1,
+    );
+}
+
+criterion_group!(occupancy, occupancy_experiment_2);

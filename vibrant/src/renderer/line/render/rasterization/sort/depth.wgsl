@@ -40,13 +40,13 @@ fn main(@builtin(local_invocation_index) local: u32) {
             if (index_index >= n_indices) { continue; }
 
             let index = LINE_INDEX[index_index];
-            let v0 = (LINE_VERTEX[index + 0].xyz * scale) - 0.5;
-            let v1 = (LINE_VERTEX[index + 1].xyz * scale) - 0.5;
+            let v0 = LINE_VERTEX[index + 0].xyz;
+            let v1 = LINE_VERTEX[index + 1].xyz;
 
             let sdf = capsule_sdf(eye, v0, v1, radius);
 
             KEY[index_index] = index;
-            VALUE[index_index] = u32((sdf - near) * far_minus_near_inv * U32_MAX_f32);
+            VALUE[index_index] = u32(saturate((sdf - near) * far_minus_near_inv) * U32_MAX_f32);
         }
     }
 }

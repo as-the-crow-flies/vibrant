@@ -63,14 +63,14 @@ impl Settings {
             direct_light: 0.67,
             tangent_color: 1.0,
             shadows: 1.0,
-            alpha: 1.0,
+            alpha: 0.25,
             level: 0.0,
             smoothing: 0.5,
             culling: true,
             slice_count: 10,
-            render: LineRenderMode::RayTracingAlt,
-            display: LineDisplayMode::Volume,
-            voxelization: LineVoxelizationMode::Tube,
+            render: LineRenderMode::Rasterization,
+            display: LineDisplayMode::Geometry,
+            voxelization: LineVoxelizationMode::Line,
         }
     }
 }

@@ -29,7 +29,7 @@ pub fn get_settings(volume: u32, voxelization: LineVoxelizationMode, culling: bo
         volume,
         culling,
         voxelization,
-        radius: 0.2,
+        radius: 0.75,
         alpha: 1.0,
         smoothing: 0.5,
 
@@ -39,7 +39,7 @@ pub fn get_settings(volume: u32, voxelization: LineVoxelizationMode, culling: bo
         lighting: 1.0,
         direct_light: 0.5,
         tangent_color: 1.0,
-        shadows: 0.0,
+        shadows: 1.0,
         level: 0.0,
         slice_count: 10,
         render: LineRenderMode::RayTracing,
@@ -177,6 +177,10 @@ pub fn abuffer_benchmark_vrc(
 }
 
 pub fn abuffer_experiment(criterion: &mut Criterion) {
+    if true {
+        return;
+    }
+
     let gpu = &Gpu::new().block_on();
 
     for set in BenchmarkLineSet::iter() {
@@ -203,15 +207,15 @@ pub fn abuffer_experiment(criterion: &mut Criterion) {
             //     LineVoxelizationMode::Tube,
             //     false,
             // );
-            // abuffer_benchmark_ours(
-            //     criterion,
-            //     gpu,
-            //     set,
-            //     line,
-            //     volume,
-            //     LineVoxelizationMode::Tube,
-            //     true,
-            // );
+            abuffer_benchmark_ours(
+                criterion,
+                gpu,
+                set,
+                line,
+                volume,
+                LineVoxelizationMode::Tube,
+                true,
+            );
         }
     }
 }

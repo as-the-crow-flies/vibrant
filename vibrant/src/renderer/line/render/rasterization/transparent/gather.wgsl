@@ -31,7 +31,7 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
     let scale = 1.0 / f32(ENVIRONMENT.volume);
     let radius = ENVIRONMENT.settings.radius * scale;
 
-    if (bool(LINE_CULL[instance_index])) { return Fragment(); }
+    // if (bool(LINE_CULL[instance_index])) { return Fragment(); }
 
     let index = LINE_INDEX[instance_index];
 
@@ -53,7 +53,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let pixel = vec2<u32>(fragment.clip.xy);
     let pixel_index = pixel.y * ENVIRONMENT.surface.x + pixel.x;
 
-    if (textureLoad(OPACITY, pixel >> vec2<u32>(1), 0).x > MAX_OPACITY) { discard; }
+    // if (textureLoad(OPACITY, pixel >> vec2<u32>(1), 0).x > MAX_OPACITY) { discard; }
 
     let radius = ENVIRONMENT.settings.radius / f32(ENVIRONMENT.volume);
 
