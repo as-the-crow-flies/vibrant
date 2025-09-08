@@ -72,6 +72,7 @@ impl LineOccupancyAltPipeline {
             occupancy: gpu.compute(
                 "VrcVoxelizationPipeline::Occupancy",
                 &gpu.pipeline_layout(&[
+                    &LineSet::layout(gpu, true),
                     &KeyValuePair::layout(gpu),
                     &VrcBuffer::layout(gpu),
                     &MipTexture3D::<R32Float>::layout_write(gpu),
@@ -178,10 +179,11 @@ impl LineOccupancyAltPipeline {
         let mut n = frame.occupancy().pyramid().resolution().div_ceil(8);
 
         pass.set_pipeline(&self.occupancy);
-        pass.set_bind_group(0, line.vrc().ping().binding(), &[]);
-        pass.set_bind_group(1, frame.vrc().binding(), &[]);
-        pass.set_bind_group(2, frame.occupancy().pyramid().binding_write(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(0, line.binding(true), &[]);
+        pass.set_bind_group(1, line.vrc().ping().binding(), &[]);
+        pass.set_bind_group(2, frame.vrc().binding(), &[]);
+        pass.set_bind_group(3, frame.occupancy().pyramid().binding_write(), &[]);
+        pass.set_bind_group(4, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);

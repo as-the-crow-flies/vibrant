@@ -14,8 +14,7 @@ use crate::{
         environment::Environment,
         line::render::{
             rasterization::LineRasterizationPipeline, raytracing::RayTracingLineRenderPipeline,
-            raytracing_alt::RayTracingAltLineRenderPipeline, volume::VolumeLineRenderPipeline,
-            vrc::VrcLineRenderPipeline,
+            volume::VolumeLineRenderPipeline, vrc::VrcLineRenderPipeline,
         },
     },
     surface::Frame,
@@ -24,7 +23,6 @@ use crate::{
 pub struct LineRenderPipeline {
     raster: LineRasterizationPipeline,
     ray: RayTracingLineRenderPipeline,
-    ray_alt: RayTracingAltLineRenderPipeline,
     volume: VolumeLineRenderPipeline,
     vrc: VrcLineRenderPipeline,
 }
@@ -34,7 +32,6 @@ impl LineRenderPipeline {
         Self {
             raster: LineRasterizationPipeline::new(gpu),
             ray: RayTracingLineRenderPipeline::new(gpu),
-            ray_alt: RayTracingAltLineRenderPipeline::new(gpu),
             volume: VolumeLineRenderPipeline::new(gpu),
             vrc: VrcLineRenderPipeline::new(gpu),
         }
@@ -55,9 +52,6 @@ impl LineRenderPipeline {
                 }
                 LineRenderMode::RayTracing => {
                     self.ray.render(cmd, frame, environment, settings, line)
-                }
-                LineRenderMode::RayTracingAlt => {
-                    self.ray_alt.render(cmd, frame, environment, settings, line)
                 }
                 LineRenderMode::QuantizedRayCasting => {
                     self.vrc.render(cmd, frame, environment, settings, line)

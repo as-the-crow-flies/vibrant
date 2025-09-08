@@ -23,8 +23,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     var density = 0.0;
 
     for (var index = start; index < end; index++) {
-        let segment = decode_segment(voxel, VERTICES[index]);
-        density += length(segment.v1 - segment.v0);
+        let segment = decode_segment(voxel, VERTICES[index], 1.0);
+        density += length(segment.v1.xyz - segment.v0.xyz);
     }
 
     textureStore(DENSITY, voxel, vec4<f32>(saturate(density * density_multiplier)));

@@ -16,8 +16,7 @@ use crate::{
     controller::settings::{LineRenderMode, Settings},
     gpu::Gpu,
     renderer::line::{
-        culling::LineCullingPipeline, occlusion::LineOcclusionPipeline,
-        occupancy_alt::LineOccupancyAltPipeline, render::LineRenderPipeline,
+        culling::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline, vrc::VrcLineVoxelizationPipeline,
     },
     surface::Frame,
@@ -33,7 +32,6 @@ pub struct LineRenderer {
     render: LineRenderPipeline,
 
     vrc: VrcLineVoxelizationPipeline,
-    occupancy_alt: LineOccupancyAltPipeline,
 }
 
 impl LineRenderer {
@@ -46,7 +44,6 @@ impl LineRenderer {
             culling: LineCullingPipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
             vrc: VrcLineVoxelizationPipeline::new(gpu),
-            occupancy_alt: LineOccupancyAltPipeline::new(gpu),
         }
     }
 
@@ -61,10 +58,6 @@ impl LineRenderer {
         self.transform.dispatch(cmd, environment, line);
 
         match settings.render {
-            LineRenderMode::RayTracingAlt => {
-                self.occupancy_alt
-                    .dispatch(cmd, frame, environment, settings.voxelization, line)
-            }
             LineRenderMode::QuantizedRayCasting => self.vrc.dispatch(cmd, frame, environment, line),
             _ => self
                 .occupancy

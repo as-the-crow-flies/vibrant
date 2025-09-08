@@ -18,26 +18,23 @@ pub struct VrcLineRenderPipeline {
 
 impl VrcLineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        let layout = &gpu.pipeline_layout(&[
+            &Frame::layout(gpu),
+            &Environment::layout(gpu),
+            &KeyValuePair::layout(gpu),
+            &VrcBuffer::layout(gpu),
+        ]);
+
         Self {
             opaque: gpu.quad(
                 type_name::<Self>(),
-                &gpu.pipeline_layout(&[
-                    &Frame::layout(gpu),
-                    &Environment::layout(gpu),
-                    &KeyValuePair::layout(gpu),
-                    &VrcBuffer::layout(gpu),
-                ]),
+                &layout,
                 ColorBuffer::target_srgb(),
                 &gpu.shader(&(TRACE.to_string() + include_str!("opaque.wgsl"))),
             ),
             transparent: gpu.quad(
                 type_name::<Self>(),
-                &gpu.pipeline_layout(&[
-                    &Frame::layout(gpu),
-                    &Environment::layout(gpu),
-                    &VrcBuffer::layout(gpu),
-                    &KeyValuePair::layout(gpu),
-                ]),
+                &layout,
                 ColorBuffer::target_srgb(),
                 &gpu.shader(&(TRACE.to_string() + include_str!("transparent.wgsl"))),
             ),

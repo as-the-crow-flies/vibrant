@@ -102,11 +102,6 @@ impl Controller {
                     );
                     ui.selectable_value(
                         &mut self.settings.render,
-                        LineRenderMode::RayTracingAlt,
-                        "RayTracingAlt",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.render,
                         LineRenderMode::RayTracing,
                         "RayTracing",
                     );
@@ -123,7 +118,7 @@ impl Controller {
                     ui.selectable_value(
                         &mut self.settings.display,
                         LineDisplayMode::Geometry,
-                        "Rasterization",
+                        "Geometry",
                     );
                     ui.selectable_value(
                         &mut self.settings.display,

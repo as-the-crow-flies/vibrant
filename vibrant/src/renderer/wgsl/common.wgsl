@@ -318,10 +318,10 @@ fn encode_segment(voxel: vec3<u32>, v0: vec3<f32>, v0_axis: u32, v1: vec3<f32>, 
          encode_segment_vertex(voxel, v1, v1_axis);
 }
 
-fn decode_segment(voxel: vec3<u32>, segment: u32) -> VoxelSegment {
+fn decode_segment(voxel: vec3<u32>, segment: u32, scale: f32) -> VoxelSegment {
     return VoxelSegment(
-        decode_segment_vertex(voxel, segment >> 16u),
-        decode_segment_vertex(voxel, segment & U16_MAX),
+        decode_segment_vertex(voxel, segment >> 16u, scale),
+        decode_segment_vertex(voxel, segment & U16_MAX, scale),
     );
 }
 
@@ -343,7 +343,7 @@ fn encode_segment_vertex(voxel: vec3<u32>, vertex: vec3<f32>, axis: u32) -> u32 
     return (face_bits << 12u) | (axis_0_bits << 6u) | axis_1_bits;
 }
 
-fn decode_segment_vertex(voxel: vec3<u32>, segment: u32) -> vec3<f32> {
+fn decode_segment_vertex(voxel: vec3<u32>, segment: u32, scale: f32) -> vec3<f32> {
     let face_bits = segment >> 12u;
 
     let axis_0 = decode_segment_axis(segment >> 6u);
@@ -354,10 +354,12 @@ fn decode_segment_vertex(voxel: vec3<u32>, segment: u32) -> vec3<f32> {
     let direction_1 = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.0, 1.0, 0.0), bool((face_bits >> 3u) & 1u));
     let direction_2 = vec3<f32>(1.0) - direction_0 - direction_1;
 
-    return vec3<f32>(voxel) +
+    let xyz = vec3<f32>(voxel) +
         direction_0 * axis_0 +
         direction_1 * axis_1 +
         direction_2 * axis_2;
+
+    return xyz * scale - 0.5;
 }
 
 fn encode_segment_axis(local: f32) -> u32 {

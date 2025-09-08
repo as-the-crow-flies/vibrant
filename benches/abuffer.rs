@@ -110,29 +110,29 @@ pub fn abuffer_benchmark_alt(
 
     let occpancy_alt = LineOccupancyAltPipeline::new(gpu);
 
-    // criterion.bench_function(
-    //     &format!(
-    //         "abuffer - alt - {:?} - {:?} - {:?}",
-    //         set, volume, voxelization
-    //     ),
-    //     |bencher| {
-    //         bencher.iter(|| {
-    let mut cmd = gpu.cmd();
+    criterion.bench_function(
+        &format!(
+            "abuffer - alt - {:?} - {:?} - {:?}",
+            set, volume, voxelization
+        ),
+        |bencher| {
+            bencher.iter(|| {
+                let mut cmd = gpu.cmd();
 
-    occpancy_alt.dispatch(&mut cmd, frame, environment, settings.voxelization, line);
+                occpancy_alt.dispatch(&mut cmd, frame, environment, settings.voxelization, line);
 
-    gpu.submit(cmd);
-    gpu.wait();
-    //         })
-    //     },
-    // );
+                gpu.submit(cmd);
+                gpu.wait();
+            })
+        },
+    );
 
-    let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
+    // let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
 
-    println!(
-        "abuffer - alt - {:?} - {:?} - {:?}: {:?}",
-        set, volume, voxelization, fragment_count[0]
-    )
+    // println!(
+    //     "abuffer - alt - {:?} - {:?} - {:?}: {:?}",
+    //     set, volume, voxelization, fragment_count[0]
+    // )
 }
 
 pub fn abuffer_benchmark_vrc(
@@ -154,26 +154,26 @@ pub fn abuffer_benchmark_vrc(
 
     let vrc = VrcLineVoxelizationPipeline::new(gpu);
 
-    // criterion.bench_function(
-    //     &format!("abuffer - vrc - {:?} - {:?}", set, volume),
-    //     |bencher| {
-    //         bencher.iter(|| {
-    let mut cmd = gpu.cmd();
+    criterion.bench_function(
+        &format!("abuffer - vrc - {:?} - {:?}", set, volume),
+        |bencher| {
+            bencher.iter(|| {
+                let mut cmd = gpu.cmd();
 
-    vrc.dispatch(&mut cmd, frame, environment, line);
+                vrc.dispatch(&mut cmd, frame, environment, line);
 
-    gpu.submit(cmd);
-    gpu.wait();
-    //         })
-    //     },
-    // );
+                gpu.submit(cmd);
+                gpu.wait();
+            })
+        },
+    );
 
-    let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
+    // let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
 
-    println!(
-        "abuffer - vrc - {:?} - {:?}: {:?}",
-        set, volume, fragment_count[0]
-    )
+    // println!(
+    //     "abuffer - vrc - {:?} - {:?}: {:?}",
+    //     set, volume, fragment_count[0]
+    // )
 }
 
 pub fn abuffer_experiment(criterion: &mut Criterion) {

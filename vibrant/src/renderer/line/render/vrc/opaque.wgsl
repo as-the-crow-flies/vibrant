@@ -51,12 +51,12 @@ fn visit_voxel(
     if (end - start > 128) { return; }
 
     for (var index = start; index < end; index++) {
-        let segment = decode_segment(voxel, VERTICES[index]);
+        let segment = decode_segment(voxel, VERTICES[index], DIM_INV);
 
-        let v0 = segment.v0 * DIM_INV - 0.5;
-        let v1 = segment.v1 * DIM_INV - 0.5;
+        // Skip degenerate segments
+        if (all(segment.v0.xyz == segment.v1.xyz)) { continue; }
 
-        let intersection = capsule_intersection(origin, direction, v0, v1, RADIUS);
+        let intersection = capsule_intersection(origin, direction, segment.v0.xyz, segment.v1.xyz, RADIUS);
 
         if (intersection < HIT.distance) {
             HIT = Hit(intersection, voxel, index);
@@ -67,10 +67,10 @@ fn visit_voxel(
 fn result(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     if (HIT.index == U32_MAX) { return vec4<f32>(0.0); }
 
-    let segment = decode_segment(HIT.voxel, VERTICES[HIT.index]);
+    let segment = decode_segment(HIT.voxel, VERTICES[HIT.index], DIM_INV);
 
-    let v0 = Vertex(segment.v0 * DIM_INV - 0.5, vec3<f32>(), 1.0);
-    let v1 = Vertex(segment.v1 * DIM_INV - 0.5, vec3<f32>(), 1.0);
+    let v0 = Vertex(segment.v0.xyz, vec3<f32>(), 1.0);
+    let v1 = Vertex(segment.v1.xyz, vec3<f32>(), 1.0);
 
     let position = origin + direction * HIT.distance;
 
