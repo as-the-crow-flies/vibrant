@@ -76,7 +76,7 @@ impl OccupancyBuffer {
         &self.occupancy_count_buffer
     }
 
-    pub fn density(&self) -> &MipTexture3D<R32Float> {
+    pub fn pyramid(&self) -> &MipTexture3D<R32Float> {
         &self.density
     }
 

@@ -58,7 +58,7 @@ impl Frame {
             label: Some(type_name::<Self>()),
             layout: &Self::layout(gpu),
             entries: &[
-                occupancy.density().binding_entries(0),
+                occupancy.pyramid().binding_entries(0),
                 occupancy.count().binding_entries(2),
                 occlusion.ambient().binding_entries(4),
                 occlusion.directional().binding_entries(6),

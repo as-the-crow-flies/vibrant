@@ -9,7 +9,7 @@ struct Hit {
     index: u32
 }
 
-var<private> HIT: Hit = Hit(0.0, vec3<u32>(), U32_MAX);
+var<private> HIT: Hit = Hit(1000.0, vec3<u32>(), U32_MAX);
 
 fn visit(
     voxel: vec3<u32>,
@@ -19,7 +19,7 @@ fn visit(
     increment: f32,
     distance: f32) -> bool {
 
-    HIT = Hit(distance, vec3<u32>(), U32_MAX);
+    let done = HIT.index != U32_MAX;
 
     if (ENVIRONMENT.settings.shadows > 0.5) {
         for (var x = -1; x <= 1; x++) {
@@ -34,7 +34,7 @@ fn visit(
         visit_voxel(voxel, origin, direction, position, increment, distance);
     }
 
-    return HIT.index != U32_MAX;
+    return done;
 }
 
 fn visit_voxel(
@@ -47,6 +47,8 @@ fn visit_voxel(
 
     let start = textureLoad(START, voxel).x;
     let end = textureLoad(END, voxel).x;
+
+    if (end - start > 128) { return; }
 
     for (var index = start; index < end; index++) {
         let segment = decode_segment(voxel, VERTICES[index]);

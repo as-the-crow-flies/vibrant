@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 wgpu = "25.0.2"
-winit = "0.30"
+winit = "0.30.12"
 
 egui = { git = "https://github.com/emilk/egui.git" }
 egui-wgpu = { git = "https://github.com/emilk/egui.git", features = ["winit"] }

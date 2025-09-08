@@ -79,7 +79,7 @@ impl LineOccupancyPipeline {
             ..Default::default()
         });
 
-        let n = frame.occupancy().density().resolution().div_ceil(8);
+        let n = frame.occupancy().pyramid().resolution().div_ceil(8);
 
         pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
         pass.set_bind_group(1, line.binding(true), &[]);
@@ -94,16 +94,16 @@ impl LineOccupancyPipeline {
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
-        pass.set_bind_group(1, frame.occupancy().density().binding_write(), &[]);
+        pass.set_bind_group(1, frame.occupancy().pyramid().binding_write(), &[]);
         pass.set_bind_group(2, frame.occupancy().count().binding_write(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.occupancy().density().resolution().div_ceil(8);
+        let mut mipmap = frame.occupancy().pyramid().resolution().div_ceil(8);
 
-        for binding in frame.occupancy().density().bindings_mipmap() {
+        for binding in frame.occupancy().pyramid().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

@@ -134,7 +134,7 @@ impl CullingBuffer {
         &self.offset_total
     }
 
-    pub fn culling(&self) -> &MipTexture3D<R32Float> {
+    pub fn pyramid(&self) -> &MipTexture3D<R32Float> {
         &self.culling
     }
 

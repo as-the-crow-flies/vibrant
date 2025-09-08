@@ -28,7 +28,7 @@ impl LineCullingPipeline {
             culling: gpu.compute(
                 "Culling::Culling",
                 &gpu.pipeline_layout(&[
-                    &OccupancyBuffer::layout_read(gpu),
+                    &MipTexture3D::<R32Float>::layout_write(gpu),
                     &MipTexture3D::<R32Float>::layout_write(gpu),
                     &CullingBuffer::layout_write(gpu),
                     &Environment::layout(gpu),
@@ -44,8 +44,6 @@ impl LineCullingPipeline {
     }
 
     pub fn dispatch(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
-        frame.culling().clear(cmd);
-
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Culling"),
             ..Default::default()
@@ -60,16 +58,16 @@ impl LineCullingPipeline {
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.culling);
-        pass.set_bind_group(0, frame.occupancy().binding(), &[]);
-        pass.set_bind_group(1, frame.culling().culling().binding_write(), &[]);
+        pass.set_bind_group(0, frame.culling().pyramid().binding_write(), &[]);
+        pass.set_bind_group(1, frame.occupancy().pyramid().binding_write(), &[]);
         pass.set_bind_group(2, frame.culling().binding_write(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.culling().culling().resolution().div_ceil(8);
-        for binding in frame.culling().culling().bindings_mipmap() {
+        let mut mipmap = frame.culling().pyramid().resolution().div_ceil(8);
+        for binding in frame.culling().pyramid().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

@@ -3,7 +3,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 use crate::{
     asset::{
         line::LineSet,
-        texture::{MipTexture3D, R32Float},
+        texture::{MipTexture3D, R32Float, R32Uint},
     },
     controller::settings::LineVoxelizationMode,
     gpu::Gpu,
@@ -12,6 +12,7 @@ use crate::{
 };
 
 pub struct LinePopulatePipeline {
+    scan: ComputePipeline,
     populate_tube: ComputePipeline,
     populate_line: ComputePipeline,
     populate_box: ComputePipeline,
@@ -29,6 +30,16 @@ impl LinePopulatePipeline {
         let populate_source = include_str!("populate.wgsl");
 
         Self {
+            scan: gpu.compute(
+                "Populate::Scan",
+                &gpu.pipeline_layout(&[
+                    &MipTexture3D::<R32Float>::layout_write(gpu),
+                    &CullingBuffer::layout_write(gpu),
+                    &MipTexture3D::<R32Uint>::layout(gpu),
+                    &Environment::layout(gpu),
+                ]),
+                &gpu.shader(include_str!("scan.wgsl")),
+            ),
             populate_tube: gpu.compute(
                 "Populate::Populate::Tube",
                 layout,
@@ -55,12 +66,22 @@ impl LinePopulatePipeline {
         setting: LineVoxelizationMode,
         line: &LineSet,
     ) {
+        frame.culling().clear(cmd);
         line.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Populate"),
             ..Default::default()
         });
+
+        let n = frame.occupancy().resolution().div_ceil(4);
+
+        pass.set_pipeline(&self.scan);
+        pass.set_bind_group(0, frame.culling().pyramid().binding_write(), &[]);
+        pass.set_bind_group(1, frame.culling().binding_write(), &[]);
+        pass.set_bind_group(2, frame.occupancy().count().binding(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(match setting {
             LineVoxelizationMode::Line => &self.populate_line,
@@ -69,9 +90,9 @@ impl LinePopulatePipeline {
         });
 
         pass.set_bind_group(0, frame.culling().binding_write(), &[]);
-        pass.set_bind_group(1, frame.culling().culling().binding(), &[]);
+        pass.set_bind_group(1, frame.culling().pyramid().binding(), &[]);
         pass.set_bind_group(2, line.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
-        pass.dispatch_workgroups(64, 1, 1);
+        pass.dispatch_workgroups(18, 1, 1);
     }
 }
