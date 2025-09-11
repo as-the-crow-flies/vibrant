@@ -33,15 +33,14 @@ fn visit(
         // Skip degenerate segments
         if (all(segment.v0.xyz == segment.v1.xyz)) { continue; }
 
-        let tangent = normalize(segment.v1 - segment.v0);
-
-        let v0 = Vertex(segment.v0, tangent, 1.0);
-        let v1 = Vertex(segment.v1, tangent, 1.0);
-
-        let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
+        let hit = capsule_intersection(origin, direction, segment.v0.xyz, segment.v1.xyz, RADIUS);
         let hit_position = origin + hit * direction;
 
-        if (hit == 1E6 || should_be_clipped(v0, v1, hit_position)) { continue; }
+        let should_be_clipped =
+            dot(segment.v0.xyz - hit_position, segment.v0.clip) < 0.0 ||
+            dot(segment.v1.xyz - hit_position, segment.v1.clip) < 0.0;
+
+        if (hit == 1E6 || should_be_clipped) { continue; }
 
         let candidate = (u32(saturate(hit * distance_inv) * U24_MAX_f32) << 8) | i;
 

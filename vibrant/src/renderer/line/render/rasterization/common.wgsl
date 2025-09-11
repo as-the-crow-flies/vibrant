@@ -1,4 +1,4 @@
-const K: u32 = 8u;
+const K: u32 = 4u;
 
 const MAX_OPACITY: f32 = 0.95;
 
