@@ -20,7 +20,7 @@ fn visit(
 
     if (count == 0 || end - start > 256) { return false; }
 
-    let distance_inv = 1.0 / distance;
+    let increment_inv = 1.0 / increment;
 
     var hits = array<u32, INSERTION_SORT_SIZE>();
     var hit_count = 0u;
@@ -33,16 +33,16 @@ fn visit(
         // Skip degenerate segments
         if (all(segment.v0.xyz == segment.v1.xyz)) { continue; }
 
-        let hit = capsule_intersection(origin, direction, segment.v0.xyz, segment.v1.xyz, RADIUS);
-        let hit_position = origin + hit * direction;
+        let hit = capsule_intersection(position, direction, segment.v0.xyz, segment.v1.xyz, RADIUS);
+        let hit_position = position + hit * direction;
 
         let should_be_clipped =
             dot(segment.v0.xyz - hit_position, segment.v0.clip) < 0.0 ||
             dot(segment.v1.xyz - hit_position, segment.v1.clip) < 0.0;
 
-        if (hit == 1E6 || should_be_clipped) { continue; }
+        if (hit < 0.0 || hit >= increment || should_be_clipped) { continue; }
 
-        let candidate = (u32(saturate(hit * distance_inv) * U24_MAX_f32) << 8) | i;
+        let candidate = (u32(saturate(hit * increment_inv) * U16_MAX_f32) << 16) | i;
 
         insertion_sort_insert(&hits, hit_count, candidate);
 
@@ -60,8 +60,8 @@ fn visit(
         let v0 = Vertex(segment.v0.xyz, vec3<f32>(), 1.0);
         let v1 = Vertex(segment.v1.xyz, vec3<f32>(), 1.0);
 
-        let hit = f32(item >> 8u) * U24_MAX_INV * distance;
-        let hit_position = origin + hit * direction;
+        let hit = f32(item >> 16u) * U16_MAX_INV * increment;
+        let hit_position = position + hit * direction;
 
         let c = shade(v0, v1, RADIUS, hit_position, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 
