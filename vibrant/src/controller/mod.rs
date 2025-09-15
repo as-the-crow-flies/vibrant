@@ -97,18 +97,23 @@ impl Controller {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.settings.render,
-                        LineRenderMode::Rasterization,
-                        "Rasterization",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.render,
                         LineRenderMode::RayTracing,
                         "RayTracing",
                     );
                     ui.selectable_value(
                         &mut self.settings.render,
-                        LineRenderMode::QuantizedRayCasting,
-                        "QuantizedRayCasting",
+                        LineRenderMode::RayTracingQuantized,
+                        "RayTracingQuantized",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.render,
+                        LineRenderMode::RasterizationOrderCorrecting,
+                        "RasterizationOrderCorrecting",
+                    );
+                    ui.selectable_value(
+                        &mut self.settings.render,
+                        LineRenderMode::Rasterization,
+                        "Rasterization",
                     );
                 });
 

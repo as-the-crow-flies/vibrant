@@ -1,3 +1,4 @@
+pub mod baseline;
 pub mod rasterization;
 pub mod raytracing;
 pub mod raytracing_alt;
@@ -13,14 +14,16 @@ use crate::{
     renderer::{
         environment::Environment,
         line::render::{
-            rasterization::LineRasterizationPipeline, raytracing::RayTracingLineRenderPipeline,
-            volume::VolumeLineRenderPipeline, vrc::VrcLineRenderPipeline,
+            baseline::LineBaselineRasterizationPipeline, rasterization::LineRasterizationPipeline,
+            raytracing::RayTracingLineRenderPipeline, volume::VolumeLineRenderPipeline,
+            vrc::VrcLineRenderPipeline,
         },
     },
     surface::Frame,
 };
 
 pub struct LineRenderPipeline {
+    base: LineBaselineRasterizationPipeline,
     raster: LineRasterizationPipeline,
     ray: RayTracingLineRenderPipeline,
     volume: VolumeLineRenderPipeline,
@@ -30,6 +33,7 @@ pub struct LineRenderPipeline {
 impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
+            base: LineBaselineRasterizationPipeline::new(gpu),
             raster: LineRasterizationPipeline::new(gpu),
             ray: RayTracingLineRenderPipeline::new(gpu),
             volume: VolumeLineRenderPipeline::new(gpu),
@@ -47,14 +51,17 @@ impl LineRenderPipeline {
     ) {
         match settings.display {
             LineDisplayMode::Geometry => match settings.render {
-                LineRenderMode::Rasterization => {
-                    self.raster.render(cmd, frame, environment, line, settings)
-                }
                 LineRenderMode::RayTracing => {
                     self.ray.render(cmd, frame, environment, settings, line)
                 }
-                LineRenderMode::QuantizedRayCasting => {
+                LineRenderMode::RayTracingQuantized => {
                     self.vrc.render(cmd, frame, environment, settings, line)
+                }
+                LineRenderMode::RasterizationOrderCorrecting => {
+                    self.raster.render(cmd, frame, environment, line, settings)
+                }
+                LineRenderMode::Rasterization => {
+                    self.base.render(cmd, frame, environment, line);
                 }
             },
             LineDisplayMode::Volume => self.volume.render(cmd, frame, environment),

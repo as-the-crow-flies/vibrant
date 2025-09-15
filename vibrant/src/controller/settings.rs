@@ -20,8 +20,9 @@ impl LineVoxelizationMode {
 pub enum LineRenderMode {
     #[default]
     RayTracing,
+    RayTracingQuantized,
     Rasterization,
-    QuantizedRayCasting,
+    RasterizationOrderCorrecting,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -56,18 +57,18 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            volume: 128,
+            volume: 256,
             radius: 0.1,
             lighting: 1.0,
             direct_light: 0.67,
             tangent_color: 1.0,
             shadows: 0.0,
-            alpha: 0.25,
+            alpha: 1.0,
             level: 0.0,
             smoothing: 0.5,
             culling: true,
             slice_count: 10,
-            render: LineRenderMode::QuantizedRayCasting,
+            render: LineRenderMode::RayTracing,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }
