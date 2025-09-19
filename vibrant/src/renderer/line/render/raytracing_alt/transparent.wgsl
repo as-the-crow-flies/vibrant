@@ -13,7 +13,8 @@ fn visit(
     direction: vec3<f32>,
     position: vec3<f32>,
     increment: f32,
-    distance: f32) -> bool {
+    distance: f32
+    axis: u32) -> bool {
 
     let start = textureLoad(START, voxel).x;
     let end = textureLoad(END, voxel).x;

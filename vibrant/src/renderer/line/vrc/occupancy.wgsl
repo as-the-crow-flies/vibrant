@@ -1,4 +1,4 @@
-@group(0) @binding(1) var<storage, read_write> VERTICES: array<vec2<u32>>;
+@group(0) @binding(1) var<storage, read_write> VERTICES: array<vec3<u32>>;
 
 @group(1) @binding(0) var START: texture_storage_3d<r32uint, read_write>;
 @group(1) @binding(1) var END: texture_storage_3d<r32uint, read_write>;

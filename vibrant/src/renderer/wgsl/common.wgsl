@@ -206,6 +206,30 @@ fn capsule_intersection(ro: vec3<f32>, rd: vec3<f32>, pa: vec3<f32>, pb: vec3<f3
     return 1E6;
 }
 
+
+// https://iquilezles.org/articles/intersectors
+fn cylinder_intersection(ro: vec3<f32>, rd: vec3<f32>, cb: vec3<f32>, ca: vec3<f32>, cr: f32) -> f32 {
+    let oc = ro - cb;
+    let card = dot(ca,rd);
+    let caoc = dot(ca,oc);
+    let a = 1.0 - card*card;
+    let b = dot( oc, rd) - caoc*card;
+    let c = dot( oc, oc) - caoc*caoc - cr*cr;
+    let h = b*b - a*c;
+
+    return select(1E6, (-b - sqrt(h)) / a, h >= 0.0);
+}
+
+// https://iquilezles.org/articles/intersectors
+fn sphere_intersection(ro: vec3<f32>, rd: vec3<f32>, ce: vec3<f32>, ra: f32) -> f32 {
+    let oc = ro - ce;
+    let b = dot(oc, rd);
+    let c = dot(oc, oc) - ra*ra;
+    let h = b*b - c;
+
+    return select(1E6, -b - sqrt(h), h > 0.0);
+}
+
 // https://iquilezles.org/articles/distfunctions/
 fn capsule_sdf(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
   let pa = p - a;
@@ -250,7 +274,7 @@ fn shade(
         height
     ));
 
-    let normal = (pa - height * delta) / radius;
+    let normal = normalize((pa - height * delta) / radius);
 
     let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
     let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
@@ -263,7 +287,7 @@ fn shade(
         environment.settings.direct_light),
         environment.settings.lighting);
 
-    let rgb = factor * mix(vec3<f32>(1.0), abs(tangent), environment.settings.tangent_color);
+    let rgb = factor * mix(vec3<f32>(1.0), abs(tangent).xzy, environment.settings.tangent_color);
     let a = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
 
     return vec4<f32>(rgb, a);

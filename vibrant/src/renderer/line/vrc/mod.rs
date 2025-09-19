@@ -34,7 +34,7 @@ impl VrcLineVoxelizationPipeline {
                 ]),
                 &gpu.shader(include_str!("quantize.wgsl")),
             ),
-            sort: SortPipeline::new(gpu, "vec2<u32>"),
+            sort: SortPipeline::new(gpu, "vec3<u32>"),
             scan: gpu.compute(
                 "VrcVoxelizationPipeline::Scan",
                 &gpu.pipeline_layout(&[&KeyValuePair::layout(gpu), &VrcBuffer::layout(gpu)]),

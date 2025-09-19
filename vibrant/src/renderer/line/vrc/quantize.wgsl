@@ -5,7 +5,7 @@
 @group(0) @binding(6) var<storage> LINE_OFFSET: array<u32>;
 
 @group(1) @binding(0) var<storage, read_write> KEY: array<u32>;
-@group(1) @binding(1) var<storage, read_write> VALUE: array<vec2<u32>>;
+@group(1) @binding(1) var<storage, read_write> VALUE: array<vec3<u32>>;
 @group(1) @binding(2) var<storage, read_write> COUNT: atomic<u32>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
@@ -38,7 +38,7 @@ fn main(@builtin(global_invocation_id) global: vec3<u32>) {
         let v0 = (LINE_VERTEX[index + 0].xyz + 0.5) * scale;
         let v1 = (LINE_VERTEX[index + 1].xyz + 0.5) * scale;
 
-        quantize(v0, v1, &intersections);
+        quantize(line_index, v0, v1, &intersections);
     }
 
     // Quantize final segment
@@ -51,14 +51,14 @@ fn main(@builtin(global_invocation_id) global: vec3<u32>) {
     let index = atomicAdd(&COUNT, 1u);
 
     KEY[index] = morton_encode(v2.voxel);
-    VALUE[index] = vec2<u32>(
+    VALUE[index] = vec3<u32>(
         encode_segment_vertex(v2.voxel, v1.position, v1.axis, clip_1),
-        encode_segment_vertex(v2.voxel, v2.position, v2.axis, clip_2)
+        encode_segment_vertex(v2.voxel, v2.position, v2.axis, clip_2),
+        line_index
     );
 }
 
-fn quantize(v0: vec3<f32>, v1: vec3<f32>, intersections: ptr<function, array<Intersection, 3>>) {
-
+fn quantize(line_index: u32, v0: vec3<f32>, v1: vec3<f32>, intersections: ptr<function, array<Intersection, 3>>) {
     let scale = 1.0 / f32(ENVIRONMENT.volume);
 
     let delta = v1 - v0;
@@ -103,9 +103,10 @@ fn quantize(v0: vec3<f32>, v1: vec3<f32>, intersections: ptr<function, array<Int
 
                 let index = atomicAdd(&COUNT, 1u);
                 KEY[index] = morton_encode(v2.voxel);
-                VALUE[index] = vec2<u32>(
+                VALUE[index] = vec3<u32>(
                     encode_segment_vertex(v2.voxel, v1.position, v1.axis, clip_1),
-                    encode_segment_vertex(v2.voxel, v2.position, v2.axis, clip_2)
+                    encode_segment_vertex(v2.voxel, v2.position, v2.axis, clip_2),
+                    line_index
                 );
             }
 

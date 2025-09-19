@@ -88,6 +88,8 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         voxel[axis] = next[axis] + boundary[axis] - 1;
     }
 
+    var last_axis = 0u;
+
     while (t < t_max) {
         // Get the next voxel boundary
         let next = voxel + boundary;
@@ -101,7 +103,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         // Get Increment
         let increment = max(d[axis], 1E-5);
 
-        if (visit(voxel, origin - 0.5, direction, position - 0.5, increment, t + increment)) {
+        if (visit(voxel, origin - 0.5, direction, position - 0.5, increment, t + increment, last_axis)) {
             break;
         }
 
@@ -109,6 +111,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         t += increment;
         position += direction * increment;
         voxel[axis] = next[axis] + boundary[axis] - 1;
+        last_axis = axis;
     }
 
     return result(origin - 0.5, direction);

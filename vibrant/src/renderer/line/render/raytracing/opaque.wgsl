@@ -17,7 +17,8 @@ fn visit(
     direction: vec3<f32>,
     position: vec3<f32>,
     increment: f32,
-    distance: f32) -> bool {
+    distance: f32,
+    axis: u32) -> bool {
 
     let count = textureLoad(COUNT, voxel, 0).x;
 

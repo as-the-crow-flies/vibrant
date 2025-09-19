@@ -1,4 +1,4 @@
-@group(2) @binding(1) var<storage, read_write> VERTICES: array<vec2<u32>>;
+@group(2) @binding(1) var<storage, read_write> VERTICES: array<vec3<u32>>;
 
 @group(3) @binding(0) var START: texture_storage_3d<r32uint, read_write>;
 @group(3) @binding(1) var END: texture_storage_3d<r32uint, read_write>;
@@ -17,7 +17,8 @@ fn visit(
     direction: vec3<f32>,
     position: vec3<f32>,
     increment: f32,
-    distance: f32) -> bool {
+    distance: f32,
+    axis: u32) -> bool {
 
     let done = HIT.index != U32_MAX;
 
