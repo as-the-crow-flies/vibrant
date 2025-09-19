@@ -24,7 +24,7 @@ impl LineRasterizationSortPipeline {
             &gpu.shader(include_str!("depth.wgsl")),
         );
 
-        let sort = SortPipeline::new(gpu);
+        let sort = SortPipeline::new(gpu, "u32");
 
         Self { compute, sort }
     }

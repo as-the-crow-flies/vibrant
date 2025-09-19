@@ -1,4 +1,4 @@
-@group(0) @binding(0) var<storage, read_write> VERTICES: array<u32>;
+@group(0) @binding(1) var<storage, read_write> VERTICES: array<vec2<u32>>;
 
 @group(1) @binding(0) var START: texture_storage_3d<r32uint, read_write>;
 @group(1) @binding(1) var END: texture_storage_3d<r32uint, read_write>;
@@ -23,8 +23,10 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     var density = 0.0;
 
     for (var index = start; index < end; index++) {
-        let segment = decode_segment(voxel, VERTICES[index], 1.0);
-        density += length(segment.v1.xyz - segment.v0.xyz);
+        let v0 = decode_segment_vertex(voxel, VERTICES[index][0], 1.0);
+        let v1 = decode_segment_vertex(voxel, VERTICES[index][1], 1.0);
+
+        density += length(v1.xyz - v0.xyz);
     }
 
     textureStore(DENSITY, voxel, vec4<f32>(saturate(density * density_multiplier)));

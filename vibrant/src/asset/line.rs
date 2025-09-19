@@ -454,13 +454,13 @@ impl SortedLineSet {
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("LineSort::Line"),
             layout: &LineSet::layout(gpu, true),
-            entries: &buffer.entries(ping.key(), &buffer.vertices),
+            entries: &buffer.entries(ping.value(), &buffer.vertices),
         });
 
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("LineSort::Line"),
             layout: &LineSet::layout(gpu, false),
-            entries: &buffer.entries(ping.key(), &buffer.vertices),
+            entries: &buffer.entries(ping.value(), &buffer.vertices),
         });
 
         Self {
@@ -500,8 +500,8 @@ pub struct VrcLineSet {
 
 impl VrcLineSet {
     fn new(gpu: &Gpu, len: u32) -> Self {
-        let ping = KeyValuePair::new(gpu, len * 8);
-        let pong = KeyValuePair::new(gpu, len * 8);
+        let ping = KeyValuePair::new(gpu, len * 32);
+        let pong = KeyValuePair::new(gpu, len * 32);
 
         Self { ping, pong }
     }

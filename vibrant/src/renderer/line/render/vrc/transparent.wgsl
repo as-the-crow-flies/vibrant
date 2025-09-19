@@ -1,4 +1,4 @@
-@group(2) @binding(0) var<storage, read_write> VERTICES: array<u32>;
+@group(2) @binding(1) var<storage, read_write> VERTICES: array<vec2<u32>>;
 
 @group(3) @binding(0) var START: texture_storage_3d<r32uint, read_write>;
 @group(3) @binding(1) var END: texture_storage_3d<r32uint, read_write>;
@@ -18,9 +18,10 @@ fn visit(
 
     let count = end - start;
 
-    if (count == 0 || end - start > 256) { return false; }
+    if (count == 0 || end - start > 512) { return false; }
 
-    let increment_inv = 1.0 / increment;
+    let max_distance = 2.0 * distance;
+    let max_distance_inv = 1.0 / max_distance;
 
     var hits = array<u32, INSERTION_SORT_SIZE>();
     var hit_count = 0u;
@@ -28,21 +29,18 @@ fn visit(
     for (var i = 0u; i < count; i++) {
         let index = start + i;
 
-        let segment = decode_segment(voxel, VERTICES[index], DIM_INV);
+        let v0 = decode_segment_vertex(voxel, VERTICES[index][0], DIM_INV);
+        let v1 = decode_segment_vertex(voxel, VERTICES[index][1], DIM_INV);
 
         // Skip degenerate segments
-        if (all(segment.v0.xyz == segment.v1.xyz)) { continue; }
+        if (all(v0.xyz == v1.xyz)) { continue; }
 
-        let hit = capsule_intersection(position, direction, segment.v0.xyz, segment.v1.xyz, RADIUS);
-        let hit_position = position + hit * direction;
+        let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
+        let hit_position = origin + hit * direction;
 
-        let should_be_clipped =
-            dot(segment.v0.xyz - hit_position, segment.v0.clip) < 0.0 ||
-            dot(segment.v1.xyz - hit_position, segment.v1.clip) < 0.0;
+        if (hit >= max_distance || should_be_clipped(v0, v1, hit_position)) { continue; }
 
-        if (hit < 0.0 || hit >= increment || should_be_clipped) { continue; }
-
-        let candidate = (u32(saturate(hit * increment_inv) * U16_MAX_f32) << 16) | i;
+        let candidate = (u32(saturate(hit * max_distance_inv) * U16_MAX_f32) << 16) | i;
 
         insertion_sort_insert(&hits, hit_count, candidate);
 
@@ -55,13 +53,12 @@ fn visit(
         let item = hits[i];
 
         let index = start + (item & U8_MAX);
-        let segment = decode_segment(voxel, VERTICES[index], DIM_INV);
 
-        let v0 = Vertex(segment.v0.xyz, vec3<f32>(), 1.0);
-        let v1 = Vertex(segment.v1.xyz, vec3<f32>(), 1.0);
+        let v0 = decode_segment_vertex(voxel, VERTICES[index][0], DIM_INV);
+        let v1 = decode_segment_vertex(voxel, VERTICES[index][1], DIM_INV);
 
-        let hit = f32(item >> 16u) * U16_MAX_INV * increment;
-        let hit_position = position + hit * direction;
+        let hit = f32(item >> 16u) * U16_MAX_INV * max_distance;
+        let hit_position = origin + hit * direction;
 
         let c = shade(v0, v1, RADIUS, hit_position, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 

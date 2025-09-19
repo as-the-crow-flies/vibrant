@@ -6,10 +6,10 @@
 @group(1) @binding(0) var<uniform> RADIX_SHIFT: u32;
 
 @group(2) @binding(0) var<storage, read_write> KEYS_IN: array<u32>;
-@group(2) @binding(1) var<storage, read_write> VALUES_IN: array<u32>;
+@group(2) @binding(1) var<storage, read_write> VALUES_IN: array<VALUE_TYPE>;
 
 @group(3) @binding(0) var<storage, read_write> KEYS_OUT: array<u32>;
-@group(3) @binding(1) var<storage, read_write> VALUES_OUT: array<u32>;
+@group(3) @binding(1) var<storage, read_write> VALUES_OUT: array<VALUE_TYPE>;
 
 const STATUS_NOPE: u32 = 0u;
 const STATUS_LOCAL: u32 = 1u;
@@ -54,14 +54,14 @@ fn main(
 
         workgroupBarrier();
 
-        // Grab Values
-        var values = array<u32, CHUNK_SIZE>();
+        // Grab Keys
+        var keys = array<u32, CHUNK_SIZE>();
 
         for (var i = 0u; i < CHUNK_SIZE; i++) {
             let index = subgroup_offset + i * CHUNK_SIZE + subgroup_index;
             if (index >= COUNT) { continue; }
 
-            values[i] = VALUES_IN[index];
+            keys[i] = KEYS_IN[index];
         }
 
         // Populate Subgroup Offsets for Data Chunk
@@ -69,7 +69,7 @@ fn main(
 
         // (Warp/Subgroup)-Level Multi Split
         for (var i = 0u; i < CHUNK_SIZE; i++) {
-            let radix = extract_byte(values[i], RADIX_SHIFT);
+            let radix = extract_byte(keys[i], RADIX_SHIFT);
             let subgroup_radix_index = subgroup_id * RADIX + radix;
 
             var wave_flags = U32_MAX;
@@ -85,7 +85,6 @@ fn main(
 
             var subgroup_exclusive_total = 0u;
             if (subgroup_index == lowest_rank_peer) {
-                // subgroup_exclusive_total = atomicAdd(&SUBGROUP_OFFSETS[subgroup_radix_index], total_bits);
                 subgroup_exclusive_total = subgroup_offset_atomic_add(subgroup_radix_index, total_bits);
             }
 
@@ -99,9 +98,6 @@ fn main(
             let radix = subgroup_id * 8u + i;
             let subgroup_offset_index = subgroup_index * RADIX + radix;
 
-            // let count = atomicLoad(&SUBGROUP_OFFSETS[subgroup_offset_index]);
-            // let offset = subgroupExclusiveAdd(count);
-
             let counts = subgroup_offset_load_2(subgroup_offset_index); // 2 radices at a time
             let offsets = subgroupExclusiveAdd(counts);
 
@@ -113,7 +109,6 @@ fn main(
             }
 
             // Update Subgroup Offset
-            // atomicStore(&SUBGROUP_OFFSETS[subgroup_offset_index], offset);
             subgroup_offset_store(subgroup_offset_index, offsets);
         }
 
@@ -146,7 +141,7 @@ fn main(
 
             if (index >= COUNT) { continue; }
 
-            let radix_index = extract_byte(values[i], RADIX_SHIFT);
+            let radix_index = extract_byte(keys[i], RADIX_SHIFT);
             let subgroup_radix_index = subgroup_id * RADIX + radix_index;
 
             let global_radix_offset = HISTOGRAM[(RADIX_SHIFT >> 3) * RADIX + radix_index];
@@ -155,8 +150,8 @@ fn main(
 
             let offset = global_radix_offset + workgroup_offset + subgroup_offset + offsets[i];
 
-            VALUES_OUT[offset] = values[i];
-            KEYS_OUT[offset] = KEYS_IN[index];
+            KEYS_OUT[offset] = keys[i];
+            VALUES_OUT[offset] = VALUES_IN[index];
         }
     }
 }

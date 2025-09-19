@@ -1,4 +1,4 @@
-@group(2) @binding(0) var<storage, read_write> VERTICES: array<u32>;
+@group(2) @binding(1) var<storage, read_write> VERTICES: array<vec2<u32>>;
 
 @group(3) @binding(0) var START: texture_storage_3d<r32uint, read_write>;
 @group(3) @binding(1) var END: texture_storage_3d<r32uint, read_write>;
@@ -51,12 +51,13 @@ fn visit_voxel(
     if (end - start > 128) { return; }
 
     for (var index = start; index < end; index++) {
-        let segment = decode_segment(voxel, VERTICES[index], DIM_INV);
+        let v0 = decode_segment_vertex(voxel, VERTICES[index][0], DIM_INV);
+        let v1 = decode_segment_vertex(voxel, VERTICES[index][1], DIM_INV);
 
         // Skip degenerate segments
-        if (all(segment.v0.xyz == segment.v1.xyz)) { continue; }
+        if (all(v0.xyz == v1.xyz)) { continue; }
 
-        let intersection = capsule_intersection(origin, direction, segment.v0.xyz, segment.v1.xyz, RADIUS);
+        let intersection = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
 
         if (intersection < HIT.distance) {
             HIT = Hit(intersection, voxel, index);
@@ -67,10 +68,8 @@ fn visit_voxel(
 fn result(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     if (HIT.index == U32_MAX) { return vec4<f32>(0.0); }
 
-    let segment = decode_segment(HIT.voxel, VERTICES[HIT.index], DIM_INV);
-
-    let v0 = Vertex(segment.v0.xyz, vec3<f32>(), 1.0);
-    let v1 = Vertex(segment.v1.xyz, vec3<f32>(), 1.0);
+    let v0 = decode_segment_vertex(HIT.voxel, VERTICES[HIT.index][0], DIM_INV);
+    let v1 = decode_segment_vertex(HIT.voxel, VERTICES[HIT.index][1], DIM_INV);
 
     let position = origin + direction * HIT.distance;
 

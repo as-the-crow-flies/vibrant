@@ -312,22 +312,7 @@ struct VoxelSegment {
     v1: Vertex
 }
 
-fn encode_segment(voxel: vec3<u32>, v0: vec3<f32>, v0_axis: u32, v1: vec3<f32>, v1_axis: u32) -> u32 {
-    return
-        (encode_segment_vertex(voxel, v0, v0_axis) << 16u) |
-         encode_segment_vertex(voxel, v1, v1_axis);
-}
-
-fn decode_segment(voxel: vec3<u32>, segment: u32, scale: f32) -> VoxelSegment {
-    return VoxelSegment(
-        decode_segment_vertex(voxel, segment >> 16u, scale),
-        decode_segment_vertex(voxel, segment & U16_MAX, scale),
-    );
-}
-
-fn encode_segment_vertex(voxel: vec3<u32>, vertex: vec3<f32>, axis: u32) -> u32 {
-    let epsilon = vec3<f32>(1E-16);
-
+fn encode_segment_vertex(voxel: vec3<u32>, vertex: vec3<f32>, axis: u32, clip: vec3<f32>) -> u32 {
     let local = saturate(vertex - vec3<f32>(voxel));
 
     let face_bits = (1u << (axis + 1u)) + u32(local[axis] > 0.5);
@@ -340,14 +325,18 @@ fn encode_segment_vertex(voxel: vec3<u32>, vertex: vec3<f32>, axis: u32) -> u32 
     let axis_0_bits = encode_segment_axis(local[axes[0]]);
     let axis_1_bits = encode_segment_axis(local[axes[1]]);
 
-    return (face_bits << 12u) | (axis_0_bits << 6u) | axis_1_bits;
+    let vertex_quantized = (face_bits << 12u) | (axis_0_bits << 6u) | axis_1_bits;
+
+    return (vertex_quantized << 16) | pack_normal(clip);
 }
 
-fn decode_segment_vertex(voxel: vec3<u32>, segment: u32, scale: f32) -> Vertex {
-    let face_bits = segment >> 12u;
+fn decode_segment_vertex(voxel: vec3<u32>, vertex_clip: u32, scale: f32) -> Vertex {
+    let vertex = vertex_clip >> 16u;
 
-    let axis_0 = decode_segment_axis(segment >> 6u);
-    let axis_1 = decode_segment_axis(segment);
+    let face_bits = vertex >> 12u;
+
+    let axis_0 = decode_vertex_axis(vertex >> 6u);
+    let axis_1 = decode_vertex_axis(vertex);
     let axis_2 = f32(face_bits & 1u);
 
     let direction_0 = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), bool((face_bits >> 1u) & 1u));
@@ -359,7 +348,7 @@ fn decode_segment_vertex(voxel: vec3<u32>, segment: u32, scale: f32) -> Vertex {
         direction_1 * axis_1 +
         direction_2 * axis_2;
 
-    let clip = select(-1.0, 1.0, bool(face_bits & 1u)) * direction_2;
+    let clip = unpack_normal(vertex_clip & U16_MAX);
 
     return Vertex(xyz * scale - 0.5, clip, 1.0);
 }
@@ -368,7 +357,7 @@ fn encode_segment_axis(local: f32) -> u32 {
     return clamp(u32(local * U6_MAX_f32), 0u, U6_MAX);
 }
 
-fn decode_segment_axis(axis: u32) -> f32 {
+fn decode_vertex_axis(axis: u32) -> f32 {
     return f32(axis & U6_MAX) * U6_MAX_INV;
 }
 
@@ -419,4 +408,38 @@ fn linear_to_srgb_vec3(c: vec3<f32>) -> vec3<f32> {
 
 fn linear_to_srgb_rgba(c: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(linear_to_srgb_vec3(c.rgb), c.a);
+}
+
+fn pack_normal(n: vec3<f32>) -> u32 {
+    if (all(n == vec3<f32>())) { return 0u; }
+
+    // project the normal onto the octahedron
+    var p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+    if (n.z < 0.0) {
+        p = (1.0 - abs(p.yx)) * sign(p);
+    }
+
+    // remap from [-1,1] to [0,1] and quantize to 0–255
+    let enc = clamp(p * 0.5 + 0.5, vec2<f32>(0.0), vec2<f32>(1.0));
+    let xi = u32(round(enc.x * 255.0));
+    let yi = u32(round(enc.y * 255.0));
+
+    // pack into a single 16-bit value (low byte = x, high byte = y)
+    return (yi << 8u) | xi;
+}
+
+fn unpack_normal(packed: u32) -> vec3<f32> {
+    if (packed == 0u) { return vec3<f32>(); }
+
+    // extract bytes and remap to [-1,1]
+    let x = f32(packed & 0xFFu) / 255.0 * 2.0 - 1.0;
+    let y = f32((packed >> 8u) & 0xFFu) / 255.0 * 2.0 - 1.0;
+    var v = vec3<f32>(x, y, 1.0 - abs(x) - abs(y));
+
+    // fold back into the sphere if we were in the lower hemisphere
+    if (v.z < 0.0) {
+        v = vec3<f32>((1.0 - abs(v.yx)) * sign(v.xy), v.z);
+    }
+
+    return normalize(v);
 }

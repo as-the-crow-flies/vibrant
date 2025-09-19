@@ -45,8 +45,8 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
             let sdf = capsule_sdf(eye, v0, v1, radius);
 
-            KEY[index_index] = index;
-            VALUE[index_index] = u32(saturate((sdf - near) * far_minus_near_inv) * U32_MAX_f32);
+            KEY[index_index] = u32(saturate((sdf - near) * far_minus_near_inv) * U32_MAX_f32);
+            VALUE[index_index] = index;
         }
     }
 }

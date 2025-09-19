@@ -2,7 +2,7 @@
 @group(0) @binding(2) var<storage, read_write> OFFSET: array<atomic<u32>>;
 @group(0) @binding(3) var<storage> COUNT: u32;
 
-@group(1) @binding(1) var<storage, read_write> VALUES: array<u32>;
+@group(1) @binding(0) var<storage, read_write> KEYS: array<u32>;
 
 var<workgroup> HISTOGRAM_WORKGROUP: array<atomic<u32>, 1024>;
 
@@ -31,12 +31,12 @@ fn main(
             let index = subgroup_offset + i * CHUNK_SIZE + subgroup_index;
             if (index >= COUNT) { continue; }
 
-            let value = VALUES[index];
+            let key = KEYS[index];
 
-            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(value,  0) + 0 * RADIX], 1u);
-            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(value,  8) + 1 * RADIX], 1u);
-            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(value, 16) + 2 * RADIX], 1u);
-            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(value, 24) + 3 * RADIX], 1u);
+            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(key,  0) + 0 * RADIX], 1u);
+            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(key,  8) + 1 * RADIX], 1u);
+            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(key, 16) + 2 * RADIX], 1u);
+            atomicAdd(&HISTOGRAM_WORKGROUP[extract_byte(key, 24) + 3 * RADIX], 1u);
         }
     }
 

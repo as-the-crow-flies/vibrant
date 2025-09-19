@@ -5,10 +5,16 @@
 @group(0) @binding(6) var<storage> LINE_OFFSET: array<u32>;
 
 @group(1) @binding(0) var<storage, read_write> KEY: array<u32>;
-@group(1) @binding(1) var<storage, read_write> VALUE: array<u32>;
+@group(1) @binding(1) var<storage, read_write> VALUE: array<vec2<u32>>;
 @group(1) @binding(2) var<storage, read_write> COUNT: atomic<u32>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+
+struct Intersection {
+    position: vec3<f32>,
+    voxel: vec3<u32>,
+    axis: u32,
+}
 
 @compute
 @workgroup_size(1024)
@@ -24,8 +30,7 @@ fn main(@builtin(global_invocation_id) global: vec3<u32>) {
     let line_start = LINE_OFFSET[line_index];
     let line_end = line_start + line_length;
 
-    var last_axis = 0u;
-    var last_position = vec3<f32>(-1.0);
+    var intersections = array<Intersection, 3>();
 
     for (var i = line_start; i < line_end; i++) {
         let index = LINE_INDEX[i];
@@ -33,11 +38,27 @@ fn main(@builtin(global_invocation_id) global: vec3<u32>) {
         let v0 = (LINE_VERTEX[index + 0].xyz + 0.5) * scale;
         let v1 = (LINE_VERTEX[index + 1].xyz + 0.5) * scale;
 
-        quantize(v0, v1, &last_position, &last_axis);
+        quantize(v0, v1, &intersections);
     }
+
+    // Quantize final segment
+    let v1 = intersections[1];
+    let v2 = intersections[2];
+
+    let clip_1 = normalize(v2.position - intersections[0].position);
+    let clip_2 = vec3<f32>(0.0);
+
+    let index = atomicAdd(&COUNT, 1u);
+
+    KEY[index] = morton_encode(v2.voxel);
+    VALUE[index] = vec2<u32>(
+        encode_segment_vertex(v2.voxel, v1.position, v1.axis, clip_1),
+        encode_segment_vertex(v2.voxel, v2.position, v2.axis, clip_2)
+    );
 }
 
-fn quantize(v0: vec3<f32>, v1: vec3<f32>, last_position: ptr<function, vec3<f32>>, last_axis: ptr<function, u32>) {
+fn quantize(v0: vec3<f32>, v1: vec3<f32>, intersections: ptr<function, array<Intersection, 3>>) {
+
     let scale = 1.0 / f32(ENVIRONMENT.volume);
 
     let delta = v1 - v0;
@@ -70,14 +91,27 @@ fn quantize(v0: vec3<f32>, v1: vec3<f32>, last_position: ptr<function, vec3<f32>
         position += direction * increment;
 
         if (t > 0.0 && t < distance) {
-            if (last_position.x >= 0.0) {
+            if (intersections[1].position.x != 0.0) {
+                let v1 = intersections[1];
+                let v2 = intersections[2];
+
+                let clip_1 = select(
+                    normalize(v2.position - intersections[0].position),
+                    vec3<f32>(0.0),
+                    intersections[0].position.x == 0.0);
+                let clip_2 = normalize(position - v1.position);
+
                 let index = atomicAdd(&COUNT, 1u);
-                KEY[index] = encode_segment(voxel, *last_position, *last_axis, position, axis);
-                VALUE[index] = morton_encode(voxel);
+                KEY[index] = morton_encode(v2.voxel);
+                VALUE[index] = vec2<u32>(
+                    encode_segment_vertex(v2.voxel, v1.position, v1.axis, clip_1),
+                    encode_segment_vertex(v2.voxel, v2.position, v2.axis, clip_2)
+                );
             }
 
-            *last_position = position;
-            *last_axis = axis;
+            intersections[0] = intersections[1];
+            intersections[1] = intersections[2];
+            intersections[2] = Intersection(position, voxel, axis);
         }
 
         // Increment Voxel

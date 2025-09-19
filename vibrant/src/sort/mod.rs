@@ -34,7 +34,7 @@ pub struct SortPipeline {
 }
 
 impl SortPipeline {
-    pub fn new(gpu: &Gpu) -> Self {
+    pub fn new(gpu: &Gpu, value_type: &str) -> Self {
         let histogram = gpu.device().create_buffer(&BufferDescriptor {
             label: Some(type_name::<Self>()),
             size: 1024 * 4,
@@ -86,6 +86,9 @@ impl SortPipeline {
             ],
         });
 
+        let common = include_str!("common.wgsl").to_string()
+            + &format!("\nalias VALUE_TYPE = {};\n", value_type);
+
         Self {
             histogram,
             status,
@@ -99,17 +102,12 @@ impl SortPipeline {
             histogram_count: gpu.compute(
                 "Sort::Histogram::Count",
                 &gpu.pipeline_layout(&[&Self::layout(gpu), &KeyValuePair::layout(gpu)]),
-                &gpu.shader(
-                    &(include_str!("common.wgsl").to_string()
-                        + include_str!("histogram_count.wgsl")),
-                ),
+                &gpu.shader(&(common.clone() + include_str!("histogram_count.wgsl"))),
             ),
             histogram_sum: gpu.compute(
                 "Sort::Histogram::Sum",
                 &gpu.pipeline_layout(&[&Self::layout(gpu)]),
-                &gpu.shader(
-                    &(include_str!("common.wgsl").to_string() + include_str!("histogram_sum.wgsl")),
-                ),
+                &gpu.shader(&(common.clone() + include_str!("histogram_sum.wgsl"))),
             ),
             scan: gpu.compute(
                 "Sort::Scan",
@@ -119,7 +117,7 @@ impl SortPipeline {
                     &KeyValuePair::layout(gpu),
                     &KeyValuePair::layout(gpu),
                 ]),
-                &gpu.shader(&(include_str!("common.wgsl").to_string() + include_str!("scan.wgsl"))),
+                &gpu.shader(&(common.clone() + include_str!("scan.wgsl"))),
             ),
         }
     }
@@ -496,11 +494,11 @@ pub mod test {
 
         let n = 1024 * 1024;
 
-        let keys: Vec<u32> = (0..n).collect();
-        let values: Vec<u32> = (0..n).map(|_| quick_random(&mut seed)).collect();
+        let keys: Vec<u32> = (0..n).map(|_| quick_random(&mut seed)).collect();
+        let values: Vec<u32> = (0..n).collect();
 
-        let expected_values: Vec<u32> = values.iter().copied().sorted().collect();
-        let expected_keys: Vec<u32> = values
+        let expected_keys: Vec<u32> = keys.iter().copied().sorted().collect();
+        let expected_values: Vec<u32> = keys
             .iter()
             .copied()
             .enumerate()
@@ -519,7 +517,7 @@ pub mod test {
 
         gpu.queue().submit([]);
 
-        let sort = SortPipeline::new(gpu);
+        let sort = SortPipeline::new(gpu, "u32");
 
         let mut cmd = gpu.cmd();
 

@@ -62,7 +62,7 @@ impl LineOccupancyAltPipeline {
                 voxelize_layout,
                 &gpu.shader(&(BOX.to_owned() + voxelize_shader_source)),
             ),
-            sort: SortPipeline::new(gpu),
+            sort: SortPipeline::new(gpu, "u32"),
             scan: gpu.compute(
                 "OccupancyAlt::Scan",
                 &gpu.pipeline_layout(&[&KeyValuePair::layout(gpu), &VrcBuffer::layout(gpu)]),
