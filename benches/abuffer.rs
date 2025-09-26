@@ -126,13 +126,6 @@ pub fn abuffer_benchmark_alt(
             })
         },
     );
-
-    // let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
-
-    // println!(
-    //     "abuffer - alt - {:?} - {:?} - {:?}: {:?}",
-    //     set, volume, voxelization, fragment_count[0]
-    // )
 }
 
 pub fn abuffer_benchmark_vrc(
@@ -167,20 +160,9 @@ pub fn abuffer_benchmark_vrc(
             })
         },
     );
-
-    // let fragment_count: Vec<u32> = gpu.read_buffer(line.vrc().ping().count()).block_on();
-
-    // println!(
-    //     "abuffer - vrc - {:?} - {:?}: {:?}",
-    //     set, volume, fragment_count[0]
-    // )
 }
 
 pub fn abuffer_experiment(criterion: &mut Criterion) {
-    if true {
-        return;
-    }
-
     let gpu = &Gpu::new().block_on();
 
     for set in BenchmarkLineSet::iter() {
@@ -188,7 +170,7 @@ pub fn abuffer_experiment(criterion: &mut Criterion) {
 
         let line = &load_line(gpu, set);
 
-        for volume in [128, 256] {
+        for volume in [128] {
             abuffer_benchmark_vrc(criterion, gpu, set, line, volume);
             abuffer_benchmark_alt(
                 criterion,
@@ -198,15 +180,15 @@ pub fn abuffer_experiment(criterion: &mut Criterion) {
                 volume,
                 LineVoxelizationMode::Tube,
             );
-            // abuffer_benchmark_ours(
-            //     criterion,
-            //     gpu,
-            //     set,
-            //     line,
-            //     volume,
-            //     LineVoxelizationMode::Tube,
-            //     false,
-            // );
+            abuffer_benchmark_ours(
+                criterion,
+                gpu,
+                set,
+                line,
+                volume,
+                LineVoxelizationMode::Tube,
+                false,
+            );
             abuffer_benchmark_ours(
                 criterion,
                 gpu,

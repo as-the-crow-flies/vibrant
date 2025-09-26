@@ -101,6 +101,7 @@ fn visit_neighborhood(
     return COLOR.a > 0.95;
 }
 
+var<private> LAST_LAST_BITMASK: u32;
 var<private> LAST_BITMASK: u32;
 
 fn visit_no_neighborhood(
@@ -127,6 +128,7 @@ fn visit_no_neighborhood(
     var hits = array<u32, INSERTION_SORT_SIZE>();
     var hit_count = 0u;
 
+    let last_bitmask = LAST_BITMASK | LAST_LAST_BITMASK;
     var bitmask = 0u;
 
     for (var i = 0u; i < count; i++) {
@@ -138,7 +140,7 @@ fn visit_no_neighborhood(
         let line_bit = 1u << (VERTICES[index][2] & 31);
 
         // Skip degenerate segments & lines we've already processed
-        if (all(v0.xyz == v1.xyz) || (LAST_BITMASK & line_bit) != 0u) { continue; }
+        if (all(v0.xyz == v1.xyz) || (last_bitmask & line_bit) != 0u) { continue; }
 
         let hit = capsule_intersection(origin, direction, v0.xyz, v1.xyz, RADIUS);
         let hit_position = origin + hit * direction;
@@ -154,6 +156,7 @@ fn visit_no_neighborhood(
         hit_count++;
     }
 
+    LAST_LAST_BITMASK = LAST_BITMASK;
     LAST_BITMASK = bitmask;
 
     let hit_count_clamped = min(hit_count, INSERTION_SORT_SIZE);

@@ -77,33 +77,6 @@ pub fn occupancy_benchmark(
             gpu.wait();
         })
     });
-
-    // let fragment_counts: Vec<u32> = gpu
-    //     .read_buffer(frame.occupancy().occupancy_count_buffer())
-    //     .block_on();
-
-    // let total_fragment_count: u32 = fragment_counts
-    //     .iter()
-    //     .map(|&count| count & u16::MAX as u32)
-    //     .sum();
-
-    // let vertices: Vec<Vec4> = gpu.read_buffer(line.vertices()).block_on();
-    // let indices: Vec<u32> = gpu.read_buffer(line.indices()).block_on();
-
-    // let total_length: f32 = indices
-    //     .iter()
-    //     .map(|&i| (vertices[(i + 1) as usize].xyz() - vertices[i as usize].xyz()).length())
-    //     .sum();
-
-    // let segment_length = total_length / (indices.len() as f32) * (settings.volume as f32);
-
-    // println!(
-    //     "{} - {} - {} - {}",
-    //     id,
-    //     indices.len(),
-    //     total_fragment_count,
-    //     segment_length
-    // );
 }
 
 pub fn occupancy_experiment(criterion: &mut Criterion) {
