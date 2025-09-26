@@ -125,6 +125,7 @@ impl SortPipeline {
     pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
+        n_workgroups: u32,
         ping: &BindGroup,
         pong: &BindGroup,
         count: &Buffer,
@@ -138,8 +139,6 @@ impl SortPipeline {
             label: Some(type_name::<Self>()),
             ..Default::default()
         });
-
-        let n_workgroups = 18;
 
         pass.set_pipeline(&self.histogram_count);
         pass.set_bind_group(0, &self.binding, &[]);
@@ -523,6 +522,7 @@ pub mod test {
 
         sort.dispatch(
             &mut cmd,
+            18,
             ping.binding(),
             pong.binding(),
             ping.count(),

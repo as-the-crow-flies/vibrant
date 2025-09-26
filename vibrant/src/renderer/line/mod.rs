@@ -58,10 +58,12 @@ impl LineRenderer {
         self.transform.dispatch(cmd, environment, line);
 
         match settings.render {
-            LineRenderMode::RayTracingQuantized => self.vrc.dispatch(cmd, frame, environment, line),
+            LineRenderMode::RayTracingQuantized => {
+                self.vrc.dispatch(cmd, frame, environment, settings, line)
+            }
             _ => self
                 .occupancy
-                .dispatch(cmd, frame, environment, settings.voxelization, line),
+                .dispatch(cmd, frame, environment, settings, line),
         }
 
         self.culling.dispatch(cmd, frame, environment);

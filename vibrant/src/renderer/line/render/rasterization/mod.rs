@@ -41,7 +41,7 @@ impl LineRasterizationPipeline {
         line: &LineSet,
         settings: &Settings,
     ) {
-        self.sort.dispatch(cmd, environment, line);
+        self.sort.dispatch(cmd, environment, settings, line);
 
         if settings.alpha == 1.0 {
             self.opaque.render(cmd, frame, environment, line, settings);

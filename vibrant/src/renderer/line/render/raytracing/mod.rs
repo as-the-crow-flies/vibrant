@@ -59,7 +59,7 @@ impl RayTracingLineRenderPipeline {
         line: &LineSet,
     ) {
         self.populate
-            .dispatch(cmd, frame, environment, settings.voxelization, line);
+            .dispatch(cmd, frame, environment, settings, line);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             color_attachments: &[Some(frame.color().attachment_srgb_clear())],

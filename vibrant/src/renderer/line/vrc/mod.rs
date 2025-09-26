@@ -7,6 +7,7 @@ use crate::{
         line::LineSet,
         texture::{MipTexture3D, R32Float},
     },
+    controller::settings::Settings,
     gpu::Gpu,
     renderer::environment::Environment,
     sort::{KeyValuePair, SortPipeline, SortPipelineRadix},
@@ -71,18 +72,20 @@ impl VrcLineVoxelizationPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
+        settings: &Settings,
         line: &LineSet,
     ) {
         self.clear(cmd, frame);
         self.quantize(cmd, environment, line);
         self.sort.dispatch(
             cmd,
+            settings.workgroups,
             line.vrc().ping().binding(),
             line.vrc().pong().binding(),
             line.vrc().ping().count(),
             SortPipelineRadix::R32,
         );
-        self.scan(cmd, frame, line);
+        self.scan(cmd, frame, settings, line);
         self.occupancy(cmd, frame, environment, line);
     }
 
@@ -115,7 +118,7 @@ impl VrcLineVoxelizationPipeline {
         pass.dispatch_workgroups(line.len().div_ceil(1024), 1, 1);
     }
 
-    fn scan(&self, cmd: &mut CommandEncoder, frame: &Frame, line: &LineSet) {
+    fn scan(&self, cmd: &mut CommandEncoder, frame: &Frame, settings: &Settings, line: &LineSet) {
         line.vrc().ping().clear_offset(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -126,7 +129,7 @@ impl VrcLineVoxelizationPipeline {
         pass.set_pipeline(&self.scan);
         pass.set_bind_group(0, line.vrc().ping().binding(), &[]);
         pass.set_bind_group(1, frame.vrc().binding(), &[]);
-        pass.dispatch_workgroups(18, 1, 1);
+        pass.dispatch_workgroups(settings.workgroups, 1, 1);
     }
 
     fn occupancy(

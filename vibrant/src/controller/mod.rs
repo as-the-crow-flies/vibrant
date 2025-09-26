@@ -176,10 +176,10 @@ impl Controller {
             ui.add(Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"));
             ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Ambient/Shadow"));
             ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
-            ui.add(Slider::new(&mut self.settings.shadows, 0.0..=1.0).text("Shadows"));
             ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
             ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
-            ui.add(Slider::new(&mut self.settings.slice_count, 1..=64).text("Slices"));
+            ui.add(Slider::new(&mut self.settings.slice_count, 1..=64).text("Culling Slices"));
+            ui.add(Slider::new(&mut self.settings.workgroups, 1..=64).text("# Workgroups"));
 
             ui.checkbox(&mut self.settings.culling, "Enable Culling");
         });

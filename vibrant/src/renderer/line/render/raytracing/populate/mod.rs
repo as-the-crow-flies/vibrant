@@ -5,7 +5,7 @@ use crate::{
         line::LineSet,
         texture::{MipTexture3D, R32Float, R32Uint},
     },
-    controller::settings::LineVoxelizationMode,
+    controller::settings::{LineVoxelizationMode, Settings},
     gpu::Gpu,
     renderer::{environment::Environment, wgsl},
     surface::{culling::CullingBuffer, Frame},
@@ -63,7 +63,7 @@ impl LinePopulatePipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        setting: LineVoxelizationMode,
+        settings: &Settings,
         line: &LineSet,
     ) {
         frame.culling().clear(cmd);
@@ -83,7 +83,7 @@ impl LinePopulatePipeline {
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
-        pass.set_pipeline(match setting {
+        pass.set_pipeline(match settings.voxelization {
             LineVoxelizationMode::Line => &self.populate_line,
             LineVoxelizationMode::Box => &self.populate_box,
             LineVoxelizationMode::Tube => &self.populate_tube,
@@ -93,6 +93,6 @@ impl LinePopulatePipeline {
         pass.set_bind_group(1, frame.culling().pyramid().binding(), &[]);
         pass.set_bind_group(2, line.binding(true), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
-        pass.dispatch_workgroups(18, 1, 1);
+        pass.dispatch_workgroups(settings.workgroups, 1, 1);
     }
 }

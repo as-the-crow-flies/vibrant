@@ -7,7 +7,7 @@ use crate::{
         line::LineSet,
         texture::{MipTexture3D, R32Float},
     },
-    controller::settings::LineVoxelizationMode,
+    controller::settings::{LineVoxelizationMode, Settings},
     gpu::Gpu,
     renderer::{
         environment::Environment,
@@ -93,19 +93,20 @@ impl LineOccupancyAltPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        setting: LineVoxelizationMode,
+        settings: &Settings,
         line: &LineSet,
     ) {
         self.clear(cmd, frame);
-        self.voxelize(cmd, environment, setting, line);
+        self.voxelize(cmd, environment, settings, line);
         self.sort.dispatch(
             cmd,
+            settings.workgroups,
             line.vrc().ping().binding(),
             line.vrc().pong().binding(),
             line.vrc().ping().count(),
             SortPipelineRadix::R32,
         );
-        self.scan(cmd, frame, line);
+        self.scan(cmd, frame, settings, line);
         self.occupancy(cmd, frame, environment, line);
     }
 
@@ -113,7 +114,7 @@ impl LineOccupancyAltPipeline {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        setting: LineVoxelizationMode,
+        settings: &Settings,
         line: &LineSet,
     ) {
         line.clear_count(cmd);
@@ -128,12 +129,12 @@ impl LineOccupancyAltPipeline {
         pass.set_bind_group(1, line.vrc().ping().binding(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
 
-        pass.set_pipeline(match setting {
+        pass.set_pipeline(match settings.voxelization {
             LineVoxelizationMode::Line => &self.voxelize_line,
             LineVoxelizationMode::Box => &self.voxelize_box,
             LineVoxelizationMode::Tube => &self.voxelize_tube,
         });
-        pass.dispatch_workgroups(18, 1, 1);
+        pass.dispatch_workgroups(settings.workgroups, 1, 1);
     }
 
     fn clear(&self, cmd: &mut CommandEncoder, frame: &Frame) {
@@ -150,7 +151,7 @@ impl LineOccupancyAltPipeline {
         pass.dispatch_workgroups(n, n, n);
     }
 
-    fn scan(&self, cmd: &mut CommandEncoder, frame: &Frame, line: &LineSet) {
+    fn scan(&self, cmd: &mut CommandEncoder, frame: &Frame, settings: &Settings, line: &LineSet) {
         line.vrc().ping().clear_offset(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -161,7 +162,7 @@ impl LineOccupancyAltPipeline {
         pass.set_pipeline(&self.scan);
         pass.set_bind_group(0, line.vrc().ping().binding(), &[]);
         pass.set_bind_group(1, frame.vrc().binding(), &[]);
-        pass.dispatch_workgroups(18, 1, 1);
+        pass.dispatch_workgroups(settings.workgroups, 1, 1);
     }
 
     fn occupancy(

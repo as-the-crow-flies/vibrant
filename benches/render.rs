@@ -31,6 +31,8 @@ fn get_settings(
         height: 1080,
         volume: 128,
         radius: 0.2,
+        workgroups: 18,
+
         lighting: 1.0,
         direct_light: 0.67,
         tangent_color: 1.0,

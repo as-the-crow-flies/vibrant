@@ -25,6 +25,7 @@ pub fn get_settings(volume: u32, voxelization: LineVoxelizationMode) -> Settings
         radius: 0.2,
         alpha: 1.0,
         smoothing: 0.5,
+        workgroups: 18,
 
         // Remaining Settings
         width: 1920,
@@ -71,7 +72,7 @@ pub fn occupancy_benchmark(
         bencher.iter(|| {
             let mut cmd = gpu.cmd();
 
-            pipeline.dispatch(&mut cmd, frame, environment, voxelization, line);
+            pipeline.dispatch(&mut cmd, frame, environment, &settings, line);
 
             gpu.submit(cmd);
             gpu.wait();

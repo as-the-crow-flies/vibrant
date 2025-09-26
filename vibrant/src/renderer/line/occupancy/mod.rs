@@ -5,7 +5,7 @@ use crate::{
         line::LineSet,
         texture::{MipTexture3D, R32Float, R32Uint},
     },
-    controller::settings::LineVoxelizationMode,
+    controller::settings::{LineVoxelizationMode, Settings},
     gpu::Gpu,
     renderer::{environment::Environment, wgsl},
     surface::{occupancy::OccupancyBuffer, Frame},
@@ -68,7 +68,7 @@ impl LineOccupancyPipeline {
         cmd: &mut CommandEncoder,
         frame: &Frame,
         environment: &Environment,
-        setting: LineVoxelizationMode,
+        settings: &Settings,
         line: &LineSet,
     ) {
         frame.occupancy().clear(cmd);
@@ -85,12 +85,12 @@ impl LineOccupancyPipeline {
         pass.set_bind_group(1, line.binding(true), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
 
-        pass.set_pipeline(match setting {
+        pass.set_pipeline(match settings.voxelization {
             LineVoxelizationMode::Line => &self.voxelize_line,
             LineVoxelizationMode::Box => &self.voxelize_box,
             LineVoxelizationMode::Tube => &self.voxelize_tube,
         });
-        pass.dispatch_workgroups(18, 1, 1);
+        pass.dispatch_workgroups(settings.workgroups, 1, 1);
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);

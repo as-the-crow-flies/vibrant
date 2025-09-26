@@ -32,6 +32,7 @@ pub fn get_settings(volume: u32, voxelization: LineVoxelizationMode, culling: bo
         radius: 0.75,
         alpha: 1.0,
         smoothing: 0.5,
+        workgroups: 18,
 
         // Remaining Settings
         width: 1920,
@@ -79,9 +80,9 @@ pub fn abuffer_benchmark_ours(
             bencher.iter(|| {
                 let mut cmd = gpu.cmd();
 
-                occupancy.dispatch(&mut cmd, frame, environment, settings.voxelization, line);
+                occupancy.dispatch(&mut cmd, frame, environment, &settings, line);
                 cull.dispatch(&mut cmd, frame, environment);
-                populate.dispatch(&mut cmd, frame, environment, settings.voxelization, line);
+                populate.dispatch(&mut cmd, frame, environment, &settings, line);
 
                 gpu.submit(cmd);
                 gpu.wait();
@@ -119,7 +120,7 @@ pub fn abuffer_benchmark_alt(
             bencher.iter(|| {
                 let mut cmd = gpu.cmd();
 
-                occpancy_alt.dispatch(&mut cmd, frame, environment, settings.voxelization, line);
+                occpancy_alt.dispatch(&mut cmd, frame, environment, &settings, line);
 
                 gpu.submit(cmd);
                 gpu.wait();
@@ -153,7 +154,7 @@ pub fn abuffer_benchmark_vrc(
             bencher.iter(|| {
                 let mut cmd = gpu.cmd();
 
-                vrc.dispatch(&mut cmd, frame, environment, line);
+                vrc.dispatch(&mut cmd, frame, environment, &settings, line);
 
                 gpu.submit(cmd);
                 gpu.wait();
