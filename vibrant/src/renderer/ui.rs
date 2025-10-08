@@ -1,5 +1,6 @@
 use std::any::type_name;
 
+use egui_wgpu::RendererOptions;
 use wgpu::{CommandEncoder, RenderPassDescriptor};
 
 use crate::{
@@ -14,7 +15,15 @@ pub struct UiRenderer {
 impl UiRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            egui: egui_wgpu::Renderer::new(gpu.device(), ColorBuffer::FORMAT, None, 1, false),
+            egui: egui_wgpu::Renderer::new(
+                gpu.device(),
+                ColorBuffer::FORMAT,
+                RendererOptions {
+                    msaa_samples: 1,
+                    depth_stencil_format: None,
+                    dithering: false,
+                },
+            ),
         }
     }
 

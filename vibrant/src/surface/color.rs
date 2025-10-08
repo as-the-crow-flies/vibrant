@@ -123,9 +123,10 @@ impl ColorBuffer {
         }
     }
 
-    pub fn attachment(&self) -> RenderPassColorAttachment {
+    pub fn attachment<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view,
+            depth_slice: None,
             resolve_target: None,
             ops: Operations {
                 load: LoadOp::Load,
@@ -134,20 +135,22 @@ impl ColorBuffer {
         }
     }
 
-    pub fn attachment_clear(&self) -> RenderPassColorAttachment {
+    pub fn attachment_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view,
+            depth_slice: None,
             resolve_target: None,
             ops: Operations {
-                load: LoadOp::Clear(Color::BLACK),
+                load: LoadOp::Clear(Color::TRANSPARENT),
                 store: StoreOp::Store,
             },
         }
     }
 
-    pub fn attachment_srgb(&self) -> RenderPassColorAttachment {
+    pub fn attachment_srgb<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view_srgb,
+            depth_slice: None,
             resolve_target: None,
             ops: Operations {
                 load: LoadOp::Load,
@@ -156,12 +159,13 @@ impl ColorBuffer {
         }
     }
 
-    pub fn attachment_srgb_clear(&self) -> RenderPassColorAttachment {
+    pub fn attachment_srgb_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view_srgb,
+            depth_slice: None,
             resolve_target: None,
             ops: Operations {
-                load: LoadOp::Clear(Color::BLACK),
+                load: LoadOp::Clear(Color::TRANSPARENT),
                 store: StoreOp::Store,
             },
         }

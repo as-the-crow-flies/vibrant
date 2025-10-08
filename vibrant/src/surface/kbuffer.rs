@@ -107,9 +107,10 @@ impl KBuffer {
         &self.resolve
     }
 
-    pub fn attachment(&self) -> RenderPassColorAttachment {
+    pub fn attachment<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.resolve_view,
+            depth_slice: None,
             resolve_target: None,
             ops: Operations {
                 load: LoadOp::Load,
@@ -118,9 +119,10 @@ impl KBuffer {
         }
     }
 
-    pub fn attachment_clear(&self) -> RenderPassColorAttachment {
+    pub fn attachment_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.resolve_view,
+            depth_slice: None,
             resolve_target: None,
             ops: Operations {
                 load: LoadOp::Clear(Color::TRANSPARENT),

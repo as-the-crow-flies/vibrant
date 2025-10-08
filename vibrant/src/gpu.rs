@@ -6,7 +6,7 @@ use itertools::Itertools;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
     CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Extent3d, Features,
-    FragmentState, Limits, MapMode, Origin3d, PipelineLayout, PipelineLayoutDescriptor,
+    FragmentState, Limits, MapMode, Origin3d, PipelineLayout, PipelineLayoutDescriptor, PollType,
     PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
     RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo,
     TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
@@ -164,7 +164,12 @@ impl Gpu {
     }
 
     pub fn wait(&self) -> bool {
-        self.device.poll(wgpu::MaintainBase::Wait).is_ok()
+        self.device
+            .poll(PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            })
+            .is_ok()
     }
 
     pub async fn read_buffer<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
@@ -190,7 +195,7 @@ impl Gpu {
             let _ = sender.send(x);
         });
 
-        let _ = self.device.poll(wgpu::MaintainBase::Wait).is_ok();
+        self.wait();
 
         receiver
             .await

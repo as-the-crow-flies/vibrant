@@ -226,7 +226,7 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
         &self.bindings_mipmap
     }
 
-    pub fn binding_entries(&self, offset: u32) -> Vec<BindGroupEntry> {
+    pub fn binding_entries<'a>(&'a self, offset: u32) -> Vec<BindGroupEntry<'a>> {
         vec![
             BindGroupEntry {
                 binding: offset + 0,

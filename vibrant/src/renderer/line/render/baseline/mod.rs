@@ -99,6 +99,7 @@ impl LineBaselineRasterizationPipeline {
             label: Some("Rasterization"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: frame.visibility().index_view(),
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Load,
