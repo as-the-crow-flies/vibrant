@@ -56,19 +56,17 @@ impl App {
             }
             WindowEvent::Resized(size) => self.controller.resize(size),
             WindowEvent::RedrawRequested => {
+                self.fps.tick();
+
                 let input = egui.take_egui_input(window);
                 let output = egui
                     .egui_ctx()
                     .run(input, |ctx| self.controller.ui(ctx, self.fps.seconds()));
                 egui.handle_platform_output(&window, output.platform_output.clone());
 
-                self.fps.start();
                 renderer.render(&self.gpu, &self.controller, egui.egui_ctx(), output);
-                self.fps.stop();
 
-                // if self.focused {
                 self.request_redraw();
-                // }
             }
             _ => (),
         }
@@ -225,6 +223,8 @@ fn keycode(code: KeyCode) -> Option<Key> {
     match code {
         KeyCode::ShiftLeft => Some(Key::Shift),
         KeyCode::ShiftRight => Some(Key::Shift),
+        KeyCode::Backspace => Some(Key::Backspace),
+        KeyCode::NumpadBackspace => Some(Key::Backspace),
         _ => None,
     }
 }
@@ -246,30 +246,31 @@ pub async fn run() {
 }
 
 pub struct Fps<const N: usize> {
-    buffer: [f32; N],
+    buffer: [Instant; N],
     index: usize,
-    instant: Instant,
 }
 
 impl<const N: usize> Fps<N> {
     pub fn new() -> Self {
         Self {
-            buffer: [0.0; N],
+            buffer: [Instant::now(); N],
             index: 0,
-            instant: Instant::now(),
         }
     }
 
-    pub fn start(&mut self) {
-        self.instant = Instant::now();
-    }
-
-    pub fn stop(&mut self) {
-        self.buffer[self.index] = (Instant::now() - self.instant).as_secs_f32();
+    pub fn tick(&mut self) {
+        self.buffer[self.index] = Instant::now();
         self.index = (self.index + 1) % N;
     }
 
     pub fn seconds(&self) -> f32 {
-        self.buffer.iter().fold(0.0, |acc, x| acc + x) / N as f32
+        let instants: Vec<Instant> = (1..=N).map(|i| self.buffer[(self.index + i) % N]).collect();
+
+        let total: f32 = instants
+            .windows(2)
+            .map(|window| (window[1] - window[0]).as_secs_f32())
+            .sum();
+
+        total / N as f32
     }
 }

@@ -17,15 +17,6 @@ impl LineVoxelizationMode {
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
-pub enum LineRenderMode {
-    #[default]
-    RayTracing,
-    RayTracingQuantized,
-    Rasterization,
-    RasterizationOrderCorrecting,
-}
-
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineDisplayMode {
     #[default]
     Geometry,
@@ -48,7 +39,6 @@ pub struct Settings {
     pub culling: bool,
     pub slice_count: u32,
     pub workgroups: u32,
-    pub render: LineRenderMode,
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
 }
@@ -59,7 +49,7 @@ impl Settings {
             width: 1920,
             height: 1080,
             volume: 128,
-            radius: 0.2,
+            radius: 0.15,
             lighting: 1.0,
             direct_light: 0.67,
             tangent_color: 1.0,
@@ -69,8 +59,7 @@ impl Settings {
             smoothing: 0.5,
             culling: true,
             slice_count: 10,
-            workgroups: 18,
-            render: LineRenderMode::RayTracing,
+            workgroups: 64,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }

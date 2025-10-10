@@ -8,6 +8,7 @@ pub enum MouseButton {
 
 pub enum Key {
     Shift,
+    Backspace,
 }
 
 pub enum Event {

@@ -6,10 +6,10 @@ pub mod settings;
 pub mod state;
 
 use camera::Camera;
-use egui::{ComboBox, FontId, Layout, RichText, Slider};
+use egui::{Color32, ComboBox, FontId, Frame, Layout, Margin, RichText, Slider};
 use event::Event;
 use light::Light;
-use settings::{LineRenderMode, Settings};
+use settings::Settings;
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
@@ -70,15 +70,28 @@ impl Controller {
     pub fn ui(&mut self, ctx: &egui::Context, dt: f32) {
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("⚙ settings").clicked() {
+                if ui
+                    .button("⚙ settings")
+                    .on_hover_text("Open settings panel")
+                    .clicked()
+                {
                     self.show_side_panel = !self.show_side_panel;
                 }
 
-                if ui.button("📂 open").clicked() {
+                if ui
+                    .button("📂 open")
+                    .on_hover_text("Open .tck/.obj files")
+                    .clicked()
+                {
                     File::load();
                 }
 
-                if ui.button("📷 screenshot").clicked() {
+                #[cfg(not(target_arch = "wasm32"))]
+                if ui
+                    .button("📷 screenshot")
+                    .on_hover_text("Take screenshot with transparent background")
+                    .clicked()
+                {
                     File::save();
                 }
 
@@ -92,96 +105,132 @@ impl Controller {
         });
 
         egui::SidePanel::left("SidePanel").show_animated(ctx, self.show_side_panel, |ui| {
-            ComboBox::from_label("Render Mode")
-                .selected_text(format!("{:?}", self.settings.render))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.settings.render,
-                        LineRenderMode::RayTracing,
-                        "RayTracing",
+            egui::TopBottomPanel::top("top_panel")
+                .frame(Frame {
+                    outer_margin: Margin {
+                        left: 5,
+                        right: 5,
+                        top: 5,
+                        bottom: 10,
+                    },
+                    inner_margin: Margin::ZERO,
+                    ..Default::default()
+                })
+                .show_inside(ui, |ui| {
+                    ui.heading("Rendering");
+                    ui.separator();
+
+                    ComboBox::from_label("Display Mode")
+                        .selected_text(format!("{:?}", self.settings.display))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.settings.display,
+                                LineDisplayMode::Geometry,
+                                "Geometry",
+                            );
+                            ui.selectable_value(
+                                &mut self.settings.display,
+                                LineDisplayMode::Volume,
+                                "Volume",
+                            );
+                        });
+
+                    ComboBox::from_label("Voxelization Mode")
+                        .selected_text(format!("{:?}", self.settings.voxelization))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.settings.voxelization,
+                                LineVoxelizationMode::Tube,
+                                "Tube",
+                            );
+                            ui.selectable_value(
+                                &mut self.settings.voxelization,
+                                LineVoxelizationMode::Box,
+                                "Box",
+                            );
+                            ui.selectable_value(
+                                &mut self.settings.voxelization,
+                                LineVoxelizationMode::Line,
+                                "Line",
+                            );
+                        });
+
+                    ComboBox::from_label("Voxel Resolution")
+                        .selected_text(format!("{:?}", self.settings.volume))
+                        .show_ui(ui, |ui| {
+                            for power in 5u32..10 {
+                                ui.selectable_value(
+                                    &mut self.settings.volume,
+                                    2u32.pow(power),
+                                    format!("{}", 2u32.pow(power)),
+                                );
+                            }
+                        });
+
+                    ui.separator();
+                    ui.label("Appearance");
+                    ui.separator();
+
+                    ui.add(
+                        Slider::new(&mut self.settings.radius, 0.01..=1.0)
+                            .text("Streamline Radius"),
                     );
-                    ui.selectable_value(
-                        &mut self.settings.render,
-                        LineRenderMode::RayTracingQuantized,
-                        "RayTracingQuantized",
+                    ui.add(Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"));
+                    ui.add(
+                        Slider::new(&mut self.settings.direct_light, 0.0..=1.0)
+                            .text("Ambient/Shadow"),
                     );
-                    ui.selectable_value(
-                        &mut self.settings.render,
-                        LineRenderMode::RasterizationOrderCorrecting,
-                        "RasterizationOrderCorrecting",
+                    ui.add(
+                        Slider::new(&mut self.settings.tangent_color, 0.0..=1.0)
+                            .text("Tangent Color"),
                     );
-                    ui.selectable_value(
-                        &mut self.settings.render,
-                        LineRenderMode::Rasterization,
-                        "Rasterization",
+                    ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
+                    ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
+                    ui.add(
+                        Slider::new(&mut self.settings.workgroups, 1..=128).text("# Workgroups"),
                     );
                 });
 
-            ComboBox::from_label("Display Mode")
-                .selected_text(format!("{:?}", self.settings.display))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.settings.display,
-                        LineDisplayMode::Geometry,
-                        "Geometry",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.display,
-                        LineDisplayMode::Volume,
-                        "Volume",
-                    );
+            egui::TopBottomPanel::bottom("bottom_panel")
+                .frame(Frame {
+                    outer_margin: Margin {
+                        left: 5,
+                        right: 5,
+                        top: 5,
+                        bottom: 10,
+                    },
+                    inner_margin: Margin::ZERO,
+                    ..Default::default()
+                })
+                .show_inside(ui, |ui| {
+                    ui.heading("Controls");
+                    ui.separator();
+
+                    egui::Grid::new("my_grid")
+                        .min_col_width(100.0)
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.label("Rotate Camera");
+                            ui.label("Left Mouse Button");
+                            ui.end_row();
+
+                            ui.label("Pan Camera");
+                            ui.label("Right Mouse Button");
+                            ui.end_row();
+
+                            ui.label("Zoom Camera");
+                            ui.label("Mouse Wheel");
+                            ui.end_row();
+
+                            ui.label("Reset Camera");
+                            ui.label("Backspace");
+                            ui.end_row();
+
+                            ui.label("Rotate Light");
+                            ui.label("Shift + Left Mouse Button");
+                            ui.end_row();
+                        });
                 });
-
-            ComboBox::from_label("Voxelization Mode")
-                .selected_text(format!("{:?}", self.settings.voxelization))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.settings.voxelization,
-                        LineVoxelizationMode::Tube,
-                        "Tube",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.voxelization,
-                        LineVoxelizationMode::Box,
-                        "Box",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.voxelization,
-                        LineVoxelizationMode::Line,
-                        "Line",
-                    );
-                });
-
-            ui.separator();
-            ui.label("Resolutions");
-            ui.separator();
-
-            ComboBox::from_label("Volume")
-                .selected_text(format!("{:?}", self.settings.volume))
-                .show_ui(ui, |ui| {
-                    for power in 5u32..10 {
-                        ui.selectable_value(
-                            &mut self.settings.volume,
-                            2u32.pow(power),
-                            format!("{}", 2u32.pow(power)),
-                        );
-                    }
-                });
-
-            ui.separator();
-            ui.label("Appearance");
-            ui.separator();
-
-            ui.add(Slider::new(&mut self.settings.radius, 0.01..=1.0).text("Streamline Radius"));
-            ui.add(Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"));
-            ui.add(Slider::new(&mut self.settings.direct_light, 0.0..=1.0).text("Ambient/Shadow"));
-            ui.add(Slider::new(&mut self.settings.tangent_color, 0.0..=1.0).text("Tangent Color"));
-            ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
-            ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
-            ui.add(Slider::new(&mut self.settings.slice_count, 1..=64).text("Culling Slices"));
-            ui.add(Slider::new(&mut self.settings.workgroups, 1..=64).text("# Workgroups"));
-
-            ui.checkbox(&mut self.settings.culling, "Enable Culling");
         });
     }
 

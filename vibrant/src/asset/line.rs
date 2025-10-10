@@ -9,15 +9,13 @@ use wgpu::{
     BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
 };
 
-use crate::{file::LineFile, gpu::Gpu, sort::KeyValuePair};
+use crate::{file::LineFile, gpu::Gpu};
 
 pub struct LineSet {
     buffer: LineBuffer,
     binding_read: BindGroup,
     binding_write: BindGroup,
     binding_raw: BindGroup,
-    sorted: SortedLineSet,
-    vrc: VrcLineSet,
 }
 
 impl LineSet {
@@ -67,18 +65,11 @@ impl LineSet {
             ],
         });
 
-        let len = line.indices().len() as u32;
-
-        let sorted = SortedLineSet::new(gpu, &buffer, len);
-        let vrc = VrcLineSet::new(gpu, len);
-
         Self {
             buffer,
             binding_read,
             binding_write,
             binding_raw,
-            sorted,
-            vrc,
         }
     }
 
@@ -108,14 +99,6 @@ impl LineSet {
 
     pub fn cull(&self) -> &Buffer {
         &self.buffer.cull_vertex
-    }
-
-    pub fn sorted(&self) -> &SortedLineSet {
-        &self.sorted
-    }
-
-    pub fn vrc(&self) -> &VrcLineSet {
-        &self.vrc
     }
 
     pub fn binding_raw(&self) -> &BindGroup {
@@ -427,90 +410,5 @@ impl Drop for LineBuffer {
         self.cull_vertex.destroy();
         self.line_counts.destroy();
         self.line_offsets.destroy();
-    }
-}
-
-pub struct SortedLineSet {
-    ping: KeyValuePair,
-    pong: KeyValuePair,
-    binding_read: BindGroup,
-    binding_write: BindGroup,
-    linear: Buffer,
-}
-
-impl SortedLineSet {
-    fn new(gpu: &Gpu, buffer: &LineBuffer, len: u32) -> Self {
-        let ping = KeyValuePair::new(gpu, len);
-        let pong = KeyValuePair::new(gpu, len);
-
-        let linear: Vec<u32> = (0..=len).collect();
-
-        let linear = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label: Some("SortedLineSet::Linear"),
-            contents: bytemuck::cast_slice(&linear),
-            usage: BufferUsages::COPY_SRC,
-        });
-
-        let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label: Some("LineSort::Line"),
-            layout: &LineSet::layout(gpu, true),
-            entries: &buffer.entries(ping.value(), &buffer.vertices),
-        });
-
-        let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label: Some("LineSort::Line"),
-            layout: &LineSet::layout(gpu, false),
-            entries: &buffer.entries(ping.value(), &buffer.vertices),
-        });
-
-        Self {
-            ping,
-            pong,
-            binding_read,
-            binding_write,
-            linear,
-        }
-    }
-
-    pub fn binding(&self, read_only: bool) -> &BindGroup {
-        if read_only {
-            &self.binding_read
-        } else {
-            &self.binding_write
-        }
-    }
-
-    pub fn ping(&self) -> &KeyValuePair {
-        &self.ping
-    }
-
-    pub fn pong(&self) -> &KeyValuePair {
-        &self.pong
-    }
-
-    pub fn linear(&self) -> &Buffer {
-        &self.linear
-    }
-}
-
-pub struct VrcLineSet {
-    ping: KeyValuePair,
-    pong: KeyValuePair,
-}
-
-impl VrcLineSet {
-    fn new(gpu: &Gpu, len: u32) -> Self {
-        let ping = KeyValuePair::new(gpu, len * 32);
-        let pong = KeyValuePair::new(gpu, len * 32);
-
-        Self { ping, pong }
-    }
-
-    pub fn ping(&self) -> &KeyValuePair {
-        &self.ping
-    }
-
-    pub fn pong(&self) -> &KeyValuePair {
-        &self.pong
     }
 }

@@ -17,13 +17,35 @@ pub struct File {
 impl File {
     #[cfg(target_arch = "wasm32")]
     pub fn load() {
-        wasm_bindgen_futures::spawn_local(async move {
-            let file = rfd::AsyncFileDialog::new().pick_file().await;
+        use std::path::Path;
 
-            if let Some(file) = file {
-                Self::publish_line(LineFile::from_tck(&file.read().await, 1));
+        wasm_bindgen_futures::spawn_local(async move {
+            let mut line_files: Vec<LineFile> = Vec::new();
+
+            if let Some(files) = rfd::AsyncFileDialog::new().pick_files().await {
+                for file in files {
+                    let bytes = file.read().await;
+
+                    let file_name = file.file_name();
+                    let extension = Path::new(&file_name)
+                        .extension()
+                        .map(|ext| ext.to_str())
+                        .flatten();
+
+                    if let Some(line) = match extension {
+                        Some("tck") => Some(LineFile::from_tck(&bytes, 1)),
+                        Some("obj") => Some(LineFile::from_obj(&String::from_utf8(bytes).unwrap())),
+                        _ => None,
+                    } {
+                        line_files.push(line);
+                    }
+                }
             }
-        });
+
+            if !line_files.is_empty() {
+                Self::publish_line(LineFile::join(line_files));
+            }
+        })
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -40,6 +40,13 @@ impl Camera {
             return;
         }
 
+        if state.backspace {
+            self.yaw = 0.0;
+            self.pitch = 0.0;
+            self.distance = 0.75;
+            self.pan = Vec3::ZERO;
+        }
+
         if state.left {
             let rotation = state.relative_delta() * 10.0;
             self.rotate(-rotation.x, -rotation.y);

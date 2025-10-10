@@ -1,23 +1,21 @@
 pub mod culling;
 pub mod occlusion;
 pub mod occupancy;
-pub mod occupancy_alt;
 pub mod render;
 pub mod segment;
 pub mod transform;
 pub mod ui;
-pub mod vrc;
 
 use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineSet,
-    controller::settings::{LineRenderMode, Settings},
+    controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
         culling::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
-        transform::LineTransformPipeline, vrc::VrcLineVoxelizationPipeline,
+        transform::LineTransformPipeline,
     },
     surface::Frame,
 };
@@ -30,8 +28,6 @@ pub struct LineRenderer {
     occlusion: LineOcclusionPipeline,
     culling: LineCullingPipeline,
     render: LineRenderPipeline,
-
-    vrc: VrcLineVoxelizationPipeline,
 }
 
 impl LineRenderer {
@@ -43,7 +39,6 @@ impl LineRenderer {
             occlusion: LineOcclusionPipeline::new(gpu),
             culling: LineCullingPipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
-            vrc: VrcLineVoxelizationPipeline::new(gpu),
         }
     }
 
@@ -56,15 +51,8 @@ impl LineRenderer {
         settings: &Settings,
     ) {
         self.transform.dispatch(cmd, environment, line);
-
-        match settings.render {
-            LineRenderMode::RayTracingQuantized => {
-                self.vrc.dispatch(cmd, frame, environment, settings, line)
-            }
-            _ => self
-                .occupancy
-                .dispatch(cmd, frame, environment, settings, line),
-        }
+        self.occupancy
+            .dispatch(cmd, frame, environment, settings, line);
 
         self.culling.dispatch(cmd, frame, environment);
         self.occlusion.dispatch(cmd, frame, environment);

@@ -15,6 +15,7 @@ pub struct ControllerState {
     pub delta: Vec2,
     pub scroll: Vec2,
     pub shift: bool,
+    pub backspace: bool,
 }
 
 impl ControllerState {
@@ -81,6 +82,14 @@ impl ControllerState {
             },
             Event::KeyReleased(Key::Shift) => ControllerState {
                 shift: false,
+                ..default
+            },
+            Event::KeyPressed(Key::Backspace) => ControllerState {
+                backspace: true,
+                ..default
+            },
+            Event::KeyReleased(Key::Backspace) => ControllerState {
+                backspace: false,
                 ..default
             },
         }

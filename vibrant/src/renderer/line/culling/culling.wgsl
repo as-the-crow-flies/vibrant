@@ -29,7 +29,7 @@ fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
         let step = vec3<i32>(sign(direction));
         var next = vec4<f32>(
             one_if_zero(abs(fract(vec3<f32>(-step) * fract(position)))) * voxel_boundaries,
-            10.0
+            min(distance, 16.0)
         );
 
         var voxel = vec3<i32>(position);
