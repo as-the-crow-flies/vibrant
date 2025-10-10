@@ -3,7 +3,7 @@ pub mod line;
 pub mod ui;
 pub mod wgsl;
 
-use crate::{file::LineFile, renderer::line::LineRenderer};
+use crate::renderer::line::LineRenderer;
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;

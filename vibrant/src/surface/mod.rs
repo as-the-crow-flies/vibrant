@@ -1,11 +1,7 @@
 pub mod color;
 pub mod culling;
-pub mod kbuffer;
 pub mod occlusion;
 pub mod occupancy;
-pub mod opacity;
-pub mod visibility;
-pub mod vrc;
 
 use std::any::type_name;
 
@@ -20,39 +16,28 @@ use wgpu::{
 };
 
 use crate::{
-    asset::texture::{MipTexture2D, MipTexture3D, R32Float, R32Uint},
+    asset::texture::{MipTexture3D, R32Float, R32Uint},
     controller::settings::Settings,
-    surface::{
-        culling::CullingBuffer, kbuffer::KBuffer, opacity::OpacityBuffer,
-        visibility::VisibilityBuffer, vrc::VrcBuffer,
-    },
+    surface::culling::CullingBuffer,
 };
 
 use super::gpu::Gpu;
 
 pub struct Frame {
     color: ColorBuffer,
-    kbuffer: KBuffer,
-    opacity: OpacityBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
-    visibility: VisibilityBuffer,
-    vrc: VrcBuffer,
     binding: BindGroup,
 }
 
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         let color = ColorBuffer::new(gpu, settings.width, settings.height);
-        let kbuffer = KBuffer::new(gpu, settings.width, settings.height, 8);
-        let opacity = OpacityBuffer::new(gpu, settings.width, settings.height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
         let culling = CullingBuffer::new(gpu, settings.volume);
-        let visibility = VisibilityBuffer::new(gpu, settings.width, settings.height);
-        let vrc = VrcBuffer::new(gpu, settings.volume);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -62,34 +47,21 @@ impl Frame {
                 occupancy.count().binding_entries(2),
                 occlusion.ambient().binding_entries(4),
                 occlusion.directional().binding_entries(6),
-                opacity.opacity().binding_entries(8),
             ]
             .concat(),
         });
 
         Self {
             color,
-            kbuffer,
-            opacity,
             occupancy,
             occlusion,
             culling,
-            visibility,
-            vrc,
             binding,
         }
     }
 
     pub fn color(&self) -> &ColorBuffer {
         &self.color
-    }
-
-    pub fn kbuffer(&self) -> &KBuffer {
-        &self.kbuffer
-    }
-
-    pub fn opacity(&self) -> &OpacityBuffer {
-        &self.opacity
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {
@@ -102,14 +74,6 @@ impl Frame {
 
     pub fn culling(&self) -> &CullingBuffer {
         &self.culling
-    }
-
-    pub fn visibility(&self) -> &VisibilityBuffer {
-        &self.visibility
-    }
-
-    pub fn vrc(&self) -> &VrcBuffer {
-        &self.vrc
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -125,7 +89,6 @@ impl Frame {
                     MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
                     MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
                     MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
-                    MipTexture2D::<R32Float>::layout_entries(8), // Opacity
                 ]
                 .concat(),
             })

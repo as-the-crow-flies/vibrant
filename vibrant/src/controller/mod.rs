@@ -6,7 +6,7 @@ pub mod settings;
 pub mod state;
 
 use camera::Camera;
-use egui::{Color32, ComboBox, FontId, Frame, Layout, Margin, RichText, Slider};
+use egui::{ComboBox, FontId, Frame, Layout, Margin, RichText, Slider};
 use event::Event;
 use light::Light;
 use settings::Settings;
