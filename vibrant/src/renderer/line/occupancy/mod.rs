@@ -2,7 +2,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{
-        line::LineSet,
+        line::LineBuffer,
         texture::{MipTexture3D, R32Float, R32Uint},
     },
     controller::settings::{LineVoxelizationMode, Settings},
@@ -23,7 +23,7 @@ impl LineOccupancyPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let voxelize_layout = &gpu.pipeline_layout(&[
             &OccupancyBuffer::layout_write(gpu),
-            &LineSet::layout(gpu, true),
+            &LineBuffer::layout(gpu, true),
             &Environment::layout(gpu),
         ]);
 
@@ -69,7 +69,7 @@ impl LineOccupancyPipeline {
         frame: &Frame,
         environment: &Environment,
         settings: &Settings,
-        line: &LineSet,
+        line: &LineBuffer,
     ) {
         frame.occupancy().clear(cmd);
         line.clear_count(cmd);

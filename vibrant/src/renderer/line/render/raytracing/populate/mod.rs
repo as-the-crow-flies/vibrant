@@ -2,7 +2,7 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{
-        line::LineSet,
+        line::LineBuffer,
         texture::{MipTexture3D, R32Float, R32Uint},
     },
     controller::settings::{LineVoxelizationMode, Settings},
@@ -23,7 +23,7 @@ impl LinePopulatePipeline {
         let layout = &gpu.pipeline_layout(&[
             &CullingBuffer::layout_write(gpu),
             &MipTexture3D::<R32Float>::layout(gpu),
-            &LineSet::layout(gpu, true),
+            &LineBuffer::layout(gpu, true),
             &Environment::layout(gpu),
         ]);
 
@@ -64,7 +64,7 @@ impl LinePopulatePipeline {
         frame: &Frame,
         environment: &Environment,
         settings: &Settings,
-        line: &LineSet,
+        line: &LineBuffer,
     ) {
         frame.culling().clear(cmd);
         line.clear_count(cmd);

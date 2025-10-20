@@ -2,7 +2,6 @@ pub mod culling;
 pub mod occlusion;
 pub mod occupancy;
 pub mod render;
-pub mod segment;
 pub mod transform;
 pub mod ui;
 
@@ -10,7 +9,7 @@ use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::line::LineSet,
+    asset::{line::LineBuffer, transform::TransformBuffer},
     controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
@@ -47,10 +46,15 @@ impl LineRenderer {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &Frame,
-        line: &LineSet,
+        line: &LineBuffer,
+        transform: &TransformBuffer,
         settings: &Settings,
+        needs_transform: bool,
     ) {
-        self.transform.dispatch(cmd, environment, line);
+        if needs_transform {
+            self.transform.dispatch(cmd, environment, line, transform);
+        }
+
         self.occupancy
             .dispatch(cmd, frame, environment, settings, line);
 

@@ -18,7 +18,6 @@ use winit::{
 struct App {
     gpu: Gpu,
     window: Option<Arc<window::Window>>,
-    egui: Option<egui_winit::State>,
     renderer: Option<Renderer>,
     controller: Controller,
     focused: bool,
@@ -30,7 +29,6 @@ impl App {
         Self {
             gpu,
             window: None,
-            egui: None,
             renderer: None,
             controller: Controller::new(),
             focused: true,
@@ -39,11 +37,10 @@ impl App {
     }
 
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
-        let egui = self.egui.as_mut().expect("Egui");
         let window = self.window.as_ref().expect("Window");
         let renderer = self.renderer.as_mut().expect("Renderer");
 
-        let consumed_by_egui = egui.on_window_event(window, &event).consumed;
+        let consumed_by_egui = renderer.egui().on_window_event(window, &event).consumed;
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -58,13 +55,7 @@ impl App {
             WindowEvent::RedrawRequested => {
                 self.fps.tick();
 
-                let input = egui.take_egui_input(window);
-                let output = egui
-                    .egui_ctx()
-                    .run(input, |ctx| self.controller.ui(ctx, self.fps.seconds()));
-                egui.handle_platform_output(&window, output.platform_output.clone());
-
-                renderer.render(&self.gpu, &self.controller, egui.egui_ctx(), output);
+                renderer.render(&self.gpu, &mut self.controller, window);
 
                 self.request_redraw();
             }
@@ -115,18 +106,8 @@ impl ApplicationHandler for App {
 
         let renderer = Renderer::new(&self.gpu, Arc::clone(&window));
 
-        let egui = egui_winit::State::new(
-            egui::Context::default(),
-            egui::viewport::ViewportId::ROOT,
-            &window,
-            Some(window.scale_factor() as f32),
-            None,
-            None,
-        );
-
         self.window = Some(window);
         self.renderer = Some(renderer);
-        self.egui = Some(egui);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {

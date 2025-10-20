@@ -4,7 +4,7 @@ pub mod volume;
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::line::LineSet,
+    asset::line::LineBuffer,
     controller::settings::{LineDisplayMode, Settings},
     gpu::Gpu,
     renderer::{
@@ -34,7 +34,7 @@ impl LineRenderPipeline {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &Frame,
-        line: &LineSet,
+        line: &LineBuffer,
         settings: &Settings,
     ) {
         match settings.display {

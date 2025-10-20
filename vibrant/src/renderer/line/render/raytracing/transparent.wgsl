@@ -1,5 +1,7 @@
 @group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
+@group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
+@group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
 
 @group(3) @binding(0) var<storage> OFFSET: array<u32>;
 @group(3) @binding(2) var<storage> INDEX: array<u32>;
@@ -56,10 +58,12 @@ fn visit(
             let v0 = unpack_vertex(LINE_VERTEX[index + 0]);
             let v1 = unpack_vertex(LINE_VERTEX[index + 1]);
 
+            let settings = LINE_SETTINGS[LINE_MATERIAL[index]];
+
             let hit = f32(item >> 16u) * U16_MAX_INV * increment;
             let hit_position = position + hit * direction;
 
-            let c = shade(v0, v1, RADIUS, hit_position, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
+            let c = shade(v0, v1, RADIUS, hit_position, settings, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 
             COLOR += (1.0 - COLOR.a) * vec4<f32>(c.rgb * c.a, c.a);
 

@@ -34,6 +34,20 @@ struct Environment {
     settings: Settings
 }
 
+struct LineSettings {
+    visible: u32,
+    color: u32
+}
+
+struct Vertex {
+    xyz: vec3<f32>,
+    clip: vec3<f32>,
+    alpha: f32
+}
+
+const TRUE: u32 = 1u;
+const FALSE: u32 = 0u;
+
 const U32_MAX: u32 = 4294967295;
 const U32_MAX_f32: f32 = f32(U32_MAX);
 const U32_MAX_INV: f32 = 1.0 / U32_MAX_f32;
@@ -152,12 +166,6 @@ fn unpack_clip_alpha(f: f32) -> vec4<f32> {
     return vec4<f32>(clip.xyz, alpha.a);
 }
 
-struct Vertex {
-    xyz: vec3<f32>,
-    clip: vec3<f32>,
-    alpha: f32
-}
-
 fn unpack_vertex(v: vec4<f32>) -> Vertex {
     let clip_alpha = unpack_clip_alpha(v.a);
     return Vertex(v.xyz, clip_alpha.xyz, clip_alpha.a);
@@ -255,6 +263,7 @@ fn shade(
     v1: Vertex,
     radius: f32,
     position: vec3<f32>,
+    settings: LineSettings,
     environment: Environment,
     occlusion_ambient: texture_3d<f32>,
     occlusion_directional: texture_3d<f32>,
@@ -274,6 +283,8 @@ fn shade(
         height
     ));
 
+
+
     let normal = normalize((pa - height * delta) / radius);
 
     let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
@@ -287,7 +298,9 @@ fn shade(
         environment.settings.direct_light),
         environment.settings.lighting);
 
-    let rgb = factor * mix(vec3<f32>(1.0), abs(tangent).xzy, environment.settings.tangent_color);
+    let color = unpack4x8unorm(settings.color);
+
+    let rgb = color.rgb * factor * mix(vec3<f32>(1.0), abs(tangent).xzy, environment.settings.tangent_color);
     let a = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
 
     return vec4<f32>(rgb, a);

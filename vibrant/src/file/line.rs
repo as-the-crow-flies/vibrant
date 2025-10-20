@@ -1,11 +1,14 @@
 use glam::{Vec3, Vec4};
 
-use std::{collections::HashMap, fs, io::BufRead, path::Path, vec};
+use std::{collections::HashMap, io::BufRead};
+
+use crate::file::File;
 
 use super::bounds::Bounds;
 
 #[derive(Debug, Default)]
 pub struct LineFile {
+    name: String,
     vertices: Vec<Vec4>,
     indices: Vec<u32>,
     line_counts: Vec<u32>,
@@ -14,6 +17,10 @@ pub struct LineFile {
 }
 
 impl LineFile {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn vertices(&self) -> &[Vec4] {
         &self.vertices
     }
@@ -34,31 +41,9 @@ impl LineFile {
         &self.bounds
     }
 
-    pub fn from_obj(data: &String) -> LineFile {
-        let mut lines: Vec<Vec<Vec3>> = vec![vec![]];
+    pub fn from_tck(file: &File) -> LineFile {
+        let bytes = file.data();
 
-        for line in data.lines() {
-            match line.split_once(" ") {
-                Some(("v", vertex)) => {
-                    let mut v = vertex.split_whitespace();
-
-                    lines.last_mut().unwrap().push(Vec3::new(
-                        v.next().unwrap().parse().unwrap(),
-                        v.next().unwrap().parse().unwrap(),
-                        v.next().unwrap().parse().unwrap(),
-                    ));
-                }
-                Some(("l", _)) => {
-                    lines.push(Vec::new());
-                }
-                _ => {}
-            }
-        }
-
-        Self::from_lines(lines)
-    }
-
-    pub fn from_tck(bytes: &[u8], stride: usize) -> LineFile {
         let header: HashMap<String, String> = bytes
             .lines()
             .map(|line| line.unwrap())
@@ -83,14 +68,15 @@ impl LineFile {
             .unwrap_or_else(|_| bytemuck::cast_slice(&bytes[offset..].to_owned()).to_vec());
 
         Self::from_lines(
+            file.name.to_owned(),
             lines
                 .split(|vertex| !vertex.is_finite())
-                .map(|x| x.iter().step_by(stride).copied().collect())
+                .map(|x| x.iter().copied().collect())
                 .collect(),
         )
     }
 
-    pub fn from_lines(lines: Vec<Vec<Vec3>>) -> Self {
+    pub fn from_lines(name: String, lines: Vec<Vec<Vec3>>) -> Self {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
         let mut line_counts = Vec::new();
@@ -113,61 +99,12 @@ impl LineFile {
             .collect();
 
         Self {
+            name,
             bounds: Bounds::from_vertices(&vertices),
             vertices,
             indices,
             line_counts,
             line_offsets,
         }
-    }
-
-    pub fn join(tcks: Vec<LineFile>) -> LineFile {
-        tcks.into_iter().fold(LineFile::default(), |x, y| {
-            let n_vertices = x.vertices.len() as u32;
-            let n_indices = x.indices.len() as u32;
-
-            LineFile {
-                indices: [
-                    x.indices,
-                    y.indices.iter().map(|i| i + n_vertices).collect(),
-                ]
-                .concat(),
-                line_offsets: [
-                    x.line_offsets,
-                    y.line_offsets.iter().map(|i| i + n_indices).collect(),
-                ]
-                .concat(),
-                vertices: [x.vertices, y.vertices].concat(),
-                line_counts: [x.line_counts, y.line_counts].concat(),
-                bounds: Bounds {
-                    min: y.bounds.min.min(x.bounds.min),
-                    max: y.bounds.max.max(x.bounds.max),
-                },
-            }
-        })
-    }
-
-    pub fn from_tck_file(path: &str, stride: usize) -> LineFile {
-        LineFile::from_tck(
-            &fs::read(path).expect(&format!("Couldn't read file {:?}", path)),
-            stride,
-        )
-    }
-
-    pub fn from_file(path: &str) -> LineFile {
-        if let Some(extension) = Path::new(path).extension() {
-            return match extension.to_str() {
-                Some("tck") => LineFile::from_tck(
-                    &fs::read(path).expect(&format!("Couldn't read file {:?}", path)),
-                    1,
-                ),
-                Some("obj") => LineFile::from_obj(
-                    &fs::read_to_string(path).expect(&format!("Couldn't read file {:?}", path)),
-                ),
-                _ => panic!("unknown file type"),
-            };
-        }
-
-        panic!("")
     }
 }

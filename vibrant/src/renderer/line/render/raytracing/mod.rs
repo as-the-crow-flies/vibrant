@@ -5,7 +5,7 @@ use std::any::type_name;
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
-    asset::line::LineSet,
+    asset::line::LineBuffer,
     controller::settings::Settings,
     gpu::Gpu,
     renderer::{
@@ -30,7 +30,7 @@ impl RayTracingLineRenderPipeline {
                 &gpu.pipeline_layout(&[
                     &Frame::layout(gpu),
                     &Environment::layout(gpu),
-                    &LineSet::layout(gpu, true),
+                    &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
                 ColorBuffer::target_srgb(),
@@ -41,7 +41,7 @@ impl RayTracingLineRenderPipeline {
                 &gpu.pipeline_layout(&[
                     &Frame::layout(gpu),
                     &Environment::layout(gpu),
-                    &LineSet::layout(gpu, true),
+                    &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
                 ColorBuffer::target_srgb(),
@@ -56,7 +56,7 @@ impl RayTracingLineRenderPipeline {
         frame: &Frame,
         environment: &Environment,
         settings: &Settings,
-        line: &LineSet,
+        line: &LineBuffer,
     ) {
         self.populate
             .dispatch(cmd, frame, environment, settings, line);

@@ -1,6 +1,6 @@
-use glam::{Vec3, Vec4, Vec4Swizzles};
+use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Bounds {
     pub min: Vec3,
     pub max: Vec3,
@@ -26,6 +26,25 @@ impl Bounds {
                 },
             )
             .expand()
+    }
+
+    pub fn from_bounds(bounds: &[Bounds]) -> Bounds {
+        bounds.iter().fold(
+            Bounds {
+                min: Vec3::MAX,
+                max: Vec3::MIN,
+            },
+            |result, bounds| Bounds {
+                min: result.min.min(bounds.min),
+                max: result.max.max(bounds.max),
+            },
+        )
+    }
+
+    pub fn transform(&self) -> Mat4 {
+        Mat4::IDENTITY
+            * Mat4::from_translation(self.min + 0.5 * self.scale())
+            * Mat4::from_scale(Vec3::splat(self.scale().max_element()))
     }
 
     fn expand(self) -> Self {

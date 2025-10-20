@@ -1,9 +1,12 @@
 pub mod line;
 pub mod texture;
-pub mod utils;
+pub mod transform;
 
-use line::LineSet;
+use line::LineBuffer;
+use transform::TransformBuffer;
 
+#[derive(Default)]
 pub struct Asset {
-    pub line: Option<LineSet>,
+    pub line: Option<LineBuffer>,
+    pub transform: Option<TransformBuffer>,
 }

@@ -2,8 +2,10 @@
 
 @group(1) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(1) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
-@group(1) @binding(2) var<storage> LINE_INDICES_LENGTH: u32;
-@group(1) @binding(3) var<storage, read_write> LINE_COUNT: atomic<u32>;
+@group(1) @binding(2) var<storage> LINE_LENGTH: u32;
+@group(1) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
+@group(1) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
+@group(1) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -20,7 +22,7 @@ var<private> DENSITY_MULTIPLIER: f32;
 @compute
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
-    let n_indices = LINE_INDICES_LENGTH;
+    let n_indices = LINE_LENGTH;
     let scale = f32(ENVIRONMENT.volume);
 
     RADIUS = ENVIRONMENT.settings.radius;
@@ -30,7 +32,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
     while (offset < n_indices) {
         if (local == 0) {
-            OFFSET = atomicAdd(&LINE_COUNT, CHUNK_SIZE * WORKGROUP_SIZE);
+            OFFSET = atomicAdd(&LINE_OFFSET, CHUNK_SIZE * WORKGROUP_SIZE);
         }
 
         offset = workgroupUniformLoad(&OFFSET);
@@ -41,10 +43,15 @@ fn main(@builtin(local_invocation_index) local: u32) {
             if (index_index >= n_indices) { continue; }
 
             let index = LINE_INDEX[index_index];
-            let v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
-            let v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
 
-            voxelize(index, v0, v1, RADIUS);
+            let visible = LINE_SETTINGS[LINE_MATERIAL[index]].visible == TRUE;
+
+            if (visible) {
+                let v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
+                let v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
+
+                voxelize(index, v0, v1, RADIUS);
+            }
         }
     }
 }

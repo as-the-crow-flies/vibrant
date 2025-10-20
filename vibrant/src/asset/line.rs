@@ -1,76 +1,209 @@
-use std::{any::type_name, ops::Div};
+use std::{any::type_name, iter::zip};
 
-use glam::{Mat4, Vec3};
-
+use bytemuck::{Pod, Zeroable};
+use glam::Vec4;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
+    *,
 };
 
 use crate::{file::LineFile, gpu::Gpu};
 
-pub struct LineSet {
-    buffer: LineBuffer,
-    binding_read: BindGroup,
-    binding_write: BindGroup,
-    binding_raw: BindGroup,
+pub struct GlobalLineSettings {
+    pub selected: Option<bool>,
+    pub visible: Option<bool>,
 }
 
-impl LineSet {
-    pub fn new(gpu: &Gpu, line: &LineFile) -> Self {
+pub struct LineSettings {
+    pub name: String,
+    pub selected: bool,
+    pub visible: bool,
+    pub color: [u8; 3],
+}
+
+#[repr(C)]
+#[derive(Pod, Zeroable, Clone, Copy)]
+pub struct LineSettingsBuffer {
+    visible: u32,
+    color: [u8; 4],
+}
+
+impl LineSettings {
+    pub fn to_buffer(&self) -> LineSettingsBuffer {
+        let [r, g, b] = self.color;
+
+        LineSettingsBuffer {
+            visible: self.visible as u32,
+            color: [r, g, b, 255],
+        }
+    }
+}
+
+pub struct LineBuffer {
+    global_settings: GlobalLineSettings,
+    settings: Vec<LineSettings>,
+    settings_buffer: Buffer,
+
+    vertices: Buffer,
+    indices: Buffer,
+    length: Buffer,
+    offset: Buffer,
+
+    materials: Buffer,
+
+    binding_read: BindGroup,
+    binding_write: BindGroup,
+}
+
+impl LineBuffer {
+    pub fn new(gpu: &Gpu, lines: &[LineFile]) -> Self {
         let label = Some(type_name::<Self>());
 
-        let buffer = LineBuffer::new(gpu, line);
+        let global_settings = GlobalLineSettings {
+            selected: Some(false),
+            visible: Some(true),
+        };
 
-        let transform = Mat4::IDENTITY
-            * Mat4::from_translation(line.bounds().min + 0.5 * line.bounds().scale())
-            * Mat4::from_scale(Vec3::splat(line.bounds().scale().max_element()));
+        let settings: Vec<LineSettings> = lines
+            .iter()
+            .map(|line| LineSettings {
+                name: line.name().to_owned(),
+                color: [255, 255, 255],
+                selected: false,
+                visible: true,
+            })
+            .collect();
 
-        let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let settings_buffer: Vec<LineSettingsBuffer> =
+            settings.iter().map(|setting| setting.to_buffer()).collect();
+
+        let vertices: Vec<Vec4> = lines
+            .iter()
+            .map(|line| line.vertices())
+            .flatten()
+            .copied()
+            .collect();
+
+        let offsets: Vec<u32> = lines
+            .iter()
+            .map(|line| line.vertices().len() as u32)
+            .scan(0u32, |sum, x| {
+                *sum += x;
+                Some(*sum - x)
+            })
+            .collect();
+
+        let indices: Vec<u32> = zip(lines.iter().map(|line| line.indices()), offsets)
+            .map(|(indices, offset)| indices.iter().map(move |index| offset + index))
+            .flatten()
+            .collect();
+
+        let materials: Vec<u32> = lines
+            .iter()
+            .enumerate()
+            .map(|(index, line)| [(index as u32)].repeat(line.vertices().len()))
+            .flatten()
+            .collect();
+
+        let length = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytemuck::bytes_of(&transform.inverse()),
-            usage: BufferUsages::UNIFORM,
+            contents: bytemuck::bytes_of(&(indices.len() as u32)),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
         });
+
+        let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&vertices),
+            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
+        });
+
+        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&indices),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let materials = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&materials),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let offset = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 4,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&settings_buffer),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+        });
+
+        let entries = [
+            BindGroupEntry {
+                binding: 0,
+                resource: indices.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: vertices.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: length.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: offset.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 4,
+                resource: materials.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 5,
+                resource: settings_buffer.as_entire_binding(),
+            },
+        ];
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu, true),
-            entries: &buffer.entries(&buffer.indices, &buffer.vertices),
+            entries: &entries,
         });
 
         let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu, false),
-            entries: &buffer.entries(&buffer.indices, &buffer.vertices),
-        });
-
-        let binding_raw = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_raw(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: buffer.indices_raw.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: buffer.vertices_raw.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: transform.as_entire_binding(),
-                },
-            ],
+            entries: &entries,
         });
 
         Self {
-            buffer,
+            global_settings,
+            settings,
+            settings_buffer,
+
+            vertices,
+            indices,
+            length,
+            offset,
+
+            materials,
+
             binding_read,
             binding_write,
-            binding_raw,
         }
+    }
+
+    pub fn settings_global(&mut self) -> &mut GlobalLineSettings {
+        &mut self.global_settings
+    }
+
+    pub fn settings(&mut self) -> &mut [LineSettings] {
+        &mut self.settings
     }
 
     pub fn binding(&self, read_only: bool) -> &BindGroup {
@@ -81,82 +214,26 @@ impl LineSet {
         }
     }
 
-    pub fn len(&self) -> u32 {
-        self.buffer.indices.size().div(4) as u32
-    }
-
-    pub fn indices(&self) -> &Buffer {
-        &self.buffer.indices
-    }
-
-    pub fn vertices(&self) -> &Buffer {
-        &self.buffer.vertices
-    }
-
-    pub fn count(&self) -> &Buffer {
-        &self.buffer.count
-    }
-
-    pub fn cull(&self) -> &Buffer {
-        &self.buffer.cull_vertex
-    }
-
-    pub fn binding_raw(&self) -> &BindGroup {
-        &self.binding_raw
-    }
-
     pub fn clear_total_count(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.buffer.total_count, 0, None);
+        cmd.clear_buffer(&self.length, 0, None);
     }
 
     pub fn clear_count(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.buffer.count, 0, None);
+        cmd.clear_buffer(&self.offset, 0, None);
     }
 
-    pub fn clear_cull(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.buffer.cull_vertex, 0, None);
-    }
+    pub fn update_settings(&self, gpu: &Gpu) {
+        let settings_buffer: Vec<LineSettingsBuffer> = self
+            .settings
+            .iter()
+            .map(|setting| setting.to_buffer())
+            .collect();
 
-    pub fn layout_raw(gpu: &Gpu) -> BindGroupLayout {
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    // Indices Raw
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Vertices Raw
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Transform
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            })
+        gpu.queue().write_buffer(
+            &self.settings_buffer,
+            0,
+            bytemuck::cast_slice(&settings_buffer),
+        );
     }
 
     pub fn layout(gpu: &Gpu, read_only: bool) -> BindGroupLayout {
@@ -192,7 +269,7 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Total Count
+                    // Length
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
@@ -203,7 +280,7 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Count
+                    // Offset
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
@@ -214,21 +291,10 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Cull Vertex
+                    // Materials
                     BindGroupLayoutEntry {
                         binding: 4,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Line Counts
-                    BindGroupLayoutEntry {
-                        binding: 5,
-                        visibility,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
@@ -236,10 +302,10 @@ impl LineSet {
                         },
                         count: None,
                     },
-                    // Line Offsets
+                    // Settings
                     BindGroupLayoutEntry {
-                        binding: 6,
-                        visibility,
+                        binding: 5,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
@@ -252,163 +318,13 @@ impl LineSet {
     }
 }
 
-struct LineBuffer {
-    vertices_raw: Buffer,
-    indices_raw: Buffer,
-    vertices: Buffer,
-    indices: Buffer,
-    total_count: Buffer,
-    count: Buffer,
-    cull_vertex: Buffer,
-    line_counts: Buffer,
-    line_offsets: Buffer,
-}
-
-impl LineBuffer {
-    fn new(gpu: &Gpu, line: &LineFile) -> Self {
-        let label = Some(type_name::<Self>());
-
-        let vertices_raw = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.vertices()),
-            usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
-        });
-
-        let indices_raw = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.indices()),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        });
-
-        let vertices = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: vertices_raw.size(),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.indices()),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
-        });
-
-        let total_count = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::bytes_of(&(line.indices().len() as u32)),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-        });
-
-        let count = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: 4,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let cull_vertex = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: (line.indices().len() * 4) as u64,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let line_counts = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.line_counts()),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        });
-
-        let line_offsets = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line.line_offsets()),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        });
-
-        Self {
-            vertices_raw,
-            indices_raw,
-            vertices,
-            indices,
-            total_count,
-            count,
-            cull_vertex,
-            line_counts,
-            line_offsets,
-        }
-    }
-
-    fn entries<'a>(&'a self, indices: &'a Buffer, vertices: &'a Buffer) -> Vec<BindGroupEntry<'a>> {
-        vec![
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: indices,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: vertices,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.total_count,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.count,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 4,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.cull_vertex,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 5,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.line_counts,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            BindGroupEntry {
-                binding: 6,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &self.line_offsets,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-        ]
-    }
-}
-
 impl Drop for LineBuffer {
     fn drop(&mut self) {
-        self.vertices_raw.destroy();
         self.vertices.destroy();
         self.indices.destroy();
-        self.total_count.destroy();
-        self.count.destroy();
-        self.cull_vertex.destroy();
-        self.line_counts.destroy();
-        self.line_offsets.destroy();
+        self.length.destroy();
+        self.offset.destroy();
+        self.settings_buffer.destroy();
+        self.materials.destroy();
     }
 }

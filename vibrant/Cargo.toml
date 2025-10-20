@@ -8,12 +8,15 @@ wgpu.workspace = true
 winit.workspace = true
 egui.workspace = true
 egui-wgpu.workspace = true
+egui-winit.workspace = true
 log.workspace = true
 pollster.workspace = true
 
 bytemuck = { version = "1.18", features = ["derive", "min_const_generics"] }
 glam = { version = "0.29", features = ["bytemuck"] }
 rfd = "0.15"
+nifti = "0.17"
+flate2 = "1.1"
 png = "0.17"
 futures = "0.3"
 itertools = "0.13"

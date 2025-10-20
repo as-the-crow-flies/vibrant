@@ -1,50 +1,59 @@
 pub mod bounds;
 pub mod line;
+pub mod volume;
 
 pub use line::*;
+pub use volume::*;
 
 use std::{
     path::PathBuf,
     sync::{LazyLock, Mutex},
 };
 
-#[derive(Default)]
+use log::warn;
+
 pub struct File {
-    pub line: Option<LineFile>,
-    pub save: Option<PathBuf>,
+    name: String,
+    data: Vec<u8>,
 }
 
 impl File {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn into_data(self) -> Vec<u8> {
+        self.data
+    }
+}
+
+#[derive(Default)]
+pub struct FileStage {
+    pub lines: Vec<LineFile>,
+    pub volumes: Vec<VolumeFile>,
+    pub save: Option<PathBuf>,
+}
+
+impl FileStage {
     #[cfg(target_arch = "wasm32")]
     pub fn load() {
-        use std::path::Path;
-
         wasm_bindgen_futures::spawn_local(async move {
-            let mut line_files: Vec<LineFile> = Vec::new();
+            let mut files: Vec<File> = Vec::new();
 
-            if let Some(files) = rfd::AsyncFileDialog::new().pick_files().await {
-                for file in files {
-                    let bytes = file.read().await;
-
-                    let file_name = file.file_name();
-                    let extension = Path::new(&file_name)
-                        .extension()
-                        .map(|ext| ext.to_str())
-                        .flatten();
-
-                    if let Some(line) = match extension {
-                        Some("tck") => Some(LineFile::from_tck(&bytes, 1)),
-                        Some("obj") => Some(LineFile::from_obj(&String::from_utf8(bytes).unwrap())),
-                        _ => None,
-                    } {
-                        line_files.push(line);
-                    }
+            if let Some(handles) = rfd::AsyncFileDialog::new().pick_files().await {
+                for handle in handles {
+                    files.push(File {
+                        path: handle.file_name(),
+                        data: handle.read().await,
+                    });
                 }
             }
 
-            if !line_files.is_empty() {
-                Self::publish_line(LineFile::join(line_files));
-            }
+            Self::load_files(files);
         })
     }
 
@@ -52,23 +61,45 @@ impl File {
     pub fn load() {
         use std::fs;
 
-        let files = rfd::FileDialog::new().pick_files();
+        if let Some(paths) = rfd::FileDialog::new().pick_files() {
+            Self::load_files(
+                paths
+                    .into_iter()
+                    .map(|path| File {
+                        name: path.file_name().unwrap().to_str().unwrap().to_owned(),
+                        data: fs::read(&path).expect(&format!(
+                            "should be able to read path: `{:?}`",
+                            path.to_str()
+                        )),
+                    })
+                    .collect(),
+            );
+        }
+    }
 
-        if let Some(files) = files {
-            let line_files: Vec<LineFile> = files
-                .iter()
-                .filter_map(
-                    |file| match file.extension().map(|ext| ext.to_str()).flatten() {
-                        Some("tck") => Some(LineFile::from_tck(&fs::read(file).unwrap(), 1)),
-                        Some("obj") => Some(LineFile::from_obj(&fs::read_to_string(file).unwrap())),
-                        _ => None,
-                    },
+    fn load_files(files: Vec<File>) {
+        let mut lines: Vec<LineFile> = Vec::new();
+        let mut volumes: Vec<VolumeFile> = Vec::new();
+
+        for file in files {
+            if file.name().ends_with(".tck") {
+                lines.push(LineFile::from_tck(&file));
+            } else if file.name().ends_with(".nii.gz") {
+                volumes.push(VolumeFile::from_nifti(&file));
+            } else {
+                warn!(
+                    "Cannot open `{}`. Supported file types are .tck .nii.gz",
+                    file.name()
                 )
-                .collect();
-
-            if !line_files.is_empty() {
-                Self::publish_line(LineFile::join(line_files));
             }
+        }
+
+        if !lines.is_empty() {
+            QUEUE.lock().unwrap().lines.extend(lines);
+        }
+
+        if !volumes.is_empty() {
+            QUEUE.lock().unwrap().volumes.extend(volumes);
         }
     }
 
@@ -87,11 +118,19 @@ impl File {
         todo!()
     }
 
-    pub fn on_line(callback: impl FnOnce(LineFile)) {
+    pub fn on_lines(callback: impl FnOnce(Vec<LineFile>)) {
         let mut data = QUEUE.lock().unwrap();
 
-        if let Some(line) = data.line.take() {
-            callback(line);
+        if !data.lines.is_empty() {
+            callback(data.lines.drain(..).collect());
+        }
+    }
+
+    pub fn on_volumes(callback: impl FnOnce(Vec<VolumeFile>)) {
+        let mut data = QUEUE.lock().unwrap();
+
+        if !data.volumes.is_empty() {
+            callback(data.volumes.drain(..).collect());
         }
     }
 
@@ -107,13 +146,9 @@ impl File {
         }
     }
 
-    fn publish_line(tck: LineFile) {
-        QUEUE.lock().unwrap().line = Some(tck);
-    }
-
     fn publish_save_path(path: PathBuf) {
         QUEUE.lock().unwrap().save = Some(path);
     }
 }
 
-static QUEUE: LazyLock<Mutex<File>> = LazyLock::new(|| Mutex::new(File::default()));
+static QUEUE: LazyLock<Mutex<FileStage>> = LazyLock::new(|| Mutex::new(FileStage::default()));
