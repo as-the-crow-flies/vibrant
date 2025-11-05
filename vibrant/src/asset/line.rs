@@ -2,6 +2,7 @@ use std::{any::type_name, iter::zip};
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec4;
+use random_color::{options::Luminosity, RandomColor};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     *,
@@ -12,6 +13,7 @@ use crate::{file::LineFile, gpu::Gpu};
 pub struct GlobalLineSettings {
     pub selected: Option<bool>,
     pub visible: Option<bool>,
+    pub color_visible: bool,
 }
 
 pub struct LineSettings {
@@ -19,6 +21,7 @@ pub struct LineSettings {
     pub selected: bool,
     pub visible: bool,
     pub color: [u8; 3],
+    pub color_visible: bool,
 }
 
 #[repr(C)]
@@ -34,7 +37,7 @@ impl LineSettings {
 
         LineSettingsBuffer {
             visible: self.visible as u32,
-            color: [r, g, b, 255],
+            color: [r, g, b, if self.color_visible { 255 } else { 0 }],
         }
     }
 }
@@ -62,15 +65,34 @@ impl LineBuffer {
         let global_settings = GlobalLineSettings {
             selected: Some(false),
             visible: Some(true),
+            color_visible: false,
         };
 
         let settings: Vec<LineSettings> = lines
             .iter()
             .map(|line| LineSettings {
                 name: line.name().to_owned(),
-                color: [255, 255, 255],
+                color: RandomColor {
+                    luminosity: Some(Luminosity::Bright),
+                    ..Default::default()
+                }
+                .seed(
+                    line.name()
+                        .to_lowercase()
+                        .replace("_right", "")
+                        .replace("_left", "")
+                        .replace("_r", "")
+                        .replace("_l", "")
+                        .replace("right_", "")
+                        .replace("left_", "")
+                        .replace("l_", "")
+                        .replace("r_", ""),
+                )
+                .clone()
+                .into_rgb_array(),
                 selected: false,
                 visible: true,
+                color_visible: false,
             })
             .collect();
 

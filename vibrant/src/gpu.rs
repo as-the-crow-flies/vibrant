@@ -3,6 +3,7 @@ use std::{any::type_name, borrow::Cow, path::PathBuf};
 use bytemuck::Pod;
 use futures::channel::oneshot::channel;
 use itertools::Itertools;
+use log::info;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
     CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Extent3d, Features,
@@ -36,6 +37,8 @@ impl Gpu {
 
         let limits = adapter.limits();
 
+        info!("{:?}", adapter.features());
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some(type_name::<Self>()),
@@ -52,10 +55,7 @@ impl Gpu {
                         .max_storage_buffers_per_shader_stage,
                     ..Default::default()
                 },
-                required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                    | Features::FLOAT32_FILTERABLE
-                    | Features::CLEAR_TEXTURE
-                    | Features::SUBGROUP,
+                required_features: Features::FLOAT32_FILTERABLE,
                 ..Default::default()
             })
             .await

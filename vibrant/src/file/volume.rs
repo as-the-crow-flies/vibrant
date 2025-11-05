@@ -34,15 +34,15 @@ impl VolumeFile {
         }
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn transform(&self) -> Mat4 {
+    pub fn transform(&self) -> Mat4 {
         self.transform
     }
 
-    fn data(&self) -> &[f32] {
+    pub fn data(&self) -> &[f32] {
         &self.data
     }
 }

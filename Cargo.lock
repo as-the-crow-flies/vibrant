@@ -1108,9 +1108,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26145e563e54f2cadc477553f1ec5ee650b00862f0a58bcd12cbdc5f0ea2d2f4"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2344,6 +2346,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "random_color"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d635c5e80ae160390ac62ca027d2d06c94c1dc69e5c0a12f1e3a53664dc84966"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "range-alloc"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2916,6 +2927,7 @@ dependencies = [
  "egui-winit",
  "flate2",
  "futures",
+ "getrandom",
  "glam",
  "integer-sqrt",
  "itertools",
@@ -2923,6 +2935,7 @@ dependencies = [
  "nifti",
  "png",
  "pollster 0.3.0",
+ "random_color",
  "rfd",
  "wasm-bindgen-futures",
  "wgpu",

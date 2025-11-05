@@ -68,7 +68,7 @@ impl LineFile {
             .unwrap_or_else(|_| bytemuck::cast_slice(&bytes[offset..].to_owned()).to_vec());
 
         Self::from_lines(
-            file.name.to_owned(),
+            file.name.replace(".tck", ""),
             lines
                 .split(|vertex| !vertex.is_finite())
                 .map(|x| x.iter().copied().collect())

@@ -47,7 +47,7 @@ impl FileStage {
             if let Some(handles) = rfd::AsyncFileDialog::new().pick_files().await {
                 for handle in handles {
                     files.push(File {
-                        path: handle.file_name(),
+                        name: handle.file_name(),
                         data: handle.read().await,
                     });
                 }

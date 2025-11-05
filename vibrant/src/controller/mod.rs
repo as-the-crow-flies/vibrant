@@ -7,7 +7,8 @@ pub mod state;
 
 use camera::Camera;
 use egui::{
-    collapsing_header::CollapsingState, ComboBox, Frame, Margin, ScrollArea, SidePanel, Slider, Ui,
+    collapsing_header::CollapsingState, Align, ComboBox, Frame, Layout, Margin, ScrollArea,
+    SidePanel, Slider, Ui,
 };
 use event::Event;
 use itertools::Itertools;
@@ -69,14 +70,6 @@ impl Controller {
                     self.show_left_side_panel = !self.show_left_side_panel;
                 }
 
-                if ui
-                    .button("📂 open")
-                    .on_hover_text("Open .tck/.obj files")
-                    .clicked()
-                {
-                    FileStage::load();
-                }
-
                 #[cfg(not(target_arch = "wasm32"))]
                 if ui
                     .button("📷 screenshot")
@@ -85,6 +78,22 @@ impl Controller {
                 {
                     FileStage::save();
                 }
+
+                ui.take_available_width();
+
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.button("☰ layers").clicked() {
+                        self.show_right_side_panel = !self.show_right_side_panel
+                    }
+
+                    if ui
+                        .button("📂 open")
+                        .on_hover_text("Open .tck/.obj files")
+                        .clicked()
+                    {
+                        FileStage::load();
+                    }
+                });
             });
         });
 
@@ -258,8 +267,20 @@ impl Controller {
                                     line.visible = visible;
                                 }
                             }
+
+                            if let Some(color_visible) = ternary_checkbox(
+                                ui,
+                                Some(lines.settings_global().color_visible),
+                                "   🎨   ",
+                            ) {
+                                lines.settings_global().color_visible = color_visible;
+
+                                for line in lines.settings() {
+                                    line.color_visible = color_visible
+                                }
+                            }
                         })
-                        .body(|ui| {});
+                        .body(|_| {});
 
                     for line in lines.settings() {
                         let id = ui.make_persistent_id(&line.name);
@@ -269,7 +290,7 @@ impl Controller {
                                 ui.color_edit_button_srgb(&mut line.color);
                                 ui.label(&line.name);
                             })
-                            .body(|ui| {});
+                            .body(|_| {});
                     }
                 }
             });

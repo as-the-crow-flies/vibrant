@@ -300,7 +300,7 @@ fn shade(
 
     let color = unpack4x8unorm(settings.color);
 
-    let rgb = color.rgb * factor * mix(vec3<f32>(1.0), abs(tangent).xzy, environment.settings.tangent_color);
+    let rgb = factor * mix(abs(tangent).xzy, color.rgb, color.a);
     let a = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
 
     return vec4<f32>(rgb, a);
