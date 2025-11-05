@@ -43,12 +43,6 @@ impl Gpu {
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some(type_name::<Self>()),
                 required_limits: Limits {
-                    max_bind_groups: limits.max_bind_groups,
-                    max_compute_invocations_per_workgroup: limits
-                        .max_compute_invocations_per_workgroup,
-                    max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
-                    max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y,
-                    max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
                     max_buffer_size: limits.max_buffer_size,
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                     max_storage_buffers_per_shader_stage: limits

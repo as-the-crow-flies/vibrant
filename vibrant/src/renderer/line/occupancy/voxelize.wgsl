@@ -9,7 +9,7 @@
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-const WORKGROUP_SIZE: u32 = 1024;
+const WORKGROUP_SIZE: u32 = 256;
 const CHUNK_SIZE: u32 = 32;
 
 const PI: f32 = 3.14159265358979323846264338327950288;

@@ -3,7 +3,7 @@
 @group(0) @binding(2) var<storage> LINE_LENGTH: u32;
 @group(0) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
 
-const WORKGROUP_SIZE: u32 = 1024;
+const WORKGROUP_SIZE: u32 = 256;
 const CHUNK_SIZE: u32 = 32;
 
 var<workgroup> OFFSET: u32;
