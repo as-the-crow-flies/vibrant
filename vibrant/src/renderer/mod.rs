@@ -6,7 +6,9 @@ pub mod wgsl;
 use std::sync::Arc;
 
 use crate::{
-    asset::transform::TransformBuffer, file::bounds::Bounds, renderer::line::LineRenderer,
+    asset::{transform::TransformBuffer, volume::VolumeBuffer},
+    file::bounds::Bounds,
+    renderer::line::LineRenderer,
 };
 use environment::Environment;
 use pollster::FutureExt;
@@ -67,13 +69,23 @@ impl Renderer {
             needs_transform = true;
         });
 
+        FileStage::on_volumes(|volumes| {
+            self.asset
+                .volumes
+                .extend(volumes.iter().map(|volume| VolumeBuffer::new(gpu, volume)));
+
+            if let Some(volume) = volumes.last() {
+                self.asset.transform = Some(TransformBuffer::new(gpu, volume.transform()));
+            }
+        });
+
         let surface = self.surface.maybe_resize(gpu, &controller.settings());
 
         let input = self.egui.take_egui_input(window);
         let output = self
             .egui
             .egui_ctx()
-            .run(input, |ctx| controller.ui(ctx, &mut self.asset.line));
+            .run(input, |ctx| controller.ui(ctx, &mut self.asset));
         self.egui
             .handle_platform_output(&window, output.platform_output.clone());
 

@@ -2,14 +2,26 @@ use std::io::Cursor;
 
 use flate2::read::GzDecoder;
 use glam::Mat4;
-use nifti::{InMemNiftiObject, NiftiObject};
+use nifti::{InMemNiftiObject, NiftiObject, NiftiType};
 
 use crate::file::File;
 
+pub enum VolumeType {
+    Uint8,
+    Uint16,
+    Uint32,
+    Int8,
+    Int16,
+    Int32,
+    Float32,
+}
+
 pub struct VolumeFile {
     name: String,
+    ty: VolumeType,
     transform: Mat4,
-    data: Vec<f32>,
+    data: Vec<u8>,
+    dim: Vec<u16>,
 }
 
 impl VolumeFile {
@@ -25,12 +37,29 @@ impl VolumeFile {
         ])
         .transpose();
 
-        let data: Vec<f32> = obj.into_volume().into_nifti_typed_data().unwrap();
+        let ty = match obj.header().data_type().expect("Invalid Nifti data type") {
+            NiftiType::Uint8 => VolumeType::Uint8,
+            NiftiType::Uint16 => VolumeType::Uint16,
+            NiftiType::Uint32 => VolumeType::Uint32,
+            NiftiType::Int8 => VolumeType::Int8,
+            NiftiType::Int16 => VolumeType::Int16,
+            NiftiType::Int32 => VolumeType::Int32,
+            NiftiType::Float32 => VolumeType::Float32,
+            _ => panic!("Unsupported Nifti data type"),
+        };
+
+        let dim = obj
+            .header()
+            .dim()
+            .expect("Invalid Nifti dimension")
+            .to_vec();
 
         Self {
-            name: file.name.to_owned(),
+            data: obj.into_volume().into_raw_data(),
+            name: file.name.replace(".nii", "").replace(".gz", "").to_owned(),
             transform,
-            data,
+            ty,
+            dim,
         }
     }
 
@@ -42,8 +71,16 @@ impl VolumeFile {
         self.transform
     }
 
-    pub fn data(&self) -> &[f32] {
+    pub fn data(&self) -> &[u8] {
         &self.data
+    }
+
+    pub fn ty(&self) -> &VolumeType {
+        &self.ty
+    }
+
+    pub fn dim(&self) -> &[u16] {
+        &self.dim
     }
 }
 
@@ -63,6 +100,19 @@ mod test {
 
         let volume = VolumeFile::from_nifti(&file);
 
-        dbg!(volume.data);
+        dbg!(volume.transform());
+    }
+
+    #[test]
+    fn can_read_integer_nifti_file() {
+        let file = File {
+            name: "T1w_acpc_dc_restore_1.25.nii.gz".to_owned(),
+            data: fs::read("/Users/bkraaijeveld/Projects/vibrant/assets/HCP-100307/m2m_hcp-100307/final_tissues.nii.gz")
+                .expect("Should be able to load nifti file"),
+        };
+
+        let volume = VolumeFile::from_nifti(&file);
+
+        dbg!(volume.transform());
     }
 }

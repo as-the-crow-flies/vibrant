@@ -18,7 +18,7 @@ use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    asset::line::LineBuffer,
+    asset::{line::LineBuffer, Asset},
     controller::{
         segment::Segment,
         settings::{LineDisplayMode, LineVoxelizationMode},
@@ -59,7 +59,7 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, lines: &mut Option<LineBuffer>) {
+    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset) {
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -235,66 +235,87 @@ impl Controller {
             },
         );
 
-        SidePanel::right("SidePanelRight").show_animated(ctx, self.show_right_side_panel, |ui| {
-            ScrollArea::new([false, true]).show(ui, |ui| {
-                ui.heading("Layers");
-                ui.separator();
+        SidePanel::right("SidePanelRight")
+            .min_width(300.0)
+            .show_animated(ctx, self.show_right_side_panel, |ui| {
+                CollapsingState::load_with_default_open(ui.ctx(), "Tractography".into(), false)
+                    .show_header(ui, |ui| ui.heading("Tractography"))
+                    .body(|ui| {
+                        ScrollArea::new([false, true]).show(ui, |ui| {
+                            if let Some(lines) = &mut asset.line {
+                                lines.settings_global().selected = lines
+                                    .settings()
+                                    .iter()
+                                    .map(|settings| settings.selected)
+                                    .all_equal_value()
+                                    .ok();
 
-                if let Some(lines) = lines {
-                    lines.settings_global().selected = lines
-                        .settings()
-                        .iter()
-                        .map(|settings| settings.selected)
-                        .all_equal_value()
-                        .ok();
+                                lines.settings_global().visible = lines
+                                    .settings()
+                                    .iter()
+                                    .map(|settings| settings.visible)
+                                    .all_equal_value()
+                                    .ok();
 
-                    lines.settings_global().visible = lines
-                        .settings()
-                        .iter()
-                        .map(|settings| settings.visible)
-                        .all_equal_value()
-                        .ok();
+                                CollapsingState::load_with_default_open(
+                                    ui.ctx(),
+                                    "Line".into(),
+                                    false,
+                                )
+                                .show_header(ui, |ui| {
+                                    if let Some(visible) =
+                                        ternary_checkbox(ui, lines.settings_global().visible, "👁")
+                                    {
+                                        lines.settings_global().visible = Some(visible);
 
-                    let id = ui.make_persistent_id("Line Layer");
-                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                        .show_header(ui, |ui| {
-                            if let Some(visible) =
-                                ternary_checkbox(ui, lines.settings_global().visible, "👁")
-                            {
-                                lines.settings_global().visible = Some(visible);
+                                        for line in lines.settings() {
+                                            line.visible = visible;
+                                        }
+                                    }
+
+                                    if let Some(color_visible) = ternary_checkbox(
+                                        ui,
+                                        Some(lines.settings_global().color_visible),
+                                        "   🎨   ",
+                                    ) {
+                                        lines.settings_global().color_visible = color_visible;
+
+                                        for line in lines.settings() {
+                                            line.color_visible = color_visible
+                                        }
+                                    }
+                                })
+                                .body(|_| {});
 
                                 for line in lines.settings() {
-                                    line.visible = visible;
+                                    let id = ui.make_persistent_id(&line.name);
+                                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                                        .show_header(ui, |ui| {
+                                            ui.toggle_value(&mut line.visible, "👁");
+                                            ui.color_edit_button_srgb(&mut line.color);
+                                            ui.label(&line.name);
+                                        })
+                                        .body(|_| {});
                                 }
                             }
+                        });
+                    });
 
-                            if let Some(color_visible) = ternary_checkbox(
-                                ui,
-                                Some(lines.settings_global().color_visible),
-                                "   🎨   ",
-                            ) {
-                                lines.settings_global().color_visible = color_visible;
-
-                                for line in lines.settings() {
-                                    line.color_visible = color_visible
-                                }
+                CollapsingState::load_with_default_open(ui.ctx(), "Volumes".into(), false)
+                    .show_header(ui, |ui| ui.heading("Volumes"))
+                    .body(|ui| {
+                        ScrollArea::new([false, true]).show(ui, |ui| {
+                            for volume in &mut asset.volumes {
+                                let id = ui.make_persistent_id(&volume.name());
+                                CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                                    .show_header(ui, |ui| {
+                                        ui.label(volume.name());
+                                    })
+                                    .body(|_| {});
                             }
-                        })
-                        .body(|_| {});
-
-                    for line in lines.settings() {
-                        let id = ui.make_persistent_id(&line.name);
-                        CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                            .show_header(ui, |ui| {
-                                ui.toggle_value(&mut line.visible, "👁");
-                                ui.color_edit_button_srgb(&mut line.color);
-                                ui.label(&line.name);
-                            })
-                            .body(|_| {});
-                    }
-                }
+                        });
+                    });
             });
-        });
     }
 
     pub fn camera(&self) -> &Camera {
