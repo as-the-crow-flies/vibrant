@@ -72,7 +72,7 @@ impl LineOccupancyPipeline {
         line: &LineBuffer,
     ) {
         frame.occupancy().clear(cmd);
-        line.clear_count(cmd);
+        line.clear_offset(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Occupancy"),

@@ -8,7 +8,7 @@
 @group(2) @binding(2) var<storage> LINE_LENGTH: u32;
 @group(2) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
 @group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
-@group(2) @binding(6) var<storage> LINE_SETTINGS: array<LineSettings>;
+@group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -48,14 +48,14 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
                 index = LINE_INDEX[index_index];
 
-                let visible = LINE_SETTINGS[LINE_MATERIAL[index]].visible == TRUE;
+                // let visible = LINE_SETTINGS[LINE_MATERIAL[index]].visible == TRUE;
 
-                if (visible) {
+                // if (visible) {
                     v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
                     v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
 
                     if (culling(v0.xyz, v1.xyz) > 0.0) { break; }
-                }
+                // }
             }
 
             voxelize(index, v0, v1, radius);

@@ -1,3 +1,4 @@
+pub mod crop;
 pub mod cull;
 pub mod occlusion;
 pub mod occupancy;
@@ -13,8 +14,8 @@ use crate::{
     controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
-        cull::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
-        transform::LineTransformPipeline,
+        crop::LineCropPipeline, cull::LineCullingPipeline, occlusion::LineOcclusionPipeline,
+        render::LineRenderPipeline, transform::LineTransformPipeline,
     },
     surface::Frame,
 };
@@ -23,6 +24,7 @@ use super::environment::Environment;
 
 pub struct LineRenderer {
     transform: LineTransformPipeline,
+    crop: LineCropPipeline,
     occupancy: LineOccupancyPipeline,
     occlusion: LineOcclusionPipeline,
     culling: LineCullingPipeline,
@@ -33,7 +35,7 @@ impl LineRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             transform: LineTransformPipeline::new(gpu),
-
+            crop: LineCropPipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
             occlusion: LineOcclusionPipeline::new(gpu),
             culling: LineCullingPipeline::new(gpu),
@@ -54,6 +56,8 @@ impl LineRenderer {
         if needs_transform {
             self.transform.dispatch(cmd, line, transform);
         }
+
+        self.crop.dispatch(cmd, line, environment);
 
         self.occupancy
             .dispatch(cmd, frame, environment, settings, line);

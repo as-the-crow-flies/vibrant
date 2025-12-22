@@ -1,7 +1,8 @@
-use std::{any::type_name, iter::zip};
+use std::any::type_name;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec4;
+use itertools::Itertools;
 use random_color::{options::Luminosity, RandomColor};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -53,14 +54,18 @@ pub struct LineBuffer {
     offset: Buffer,
 
     materials: Buffer,
-    line_offsets: Buffer,
+
+    raw_indices: Buffer,
+    raw_offsets: Buffer,
 
     binding_read: BindGroup,
     binding_write: BindGroup,
+
+    n_lines: u32,
 }
 
 impl LineBuffer {
-    pub fn new(gpu: &Gpu, lines: &[LineFile]) -> Self {
+    pub fn new(gpu: &Gpu, files: &[LineFile]) -> Self {
         let label = Some(type_name::<Self>());
 
         let global_settings = GlobalLineSettings {
@@ -69,7 +74,7 @@ impl LineBuffer {
             color_visible: false,
         };
 
-        let settings: Vec<LineSettings> = lines
+        let settings: Vec<LineSettings> = files
             .iter()
             .map(|line| LineSettings {
                 name: line.name().to_owned(),
@@ -100,37 +105,59 @@ impl LineBuffer {
         let settings_buffer: Vec<LineSettingsBuffer> =
             settings.iter().map(|setting| setting.to_buffer()).collect();
 
-        let vertices: Vec<Vec4> = lines
+        let n_lines = files.iter().map(|file| file.lines().len() as u32).sum();
+
+        let vertices: Vec<Vec4> = files
             .iter()
-            .map(|line| line.vertices())
+            .flat_map(|file| file.lines())
             .flatten()
             .copied()
             .collect();
 
-        let offsets: Vec<u32> = lines
+        let vertex_counts: Vec<u32> = files
             .iter()
-            .map(|line| line.vertices().len() as u32)
+            .flat_map(|file| file.lines().iter().map(|vertices| vertices.len() as u32))
+            .collect();
+
+        let indices: Vec<u32> = vertex_counts
+            .iter()
+            .scan(0u32, |sum, x| {
+                *sum += x;
+                Some(*sum - x)
+            })
+            .tuple_windows()
+            .flat_map(|(start, end)| start..end - 1)
+            .collect();
+
+        let index_offsets: Vec<u32> = vertex_counts
+            .iter()
+            .map(|count| count - 1)
             .scan(0u32, |sum, x| {
                 *sum += x;
                 Some(*sum - x)
             })
             .collect();
 
-        let line_offsets: Vec<u32> = zip(lines, &offsets)
-            .flat_map(|(line, offset)| line.line_offsets().iter().map(move |o| offset + o))
-            .collect();
-
-        let indices: Vec<u32> = zip(lines, &offsets)
-            .map(|(line, offset)| line.indices().iter().map(move |index| offset + index))
-            .flatten()
-            .collect();
-
-        let materials: Vec<u32> = lines
+        let materials: Vec<u32> = files
             .iter()
             .enumerate()
-            .map(|(index, line)| [(index as u32)].repeat(line.vertices().len()))
+            .map(|(index, file)| {
+                [(index as u32)].repeat(file.lines().iter().map(|line| line.len()).sum())
+            })
             .flatten()
             .collect();
+
+        let raw_indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&indices),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let raw_offsets = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&index_offsets),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
 
         let length = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
@@ -151,21 +178,16 @@ impl LineBuffer {
             usage: BufferUsages::VERTEX | BufferUsages::STORAGE,
         });
 
-        let indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let indices = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            contents: bytemuck::cast_slice(&indices),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            size: (indices.len() * 8) as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
         });
 
         let materials = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&materials),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        });
-
-        let line_offsets = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&line_offsets),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
@@ -198,11 +220,15 @@ impl LineBuffer {
             },
             BindGroupEntry {
                 binding: 5,
-                resource: line_offsets.as_entire_binding(),
+                resource: settings_buffer.as_entire_binding(),
             },
             BindGroupEntry {
                 binding: 6,
-                resource: settings_buffer.as_entire_binding(),
+                resource: raw_indices.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 7,
+                resource: raw_offsets.as_entire_binding(),
             },
         ];
 
@@ -229,10 +255,14 @@ impl LineBuffer {
             offset,
 
             materials,
-            line_offsets,
+
+            raw_indices,
+            raw_offsets,
 
             binding_read,
             binding_write,
+
+            n_lines,
         }
     }
 
@@ -252,12 +282,12 @@ impl LineBuffer {
         }
     }
 
-    pub fn clear_total_count(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.length, 0, None);
+    pub fn clear_offset(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_buffer(&self.offset, 0, None);
     }
 
-    pub fn clear_count(&self, cmd: &mut CommandEncoder) {
-        cmd.clear_buffer(&self.offset, 0, None);
+    pub fn clear_length(&self, cmd: &mut CommandEncoder) {
+        cmd.clear_buffer(&self.length, 0, None);
     }
 
     pub fn update_settings(&self, gpu: &Gpu) {
@@ -340,7 +370,7 @@ impl LineBuffer {
                         },
                         count: None,
                     },
-                    // Line Offsets
+                    // Settings
                     BindGroupLayoutEntry {
                         binding: 5,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
@@ -351,9 +381,20 @@ impl LineBuffer {
                         },
                         count: None,
                     },
-                    // Settings
+                    // Raw Indices
                     BindGroupLayoutEntry {
                         binding: 6,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Raw Offsets
+                    BindGroupLayoutEntry {
+                        binding: 7,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
@@ -365,6 +406,10 @@ impl LineBuffer {
                 ],
             })
     }
+
+    pub fn n_lines(&self) -> u32 {
+        self.n_lines
+    }
 }
 
 impl Drop for LineBuffer {
@@ -374,7 +419,8 @@ impl Drop for LineBuffer {
         self.length.destroy();
         self.offset.destroy();
         self.materials.destroy();
-        self.line_offsets.destroy();
         self.settings_buffer.destroy();
+        self.raw_indices.destroy();
+        self.raw_offsets.destroy();
     }
 }

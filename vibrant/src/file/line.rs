@@ -1,4 +1,5 @@
 use glam::{Vec3, Vec4};
+use itertools::Itertools;
 
 use std::{collections::HashMap, io::BufRead};
 
@@ -9,10 +10,7 @@ use super::bounds::Bounds;
 #[derive(Debug, Default)]
 pub struct LineFile {
     name: String,
-    vertices: Vec<Vec4>,
-    indices: Vec<u32>,
-    line_counts: Vec<u32>,
-    line_offsets: Vec<u32>,
+    lines: Vec<Vec<Vec4>>,
     bounds: Bounds,
 }
 
@@ -21,20 +19,8 @@ impl LineFile {
         &self.name
     }
 
-    pub fn vertices(&self) -> &[Vec4] {
-        &self.vertices
-    }
-
-    pub fn indices(&self) -> &[u32] {
-        &self.indices
-    }
-
-    pub fn line_counts(&self) -> &[u32] {
-        &self.line_counts
-    }
-
-    pub fn line_offsets(&self) -> &[u32] {
-        &self.line_offsets
+    pub fn lines(&self) -> &Vec<Vec<Vec4>> {
+        &self.lines
     }
 
     pub fn bounds(&self) -> &Bounds {
@@ -67,44 +53,45 @@ impl LineFile {
             // Fallback to copy when vertices are not aligned properly
             .unwrap_or_else(|_| bytemuck::cast_slice(&bytes[offset..].to_owned()).to_vec());
 
-        Self::from_lines(
-            file.name.replace(".tck", ""),
-            lines
-                .split(|vertex| !vertex.is_finite())
-                .map(|x| x.iter().copied().collect())
-                .collect(),
-        )
-    }
-
-    pub fn from_lines(name: String, lines: Vec<Vec<Vec3>>) -> Self {
-        let mut vertices = Vec::new();
-        let mut indices = Vec::new();
-        let mut line_counts = Vec::new();
-
-        for line in lines.iter().filter(|line| line.len() >= 2) {
-            let index_length = line.len() - 1;
-
-            indices.extend((vertices.len()..vertices.len() + index_length).map(|i| i as u32));
-            vertices.extend(line.iter().map(|v| Vec4::new(v.x, v.y, v.z, 1.0)));
-            line_counts.push(index_length as u32);
-        }
-
-        let line_offsets = line_counts
-            .iter()
-            .scan(0, |total, c| {
-                let result = *total;
-                *total += c;
-                Some(result)
-            })
+        let mut lines: Vec<Vec<Vec4>> = lines
+            .split(|vertex| !vertex.is_finite())
+            .filter(|line| line.len() >= 2)
+            .map(|line| line.iter().map(|v| Vec4::new(v.x, v.y, v.z, 1.0)).collect())
             .collect();
 
+        lines.sort_by_key(|line| -(line.len() as i32));
+
+        let mut reference = lines.first().unwrap().iter().copied().collect_vec();
+
+        Self::orient_line(&mut reference, Vec4::ONE);
+
+        for line in &mut lines {
+            Self::orient_to_reference(line, &reference);
+        }
+
         Self {
-            name,
-            bounds: Bounds::from_vertices(&vertices),
-            vertices,
-            indices,
-            line_counts,
-            line_offsets,
+            name: file.name.replace(".tck", ""),
+            bounds: Bounds::from_vertices(lines.iter().flatten()),
+            lines,
+        }
+    }
+
+    fn orient_line(line: &mut Vec<Vec4>, preferred: Vec4) {
+        let dir = line.last().unwrap() - line.first().unwrap();
+        if dir.dot(preferred) < 0.0 {
+            line.reverse();
+        }
+    }
+
+    fn orient_to_reference(line: &mut Vec<Vec4>, reference: &Vec<Vec4>) {
+        let d_forward = line.first().unwrap().distance(*reference.first().unwrap())
+            + line.last().unwrap().distance(*reference.last().unwrap());
+
+        let d_reverse = line.first().unwrap().distance(*reference.last().unwrap())
+            + line.last().unwrap().distance(*reference.first().unwrap());
+
+        if d_reverse < d_forward {
+            line.reverse();
         }
     }
 }

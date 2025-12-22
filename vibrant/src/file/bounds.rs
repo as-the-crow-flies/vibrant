@@ -11,9 +11,8 @@ impl Bounds {
         self.max - self.min
     }
 
-    pub fn from_vertices(vertices: &[Vec4]) -> Bounds {
+    pub fn from_vertices<'a>(vertices: impl Iterator<Item = &'a Vec4>) -> Bounds {
         vertices
-            .iter()
             .filter(|&vertex| vertex.is_finite())
             .fold(
                 Bounds {

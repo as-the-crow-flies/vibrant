@@ -1,6 +1,6 @@
 @group(0) @binding(0) var<storage, read_write> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage, read_write> LINE_VERTEX: array<vec4<f32>>;
-@group(0) @binding(2) var<storage> LINE_LENGTH: u32;
+@group(0) @binding(2) var<storage, read_write> LINE_LENGTH: u32;
 @group(0) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
 
 const WORKGROUP_SIZE: u32 = 256;
@@ -11,7 +11,7 @@ var<workgroup> OFFSET: u32;
 @compute
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
-    let n_indices = arrayLength(&LINE_INDEX);
+    let n_indices = LINE_LENGTH;
 
     var offset = 0u;
 

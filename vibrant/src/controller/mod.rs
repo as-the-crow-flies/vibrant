@@ -193,6 +193,18 @@ impl Controller {
                         ui.add(
                             Slider::new(&mut self.settings.crop_end, 0.0..=1.0).text("Crop End"),
                         );
+
+                        if ui
+                            .add(
+                                Slider::new(&mut self.settings.crop_middle, 0.0..=0.5)
+                                    .text("Crop Middle"),
+                            )
+                            .changed()
+                        {
+                            self.settings.crop_start = 0.5 - self.settings().crop_middle;
+                            self.settings.crop_end = 0.5 + self.settings().crop_middle;
+                        }
+
                         ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
