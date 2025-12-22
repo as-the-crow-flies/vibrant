@@ -5,8 +5,6 @@
 
 @group(1) @binding(0) var<uniform> TRANSFORM: mat4x4<f32>;
 
-@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
-
 const WORKGROUP_SIZE: u32 = 256;
 const CHUNK_SIZE: u32 = 32;
 

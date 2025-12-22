@@ -8,7 +8,7 @@
 @group(2) @binding(2) var<storage> LINE_LENGTH: u32;
 @group(2) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
 @group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
-@group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
+@group(2) @binding(6) var<storage> LINE_SETTINGS: array<LineSettings>;
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 

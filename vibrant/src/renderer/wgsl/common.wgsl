@@ -8,6 +8,8 @@ struct Settings {
     level: f32,
     smoothing: f32,
     culling: u32,
+    crop_start: f32,
+    crop_end: f32,
 }
 
 struct Segment {

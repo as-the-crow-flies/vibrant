@@ -3,7 +3,6 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 use crate::{
     asset::{line::LineBuffer, transform::TransformBuffer},
     gpu::Gpu,
-    renderer::environment::Environment,
 };
 
 pub struct LineTransformPipeline {
@@ -19,7 +18,6 @@ impl LineTransformPipeline {
                 &gpu.pipeline_layout(&[
                     &LineBuffer::layout(gpu, false),
                     &TransformBuffer::layout(gpu),
-                    &Environment::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("transform.wgsl")),
             ),
@@ -34,21 +32,14 @@ impl LineTransformPipeline {
     pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
-        environment: &Environment,
         line: &LineBuffer,
         transform: &TransformBuffer,
     ) {
-        self.transform(cmd, line, transform, environment);
+        self.transform(cmd, line, transform);
         self.adjacency(cmd, line);
     }
 
-    fn transform(
-        &self,
-        cmd: &mut CommandEncoder,
-        line: &LineBuffer,
-        transform: &TransformBuffer,
-        environment: &Environment,
-    ) {
+    fn transform(&self, cmd: &mut CommandEncoder, line: &LineBuffer, transform: &TransformBuffer) {
         line.clear_count(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -59,7 +50,6 @@ impl LineTransformPipeline {
         pass.set_pipeline(&self.transform);
         pass.set_bind_group(0, line.binding(false), &[]);
         pass.set_bind_group(1, transform.binding(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }
 

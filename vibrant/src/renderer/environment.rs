@@ -81,6 +81,8 @@ impl Environment {
                 bytes_of(&controller.settings().level),
                 bytes_of(&controller.settings().smoothing),
                 bytes_of(&(controller.settings().culling as u32)),
+                bytes_of(&(controller.settings().crop_start)),
+                bytes_of(&(controller.settings().crop_end)),
             ]
             .concat(),
         );

@@ -18,7 +18,7 @@ use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    asset::{line::LineBuffer, Asset},
+    asset::Asset,
     controller::{
         segment::Segment,
         settings::{LineDisplayMode, LineVoxelizationMode},
@@ -185,6 +185,13 @@ impl Controller {
                         ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
                         ui.add(
                             Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"),
+                        );
+                        ui.add(
+                            Slider::new(&mut self.settings.crop_start, 0.0..=1.0)
+                                .text("Crop Start"),
+                        );
+                        ui.add(
+                            Slider::new(&mut self.settings.crop_end, 0.0..=1.0).text("Crop End"),
                         );
                         ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)

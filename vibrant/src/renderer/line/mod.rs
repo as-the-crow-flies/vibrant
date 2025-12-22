@@ -1,4 +1,4 @@
-pub mod culling;
+pub mod cull;
 pub mod occlusion;
 pub mod occupancy;
 pub mod render;
@@ -13,7 +13,7 @@ use crate::{
     controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
-        culling::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
+        cull::LineCullingPipeline, occlusion::LineOcclusionPipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
     surface::Frame,
@@ -52,7 +52,7 @@ impl LineRenderer {
         needs_transform: bool,
     ) {
         if needs_transform {
-            self.transform.dispatch(cmd, environment, line, transform);
+            self.transform.dispatch(cmd, line, transform);
         }
 
         self.occupancy

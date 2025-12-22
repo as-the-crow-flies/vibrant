@@ -39,6 +39,8 @@ pub struct Settings {
     pub culling: bool,
     pub slice_count: u32,
     pub workgroups: u32,
+    pub crop_start: f32,
+    pub crop_end: f32,
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
 }
@@ -59,6 +61,8 @@ impl Settings {
             smoothing: 0.5,
             culling: true,
             slice_count: 10,
+            crop_start: 0.0,
+            crop_end: 1.0,
             workgroups: 64,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,

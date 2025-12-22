@@ -33,7 +33,7 @@ impl LineCullingPipeline {
                     &CullingBuffer::layout_write(gpu),
                     &Environment::layout(gpu),
                 ]),
-                &gpu.shader(include_str!("culling.wgsl")),
+                &gpu.shader(include_str!("cull.wgsl")),
             ),
             mipmap: gpu.compute(
                 "Culling::Mipmap",

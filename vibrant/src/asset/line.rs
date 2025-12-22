@@ -53,6 +53,7 @@ pub struct LineBuffer {
     offset: Buffer,
 
     materials: Buffer,
+    line_offsets: Buffer,
 
     binding_read: BindGroup,
     binding_write: BindGroup,
@@ -115,8 +116,12 @@ impl LineBuffer {
             })
             .collect();
 
-        let indices: Vec<u32> = zip(lines.iter().map(|line| line.indices()), offsets)
-            .map(|(indices, offset)| indices.iter().map(move |index| offset + index))
+        let line_offsets: Vec<u32> = zip(lines, &offsets)
+            .flat_map(|(line, offset)| line.line_offsets().iter().map(move |o| offset + o))
+            .collect();
+
+        let indices: Vec<u32> = zip(lines, &offsets)
+            .map(|(line, offset)| line.indices().iter().map(move |index| offset + index))
             .flatten()
             .collect();
 
@@ -131,6 +136,13 @@ impl LineBuffer {
             label,
             contents: bytemuck::bytes_of(&(indices.len() as u32)),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+        });
+
+        let offset = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 4,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
         });
 
         let vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -151,11 +163,10 @@ impl LineBuffer {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
-        let offset = gpu.device().create_buffer(&BufferDescriptor {
+        let line_offsets = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            size: 4,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
+            contents: bytemuck::cast_slice(&line_offsets),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -187,6 +198,10 @@ impl LineBuffer {
             },
             BindGroupEntry {
                 binding: 5,
+                resource: line_offsets.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 6,
                 resource: settings_buffer.as_entire_binding(),
             },
         ];
@@ -214,6 +229,7 @@ impl LineBuffer {
             offset,
 
             materials,
+            line_offsets,
 
             binding_read,
             binding_write,
@@ -324,9 +340,20 @@ impl LineBuffer {
                         },
                         count: None,
                     },
-                    // Settings
+                    // Line Offsets
                     BindGroupLayoutEntry {
                         binding: 5,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Settings
+                    BindGroupLayoutEntry {
+                        binding: 6,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
@@ -346,7 +373,8 @@ impl Drop for LineBuffer {
         self.indices.destroy();
         self.length.destroy();
         self.offset.destroy();
-        self.settings_buffer.destroy();
         self.materials.destroy();
+        self.line_offsets.destroy();
+        self.settings_buffer.destroy();
     }
 }

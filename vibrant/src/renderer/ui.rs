@@ -22,6 +22,7 @@ impl UiRenderer {
                     msaa_samples: 1,
                     depth_stencil_format: None,
                     dithering: false,
+                    predictable_texture_filtering: false,
                 },
             ),
         }
