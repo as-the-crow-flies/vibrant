@@ -12,7 +12,7 @@ egui-winit.workspace = true
 log.workspace = true
 pollster.workspace = true
 
-bytemuck = { version = "1.18", features = ["derive", "min_const_generics"] }
+bytemuck = { version = "1.24", features = ["derive", "min_const_generics"] }
 glam = { version = "0.29", features = ["bytemuck"] }
 rfd = "0.15"
 nifti = "0.17"
