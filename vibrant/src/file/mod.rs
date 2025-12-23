@@ -18,6 +18,13 @@ pub struct File {
 }
 
 impl File {
+    pub fn new(name: &str, data: Vec<u8>) -> Self {
+        Self {
+            name: name.to_string(),
+            data,
+        }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }

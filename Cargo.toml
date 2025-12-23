@@ -45,3 +45,10 @@ web-sys = { version = "0.3", features = [
     "Element",
     "HtmlCanvasElement",
 ] }
+
+[dev-dependencies]
+criterion = "0.8"
+
+[[bench]]
+name = "main"
+harness = false

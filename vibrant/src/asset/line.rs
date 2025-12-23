@@ -9,7 +9,10 @@ use wgpu::{
     *,
 };
 
-use crate::{file::LineFile, gpu::Gpu};
+use crate::{
+    file::{bounds::Bounds, LineFile},
+    gpu::Gpu,
+};
 
 pub struct GlobalLineSettings {
     pub selected: Option<bool>,
@@ -47,6 +50,7 @@ pub struct LineBuffer {
     global_settings: GlobalLineSettings,
     settings: Vec<LineSettings>,
     settings_buffer: Buffer,
+    bounds: Bounds,
 
     vertices: Buffer,
     indices: Buffer,
@@ -73,6 +77,8 @@ impl LineBuffer {
             visible: Some(true),
             color_visible: false,
         };
+
+        let bounds = Bounds::from_bounds(&files.iter().map(|file| *file.bounds()).collect_vec());
 
         let settings: Vec<LineSettings> = files
             .iter()
@@ -248,6 +254,7 @@ impl LineBuffer {
             global_settings,
             settings,
             settings_buffer,
+            bounds,
 
             vertices,
             indices,
@@ -272,6 +279,10 @@ impl LineBuffer {
 
     pub fn settings(&mut self) -> &mut [LineSettings] {
         &mut self.settings
+    }
+
+    pub fn bounds(&self) -> &Bounds {
+        &self.bounds
     }
 
     pub fn binding(&self, read_only: bool) -> &BindGroup {
