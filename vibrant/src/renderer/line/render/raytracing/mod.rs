@@ -1,5 +1,3 @@
-pub mod populate;
-
 use std::any::type_name;
 
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
@@ -8,15 +6,11 @@ use crate::{
     asset::line::LineBuffer,
     controller::settings::Settings,
     gpu::Gpu,
-    renderer::{
-        environment::Environment, line::render::raytracing::populate::LinePopulatePipeline,
-        wgsl::TRACE,
-    },
+    renderer::{environment::Environment, wgsl::TRACE},
     surface::{color::ColorBuffer, culling::CullingBuffer, Frame},
 };
 
 pub struct RayTracingLineRenderPipeline {
-    populate: LinePopulatePipeline,
     opaque: RenderPipeline,
     transparent: RenderPipeline,
 }
@@ -24,7 +18,6 @@ pub struct RayTracingLineRenderPipeline {
 impl RayTracingLineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            populate: LinePopulatePipeline::new(gpu),
             opaque: gpu.quad(
                 type_name::<Self>(),
                 &gpu.pipeline_layout(&[
@@ -58,9 +51,6 @@ impl RayTracingLineRenderPipeline {
         settings: &Settings,
         line: &LineBuffer,
     ) {
-        self.populate
-            .dispatch(cmd, frame, environment, settings, line);
-
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             color_attachments: &[Some(frame.color().attachment_srgb_clear())],
             label: Some("Ray"),

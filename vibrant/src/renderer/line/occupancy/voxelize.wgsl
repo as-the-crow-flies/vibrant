@@ -4,8 +4,6 @@
 @group(1) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
 @group(1) @binding(2) var<storage> LINE_LENGTH: u32;
 @group(1) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
-@group(1) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
-@group(1) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -44,14 +42,10 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
             let index = LINE_INDEX[index_index];
 
-            // let visible = LINE_SETTINGS[LINE_MATERIAL[index]].visible == TRUE;
+            let v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
+            let v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
 
-            // if (visible) {
-                let v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
-                let v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
-
-                voxelize(index, v0, v1, RADIUS);
-            // }
+            voxelize(index, v0, v1, RADIUS);
         }
     }
 }

@@ -206,6 +206,33 @@ impl Controller {
                         }
 
                         ui.add(
+                            Slider::new(&mut self.settings.crop_x_start, -0.5..=0.5)
+                                .text("Crop X Start"),
+                        );
+                        ui.add(
+                            Slider::new(&mut self.settings.crop_x_end, -0.5..=0.5)
+                                .text("Crop X End"),
+                        );
+
+                        ui.add(
+                            Slider::new(&mut self.settings.crop_y_start, -0.5..=0.5)
+                                .text("Crop Y Start"),
+                        );
+                        ui.add(
+                            Slider::new(&mut self.settings.crop_y_end, -0.5..=0.5)
+                                .text("Crop Y End"),
+                        );
+
+                        ui.add(
+                            Slider::new(&mut self.settings.crop_z_start, -0.5..=0.5)
+                                .text("Crop Z Start"),
+                        );
+                        ui.add(
+                            Slider::new(&mut self.settings.crop_z_end, -0.5..=0.5)
+                                .text("Crop Z End"),
+                        );
+
+                        ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
                         );

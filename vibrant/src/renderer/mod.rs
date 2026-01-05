@@ -57,6 +57,7 @@ impl Renderer {
 
     pub fn render(&mut self, gpu: &Gpu, controller: &mut Controller, window: &Arc<Window>) {
         let mut needs_transform = false;
+        let mut needs_update = true;
 
         FileStage::on_lines(|lines| {
             self.asset.line = Some(LineBuffer::new(gpu, &lines));
@@ -106,6 +107,7 @@ impl Renderer {
                 transform,
                 controller.settings(),
                 needs_transform,
+                needs_update,
             );
         }
 

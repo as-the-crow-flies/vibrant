@@ -10,6 +10,12 @@ struct Settings {
     culling: u32,
     crop_start: f32,
     crop_end: f32,
+    crop_x_start: f32,
+    crop_x_end: f32,
+    crop_y_start: f32,
+    crop_y_end: f32,
+    crop_z_start: f32,
+    crop_z_end: f32,
 }
 
 struct Segment {

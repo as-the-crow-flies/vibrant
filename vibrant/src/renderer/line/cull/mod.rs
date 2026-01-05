@@ -7,13 +7,13 @@ use crate::{
     surface::{culling::CullingBuffer, occupancy::OccupancyBuffer, Frame},
 };
 
-pub struct LineCullingPipeline {
+pub struct LineCullPipeline {
     erode: ComputePipeline,
     culling: ComputePipeline,
     mipmap: ComputePipeline,
 }
 
-impl LineCullingPipeline {
+impl LineCullPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             erode: gpu.compute(

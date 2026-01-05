@@ -83,6 +83,12 @@ impl Environment {
                 bytes_of(&(controller.settings().culling as u32)),
                 bytes_of(&(controller.settings().crop_start)),
                 bytes_of(&(controller.settings().crop_end)),
+                bytes_of(&(controller.settings().crop_x_start)),
+                bytes_of(&(controller.settings().crop_x_end)),
+                bytes_of(&(controller.settings().crop_y_start)),
+                bytes_of(&(controller.settings().crop_y_end)),
+                bytes_of(&(controller.settings().crop_z_start)),
+                bytes_of(&(controller.settings().crop_z_end)),
             ]
             .concat(),
         );

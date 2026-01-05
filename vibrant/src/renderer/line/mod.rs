@@ -2,6 +2,7 @@ pub mod crop;
 pub mod cull;
 pub mod occlusion;
 pub mod occupancy;
+pub mod populate;
 pub mod render;
 pub mod transform;
 pub mod ui;
@@ -14,8 +15,9 @@ use crate::{
     controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
-        crop::LineCropPipeline, cull::LineCullingPipeline, occlusion::LineOcclusionPipeline,
-        render::LineRenderPipeline, transform::LineTransformPipeline,
+        crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
+        populate::LinePopulatePipeline, render::LineRenderPipeline,
+        transform::LineTransformPipeline,
     },
     surface::Frame,
 };
@@ -27,7 +29,8 @@ pub struct LineRenderer {
     crop: LineCropPipeline,
     occupancy: LineOccupancyPipeline,
     occlusion: LineOcclusionPipeline,
-    culling: LineCullingPipeline,
+    cull: LineCullPipeline,
+    populate: LinePopulatePipeline,
     render: LineRenderPipeline,
 }
 
@@ -38,7 +41,8 @@ impl LineRenderer {
             crop: LineCropPipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
             occlusion: LineOcclusionPipeline::new(gpu),
-            culling: LineCullingPipeline::new(gpu),
+            cull: LineCullPipeline::new(gpu),
+            populate: LinePopulatePipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
         }
     }
@@ -52,6 +56,7 @@ impl LineRenderer {
         transform: &TransformBuffer,
         settings: &Settings,
         needs_transform: bool,
+        needs_update: bool,
     ) {
         if needs_transform {
             self.transform.dispatch(cmd, line, transform);
@@ -62,8 +67,12 @@ impl LineRenderer {
         self.occupancy
             .dispatch(cmd, frame, environment, settings, line);
 
-        self.culling.dispatch(cmd, frame, environment);
+        self.cull.dispatch(cmd, frame, environment);
+
         self.occlusion.dispatch(cmd, frame, environment);
+
+        self.populate
+            .dispatch(cmd, frame, environment, settings, line);
 
         self.render
             .dispatch(cmd, environment, frame, line, settings);
