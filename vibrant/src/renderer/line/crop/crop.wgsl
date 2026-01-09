@@ -18,7 +18,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let n_lines = arrayLength(&LINE_OFFSET_RAW);
     let index = global_invocation_id.x;
 
-    if (index >= n_lines - 1) { return; }
+    if (index >= n_lines) { return; }
 
     let start = LINE_OFFSET_RAW[index];
     let end = LINE_OFFSET_RAW[index + 1];
@@ -34,8 +34,6 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
     let crop_length = min(offset_end - offset_start, length);
 
-    var mask = array<u32, 16>();
-
     let crop_min = vec3<f32>(
         ENVIRONMENT.settings.crop_x_start,
         ENVIRONMENT.settings.crop_y_start,
@@ -48,6 +46,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         ENVIRONMENT.settings.crop_z_end
     );
 
+    var total_length = 0u;
     for (var i=0u; i<crop_length; i++) {
         let index = LINE_INDEX_RAW[start + offset_start + i];
         let v0 = LINE_VERTEX[index].xyz;
@@ -55,20 +54,21 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
         if(all(v0 >= crop_min) && all(v0 <= crop_max) &&
            all(v1 >= crop_min) && all(v1 <= crop_max)) {
-            mask[i >> 5u] |= 1u << (i & 31u);
+           total_length++;
         }
     }
 
-    var total_length = 0u;
-    for (var i=0u; i<16u; i++) {
-        total_length += countOneBits(mask[i]);
-    }
-
     let offset_line = atomicAdd(&LINE_LENGTH, total_length);
+
     var offset_index = 0u;
 
     for (var i=0u; i<crop_length; i++) {
-        if (bool((mask[i >> 5u] >> (i & 31)) & 1u)) {
+        let index = LINE_INDEX_RAW[start + offset_start + i];
+        let v0 = LINE_VERTEX[index].xyz;
+        let v1 = LINE_VERTEX[index + 1].xyz;
+
+        if(all(v0 >= crop_min) && all(v0 <= crop_max) &&
+           all(v1 >= crop_min) && all(v1 <= crop_max)) {
             LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
             offset_index++;
         }

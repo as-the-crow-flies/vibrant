@@ -90,12 +90,14 @@ impl FileStage {
 
         for file in files {
             if file.name().ends_with(".tck") {
-                lines.push(LineFile::from_tck(&file));
+                lines.push(LineFile::from_tck(file));
+            } else if file.name().ends_with(".obj") {
+                lines.push(LineFile::from_obj(file));
             } else if file.name().ends_with(".nii.gz") {
                 volumes.push(VolumeFile::from_nifti(&file));
             } else {
                 warn!(
-                    "Cannot open `{}`. Supported file types are .tck .nii.gz",
+                    "Cannot open `{}`. Supported file types are [.tck .obj .nii.gz]",
                     file.name()
                 )
             }

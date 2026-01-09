@@ -55,7 +55,7 @@ impl App {
             WindowEvent::RedrawRequested => {
                 self.fps.tick();
 
-                renderer.render(&self.gpu, &mut self.controller, window);
+                renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
 
                 self.request_redraw();
             }

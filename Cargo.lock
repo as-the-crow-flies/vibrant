@@ -3170,6 +3170,7 @@ dependencies = [
  "random_color",
  "rfd",
  "wasm-bindgen-futures",
+ "web-time",
  "wgpu",
  "winit",
 ]

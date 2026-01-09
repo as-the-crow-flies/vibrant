@@ -11,6 +11,7 @@ egui-wgpu.workspace = true
 egui-winit.workspace = true
 log.workspace = true
 pollster.workspace = true
+web-time.workspace = true
 
 bytemuck = { version = "1.24", features = ["derive", "min_const_generics"] }
 glam = { version = "0.29", features = ["bytemuck"] }

@@ -48,7 +48,7 @@ fn occlusion_experiment(criterion: &mut Criterion) {
 
     let id = "Brain200k";
 
-    let file = LineFile::from_tck(&File::new(
+    let file = LineFile::from_tck(File::new(
         id,
         fs::read("assets/HCP-100307/whole_brain200k.tck").unwrap(),
     ));

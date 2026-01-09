@@ -65,7 +65,7 @@ impl Settings {
             shadows: 0.0,
             alpha: 1.0,
             level: 0.0,
-            smoothing: 0.5,
+            smoothing: 0.67,
             culling: true,
             slice_count: 10,
             crop_start: 0.0,

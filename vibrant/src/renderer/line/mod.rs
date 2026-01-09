@@ -56,7 +56,7 @@ impl LineRenderer {
         transform: &TransformBuffer,
         settings: &Settings,
         needs_transform: bool,
-        needs_update: bool,
+        _needs_update: bool,
     ) {
         if needs_transform {
             self.transform.dispatch(cmd, line, transform);

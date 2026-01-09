@@ -13,7 +13,7 @@ fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
 
     let this_voxel_density = saturate(textureLoad(DENSITY, this_voxel).x);
 
-    let max_density = 2.0;
+    let max_density = 4.0;
 
     var keep = ENVIRONMENT.settings.culling == 0 && this_voxel_density > 0.0;
 

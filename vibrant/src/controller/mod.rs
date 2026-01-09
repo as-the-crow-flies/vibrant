@@ -5,10 +5,12 @@ pub mod segment;
 pub mod settings;
 pub mod state;
 
+use std::time::Instant;
+
 use camera::Camera;
 use egui::{
-    collapsing_header::CollapsingState, Align, ComboBox, Frame, Layout, Margin, ScrollArea,
-    SidePanel, Slider, Ui,
+    collapsing_header::CollapsingState, Align, Align2, Color32, ComboBox, FontId, Frame, Layout,
+    Margin, ScrollArea, SidePanel, Slider, Ui,
 };
 use event::Event;
 use itertools::Itertools;
@@ -33,6 +35,7 @@ pub struct Controller {
     light: Light,
     segment: Segment,
     settings: Settings,
+    time: Instant,
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
@@ -46,9 +49,10 @@ impl Controller {
             light: Light::default(),
             segment: Segment::new(),
             settings: Settings::new(),
+            time: Instant::now(),
 
             show_left_side_panel: false,
-            show_right_side_panel: true,
+            show_right_side_panel: false,
         }
     }
 
@@ -59,7 +63,7 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset) {
+    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, dt: f32) {
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -207,28 +211,34 @@ impl Controller {
 
                         ui.add(
                             Slider::new(&mut self.settings.crop_x_start, -0.5..=0.5)
+                                .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop X Start"),
                         );
                         ui.add(
                             Slider::new(&mut self.settings.crop_x_end, -0.5..=0.5)
+                                .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop X End"),
                         );
 
                         ui.add(
                             Slider::new(&mut self.settings.crop_y_start, -0.5..=0.5)
+                                .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop Y Start"),
                         );
                         ui.add(
                             Slider::new(&mut self.settings.crop_y_end, -0.5..=0.5)
+                                .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop Y End"),
                         );
 
                         ui.add(
                             Slider::new(&mut self.settings.crop_z_start, -0.5..=0.5)
+                                .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop Z Start"),
                         );
                         ui.add(
                             Slider::new(&mut self.settings.crop_z_end, -0.5..=0.5)
+                                .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop Z End"),
                         );
 
@@ -362,6 +372,24 @@ impl Controller {
                         });
                     });
             });
+
+        let fps = 1.0 / dt;
+        let ms = 1000.0 * dt;
+        let text = format!("{fps:3.0} fps ({ms:3.0} ms)");
+
+        // Foreground layer
+        let painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("fps_overlay"),
+        ));
+
+        painter.text(
+            egui::pos2(self.settings.width as f32 / 4.0, 50.0),
+            Align2::CENTER_TOP,
+            text,
+            FontId::monospace(20.0),
+            Color32::WHITE,
+        );
     }
 
     pub fn camera(&self) -> &Camera {
@@ -383,6 +411,10 @@ impl Controller {
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         self.settings.width = size.width;
         self.settings.height = size.height;
+    }
+
+    pub fn time(&self) -> f32 {
+        Instant::now().duration_since(self.time).as_secs_f32()
     }
 }
 

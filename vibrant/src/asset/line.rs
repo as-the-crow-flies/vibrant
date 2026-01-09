@@ -72,6 +72,14 @@ impl LineBuffer {
     pub fn new(gpu: &Gpu, files: &[LineFile]) -> Self {
         let label = Some(type_name::<Self>());
 
+        let max_line_length = files
+            .iter()
+            .flat_map(|file| file.lines())
+            .map(|line| line.len())
+            .max();
+
+        dbg!(max_line_length);
+
         let global_settings = GlobalLineSettings {
             selected: Some(false),
             visible: Some(true),

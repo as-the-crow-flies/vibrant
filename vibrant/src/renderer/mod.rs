@@ -55,9 +55,15 @@ impl Renderer {
         &mut self.egui
     }
 
-    pub fn render(&mut self, gpu: &Gpu, controller: &mut Controller, window: &Arc<Window>) {
+    pub fn render(
+        &mut self,
+        gpu: &Gpu,
+        window: &Arc<Window>,
+        controller: &mut Controller,
+        dt: f32,
+    ) {
         let mut needs_transform = false;
-        let mut needs_update = true;
+        let needs_update = true;
 
         FileStage::on_lines(|lines| {
             self.asset.line = Some(LineBuffer::new(gpu, &lines));
@@ -86,7 +92,7 @@ impl Renderer {
         let output = self
             .egui
             .egui_ctx()
-            .run(input, |ctx| controller.ui(ctx, &mut self.asset));
+            .run(input, |ctx| controller.ui(ctx, &mut self.asset, dt));
         self.egui
             .handle_platform_output(&window, output.platform_output.clone());
 

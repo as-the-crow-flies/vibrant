@@ -16,6 +16,7 @@ struct Settings {
     crop_y_end: f32,
     crop_z_start: f32,
     crop_z_end: f32,
+    time: f32
 }
 
 struct Segment {
@@ -34,7 +35,7 @@ struct Camera {
 struct Environment {
     surface: vec2<u32>,
     volume: u32,
-    _memory: u32,
+    time: f32,
     camera: Camera,
     segment: Segment,
     light: vec3<f32>,
@@ -291,8 +292,6 @@ fn shade(
         height
     ));
 
-
-
     let normal = normalize((pa - height * delta) / radius);
 
     let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
@@ -308,7 +307,7 @@ fn shade(
 
     let color = unpack4x8unorm(settings.color);
 
-    let rgb = factor * mix(abs(tangent).xzy, color.rgb, color.a);
+    let rgb = factor * mix(color.rgb, abs(tangent).xzy, environment.settings.tangent_color);
     let a = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
 
     return vec4<f32>(rgb, a);

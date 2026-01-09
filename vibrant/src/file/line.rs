@@ -27,7 +27,44 @@ impl LineFile {
         &self.bounds
     }
 
-    pub fn from_tck(file: &File) -> LineFile {
+    pub fn from_obj(file: File) -> LineFile {
+        let mut lines: Vec<Vec<Vec4>> = vec![vec![]];
+
+        let name = file.name.replace(".obj", "");
+
+        let data = String::from_utf8(file.data).unwrap();
+
+        for line in data.lines() {
+            match line.split_once(" ") {
+                Some(("v", vertex)) => {
+                    let mut v = vertex.split_whitespace();
+
+                    lines.last_mut().unwrap().push(Vec4::new(
+                        v.next().unwrap().parse().unwrap(),
+                        v.next().unwrap().parse().unwrap(),
+                        v.next().unwrap().parse().unwrap(),
+                        1.0,
+                    ));
+                }
+                Some(("l", _)) => {
+                    lines.push(Vec::new());
+                }
+                _ => {}
+            }
+        }
+
+        lines.pop();
+
+        // Self::orient_lines(&mut lines);
+
+        Self {
+            name,
+            bounds: Bounds::from_vertices(lines.iter().flatten()),
+            lines,
+        }
+    }
+
+    pub fn from_tck(file: File) -> LineFile {
         let bytes = file.data();
 
         let header: HashMap<String, String> = bytes
@@ -59,20 +96,24 @@ impl LineFile {
             .map(|line| line.iter().map(|v| Vec4::new(v.x, v.y, v.z, 1.0)).collect())
             .collect();
 
+        Self::orient_lines(&mut lines);
+
+        Self {
+            name: file.name.replace(".tck", ""),
+            bounds: Bounds::from_vertices(lines.iter().flatten()),
+            lines,
+        }
+    }
+
+    fn orient_lines(lines: &mut Vec<Vec<Vec4>>) {
         lines.sort_by_key(|line| -(line.len() as i32));
 
         let mut reference = lines.first().unwrap().iter().copied().collect_vec();
 
         Self::orient_line(&mut reference, Vec4::ONE);
 
-        for line in &mut lines {
+        for line in lines {
             Self::orient_to_reference(line, &reference);
-        }
-
-        Self {
-            name: file.name.replace(".tck", ""),
-            bounds: Bounds::from_vertices(lines.iter().flatten()),
-            lines,
         }
     }
 

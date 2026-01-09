@@ -19,6 +19,7 @@ egui-wgpu = { version = "0.33", features = ["winit"] }
 egui-winit = { version = "0.33", default-features = false }
 log = "0.4.28"
 pollster = "0.3"
+web-time = "1.1"
 
 [dependencies]
 vibrant = { path = "vibrant" }
@@ -30,8 +31,8 @@ egui-wgpu.workspace = true
 egui-winit.workspace = true
 log.workspace = true
 pollster.workspace = true
+web-time.workspace = true
 
-web-time = "1.1"
 env_logger = "0.11"
 
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
