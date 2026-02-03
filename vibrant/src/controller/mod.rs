@@ -5,7 +5,7 @@ pub mod segment;
 pub mod settings;
 pub mod state;
 
-use std::time::Instant;
+use std::{ops::Mul, time::Instant};
 
 use camera::Camera;
 use egui::{
@@ -183,7 +183,7 @@ impl Controller {
                                 .text("Ambient/Shadow"),
                         );
                         ui.add(
-                            Slider::new(&mut self.settings.tangent_color, 0.0..=1.0)
+                            Slider::new(&mut self.settings.tangent_color, 0.0..=2.0)
                                 .text("Tangent Color"),
                         );
                         ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
@@ -241,6 +241,8 @@ impl Controller {
                                 .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop Z End"),
                         );
+
+                        ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("plane"));
 
                         ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)
@@ -351,7 +353,16 @@ impl Controller {
                                             ui.color_edit_button_srgb(&mut line.color);
                                             ui.label(&line.name);
                                         })
-                                        .body(|_| {});
+                                        .body(|ui| {
+                                            ui.add(
+                                                Slider::new(&mut line.crop_start, 0.0..=1.0)
+                                                    .text("Crop Start"),
+                                            );
+                                            ui.add(
+                                                Slider::new(&mut line.crop_end, 0.0..=1.0)
+                                                    .text("Crop End"),
+                                            );
+                                        });
                                 }
                             }
                         });
@@ -377,7 +388,6 @@ impl Controller {
         let ms = 1000.0 * dt;
         let text = format!("{fps:3.0} fps ({ms:3.0} ms)");
 
-        // Foreground layer
         let painter = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
             egui::Id::new("fps_overlay"),
@@ -390,6 +400,38 @@ impl Controller {
             FontId::monospace(20.0),
             Color32::WHITE,
         );
+
+        // if let Some(line) = &mut asset.line {
+        //     let count = line.settings().len();
+
+        //     let speed = count as f32;
+        //     let factor = self.time().mul(0.5).rem(speed);
+
+        //     for (index, setting) in line.settings().iter_mut().enumerate() {
+        //         setting.crop_end = factor.sub(index as f32).clamp(0.0, 1.0);
+        //     }
+        // }
+
+        // let time = self.time().mul(0.5);
+
+        // self.settings.crop_start = time.mul(8.0).sin().mul_add(0.5, 0.5);
+
+        // self.settings.crop_start = time.sin().mul_add(
+        //     0.48 - self.settings.crop_middle,
+        //     0.5 - self.settings.crop_middle,
+        // );
+        // self.settings.crop_end = time.sin().mul_add(
+        //     0.48 - self.settings.crop_middle,
+        //     0.5 + self.settings.crop_middle,
+        // );
+
+        // let time = self.time().mul(0.1);
+        // // let factor = time.cos().add(time).sin();
+        // let factor = time.sin();
+        // let position = factor.mul(0.5);
+        // self.settings.crop_y_end = position;
+
+        // self.camera.yaw = -0.25 * self.time();
     }
 
     pub fn camera(&self) -> &Camera {

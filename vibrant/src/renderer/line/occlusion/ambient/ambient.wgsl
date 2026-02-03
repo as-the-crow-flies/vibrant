@@ -7,28 +7,6 @@
 
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-const ICOSAHEDRON_ONE: f32 = 0.8506508;
-const ICOSAHEDRON_PHI: f32 = 0.5257311;
-
-const ICOSAHEDRON: array<vec3<f32>, 12> = array<vec3<f32>, 12>(
-    vec3<f32>(0.0,  ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI),
-    vec3<f32>(0.0,  ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI),
-    vec3<f32>(0.0, -ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI),
-    vec3<f32>(0.0, -ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI),
-
-    vec3<f32>( ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI, 0.0),
-    vec3<f32>( ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI, 0.0),
-    vec3<f32>(-ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI, 0.0),
-    vec3<f32>(-ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI, 0.0),
-
-    vec3<f32>( ICOSAHEDRON_PHI, 0.0,  ICOSAHEDRON_ONE),
-    vec3<f32>(-ICOSAHEDRON_PHI, 0.0,  ICOSAHEDRON_ONE),
-    vec3<f32>( ICOSAHEDRON_PHI, 0.0, -ICOSAHEDRON_ONE),
-    vec3<f32>(-ICOSAHEDRON_PHI, 0.0, -ICOSAHEDRON_ONE));
-
-const ONE_OVER_TWELVE: f32 = 1.0 / 12.0;
-const TAN_CONE_ANGLE: f32 = 1.6403417719345383;
-
 @compute
 @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {

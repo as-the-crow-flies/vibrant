@@ -26,6 +26,8 @@ pub struct LineSettings {
     pub visible: bool,
     pub color: [u8; 3],
     pub color_visible: bool,
+    pub crop_start: f32,
+    pub crop_end: f32,
 }
 
 #[repr(C)]
@@ -33,6 +35,8 @@ pub struct LineSettings {
 pub struct LineSettingsBuffer {
     visible: u32,
     color: [u8; 4],
+    crop_start: f32,
+    crop_end: f32,
 }
 
 impl LineSettings {
@@ -42,6 +46,8 @@ impl LineSettings {
         LineSettingsBuffer {
             visible: self.visible as u32,
             color: [r, g, b, if self.color_visible { 255 } else { 0 }],
+            crop_start: self.crop_start,
+            crop_end: self.crop_end,
         }
     }
 }
@@ -60,6 +66,7 @@ pub struct LineBuffer {
     materials: Buffer,
 
     raw_indices: Buffer,
+    raw_vertices: Buffer,
     raw_offsets: Buffer,
 
     binding_read: BindGroup,
@@ -113,6 +120,8 @@ impl LineBuffer {
                 selected: false,
                 visible: true,
                 color_visible: false,
+                crop_start: 0.0,
+                crop_end: 1.0,
             })
             .collect();
 
@@ -164,6 +173,12 @@ impl LineBuffer {
         let raw_indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&indices),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let raw_vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&vertices),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
@@ -242,6 +257,10 @@ impl LineBuffer {
             },
             BindGroupEntry {
                 binding: 7,
+                resource: raw_vertices.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 8,
                 resource: raw_offsets.as_entire_binding(),
             },
         ];
@@ -272,6 +291,7 @@ impl LineBuffer {
             materials,
 
             raw_indices,
+            raw_vertices,
             raw_offsets,
 
             binding_read,
@@ -411,9 +431,20 @@ impl LineBuffer {
                         },
                         count: None,
                     },
-                    // Raw Offsets
+                    // Raw Vertices
                     BindGroupLayoutEntry {
                         binding: 7,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Raw Offsets
+                    BindGroupLayoutEntry {
+                        binding: 8,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
@@ -440,6 +471,7 @@ impl Drop for LineBuffer {
         self.materials.destroy();
         self.settings_buffer.destroy();
         self.raw_indices.destroy();
+        self.raw_vertices.destroy();
         self.raw_offsets.destroy();
     }
 }

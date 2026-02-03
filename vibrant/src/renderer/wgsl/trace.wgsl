@@ -37,7 +37,11 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let origin = near + 0.5; // 0-1 Space
     let direction = normalize(far - near);
 
-    return raymarch(origin, direction);
+    let result = raymarch(origin, direction);
+
+    if (result.a > 0.0) { return result; }
+    else { return vec4<f32>(0.0); }
+    // else { return background(origin, direction); }
 }
 
 fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
@@ -132,4 +136,51 @@ fn minimum(v: vec3<f32>) -> f32 {
 fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
     return t.xyz / t.w;
+}
+
+fn background(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
+    let hit = plane_intersection(origin, direction, vec4<f32>(0.0, 1.0, 0.0, -ENVIRONMENT.settings.plane));
+    if (hit <= 0.0) { return vec4<f32>(1.0); }
+
+    let dim = f32(textureDimensions(DENSITY).x);
+    let one_over_dim = 1.0 / dim;
+
+    let position = origin + direction * hit;
+
+    var directional_occlusion = 0.0;
+
+    for (var distance = 1.0; distance < 2.0 * dim; distance += 1.0) {
+        let sample = (position + ENVIRONMENT.light * distance * one_over_dim);
+
+        directional_occlusion += (1.0 - directional_occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, 0.0).x;
+
+        if (directional_occlusion > 0.99) { break; }
+    }
+
+    var ambient_occlusion = 0.0;
+
+    for (var i=0u; i<12; i++) {
+        var icosahedron = ICOSAHEDRON[i];
+
+        var occlusion = 0.0;
+
+        for (var distance = 1.0; distance < dim * 2.0; distance *= 2.0) {
+            let sample = (position + icosahedron * distance * one_over_dim);
+            let level = log2(TAN_CONE_ANGLE * distance);
+
+            occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
+
+            if (occlusion > 0.99) { break; }
+        }
+
+        ambient_occlusion += occlusion;
+    }
+
+    ambient_occlusion = clamp(ambient_occlusion / 3.0, 0.0, 1.0);
+
+    let ao = 1.0 - ambient_occlusion;
+    let shadow = 1.0 - ENVIRONMENT.settings.direct_light * directional_occlusion;
+    let occlusion = 1.0 - (1.0 - shadow) * (1.0 - ao) - saturate(0.5 * length(position.xz - 0.5));
+
+    return vec4<f32>(vec3<f32>(occlusion), 1.0);
 }

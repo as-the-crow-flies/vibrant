@@ -3,9 +3,10 @@ use std::{any::type_name, marker::PhantomData};
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, CommandEncoder,
-    Extent3d, FilterMode, ImageSubresourceRange, Sampler, SamplerBindingType, SamplerDescriptor,
-    ShaderStages, StorageTextureAccess, Texture, TextureAspect, TextureDescriptor, TextureFormat,
-    TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
+    Extent3d, FilterMode, ImageSubresourceRange, Sampler, SamplerBindingType, SamplerBorderColor,
+    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureAspect,
+    TextureDescriptor, TextureFormat, TextureSampleType, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -99,9 +100,10 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
+            address_mode_u: AddressMode::ClampToBorder,
+            address_mode_v: AddressMode::ClampToBorder,
+            address_mode_w: AddressMode::ClampToBorder,
+            border_color: Some(SamplerBorderColor::TransparentBlack),
             mag_filter: filter,
             min_filter: filter,
             mipmap_filter: filter,

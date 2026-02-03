@@ -16,7 +16,7 @@ struct Settings {
     crop_y_end: f32,
     crop_z_start: f32,
     crop_z_end: f32,
-    time: f32
+    plane: f32,
 }
 
 struct Segment {
@@ -45,7 +45,9 @@ struct Environment {
 
 struct LineSettings {
     visible: u32,
-    color: u32
+    color: u32,
+    crop_start: f32,
+    crop_end: f32,
 }
 
 struct Vertex {
@@ -86,6 +88,30 @@ const U8_MAX_INV: f32 = 1.0 / U8_MAX_f32;
 const U6_MAX: u32 = 63;
 const U6_MAX_f32: f32 = f32(U6_MAX);
 const U6_MAX_INV: f32 = 1.0 / U6_MAX_f32;
+
+const ICOSAHEDRON_ONE: f32 = 0.8506508;
+const ICOSAHEDRON_PHI: f32 = 0.5257311;
+
+const ICOSAHEDRON: array<vec3<f32>, 12> = array<vec3<f32>, 12>(
+    vec3<f32>(0.0,  ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI),
+    vec3<f32>(0.0,  ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI),
+    vec3<f32>(0.0, -ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI),
+    vec3<f32>(0.0, -ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI),
+
+    vec3<f32>( ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI, 0.0),
+    vec3<f32>( ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI, 0.0),
+    vec3<f32>(-ICOSAHEDRON_ONE,  ICOSAHEDRON_PHI, 0.0),
+    vec3<f32>(-ICOSAHEDRON_ONE, -ICOSAHEDRON_PHI, 0.0),
+
+    vec3<f32>( ICOSAHEDRON_PHI, 0.0,  ICOSAHEDRON_ONE),
+    vec3<f32>(-ICOSAHEDRON_PHI, 0.0,  ICOSAHEDRON_ONE),
+    vec3<f32>( ICOSAHEDRON_PHI, 0.0, -ICOSAHEDRON_ONE),
+    vec3<f32>(-ICOSAHEDRON_PHI, 0.0, -ICOSAHEDRON_ONE));
+
+const ONE_OVER_TWELVE: f32 = 1.0 / 12.0;
+const TAN_CONE_ANGLE: f32 = 1.6403417719345383;
+
+const PI: f32 = 3.14159265358979323846264338327950288;
 
 const BLOCK_BITS: u32 = 3u;
 const BLOCK_SIZE: u32 = 8u;
@@ -247,6 +273,10 @@ fn sphere_intersection(ro: vec3<f32>, rd: vec3<f32>, ce: vec3<f32>, ra: f32) -> 
     return select(1E6, -b - sqrt(h), h > 0.0);
 }
 
+fn plane_intersection(ro: vec3<f32>, rd: vec3<f32>, p: vec4<f32>) -> f32 {
+    return -(dot(ro,p.xyz)+p.w)/dot(rd,p.xyz);
+}
+
 // https://iquilezles.org/articles/distfunctions/
 fn capsule_sdf(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
   let pa = p - a;
@@ -301,16 +331,47 @@ fn shade(
     let ambient = 1.0 - textureSampleLevel(occlusion_ambient, occlusion_sampler, position + 0.5, 0.0).x;
     let directional = 1.0 - textureSampleLevel(occlusion_directional, occlusion_sampler, position + 0.5, 0.0).x;
 
-    let factor = mix(1.0, mix(ambient, diffuse * directional,
-        environment.settings.direct_light),
-        environment.settings.lighting);
+    let ao = ambient;
+    let shadow = diffuse * environment.settings.direct_light * directional;
+    let factor = 1.0 - (1.0 - shadow) * (1.0 - ao);
 
     let color = unpack4x8unorm(settings.color);
 
-    let rgb = factor * mix(color.rgb, abs(tangent).xzy, environment.settings.tangent_color);
-    let a = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
+    let d = abs(tangent).xzy;
 
-    return vec4<f32>(rgb, a);
+    let red = vec2<f32>(0.217, 0.125);
+    let green = vec2<f32>(-0.217, 0.125);
+    let blue = vec2<f32>(0.000, -0.250);
+
+    let oklab = vec3<f32>(environment.settings.lighting, environment.settings.tangent_color * d.r * red + d.g * green + d.b * blue);
+    let result = select(oklab2rgb(oklab), d, environment.settings.lighting == 0.0);
+
+    let rgb = factor * result;
+    let alpha = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
+
+    return vec4<f32>(rgb, alpha);
+}
+
+/*
+contributors: Bjorn Ottosson (@bjornornorn)
+description: Oklab to linear RGB https://bottosson.github.io/posts/oklab/
+license:
+    - MIT License (MIT) Copyright (c) 2020 Björn Ottosson
+*/
+
+const OKLAB2RGB_A : mat3x3<f32>  = mat3x3<f32>(
+    vec3f(1.0, 1.0, 1.0),
+    vec3f(0.3963377774, -0.1055613458, -0.0894841775),
+    vec3f(0.2158037573, -0.0638541728, -1.2914855480) );
+
+const OKLAB2RGB_B : mat3x3<f32>  = mat3x3<f32>(
+    vec3f(4.0767416621, -1.2684380046, -0.0041960863),
+    vec3f(-3.3077115913, 2.6097574011, -0.7034186147),
+    vec3f(0.2309699292, -0.3413193965, 1.7076147010) );
+
+fn oklab2rgb(oklab: vec3f) -> vec3f {
+    let lms = OKLAB2RGB_A * oklab;
+    return OKLAB2RGB_B * (lms * lms * lms);
 }
 
 fn should_be_clipped(v0: Vertex, v1: Vertex, position: vec3<f32>) -> bool {

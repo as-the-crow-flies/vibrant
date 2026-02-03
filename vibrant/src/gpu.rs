@@ -49,7 +49,8 @@ impl Gpu {
                         .max_storage_buffers_per_shader_stage,
                     ..Default::default()
                 },
-                required_features: Features::FLOAT32_FILTERABLE,
+                required_features: Features::FLOAT32_FILTERABLE
+                    | Features::ADDRESS_MODE_CLAMP_TO_BORDER,
                 ..Default::default()
             })
             .await

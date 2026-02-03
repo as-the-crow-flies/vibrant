@@ -25,7 +25,7 @@ fn occlusion(criterion: &mut Criterion, id: &str, gpu: &Gpu, line: &LineBuffer) 
         let frame = &Frame::new(gpu, controller.settings());
 
         let mut cmd = gpu.cmd();
-        LineTransformPipeline::new(gpu).dispatch(&mut cmd, line, transform);
+        LineTransformPipeline::new(gpu).dispatch(&mut cmd, line, transform, environment);
         LineCropPipeline::new(gpu).dispatch(&mut cmd, line, environment);
         gpu.submit(cmd);
         gpu.wait();

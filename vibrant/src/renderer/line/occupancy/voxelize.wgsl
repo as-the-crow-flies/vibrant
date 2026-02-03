@@ -10,8 +10,6 @@
 const WORKGROUP_SIZE: u32 = 256;
 const CHUNK_SIZE: u32 = 32;
 
-const PI: f32 = 3.14159265358979323846264338327950288;
-
 var<workgroup> OFFSET: u32;
 
 var<private> RADIUS: f32;

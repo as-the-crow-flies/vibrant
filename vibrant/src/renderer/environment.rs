@@ -89,6 +89,7 @@ impl Environment {
                 bytes_of(&controller.settings().crop_y_end),
                 bytes_of(&controller.settings().crop_z_start),
                 bytes_of(&controller.settings().crop_z_end),
+                bytes_of(&controller.settings().plane),
             ]
             .concat(),
         );

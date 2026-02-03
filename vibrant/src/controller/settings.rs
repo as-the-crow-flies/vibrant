@@ -50,6 +50,7 @@ pub struct Settings {
     pub crop_z_end: f32,
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
+    pub plane: f32,
 }
 
 impl Settings {
@@ -58,9 +59,9 @@ impl Settings {
             width: 1920,
             height: 1080,
             volume: 128,
-            radius: 0.15,
-            lighting: 1.0,
-            direct_light: 0.67,
+            radius: 0.2,
+            lighting: 0.725,
+            direct_light: 1.0,
             tangent_color: 1.0,
             shadows: 0.0,
             alpha: 1.0,
@@ -78,6 +79,7 @@ impl Settings {
             crop_z_start: -0.5,
             crop_z_end: 1.0,
             workgroups: 64,
+            plane: 0.33,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }

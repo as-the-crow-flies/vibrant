@@ -28,8 +28,8 @@ pub struct LineRenderer {
     transform: LineTransformPipeline,
     crop: LineCropPipeline,
     occupancy: LineOccupancyPipeline,
-    occlusion: LineOcclusionPipeline,
     cull: LineCullPipeline,
+    occlusion: LineOcclusionPipeline,
     populate: LinePopulatePipeline,
     render: LineRenderPipeline,
 }
@@ -59,7 +59,7 @@ impl LineRenderer {
         _needs_update: bool,
     ) {
         if needs_transform {
-            self.transform.dispatch(cmd, line, transform);
+            self.transform.dispatch(cmd, line, transform, environment);
         }
 
         self.crop.dispatch(cmd, line, environment);

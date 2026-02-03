@@ -6,7 +6,8 @@
 @group(0) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
 
 @group(0) @binding(6) var<storage> LINE_INDEX_RAW: array<u32>;
-@group(0) @binding(7) var<storage> LINE_OFFSET_RAW: array<u32>;
+@group(0) @binding(7) var<storage> LINE_VERTEX_RAW: array<vec4<f32>>;
+@group(0) @binding(8) var<storage> LINE_OFFSET_RAW: array<u32>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
@@ -23,16 +24,26 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let start = LINE_OFFSET_RAW[index];
     let end = LINE_OFFSET_RAW[index + 1];
 
-    let visible = LINE_SETTINGS[LINE_MATERIAL[LINE_INDEX_RAW[start]]].visible == TRUE;
+    let settings = LINE_SETTINGS[LINE_MATERIAL[LINE_INDEX_RAW[start]]];
+
+    let visible = settings.visible == TRUE;
 
     if (!visible) { return; }
 
     let length = end - start;
 
-    let offset_start = u32(ENVIRONMENT.settings.crop_start * f32(length));
-    let offset_end = u32(ENVIRONMENT.settings.crop_end * f32(length));
+    let start_index = LINE_INDEX_RAW[start];
+    let t = ENVIRONMENT.time;
+
+    let crop_start = max(ENVIRONMENT.settings.crop_start, settings.crop_start);
+    let crop_end = min(ENVIRONMENT.settings.crop_end, settings.crop_end);
+
+    let offset_start = u32(crop_start * f32(length));
+    let offset_end = u32(crop_end * f32(length));
 
     let crop_length = min(offset_end - offset_start, length);
+
+    if (crop_length == 0) { return; }
 
     let crop_min = vec3<f32>(
         ENVIRONMENT.settings.crop_x_start,

@@ -110,7 +110,7 @@ impl LineFile {
 
         let mut reference = lines.first().unwrap().iter().copied().collect_vec();
 
-        Self::orient_line(&mut reference, Vec4::ONE);
+        Self::orient_line(&mut reference, Vec4::new(0.0, 0.0, 1.0, 0.0));
 
         for line in lines {
             Self::orient_to_reference(line, &reference);
