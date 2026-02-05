@@ -19,7 +19,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let n_lines = arrayLength(&LINE_OFFSET_RAW);
     let index = global_invocation_id.x;
 
-    if (index >= n_lines) { return; }
+    if (index >= n_lines - 1) { return; }
 
     let start = LINE_OFFSET_RAW[index];
     let end = LINE_OFFSET_RAW[index + 1];

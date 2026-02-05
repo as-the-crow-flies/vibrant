@@ -5,12 +5,12 @@ pub mod segment;
 pub mod settings;
 pub mod state;
 
-use std::{ops::Mul, time::Instant};
+use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    collapsing_header::CollapsingState, Align, Align2, Color32, ComboBox, FontId, Frame, Layout,
-    Margin, ScrollArea, SidePanel, Slider, Ui,
+    collapsing_header::CollapsingState, Align, ComboBox, Frame, Layout, Margin, ScrollArea,
+    SidePanel, Slider, Ui,
 };
 use event::Event;
 use itertools::Itertools;
@@ -63,7 +63,7 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, dt: f32) {
+    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -383,55 +383,6 @@ impl Controller {
                         });
                     });
             });
-
-        let fps = 1.0 / dt;
-        let ms = 1000.0 * dt;
-        let text = format!("{fps:3.0} fps ({ms:3.0} ms)");
-
-        let painter = ctx.layer_painter(egui::LayerId::new(
-            egui::Order::Foreground,
-            egui::Id::new("fps_overlay"),
-        ));
-
-        painter.text(
-            egui::pos2(self.settings.width as f32 / 4.0, 50.0),
-            Align2::CENTER_TOP,
-            text,
-            FontId::monospace(20.0),
-            Color32::WHITE,
-        );
-
-        // if let Some(line) = &mut asset.line {
-        //     let count = line.settings().len();
-
-        //     let speed = count as f32;
-        //     let factor = self.time().mul(0.5).rem(speed);
-
-        //     for (index, setting) in line.settings().iter_mut().enumerate() {
-        //         setting.crop_end = factor.sub(index as f32).clamp(0.0, 1.0);
-        //     }
-        // }
-
-        // let time = self.time().mul(0.5);
-
-        // self.settings.crop_start = time.mul(8.0).sin().mul_add(0.5, 0.5);
-
-        // self.settings.crop_start = time.sin().mul_add(
-        //     0.48 - self.settings.crop_middle,
-        //     0.5 - self.settings.crop_middle,
-        // );
-        // self.settings.crop_end = time.sin().mul_add(
-        //     0.48 - self.settings.crop_middle,
-        //     0.5 + self.settings.crop_middle,
-        // );
-
-        // let time = self.time().mul(0.1);
-        // // let factor = time.cos().add(time).sin();
-        // let factor = time.sin();
-        // let position = factor.mul(0.5);
-        // self.settings.crop_y_end = position;
-
-        // self.camera.yaw = -0.25 * self.time();
     }
 
     pub fn camera(&self) -> &Camera {
