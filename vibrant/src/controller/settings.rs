@@ -58,8 +58,8 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            volume: 128,
-            radius: 0.2,
+            volume: 256,
+            radius: 0.25,
             lighting: 0.725,
             direct_light: 1.0,
             tangent_color: 1.0,

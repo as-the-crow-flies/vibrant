@@ -26,7 +26,7 @@ impl RayTracingLineRenderPipeline {
                     &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target_srgb(),
+                ColorBuffer::target(),
                 &gpu.shader(&(TRACE.to_string() + include_str!("opaque.wgsl"))),
             ),
             transparent: gpu.quad(
@@ -37,7 +37,7 @@ impl RayTracingLineRenderPipeline {
                     &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target_srgb(),
+                ColorBuffer::target(),
                 &gpu.shader(&(TRACE.to_string() + include_str!("transparent.wgsl"))),
             ),
         }
@@ -52,7 +52,7 @@ impl RayTracingLineRenderPipeline {
         line: &LineBuffer,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_srgb_clear())],
+            color_attachments: &[Some(frame.color().attachment_clear())],
             label: Some("Ray"),
             ..Default::default()
         });

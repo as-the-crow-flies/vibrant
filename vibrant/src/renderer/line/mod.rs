@@ -3,9 +3,9 @@ pub mod cull;
 pub mod occlusion;
 pub mod occupancy;
 pub mod populate;
+pub mod post;
 pub mod render;
 pub mod transform;
-pub mod ui;
 
 use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
@@ -16,7 +16,7 @@ use crate::{
     gpu::Gpu,
     renderer::line::{
         crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
-        populate::LinePopulatePipeline, render::LineRenderPipeline,
+        populate::LinePopulatePipeline, post::PostProcessingPipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
     surface::Frame,
@@ -32,6 +32,7 @@ pub struct LineRenderer {
     occlusion: LineOcclusionPipeline,
     populate: LinePopulatePipeline,
     render: LineRenderPipeline,
+    post: PostProcessingPipeline,
 }
 
 impl LineRenderer {
@@ -44,6 +45,7 @@ impl LineRenderer {
             cull: LineCullPipeline::new(gpu),
             populate: LinePopulatePipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
+            post: PostProcessingPipeline::new(gpu),
         }
     }
 
@@ -76,5 +78,7 @@ impl LineRenderer {
 
         self.render
             .dispatch(cmd, environment, frame, line, settings);
+
+        self.post.dispatch(cmd, environment, frame);
     }
 }

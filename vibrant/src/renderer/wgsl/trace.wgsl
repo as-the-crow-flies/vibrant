@@ -176,11 +176,11 @@ fn background(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         ambient_occlusion += occlusion;
     }
 
-    ambient_occlusion = clamp(ambient_occlusion / 3.0, 0.0, 1.0);
+    ambient_occlusion = clamp(ambient_occlusion / 6.0, 0.0, 1.0);
 
     let ao = 1.0 - ambient_occlusion;
     let shadow = 1.0 - ENVIRONMENT.settings.direct_light * directional_occlusion;
-    let occlusion = 1.0 - (1.0 - shadow) * (1.0 - ao) - saturate(0.5 * length(position.xz - 0.5));
+    let occlusion = 1.0 - (1.0 - shadow) * (1.0 - ao);
 
     return vec4<f32>(vec3<f32>(occlusion), 1.0);
 }
