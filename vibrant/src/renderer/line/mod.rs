@@ -79,6 +79,6 @@ impl LineRenderer {
         self.render
             .dispatch(cmd, environment, frame, line, settings);
 
-        self.post.dispatch(cmd, environment, frame);
+        self.post.dispatch(cmd, environment, frame, settings);
     }
 }

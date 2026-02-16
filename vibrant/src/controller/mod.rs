@@ -249,6 +249,25 @@ impl Controller {
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
                         );
+                        ui.separator();
+                        ui.label("Post Processing");
+                        ui.separator();
+                        ui.checkbox(&mut self.settings.bloom, "Bloom");
+                        ui.add_enabled(
+                            self.settings.bloom,
+                            Slider::new(&mut self.settings.bloom_threshold, 0.0..=1.0)
+                                .text("Bloom Threshold"),
+                        );
+                        ui.add_enabled(
+                            self.settings.bloom,
+                            Slider::new(&mut self.settings.bloom_intensity, 0.0..=3.0)
+                                .text("Bloom Intensity"),
+                        );
+                        ui.add_enabled(
+                            self.settings.bloom,
+                            Slider::new(&mut self.settings.bloom_spread, 1.0..=5.0)
+                                .text("Bloom Spread"),
+                        );
                     });
 
                 egui::TopBottomPanel::bottom("bottom_panel")
