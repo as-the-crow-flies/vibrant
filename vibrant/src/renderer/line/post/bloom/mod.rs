@@ -38,11 +38,11 @@ impl BloomRenderPipeline {
             ..Default::default()
         });
 
-        // let n = frame.occlusion().ambient().resolution().div_ceil(4);
-        // pass.set_bind_group(0, environment.binding(), &[]);
-        // pass.set_bind_group(1, frame.color().binding(), &[]);
-        let w = frame.color().width().div_ceil(16);
-        let h = frame.color().height().div_ceil(16);
+        let w = frame.color().width().div_ceil(4);
+        let h = frame.color().height().div_ceil(4);
+        pass.set_pipeline(&self.extract);
+        pass.set_bind_group(0, environment.binding(), &[]);
+        pass.set_bind_group(1, frame.color().binding(), &[]);
         pass.dispatch_workgroups(w, h, 1);
     }
 
@@ -52,10 +52,11 @@ impl BloomRenderPipeline {
             ..Default::default()
         });
 
-        // pass.set_bind_group(0, environment.binding(), &[]);
-        // pass.set_bind_group(1, frame.color().binding(), &[]);
-        let w = frame.color().width().div_ceil(16);
-        let h = frame.color().height().div_ceil(16);
+        let w = frame.color().width().div_ceil(4);
+        let h = frame.color().height().div_ceil(4);
+        pass.set_pipeline(&self.blur);
+        pass.set_bind_group(0, environment.binding(), &[]);
+        pass.set_bind_group(1, frame.color().binding(), &[]);
         pass.dispatch_workgroups(w, h, 1);
     }
 }
