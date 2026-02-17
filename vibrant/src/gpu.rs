@@ -253,6 +253,9 @@ impl Gpu {
             .flat_map(|(b, g, r, a)| [r, g, b, a])
             .collect_vec();
 
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
         let file = std::fs::File::create(path).unwrap();
         let writer = &mut std::io::BufWriter::new(file);
         let mut enc = png::Encoder::new(writer, width, height);
@@ -266,5 +269,61 @@ impl Gpu {
         ));
         let mut writer = enc.write_header().unwrap();
         writer.write_image_data(&buffer).unwrap();
+    }
+
+    /// Read back a frame as raw RGBA bytes. Returns (data, width, height).
+    pub async fn read_frame(&self, texture: &Texture) -> (Vec<u8>, u32, u32) {
+        assert!(texture.format() == TextureFormat::Bgra8Unorm);
+
+        let pixel = 4;
+        let width = (texture.width() / 64) * 64;
+        let height = texture.height();
+
+        let result = self.device.create_buffer(&BufferDescriptor {
+            label: Some("read_frame.result"),
+            size: (width * height * pixel) as u64,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut cmd = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        cmd.copy_texture_to_buffer(
+            TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: Origin3d {
+                    x: (texture.width() - width) / 2,
+                    y: 0,
+                    z: 0,
+                },
+                aspect: TextureAspect::All,
+            },
+            TexelCopyBufferInfo {
+                buffer: &result,
+                layout: TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(width * pixel),
+                    rows_per_image: None,
+                },
+            },
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit([cmd.finish()]);
+
+        let buffer = self
+            .read(&result)
+            .await
+            .into_iter()
+            .tuples()
+            .flat_map(|(b, g, r, a)| [r, g, b, a])
+            .collect_vec();
+
+        (buffer, width, height)
     }
 }

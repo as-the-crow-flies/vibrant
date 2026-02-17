@@ -51,6 +51,8 @@ pub struct Settings {
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
     pub plane: f32,
+    pub auto_rotate: bool,
+    pub auto_rotate_speed: f32,
 }
 
 impl Settings {
@@ -82,6 +84,8 @@ impl Settings {
             plane: 0.33,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
+            auto_rotate: false,
+            auto_rotate_speed: 10.0,
         }
     }
 }

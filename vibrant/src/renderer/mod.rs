@@ -55,6 +55,16 @@ impl Renderer {
         &mut self.egui
     }
 
+    pub fn has_assets(&self) -> bool {
+        self.asset.line.is_some()
+    }
+
+    /// Read back the current frame as raw RGBA bytes. Returns (data, width, height).
+    pub async fn read_frame(&self, gpu: &Gpu) -> (Vec<u8>, u32, u32) {
+        gpu.read_frame(self.surface.buffer().color().texture())
+            .await
+    }
+
     pub fn render(
         &mut self,
         gpu: &Gpu,

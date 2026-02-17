@@ -34,6 +34,7 @@ pollster.workspace = true
 web-time.workspace = true
 
 env_logger = "0.11"
+clap = { version = "4", features = ["derive"] }
 
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"

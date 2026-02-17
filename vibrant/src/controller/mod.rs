@@ -63,7 +63,12 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
+    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, dt: f32) {
+        if self.settings.auto_rotate {
+            let speed_rad = self.settings.auto_rotate_speed.to_radians();
+            self.camera.yaw += speed_rad * dt;
+        }
+
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -245,6 +250,16 @@ impl Controller {
 
                         ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("plane"));
 
+                        ui.separator();
+                        ui.checkbox(&mut self.settings.auto_rotate, "Auto-Rotate");
+                        if self.settings.auto_rotate {
+                            ui.add(
+                                Slider::new(&mut self.settings.auto_rotate_speed, 1.0..=360.0)
+                                    .text("Rotation Speed (°/s)"),
+                            );
+                        }
+
+                        ui.separator();
                         ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
@@ -400,6 +415,10 @@ impl Controller {
 
     pub fn settings(&self) -> &Settings {
         &self.settings
+    }
+
+    pub fn settings_mut(&mut self) -> &mut Settings {
+        &mut self.settings
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {

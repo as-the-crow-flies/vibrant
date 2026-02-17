@@ -160,4 +160,25 @@ impl FileStage {
     }
 }
 
+impl FileStage {
+    /// Load a file from a path programmatically (no dialog).
+    /// Used by CLI mode.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_path(path: PathBuf) {
+        use std::fs;
+
+        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+        let data =
+            fs::read(&path).unwrap_or_else(|_| panic!("should be able to read path: `{:?}`", path));
+
+        Self::load_files(vec![File::new(&name, data)]);
+    }
+
+    /// Queue a save path programmatically (no dialog).
+    /// Used by CLI mode.
+    pub fn save_path(path: PathBuf) {
+        Self::publish_save_path(path);
+    }
+}
+
 static QUEUE: LazyLock<Mutex<FileStage>> = LazyLock::new(|| Mutex::new(FileStage::default()));

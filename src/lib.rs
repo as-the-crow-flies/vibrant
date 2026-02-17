@@ -1,4 +1,6 @@
 pub mod app;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod video;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -9,5 +11,5 @@ async fn start() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init().expect("Couldn't initialize console_log");
 
-    app::run().await;
+    app::run(app::AppConfig::default()).await;
 }
