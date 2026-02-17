@@ -54,7 +54,7 @@ impl UiRenderer {
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
                 label: Some(type_name::<Self>()),
-                color_attachments: &[Some(frame.color().attachment())],
+                color_attachments: &[Some(frame.post().attachment())],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,

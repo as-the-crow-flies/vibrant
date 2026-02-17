@@ -12,7 +12,7 @@ pub struct Camera {
     pub pitch: f32,
     distance: f32,
     pan: Vec3,
-    fov: f32,
+    pub fov: f32,
     near: f32,
     far: f32,
 }
@@ -23,7 +23,7 @@ impl Camera {
             width: 1,
             height: 1,
             yaw: 0.0,
-            pitch: -PI / 2.0,
+            pitch: 0.0,
             distance: 0.75,
             pan: Vec3::ZERO,
             fov: PI / 3.0,

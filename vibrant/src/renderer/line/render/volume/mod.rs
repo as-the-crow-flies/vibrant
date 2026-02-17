@@ -16,7 +16,7 @@ impl VolumeLineRenderPipeline {
             pipeline: gpu.quad(
                 "Volume",
                 &gpu.pipeline_layout(&[&Frame::layout(gpu), &Environment::layout(gpu)]),
-                ColorBuffer::target_srgb(),
+                ColorBuffer::target(),
                 &gpu.shader(include_str!("volume.wgsl")),
             ),
         }
@@ -24,7 +24,7 @@ impl VolumeLineRenderPipeline {
 
     pub fn render(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_srgb_clear())],
+            color_attachments: &[Some(frame.color().attachment_clear())],
             label: Some("Volume"),
             ..Default::default()
         });

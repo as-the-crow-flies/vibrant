@@ -1,3 +1,4 @@
+pub mod bloom;
 pub mod color;
 pub mod culling;
 pub mod occlusion;
@@ -5,6 +6,7 @@ pub mod occupancy;
 
 use std::any::type_name;
 
+use bloom::BloomBuffer;
 use color::ColorBuffer;
 use log::warn;
 use occlusion::OcclusionBuffer;
@@ -25,6 +27,8 @@ use super::gpu::Gpu;
 
 pub struct Frame {
     color: ColorBuffer,
+    post: ColorBuffer,
+    bloom: BloomBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -34,6 +38,8 @@ pub struct Frame {
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         let color = ColorBuffer::new(gpu, settings.width, settings.height);
+        let post = ColorBuffer::new(gpu, settings.width, settings.height);
+        let bloom = BloomBuffer::new(gpu, settings.width, settings.height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -53,6 +59,8 @@ impl Frame {
 
         Self {
             color,
+            post,
+            bloom,
             occupancy,
             occlusion,
             culling,
@@ -62,6 +70,14 @@ impl Frame {
 
     pub fn color(&self) -> &ColorBuffer {
         &self.color
+    }
+
+    pub fn post(&self) -> &ColorBuffer {
+        &self.post
+    }
+
+    pub fn bloom(&self) -> &BloomBuffer {
+        &self.bloom
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {
@@ -136,7 +152,7 @@ impl Surface {
         if let Some(surface) = self.surface.get_current_texture().ok() {
             cmd.copy_texture_to_texture(
                 TexelCopyTextureInfo {
-                    texture: self.buffer.color().texture(),
+                    texture: self.buffer.post().texture(),
                     mip_level: 0,
                     origin: Origin3d::ZERO,
                     aspect: TextureAspect::All,

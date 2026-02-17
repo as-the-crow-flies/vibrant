@@ -171,6 +171,7 @@ impl Controller {
                         ui.label("Appearance");
                         ui.separator();
 
+                        ui.add(Slider::new(&mut self.camera.fov, 0.1..=3.0));
                         ui.add(
                             Slider::new(&mut self.settings.radius, 0.01..=1.0)
                                 .text("Streamline Radius"),
@@ -179,7 +180,7 @@ impl Controller {
                             Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"),
                         );
                         ui.add(
-                            Slider::new(&mut self.settings.direct_light, 0.0..=1.0)
+                            Slider::new(&mut self.settings.direct_light, 0.0..=3.0)
                                 .text("Ambient/Shadow"),
                         );
                         ui.add(
@@ -247,6 +248,25 @@ impl Controller {
                         ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
+                        );
+                        ui.separator();
+                        ui.label("Post Processing");
+                        ui.separator();
+                        ui.checkbox(&mut self.settings.bloom, "Bloom");
+                        ui.add_enabled(
+                            self.settings.bloom,
+                            Slider::new(&mut self.settings.bloom_threshold, 0.0..=1.0)
+                                .text("Bloom Threshold"),
+                        );
+                        ui.add_enabled(
+                            self.settings.bloom,
+                            Slider::new(&mut self.settings.bloom_intensity, 0.0..=3.0)
+                                .text("Bloom Intensity"),
+                        );
+                        ui.add_enabled(
+                            self.settings.bloom,
+                            Slider::new(&mut self.settings.bloom_spread, 1.0..=5.0)
+                                .text("Bloom Spread"),
                         );
                     });
 
