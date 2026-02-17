@@ -74,6 +74,7 @@ impl Environment {
                 bytes_of(&0u32),
                 bytes_of(&controller.settings().radius),
                 bytes_of(&controller.settings().lighting),
+                bytes_of(&controller.settings().ambient_light),
                 bytes_of(&controller.settings().direct_light),
                 bytes_of(&controller.settings().tangent_color),
                 bytes_of(&controller.settings().shadows),

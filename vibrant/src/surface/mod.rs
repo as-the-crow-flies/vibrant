@@ -104,7 +104,7 @@ impl Frame {
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
-    buffer: Frame,
+    frame: Frame,
 }
 
 impl Surface {
@@ -120,19 +120,19 @@ impl Surface {
 
         Self {
             surface,
-            buffer: Frame::new(gpu, &Settings::new()),
+            frame: Frame::new(gpu, &Settings::new()),
         }
     }
 
     pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
-        if settings.width == self.buffer.color().width()
-            && settings.height == self.buffer.color().height()
-            && settings.volume == self.buffer.occupancy().resolution()
+        if settings.width == self.frame.color().width()
+            && settings.height == self.frame.color().height()
+            && settings.volume == self.frame.occupancy().resolution()
         {
             return self;
         }
 
-        self.buffer = Frame::new(gpu, &settings);
+        self.frame = Frame::new(gpu, &settings);
         self.surface
             .configure(gpu.device(), &Self::config(settings.width, settings.height));
 
@@ -143,7 +143,7 @@ impl Surface {
         if let Some(surface) = self.surface.get_current_texture().ok() {
             cmd.copy_texture_to_texture(
                 TexelCopyTextureInfo {
-                    texture: self.buffer.post().texture(),
+                    texture: self.frame.post().texture(),
                     mip_level: 0,
                     origin: Origin3d::ZERO,
                     aspect: TextureAspect::All,
@@ -185,7 +185,7 @@ impl Surface {
         }
     }
 
-    pub fn buffer(&self) -> &Frame {
-        &self.buffer
+    pub fn frame(&self) -> &Frame {
+        &self.frame
     }
 }

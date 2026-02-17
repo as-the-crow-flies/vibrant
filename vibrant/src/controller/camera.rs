@@ -24,11 +24,11 @@ impl Camera {
             height: 1,
             yaw: 0.0,
             pitch: 0.0,
-            distance: 0.75,
+            distance: 400.0,
             pan: Vec3::ZERO,
             fov: PI / 3.0,
-            near: 0.01,
-            far: 10.0,
+            near: 1.0,
+            far: 10000.0,
         }
     }
 
@@ -61,7 +61,7 @@ impl Camera {
             self.zoom(state.relative_delta().y);
         }
 
-        self.zoom(-0.1 * state.scroll.y);
+        self.zoom(-10.0 * state.scroll.y);
     }
 
     pub fn aspect(&self) -> f32 {
@@ -86,7 +86,7 @@ impl Camera {
     }
 
     pub fn zoom(&mut self, zoom: f32) {
-        self.distance = (self.distance + zoom).clamp(0.01, 5.0);
+        self.distance = (self.distance + zoom).clamp(1.0, 10000.0);
     }
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {

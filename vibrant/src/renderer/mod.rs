@@ -1,3 +1,4 @@
+pub mod anatomy;
 pub mod environment;
 pub mod line;
 pub mod ui;
@@ -6,9 +7,12 @@ pub mod wgsl;
 use std::sync::Arc;
 
 use crate::{
-    asset::{transform::TransformBuffer, volume::VolumeBuffer},
+    asset::{
+        radiance::RadianceVolume, segmentation::VolumeSegmenationBuffer,
+        transform::TransformBuffer, volume::PhysicalVolume,
+    },
     file::bounds::Bounds,
-    renderer::line::LineRenderer,
+    renderer::{anatomy::AnatomyRenderer, line::LineRenderer},
 };
 use environment::Environment;
 use pollster::FutureExt;
@@ -25,8 +29,11 @@ use super::{controller::Controller, gpu::Gpu, surface::Surface};
 pub struct Renderer {
     surface: Surface,
     egui: egui_winit::State,
+
+    anatomy: AnatomyRenderer,
     line: LineRenderer,
     ui: UiRenderer,
+
     environment: Environment,
     asset: Asset,
 }
@@ -43,6 +50,8 @@ impl Renderer {
                 None,
             ),
             surface: Surface::new(gpu, window),
+
+            anatomy: AnatomyRenderer::new(gpu),
             line: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
 
@@ -77,12 +86,26 @@ impl Renderer {
         });
 
         FileStage::on_volumes(|volumes| {
-            self.asset
-                .volumes
-                .extend(volumes.iter().map(|volume| VolumeBuffer::new(gpu, volume)));
+            self.asset.segmentations.extend(
+                volumes
+                    .iter()
+                    .map(|volume| VolumeSegmenationBuffer::new(gpu, volume)),
+            );
 
-            if let Some(volume) = volumes.last() {
+            if let (Some(volume), Some(segmentation)) =
+                (volumes.last(), self.asset.segmentations.last())
+            {
                 self.asset.transform = Some(TransformBuffer::new(gpu, volume.transform()));
+
+                if self.asset.physical_volume.is_none() {
+                    self.asset.physical_volume = Some(PhysicalVolume::new(
+                        gpu,
+                        segmentation.size(),
+                        volume.transform(),
+                    ));
+
+                    self.asset.radiance = Some(RadianceVolume::new(gpu, segmentation.size()))
+                }
             }
         });
 
@@ -101,14 +124,35 @@ impl Renderer {
         if let Some(line) = &self.asset.line {
             line.update_settings(gpu);
         }
+        for volume in &self.asset.segmentations {
+            volume.update_settings(gpu);
+        }
 
         let mut cmd = gpu.cmd();
+
+        if let (Some(segmentation), Some(volume), Some(radiance)) = (
+            self.asset
+                .segmentations
+                .iter()
+                .find(|&volume| volume.ty().is_integer()),
+            &self.asset.physical_volume,
+            &self.asset.radiance,
+        ) {
+            self.anatomy.render(
+                &mut cmd,
+                &self.environment,
+                surface.frame(),
+                segmentation,
+                volume,
+                radiance,
+            );
+        }
 
         if let (Some(line), Some(transform)) = (&self.asset.line, &self.asset.transform) {
             self.line.render(
                 &mut cmd,
                 &self.environment,
-                surface.buffer(),
+                surface.frame(),
                 line,
                 transform,
                 controller.settings(),
@@ -118,20 +162,12 @@ impl Renderer {
         }
 
         if !FileStage::about_to_save() {
-            self.ui.render(
-                gpu,
-                &mut cmd,
-                surface.buffer(),
-                self.egui.egui_ctx(),
-                output,
-            );
+            self.ui
+                .render(gpu, &mut cmd, surface.frame(), self.egui.egui_ctx(), output);
         }
 
         surface.present(gpu, cmd);
 
-        FileStage::on_save(|path| {
-            gpu.save(path, surface.buffer().color().texture())
-                .block_on()
-        });
+        FileStage::on_save(|path| gpu.save(path, surface.frame().color().texture()).block_on());
     }
 }

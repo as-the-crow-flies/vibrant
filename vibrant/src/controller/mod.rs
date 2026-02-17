@@ -5,12 +5,13 @@ pub mod segment;
 pub mod settings;
 pub mod state;
 
-use std::time::Instant;
+use std::{iter::zip, time::Instant};
 
 use camera::Camera;
+use egui::ComboBox;
 use egui::{
-    collapsing_header::CollapsingState, Align, ComboBox, Frame, Layout, Margin, ScrollArea,
-    SidePanel, Slider, Ui,
+    collapsing_header::CollapsingState, Align, DragValue, Frame, Layout, Margin, Rgba, ScrollArea,
+    SidePanel, Slider, Ui, Vec2,
 };
 use event::Event;
 use itertools::Itertools;
@@ -52,7 +53,7 @@ impl Controller {
             time: Instant::now(),
 
             show_left_side_panel: false,
-            show_right_side_panel: false,
+            show_right_side_panel: true,
         }
     }
 
@@ -180,8 +181,12 @@ impl Controller {
                             Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"),
                         );
                         ui.add(
-                            Slider::new(&mut self.settings.direct_light, 0.0..=3.0)
-                                .text("Ambient/Shadow"),
+                            Slider::new(&mut self.settings.ambient_light, 0.0..=20.0)
+                                .text("Ambient Light"),
+                        );
+                        ui.add(
+                            Slider::new(&mut self.settings.direct_light, 0.0..=20.0)
+                                .text("Direct Light"),
                         );
                         ui.add(
                             Slider::new(&mut self.settings.tangent_color, 0.0..=2.0)
@@ -373,13 +378,47 @@ impl Controller {
                     .show_header(ui, |ui| ui.heading("Volumes"))
                     .body(|ui| {
                         ScrollArea::new([false, true]).show(ui, |ui| {
-                            for volume in &mut asset.volumes {
+                            for volume in &mut asset.segmentations {
                                 let id = ui.make_persistent_id(&volume.name());
                                 CollapsingState::load_with_default_open(ui.ctx(), id, false)
                                     .show_header(ui, |ui| {
-                                        ui.label(volume.name());
+                                        ui.label(format!("{} ({:?})", volume.name(), volume.ty()));
                                     })
-                                    .body(|_| {});
+                                    .body(|ui| {
+                                        let height = ui.text_style_height(&egui::TextStyle::Button);
+
+                                        let labels = ["R", "G", "B"];
+
+                                        for settings in volume.settings() {
+                                            ui.heading(&settings.name);
+
+                                            for (rgb, label) in [
+                                                (&mut settings.absorption, "absorption"),
+                                                (&mut settings.scattering, "scattering"),
+                                            ] {
+                                                ui.label(label);
+                                                ui.horizontal(|ui| {
+                                                    egui::color_picker::show_color(
+                                                        ui,
+                                                        Rgba::from_rgb(rgb[0], rgb[1], rgb[2]),
+                                                        Vec2::new(2.0 * height, 4.0 * height),
+                                                    );
+
+                                                    ui.vertical(|ui| {
+                                                        for (component, label) in zip(rgb, labels) {
+                                                            ui.horizontal(|ui| {
+                                                                ui.label(label);
+                                                                ui.add(
+                                                                    DragValue::new(component)
+                                                                        .speed(0.01),
+                                                                );
+                                                            });
+                                                        }
+                                                    })
+                                                });
+                                            }
+                                        }
+                                    });
                             }
                         });
                     });

@@ -1,6 +1,7 @@
 struct Settings {
     radius: f32,
     lighting: f32,
+    ambient_light: f32,
     direct_light: f32,
     tangent_color: f32,
     shadows: f32,
@@ -547,4 +548,8 @@ fn unpack_normal(packed: u32) -> vec3<f32> {
     }
 
     return normalize(v);
+}
+
+fn hash(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }

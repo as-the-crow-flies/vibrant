@@ -1,11 +1,12 @@
-use std::io::Cursor;
+use std::{f32::consts::PI, io::Cursor};
 
 use flate2::read::GzDecoder;
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use nifti::{InMemNiftiObject, NiftiObject, NiftiType};
 
 use crate::file::File;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VolumeType {
     Uint8,
     Uint16,
@@ -14,6 +15,16 @@ pub enum VolumeType {
     Int16,
     Int32,
     Float32,
+}
+
+impl VolumeType {
+    pub fn is_float(&self) -> bool {
+        *self == VolumeType::Float32
+    }
+
+    pub fn is_integer(&self) -> bool {
+        !self.is_float()
+    }
 }
 
 pub struct VolumeFile {
@@ -29,13 +40,29 @@ impl VolumeFile {
         let obj = InMemNiftiObject::from_reader(GzDecoder::new(Cursor::new(&file.data)))
             .expect("Nifti should contain volume data");
 
-        let transform = Mat4::from_cols_array_2d(&[
+        let dim = obj
+            .header()
+            .dim()
+            .expect("Nifti should contain valid dimensionality");
+
+        let voxel_to_texture = Mat4::from_scale(Vec3::new(
+            1.0 / dim[0] as f32,
+            1.0 / dim[1] as f32,
+            1.0 / dim[2] as f32,
+        ));
+
+        let mm_to_voxel = Mat4::from_cols_array_2d(&[
             obj.header().srow_x,
             obj.header().srow_y,
             obj.header().srow_z,
             [0.0, 0.0, 0.0, 1.0],
         ])
-        .transpose();
+        .transpose()
+        .inverse();
+
+        let rotation = Mat4::from_rotation_x(PI / 2.0);
+
+        let transform = voxel_to_texture * mm_to_voxel * rotation;
 
         let ty = match obj.header().data_type().expect("Invalid Nifti data type") {
             NiftiType::Uint8 => VolumeType::Uint8,
@@ -75,44 +102,11 @@ impl VolumeFile {
         &self.data
     }
 
-    pub fn ty(&self) -> &VolumeType {
-        &self.ty
+    pub fn ty(&self) -> VolumeType {
+        self.ty
     }
 
     pub fn dim(&self) -> &[u16] {
         &self.dim
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::fs;
-
-    use crate::file::{volume::VolumeFile, File};
-
-    #[test]
-    fn can_read_nifti_file() {
-        let file = File {
-            name: "T1w_acpc_dc_restore_1.25.nii.gz".to_owned(),
-            data: fs::read("/Users/bkraaijeveld/Projects/vibrant/assets/HCP-100307/T1w_acpc_dc_restore_1.25.nii.gz")
-                .expect("Should be able to load nifti file"),
-        };
-
-        let volume = VolumeFile::from_nifti(&file);
-
-        dbg!(volume.transform());
-    }
-
-    #[test]
-    fn can_read_integer_nifti_file() {
-        let file = File {
-            name: "T1w_acpc_dc_restore_1.25.nii.gz".to_owned(),
-            data: fs::read("/Users/bkraaijeveld/Projects/vibrant/assets/HCP-100307/m2m_hcp-100307/final_tissues.nii.gz")
-                .expect("Should be able to load nifti file"),
-        };
-
-        let volume = VolumeFile::from_nifti(&file);
-
-        dbg!(volume.transform());
     }
 }

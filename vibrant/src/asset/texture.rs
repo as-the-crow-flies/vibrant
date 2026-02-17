@@ -103,7 +103,7 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
             address_mode_u: AddressMode::ClampToBorder,
             address_mode_v: AddressMode::ClampToBorder,
             address_mode_w: AddressMode::ClampToBorder,
-            border_color: Some(SamplerBorderColor::TransparentBlack),
+            border_color: Some(SamplerBorderColor::Zero),
             mag_filter: filter,
             min_filter: filter,
             mipmap_filter: filter,

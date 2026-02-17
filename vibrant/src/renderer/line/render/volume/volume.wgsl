@@ -122,7 +122,3 @@ fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
     return t.xyz / t.w;
 }
-
-fn hash(co: vec2<f32>) -> f32 {
-    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-}

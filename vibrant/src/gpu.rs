@@ -50,7 +50,8 @@ impl Gpu {
                     ..Default::default()
                 },
                 required_features: Features::FLOAT32_FILTERABLE
-                    | Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                    | Features::ADDRESS_MODE_CLAMP_TO_BORDER
+                    | Features::ADDRESS_MODE_CLAMP_TO_ZERO,
                 ..Default::default()
             })
             .await
