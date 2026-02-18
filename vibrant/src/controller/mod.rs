@@ -46,6 +46,7 @@ pub struct Controller {
     // View cube state
     viewcube_hovered: u32,
     viewcube_click_pending: bool,
+    viewcube_animating: bool,
 }
 
 impl Controller {
@@ -63,6 +64,7 @@ impl Controller {
 
             viewcube_hovered: PICK_NONE,
             viewcube_click_pending: false,
+            viewcube_animating: false,
         }
     }
 
@@ -91,22 +93,24 @@ impl Controller {
         self.state = self.state.update(event);
 
         if !intercept {
-            self.camera.update(&self.state);
+            if !self.viewcube_animating {
+                self.camera.update(&self.state);
+            }
             self.light.update(&self.state);
         }
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, dt: f32) {
         // Tick camera animation
-        self.camera.tick_animation(dt);
+        let still_animating = self.camera.tick_animation(dt);
+        if !still_animating {
+            self.viewcube_animating = false;
+        }
 
         if self.settings.auto_rotate && !self.camera.is_animating() {
             let speed_rad = self.settings.auto_rotate_speed.to_radians();
             self.camera.yaw += speed_rad * dt;
         }
-
-        // Draw view cube face labels as egui overlay
-        self.draw_viewcube_labels(ctx);
 
         // Change cursor to pointer when hovering over the view cube
         if self.viewcube_hovered != PICK_NONE {
@@ -445,63 +449,6 @@ impl Controller {
             });
     }
 
-    fn draw_viewcube_labels(&self, ctx: &egui::Context) {
-        use glam::{Mat4, Vec3};
-
-        let sw = self.settings.width as f32;
-        let _sh = self.settings.height as f32;
-        let cube_size = VIEWCUBE_SIZE as f32;
-        let margin = VIEWCUBE_MARGIN as f32;
-
-        // View cube center in screen space
-        let cx = sw - cube_size / 2.0 - margin;
-        let cy = cube_size / 2.0 + margin;
-
-        let rotation = Mat4::from_quat(self.camera.rotation());
-        let scale = cube_size * 0.3; // How far from center the labels appear
-
-        let faces: [(Vec3, &str); 6] = [
-            (Vec3::new(0.0, 0.0, 1.0), "F"),
-            (Vec3::new(0.0, 0.0, -1.0), "Bk"),
-            (Vec3::new(1.0, 0.0, 0.0), "R"),
-            (Vec3::new(-1.0, 0.0, 0.0), "L"),
-            (Vec3::new(0.0, 1.0, 0.0), "T"),
-            (Vec3::new(0.0, -1.0, 0.0), "Bt"),
-        ];
-
-        let area = egui::Area::new(egui::Id::new("viewcube_labels"))
-            .fixed_pos(egui::pos2(0.0, 0.0))
-            .order(egui::Order::Foreground)
-            .interactable(false);
-
-        area.show(ctx, |ui| {
-            let painter = ui.painter();
-            for (normal, label) in &faces {
-                // Transform normal by camera rotation
-                let rotated = rotation.transform_vector3(*normal);
-
-                // Only show label if face is facing toward viewer (z > 0 in screen space)
-                if rotated.z <= 0.05 {
-                    continue;
-                }
-
-                // Project to screen: x goes right, y goes down
-                let screen_x = cx + rotated.x * scale;
-                let screen_y = cy - rotated.y * scale;
-
-                let alpha = (rotated.z * 2.0).min(1.0);
-
-                painter.text(
-                    egui::pos2(screen_x, screen_y),
-                    egui::Align2::CENTER_CENTER,
-                    *label,
-                    egui::FontId::proportional(12.0),
-                    egui::Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 220.0) as u8),
-                );
-            }
-        });
-    }
-
     /// Returns the currently hovered view cube face ID (or PICK_NONE).
     pub fn viewcube_hovered_id(&self) -> u32 {
         self.viewcube_hovered
@@ -547,6 +494,7 @@ impl Controller {
                 if id != PICK_NONE {
                     if let Some(target) = ViewCubeTarget::from_id(id) {
                         self.camera.animate_to(target.yaw, target.pitch, 0.4);
+                        self.viewcube_animating = true;
                     }
                 }
             }
