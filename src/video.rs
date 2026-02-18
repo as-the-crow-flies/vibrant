@@ -5,7 +5,7 @@ use std::process::{Child, Command, Stdio};
 /// Manages an ffmpeg subprocess that receives raw RGBA frames via stdin
 /// and encodes them into an MP4 (H.264) file.
 pub struct VideoEncoder {
-    child: Child,
+    child: Option<Child>,
     width: u32,
     height: u32,
 }
@@ -53,7 +53,7 @@ impl VideoEncoder {
             .spawn()?;
 
         Ok(Self {
-            child,
+            child: Some(child),
             width,
             height,
         })
@@ -76,10 +76,14 @@ impl VideoEncoder {
             ));
         }
 
-        let stdin =
-            self.child.stdin.as_mut().ok_or_else(|| {
-                io::Error::new(io::ErrorKind::BrokenPipe, "ffmpeg stdin unavailable")
-            })?;
+        let child = self
+            .child
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "encoder already finished"))?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "ffmpeg stdin unavailable"))?;
         stdin.write_all(data)
     }
 
@@ -87,10 +91,15 @@ impl VideoEncoder {
     ///
     /// Returns an error if ffmpeg exits with a non-zero status.
     pub fn finish(mut self) -> io::Result<()> {
-        // Drop stdin to signal EOF
-        drop(self.child.stdin.take());
+        let mut child = self
+            .child
+            .take()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "encoder already finished"))?;
 
-        let output = self.child.wait_with_output()?;
+        // Drop stdin to signal EOF
+        drop(child.stdin.take());
+
+        let output = child.wait_with_output()?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             Err(io::Error::new(
@@ -103,6 +112,18 @@ impl VideoEncoder {
         } else {
             log::info!("ffmpeg finished successfully");
             Ok(())
+        }
+    }
+}
+
+impl Drop for VideoEncoder {
+    fn drop(&mut self) {
+        if let Some(ref mut child) = self.child {
+            // Close stdin so ffmpeg sees EOF, then kill if still running and
+            // reap the child to prevent zombie processes.
+            drop(child.stdin.take());
+            let _ = child.kill();
+            let _ = child.wait();
         }
     }
 }
@@ -139,7 +160,7 @@ mod tests {
         let err = result.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
 
-        // Clean up: kill the child process to avoid zombie
+        // Clean up: Drop impl kills and reaps the child process
         drop(encoder);
     }
 

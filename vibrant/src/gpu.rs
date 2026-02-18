@@ -319,7 +319,7 @@ impl Gpu {
         }
 
         let pixel = 4u32;
-        let width = (texture.width() / 64) * 64;
+        let width = texture.width();
         let height = texture.height();
 
         let bytes_per_row_unpadded = width * pixel;
@@ -340,11 +340,7 @@ impl Gpu {
             TexelCopyTextureInfo {
                 texture,
                 mip_level: 0,
-                origin: Origin3d {
-                    x: (texture.width() - width) / 2, // Center Crop
-                    y: 0,
-                    z: 0,
-                },
+                origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
             TexelCopyBufferInfo {
@@ -417,7 +413,7 @@ impl Gpu {
         }
 
         let pixel = 4u32;
-        let width = (texture.width() / 64) * 64;
+        let width = texture.width();
         let height = texture.height();
 
         let bytes_per_row_unpadded = width * pixel;
@@ -438,11 +434,7 @@ impl Gpu {
             TexelCopyTextureInfo {
                 texture,
                 mip_level: 0,
-                origin: Origin3d {
-                    x: (texture.width() - width) / 2,
-                    y: 0,
-                    z: 0,
-                },
+                origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
             TexelCopyBufferInfo {

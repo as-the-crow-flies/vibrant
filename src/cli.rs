@@ -19,11 +19,11 @@ pub struct CliArgs {
     pub video: Option<PathBuf>,
 
     /// Video frame rate (default: 30)
-    #[arg(long, default_value_t = 30)]
+    #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(1..))]
     pub fps: u32,
 
     /// Video duration in seconds (default: 10)
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u32).range(1..))]
     pub duration: u32,
 
     /// Enable auto-rotation of the camera

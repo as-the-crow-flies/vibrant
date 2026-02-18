@@ -295,7 +295,9 @@ impl ApplicationHandler for App {
         // Load input files specified via CLI
         #[cfg(not(target_arch = "wasm32"))]
         for path in &self.config.input {
-            FileStage::load_path(path.clone());
+            if let Err(e) = FileStage::load_path(path.clone()) {
+                log::error!("Failed to load {:?}: {}", path, e);
+            }
         }
     }
 

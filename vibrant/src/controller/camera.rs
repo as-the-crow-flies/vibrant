@@ -108,6 +108,15 @@ impl Camera {
             return false;
         }
 
+        // Snap immediately when the duration is zero or negative to avoid NaN
+        // from 0.0 / 0.0.
+        if self.anim_duration <= 0.0 {
+            self.yaw = self.anim_target_yaw;
+            self.pitch = self.anim_target_pitch;
+            self.animating = false;
+            return false;
+        }
+
         self.anim_elapsed += dt;
         let t = (self.anim_elapsed / self.anim_duration).min(1.0);
 

@@ -96,10 +96,14 @@ impl Controller {
         self.state = self.state.update(event);
 
         if !intercept {
-            if !self.viewcube_animating {
-                self.camera.update(&self.state);
-            }
+            self.camera.update(&self.state);
             self.light.update(&self.state);
+            // If the user interacted while the viewcube was animating,
+            // camera.update() will have called cancel_animation(), so
+            // clear our flag too.
+            if !self.camera.is_animating() {
+                self.viewcube_animating = false;
+            }
         }
     }
 

@@ -164,14 +164,30 @@ impl FileStage {
     /// Load a file from a path programmatically (no dialog).
     /// Used by CLI mode.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_path(path: PathBuf) {
+    pub fn load_path(path: PathBuf) -> std::io::Result<()> {
         use std::fs;
 
-        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
-        let data =
-            fs::read(&path).unwrap_or_else(|_| panic!("should be able to read path: `{:?}`", path));
+        let name = path
+            .file_name()
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("path has no file name: {:?}", path),
+                )
+            })?
+            .to_str()
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("non-UTF-8 file name: {:?}", path),
+                )
+            })?
+            .to_owned();
+
+        let data = fs::read(&path)?;
 
         Self::load_files(vec![File::new(&name, data)]);
+        Ok(())
     }
 
     /// Queue a save path programmatically (no dialog).

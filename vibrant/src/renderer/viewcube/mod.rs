@@ -523,7 +523,7 @@ impl ViewCubeRenderer {
     }
 
     /// Render the visual view cube directly onto the post buffer.
-    /// Uses viewport + scissor to constrain drawing to the 150×150 widget region.
+    /// Uses viewport + scissor to constrain drawing to the view cube widget region.
     /// Depth buffer ensures correct face ordering under rotation.
     #[allow(clippy::too_many_arguments)]
     pub fn render(
