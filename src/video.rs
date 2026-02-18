@@ -79,10 +79,17 @@ impl VideoEncoder {
         // Drop stdin to signal EOF
         drop(self.child.stdin.take());
 
-        let output = self.child.wait_with_output().expect("Failed to wait for ffmpeg");
+        let output = self
+            .child
+            .wait_with_output()
+            .expect("Failed to wait for ffmpeg");
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            log::error!("ffmpeg exited with status: {}. stderr:\n{}", output.status, stderr);
+            log::error!(
+                "ffmpeg exited with status: {}. stderr:\n{}",
+                output.status,
+                stderr
+            );
         } else {
             log::info!("ffmpeg finished successfully");
         }

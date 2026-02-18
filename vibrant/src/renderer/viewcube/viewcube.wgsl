@@ -12,6 +12,8 @@ struct Uniforms {
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
+@group(0) @binding(1) var label_tex: texture_2d<f32>;
+@group(0) @binding(2) var label_samp: sampler;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -24,6 +26,8 @@ struct VertexOutput {
     @location(0) normal: vec3<f32>,
     @location(1) @interpolate(flat) face_id: u32,
     @location(2) world_pos: vec3<f32>,
+    @location(3) object_normal: vec3<f32>,
+    @location(4) object_pos: vec3<f32>,
 };
 
 @vertex
@@ -31,10 +35,13 @@ fn vertex(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
     output.face_id = input.face_id;
 
+    output.object_pos = input.position;
+
     // Background quad (face_id=255): pass through NDC position directly, no rotation
     if input.face_id == 255u {
         output.position = vec4<f32>(input.position, 1.0);
         output.normal = vec3<f32>(0.0, 0.0, 1.0);
+        output.object_normal = vec3<f32>(0.0, 0.0, 1.0);
         output.world_pos = input.position;
         return output;
     }
@@ -48,10 +55,13 @@ fn vertex(input: VertexInput) -> VertexOutput {
     let scale = 0.6;
     let x_ndc = rotated.x * scale;
     let y_ndc = rotated.y * scale;
-    let z_ndc = rotated.z * 0.5 + 0.5; // Map z to [0,1] for depth
+    // Map z to [0,1] for depth. The cube diagonal extends to sqrt(3) ≈ 1.73,
+    // so divide by 2*sqrt(3) ≈ 3.4641 to ensure all vertices stay within [0,1] clip range.
+    let z_ndc = rotated.z / (2.0 * sqrt(3.0)) + 0.5;
 
     output.position = vec4<f32>(x_ndc, y_ndc, z_ndc, 1.0);
     output.normal = rotated_normal;
+    output.object_normal = input.normal;
     output.world_pos = rotated.xyz;
 
     return output;
@@ -107,6 +117,48 @@ fn face_color(id: u32) -> vec3<f32> {
     }
 }
 
+// Compute face-local UV from object-space position.
+// The face center cell spans [-0.5, 0.5] in face-local axes (edge_t = 0.25, cube half-extent = 1).
+// We remap that range to [0,1] so the entire label cell fills the center region.
+// face_id 0-5: Front(+Z), Back(-Z), Right(+X), Left(-X), Top(+Y), Bottom(-Y)
+fn face_uv(face_id: u32, pos: vec3<f32>) -> vec2<f32> {
+    // Remap: val in [-0.5, 0.5] -> [0, 1]
+    // remap(x) = x + 0.5
+    switch face_id {
+        case 0u: { // Front (+Z): use x,y
+            return vec2<f32>(pos.x + 0.5, 1.0 - (pos.y + 0.5));
+        }
+        case 1u: { // Back (-Z): use -x,y (mirrored)
+            return vec2<f32>(-pos.x + 0.5, 1.0 - (pos.y + 0.5));
+        }
+        case 2u: { // Right (+X): use -z,y
+            return vec2<f32>(-pos.z + 0.5, 1.0 - (pos.y + 0.5));
+        }
+        case 3u: { // Left (-X): use z,y
+            return vec2<f32>(pos.z + 0.5, 1.0 - (pos.y + 0.5));
+        }
+        case 4u: { // Top (+Y): use x,-z
+            return vec2<f32>(pos.x + 0.5, pos.z + 0.5);
+        }
+        case 5u: { // Bottom (-Y): use x,z
+            return vec2<f32>(pos.x + 0.5, 1.0 - (pos.z + 0.5));
+        }
+        default: {
+            return vec2<f32>(0.5, 0.5);
+        }
+    }
+}
+
+// Sample the label atlas. The atlas is 6 rows stacked vertically (one per face).
+// face_id selects which row, uv selects the position within that row.
+fn sample_label(face_id: u32, uv: vec2<f32>) -> f32 {
+    // Each row occupies 1/6 of the atlas vertically
+    let row = f32(face_id);
+    let atlas_uv = vec2<f32>(uv.x, (row + uv.y) / 6.0);
+    let sample = textureSample(label_tex, label_samp, atlas_uv);
+    return sample.a;
+}
+
 @fragment
 fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
     // Pick mode: encode face_id in red channel (skip background quad)
@@ -123,17 +175,19 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
         return vec4<f32>(0.12, 0.12, 0.14, 0.85);
     }
 
-    // Visual mode: flat-shaded lighting
+    // Visual mode: flat-shaded lighting in object space.
+    // Using the unrotated (object-space) normal ensures lighting stays
+    // consistent regardless of camera orientation — no face goes fully dark.
     let base = face_color(input.face_id);
 
-    // Simple directional light from upper-right-front
+    // Light direction in object space (upper-right-front of the widget, not the scene)
     let light_dir = normalize(vec3<f32>(0.4, 0.7, 0.5));
-    let n = normalize(input.normal);
+    let n = normalize(input.object_normal);
     let ndotl = max(dot(n, light_dir), 0.0);
 
     // Ambient + diffuse
-    let ambient = 0.35;
-    let diffuse = 0.65;
+    let ambient = 0.45;
+    let diffuse = 0.55;
     var color = base * (ambient + diffuse * ndotl);
 
     // Edge darkening: darken edge/corner regions slightly
@@ -148,6 +202,16 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
     // Hover highlight
     if input.face_id == u.hovered_id {
         color = mix(color, vec3<f32>(1.0, 1.0, 1.0), 0.3);
+    }
+
+    // Label text: only for face center IDs (0-5)
+    if input.face_id <= 5u {
+        let raw_uv = face_uv(input.face_id, input.object_pos);
+        let uv = clamp(raw_uv, vec2<f32>(0.0), vec2<f32>(1.0));
+        let text_alpha = sample_label(input.face_id, uv);
+        // Composite white text onto face color
+        let text_color = vec3<f32>(1.0, 1.0, 1.0);
+        color = mix(color, text_color, text_alpha * 0.95);
     }
 
     return vec4<f32>(color, 1.0);

@@ -51,7 +51,7 @@ impl Default for AppConfig {
             input: Vec::new(),
             mode: AppMode::Interactive,
             auto_rotate: false,
-            rotate_speed:10.0,
+            rotate_speed: 10.0,
         }
     }
 }
