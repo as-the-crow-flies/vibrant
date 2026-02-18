@@ -38,7 +38,8 @@ impl ColorBuffer {
             format: Self::FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT
                 | TextureUsages::TEXTURE_BINDING
-                | TextureUsages::COPY_SRC,
+                | TextureUsages::COPY_SRC
+                | TextureUsages::COPY_DST,
             view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
         });
 
@@ -98,6 +99,10 @@ impl ColorBuffer {
 
     pub fn texture(&self) -> &Texture {
         &self.texture
+    }
+
+    pub fn view(&self) -> &TextureView {
+        &self.view
     }
 
     pub fn binding(&self) -> &BindGroup {

@@ -26,6 +26,9 @@ use crate::{
         settings::{LineDisplayMode, LineVoxelizationMode},
     },
     file::FileStage,
+    renderer::viewcube::{
+        ViewCubeRenderer, ViewCubeTarget, PICK_NONE, VIEWCUBE_MARGIN, VIEWCUBE_SIZE,
+    },
 };
 
 #[derive(Debug)]
@@ -39,6 +42,10 @@ pub struct Controller {
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
+
+    // View cube state
+    viewcube_hovered: u32,
+    viewcube_click_pending: bool,
 }
 
 impl Controller {
@@ -53,20 +60,57 @@ impl Controller {
 
             show_left_side_panel: false,
             show_right_side_panel: false,
+
+            viewcube_hovered: PICK_NONE,
+            viewcube_click_pending: false,
         }
     }
 
     pub fn event(&mut self, event: Event) {
+        // Check if mouse click is inside view cube region
+        let intercept = if let Event::MousePressed(event::MouseButton::Left) = &event {
+            let sw = self.settings.width;
+            let cube_x = sw as f32 - VIEWCUBE_SIZE as f32 - VIEWCUBE_MARGIN as f32;
+            let cube_y = VIEWCUBE_MARGIN as f32;
+            let mx = self.state.position.x;
+            let my = self.state.position.y;
+            if mx >= cube_x
+                && mx < cube_x + VIEWCUBE_SIZE as f32
+                && my >= cube_y
+                && my < cube_y + VIEWCUBE_SIZE as f32
+            {
+                self.viewcube_click_pending = true;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         self.state = self.state.update(event);
 
-        self.camera.update(&self.state);
-        self.light.update(&self.state);
+        if !intercept {
+            self.camera.update(&self.state);
+            self.light.update(&self.state);
+        }
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, dt: f32) {
-        if self.settings.auto_rotate {
+        // Tick camera animation
+        self.camera.tick_animation(dt);
+
+        if self.settings.auto_rotate && !self.camera.is_animating() {
             let speed_rad = self.settings.auto_rotate_speed.to_radians();
             self.camera.yaw += speed_rad * dt;
+        }
+
+        // Draw view cube face labels as egui overlay
+        self.draw_viewcube_labels(ctx);
+
+        // Change cursor to pointer when hovering over the view cube
+        if self.viewcube_hovered != PICK_NONE {
+            ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
         }
 
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
@@ -399,6 +443,114 @@ impl Controller {
                         });
                     });
             });
+    }
+
+    fn draw_viewcube_labels(&self, ctx: &egui::Context) {
+        use glam::{Mat4, Vec3};
+
+        let sw = self.settings.width as f32;
+        let _sh = self.settings.height as f32;
+        let cube_size = VIEWCUBE_SIZE as f32;
+        let margin = VIEWCUBE_MARGIN as f32;
+
+        // View cube center in screen space
+        let cx = sw - cube_size / 2.0 - margin;
+        let cy = cube_size / 2.0 + margin;
+
+        let rotation = Mat4::from_quat(self.camera.rotation());
+        let scale = cube_size * 0.3; // How far from center the labels appear
+
+        let faces: [(Vec3, &str); 6] = [
+            (Vec3::new(0.0, 0.0, 1.0), "F"),
+            (Vec3::new(0.0, 0.0, -1.0), "Bk"),
+            (Vec3::new(1.0, 0.0, 0.0), "R"),
+            (Vec3::new(-1.0, 0.0, 0.0), "L"),
+            (Vec3::new(0.0, 1.0, 0.0), "T"),
+            (Vec3::new(0.0, -1.0, 0.0), "Bt"),
+        ];
+
+        let area = egui::Area::new(egui::Id::new("viewcube_labels"))
+            .fixed_pos(egui::pos2(0.0, 0.0))
+            .order(egui::Order::Foreground)
+            .interactable(false);
+
+        area.show(ctx, |ui| {
+            let painter = ui.painter();
+            for (normal, label) in &faces {
+                // Transform normal by camera rotation
+                let rotated = rotation.transform_vector3(*normal);
+
+                // Only show label if face is facing toward viewer (z > 0 in screen space)
+                if rotated.z <= 0.05 {
+                    continue;
+                }
+
+                // Project to screen: x goes right, y goes down
+                let screen_x = cx + rotated.x * scale;
+                let screen_y = cy - rotated.y * scale;
+
+                let alpha = (rotated.z * 2.0).min(1.0);
+
+                painter.text(
+                    egui::pos2(screen_x, screen_y),
+                    egui::Align2::CENTER_CENTER,
+                    *label,
+                    egui::FontId::proportional(12.0),
+                    egui::Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 220.0) as u8),
+                );
+            }
+        });
+    }
+
+    /// Returns the currently hovered view cube face ID (or PICK_NONE).
+    pub fn viewcube_hovered_id(&self) -> u32 {
+        self.viewcube_hovered
+    }
+
+    /// Update view cube hover state based on current mouse position.
+    pub fn update_viewcube_hover(&mut self, viewcube: &ViewCubeRenderer) {
+        let sw = self.settings.width;
+        let sh = self.settings.height;
+        let mx = self.state.position.x;
+        let my = self.state.position.y;
+
+        if viewcube.screen_to_pick(mx, my, sw, sh).is_some() {
+            // We're in the region; hovered_id will be updated after pick pass readback
+            // For now just keep current hovered state
+        } else {
+            self.viewcube_hovered = PICK_NONE;
+        }
+    }
+
+    /// Check if a view cube click is pending, handle pick readback, and animate camera.
+    /// Called from Renderer::render() after the pick pass has been submitted.
+    pub fn handle_viewcube_pick(&mut self, viewcube: &ViewCubeRenderer, gpu: &crate::gpu::Gpu) {
+        let sw = self.settings.width;
+        let sh = self.settings.height;
+        let mx = self.state.position.x;
+        let my = self.state.position.y;
+
+        // Update hover: read the pick pixel at current mouse position
+        if let Some((px, py)) = viewcube.screen_to_pick(mx, my, sw, sh) {
+            let id = viewcube.read_pick_pixel(gpu, px, py);
+            self.viewcube_hovered = id;
+        } else {
+            self.viewcube_hovered = PICK_NONE;
+        }
+
+        // Handle pending click
+        if self.viewcube_click_pending {
+            self.viewcube_click_pending = false;
+
+            if let Some((px, py)) = viewcube.screen_to_pick(mx, my, sw, sh) {
+                let id = viewcube.read_pick_pixel(gpu, px, py);
+                if id != PICK_NONE {
+                    if let Some(target) = ViewCubeTarget::from_id(id) {
+                        self.camera.animate_to(target.yaw, target.pitch, 0.4);
+                    }
+                }
+            }
+        }
     }
 
     pub fn camera(&self) -> &Camera {

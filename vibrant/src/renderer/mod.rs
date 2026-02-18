@@ -1,6 +1,7 @@
 pub mod environment;
 pub mod line;
 pub mod ui;
+pub mod viewcube;
 pub mod wgsl;
 
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use crate::{
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
+use viewcube::ViewCubeRenderer;
 use winit::window::Window;
 
 use crate::{
@@ -27,6 +29,7 @@ pub struct Renderer {
     egui: egui_winit::State,
     line: LineRenderer,
     ui: UiRenderer,
+    viewcube: ViewCubeRenderer,
     environment: Environment,
     asset: Asset,
 }
@@ -45,6 +48,7 @@ impl Renderer {
             surface: Surface::new(gpu, window),
             line: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
+            viewcube: ViewCubeRenderer::new(gpu, viewcube::VIEWCUBE_SIZE),
 
             environment: Environment::new(gpu),
             asset: Asset::default(),
@@ -126,6 +130,32 @@ impl Renderer {
                 needs_update,
             );
         }
+
+        // Render view cube on top of the post-processed buffer
+        {
+            let camera_rotation = controller.camera().rotation();
+            let sw = controller.settings().width;
+            let sh = controller.settings().height;
+            let hovered_id = controller.viewcube_hovered_id();
+
+            self.viewcube.render(
+                gpu,
+                &mut cmd,
+                surface.buffer().post().view(),
+                camera_rotation,
+                sw,
+                sh,
+                hovered_id,
+            );
+
+            self.viewcube.render_pick(gpu, &mut cmd, camera_rotation);
+        }
+
+        // Submit pick pass and handle viewcube click/hover readback
+        // We need to submit the pick pass commands before reading back
+        gpu.submit(cmd);
+        controller.handle_viewcube_pick(&self.viewcube, gpu);
+        let mut cmd = gpu.cmd();
 
         if !FileStage::about_to_save() {
             self.ui.render(
