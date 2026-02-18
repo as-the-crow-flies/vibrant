@@ -17,6 +17,10 @@ struct Settings {
     crop_z_start: f32,
     crop_z_end: f32,
     plane: f32,
+    bloom: u32,
+    bloom_threshold: f32,
+    bloom_intensity: f32,
+    bloom_spread: f32,
 }
 
 struct Segment {

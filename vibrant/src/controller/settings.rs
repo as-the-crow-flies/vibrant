@@ -53,6 +53,10 @@ pub struct Settings {
     pub plane: f32,
     pub auto_rotate: bool,
     pub auto_rotate_speed: f32,
+    pub bloom: bool,
+    pub bloom_threshold: f32,
+    pub bloom_intensity: f32,
+    pub bloom_spread: f32,
 }
 
 impl Settings {
@@ -86,6 +90,10 @@ impl Settings {
             voxelization: LineVoxelizationMode::Tube,
             auto_rotate: false,
             auto_rotate_speed: 10.0,
+            bloom: true,
+            bloom_threshold: 0.25,
+            bloom_intensity: 1.0,
+            bloom_spread: 2.5,
         }
     }
 }
