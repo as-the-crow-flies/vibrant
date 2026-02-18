@@ -118,6 +118,18 @@ impl Renderer {
 
         let mut cmd = gpu.cmd();
 
+        // Clear the post buffer at the start of each frame to prevent stale
+        // egui panel pixels from persisting when panels animate closed.
+        {
+            let _clear_pass = cmd.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("clear_post"),
+                color_attachments: &[Some(surface.buffer().post().attachment_srgb_clear())],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        }
+
         if let (Some(line), Some(transform)) = (&self.asset.line, &self.asset.transform) {
             self.line.render(
                 &mut cmd,
@@ -138,6 +150,8 @@ impl Renderer {
             let sh = controller.settings().height;
             let hovered_id = controller.viewcube_hovered_id();
 
+            let right_panel_offset = controller.right_panel_width();
+
             self.viewcube.render(
                 gpu,
                 &mut cmd,
@@ -146,6 +160,7 @@ impl Renderer {
                 sw,
                 sh,
                 hovered_id,
+                right_panel_offset,
             );
 
             self.viewcube.render_pick(gpu, &mut cmd, camera_rotation);

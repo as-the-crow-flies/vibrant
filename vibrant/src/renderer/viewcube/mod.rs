@@ -17,10 +17,13 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
+/// Width and height of each face label cell in the atlas texture.
+const LABEL_CELL_SIZE: u32 = 64;
+
 /// Size of the view cube widget in pixels.
-pub const VIEWCUBE_SIZE: u32 = 150;
+pub const VIEWCUBE_SIZE: u32 = 200;
 /// Margin from the top-right corner.
-pub const VIEWCUBE_MARGIN: u32 = 30;
+pub const VIEWCUBE_MARGIN: u32 = 50;
 
 /// No element hovered/picked.
 pub const PICK_NONE: u32 = 255;
@@ -47,6 +50,124 @@ struct ViewCubeUniforms {
     hovered_id: u32,
 }
 
+/// Generate a label atlas texture: 6 rows × 1 column, each cell LABEL_CELL_SIZE × LABEL_CELL_SIZE.
+/// Returns RGBA pixel data (width = LABEL_CELL_SIZE, height = LABEL_CELL_SIZE * 6).
+/// Each face label is rendered as white text on a transparent background.
+fn generate_label_atlas() -> Vec<u8> {
+    // Simple 5×7 bitmap font glyphs for uppercase letters + lowercase needed
+    // Each glyph is 5 columns × 7 rows, stored as 7 bytes (each byte = 5-bit row, MSB = left)
+    fn glyph(ch: char) -> [u8; 7] {
+        match ch {
+            'F' => [
+                0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000,
+            ],
+            'r' => [
+                0b00000, 0b00000, 0b10110, 0b11001, 0b10000, 0b10000, 0b10000,
+            ],
+            'o' => [
+                0b00000, 0b00000, 0b01110, 0b10001, 0b10001, 0b10001, 0b01110,
+            ],
+            'n' => [
+                0b00000, 0b00000, 0b10110, 0b11001, 0b10001, 0b10001, 0b10001,
+            ],
+            't' => [
+                0b00100, 0b00100, 0b01110, 0b00100, 0b00100, 0b00100, 0b00011,
+            ],
+            'B' => [
+                0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110,
+            ],
+            'a' => [
+                0b00000, 0b00000, 0b01110, 0b00001, 0b01111, 0b10001, 0b01111,
+            ],
+            'c' => [
+                0b00000, 0b00000, 0b01110, 0b10000, 0b10000, 0b10001, 0b01110,
+            ],
+            'k' => [
+                0b10000, 0b10000, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010,
+            ],
+            'R' => [
+                0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001,
+            ],
+            'i' => [
+                0b00100, 0b00000, 0b01100, 0b00100, 0b00100, 0b00100, 0b01110,
+            ],
+            'g' => [
+                0b00000, 0b00000, 0b01111, 0b10001, 0b01111, 0b00001, 0b01110,
+            ],
+            'h' => [
+                0b10000, 0b10000, 0b10110, 0b11001, 0b10001, 0b10001, 0b10001,
+            ],
+            'L' => [
+                0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111,
+            ],
+            'e' => [
+                0b00000, 0b00000, 0b01110, 0b10001, 0b11111, 0b10000, 0b01110,
+            ],
+            'f' => [
+                0b00110, 0b01001, 0b01000, 0b11100, 0b01000, 0b01000, 0b01000,
+            ],
+            'T' => [
+                0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+            ],
+            'p' => [
+                0b00000, 0b00000, 0b10110, 0b11001, 0b11110, 0b10000, 0b10000,
+            ],
+            'm' => [
+                0b00000, 0b00000, 0b11010, 0b10101, 0b10101, 0b10001, 0b10001,
+            ],
+            _ => [0; 7],
+        }
+    }
+
+    let labels = ["Front", "Back", "Right", "Left", "Top", "Bottom"];
+    let w = LABEL_CELL_SIZE as usize;
+    let h = LABEL_CELL_SIZE as usize;
+    let atlas_h = h * 6;
+    let mut pixels = vec![0u8; w * atlas_h * 4]; // RGBA
+
+    let scale = 2usize; // pixel scale for each glyph pixel
+    let glyph_w = 5 * scale;
+    let glyph_h = 7 * scale;
+    let spacing = scale; // 1 scaled pixel between glyphs
+
+    for (face_idx, label) in labels.iter().enumerate() {
+        let chars: Vec<char> = label.chars().collect();
+        let total_w = chars.len() * glyph_w + (chars.len().saturating_sub(1)) * spacing;
+        let x_start = (w.saturating_sub(total_w)) / 2;
+        let y_start = (h.saturating_sub(glyph_h)) / 2;
+        let row_offset = face_idx * h;
+
+        for (ci, ch) in chars.iter().enumerate() {
+            let g = glyph(*ch);
+            let gx = x_start + ci * (glyph_w + spacing);
+
+            for (gy_row, &bits) in g.iter().enumerate() {
+                for gx_col in 0..5usize {
+                    let on = (bits >> (4 - gx_col)) & 1 == 1;
+                    if on {
+                        // Fill scaled pixel block
+                        for sy in 0..scale {
+                            for sx in 0..scale {
+                                let px = gx + gx_col * scale + sx;
+                                let py = row_offset + y_start + gy_row * scale + sy;
+                                if px < w && py < atlas_h {
+                                    let idx = (py * w + px) * 4;
+                                    pixels[idx] = 255; // R
+                                    pixels[idx + 1] = 255; // G
+                                    pixels[idx + 2] = 255; // B
+                                    pixels[idx + 3] = 255; // A
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pixels
+}
+
 pub struct ViewCubeRenderer {
     visual_pipeline: RenderPipeline,
     pick_pipeline: RenderPipeline,
@@ -65,6 +186,7 @@ pub struct ViewCubeRenderer {
     visual_depth_view: TextureView,
     visual_screen_w: u32,
     visual_screen_h: u32,
+    label_texture: Texture,
     num_indices: u32,
     size: u32,
 }
@@ -111,46 +233,128 @@ impl ViewCubeRenderer {
             mapped_at_creation: false,
         });
 
+        // Create label atlas texture
+        let label_pixels = generate_label_atlas();
+        let label_texture = gpu.device().create_texture(&TextureDescriptor {
+            label: Some("ViewCube.label_texture"),
+            size: Extent3d {
+                width: LABEL_CELL_SIZE,
+                height: LABEL_CELL_SIZE * 6,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        gpu.queue().write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &label_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &label_pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(LABEL_CELL_SIZE * 4),
+                rows_per_image: Some(LABEL_CELL_SIZE * 6),
+            },
+            Extent3d {
+                width: LABEL_CELL_SIZE,
+                height: LABEL_CELL_SIZE * 6,
+                depth_or_array_layers: 1,
+            },
+        );
+        let label_texture_view = label_texture.create_view(&TextureViewDescriptor::default());
+
+        let label_sampler = gpu.device().create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("ViewCube.label_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
         let bind_group_layout = gpu
             .device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("ViewCube.layout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
             });
 
         let bind_group = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("ViewCube.visual_bind_group"),
             layout: &bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &uniform_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &uniform_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(&label_texture_view),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Sampler(&label_sampler),
+                },
+            ],
         });
 
         let pick_bind_group = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("ViewCube.pick_bind_group"),
             layout: &bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &pick_uniform_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &pick_uniform_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(&label_texture_view),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Sampler(&label_sampler),
+                },
+            ],
         });
 
         let pipeline_layout = gpu
@@ -305,6 +509,7 @@ impl ViewCubeRenderer {
             visual_depth_view,
             visual_screen_w: 0,
             visual_screen_h: 0,
+            label_texture,
             num_indices,
             size,
         }
@@ -340,8 +545,9 @@ impl ViewCubeRenderer {
         screen_width: u32,
         screen_height: u32,
         hovered_id: u32,
+        right_panel_offset: f32,
     ) {
-        let [vx, vy, vw, vh] = self.viewport_rect(screen_width, screen_height);
+        let [vx, vy, vw, vh] = self.viewport_rect(screen_width, screen_height, right_panel_offset);
 
         // Bounds check: ensure the viewport fits within the screen
         if vx < 0.0
@@ -357,8 +563,12 @@ impl ViewCubeRenderer {
         // The depth attachment must match the color attachment (post buffer) dimensions.
         if screen_width != self.visual_screen_w || screen_height != self.visual_screen_h {
             self.visual_depth_texture.destroy();
-            self.visual_depth_texture =
-                Self::create_depth_texture(gpu, screen_width, screen_height, "ViewCube.visual_depth");
+            self.visual_depth_texture = Self::create_depth_texture(
+                gpu,
+                screen_width,
+                screen_height,
+                "ViewCube.visual_depth",
+            );
             self.visual_depth_view = self
                 .visual_depth_texture
                 .create_view(&TextureViewDescriptor::default());
@@ -511,18 +721,29 @@ impl ViewCubeRenderer {
     }
 
     /// Compute the viewport rectangle [x, y, w, h] in screen pixels for the view cube.
-    /// Placed in the top-right corner.
-    fn viewport_rect(&self, screen_width: u32, _screen_height: u32) -> [f32; 4] {
+    /// Placed in the top-right corner, shifting left by `right_panel_offset` when the
+    /// layers/settings panel is open.
+    fn viewport_rect(
+        &self,
+        screen_width: u32,
+        _screen_height: u32,
+        right_panel_offset: f32,
+    ) -> [f32; 4] {
         let s = self.size as f32;
         let m = VIEWCUBE_MARGIN as f32;
-        let x = screen_width as f32 - s - m;
+        let x = screen_width as f32 - s - m - right_panel_offset;
         let y = m; // top
         [x, y, s, s]
     }
 
     /// Returns (x, y, w, h) of the view cube region in screen pixels.
-    pub fn screen_rect(&self, screen_width: u32, screen_height: u32) -> (f32, f32, f32, f32) {
-        let r = self.viewport_rect(screen_width, screen_height);
+    pub fn screen_rect(
+        &self,
+        screen_width: u32,
+        screen_height: u32,
+        right_panel_offset: f32,
+    ) -> (f32, f32, f32, f32) {
+        let r = self.viewport_rect(screen_width, screen_height, right_panel_offset);
         (r[0], r[1], r[2], r[3])
     }
 
@@ -534,8 +755,9 @@ impl ViewCubeRenderer {
         my: f32,
         screen_width: u32,
         screen_height: u32,
+        right_panel_offset: f32,
     ) -> Option<(u32, u32)> {
-        let (rx, ry, rw, rh) = self.screen_rect(screen_width, screen_height);
+        let (rx, ry, rw, rh) = self.screen_rect(screen_width, screen_height, right_panel_offset);
         let lx = mx - rx;
         let ly = my - ry;
         if lx >= 0.0 && ly >= 0.0 && lx < rw && ly < rh {
@@ -743,7 +965,12 @@ impl ViewCubeRenderer {
         {
             let z = 0.99f32;
             let base = vertices.len() as u16;
-            for pos in &[[-1.0, -1.0, z], [1.0, -1.0, z], [1.0, 1.0, z], [-1.0, 1.0, z]] {
+            for pos in &[
+                [-1.0, -1.0, z],
+                [1.0, -1.0, z],
+                [1.0, 1.0, z],
+                [-1.0, 1.0, z],
+            ] {
                 vertices.push(ViewCubeVertex {
                     position: *pos,
                     normal: [0.0, 0.0, 1.0],
@@ -866,8 +1093,10 @@ impl ViewCubeTarget {
     }
 
     fn new(direction: Vec3, label: &'static str) -> Self {
-        let yaw = direction.x.atan2(direction.z);
-        let pitch = (-direction.y)
+        // Negate yaw and pitch because the view matrix rotates the *world*
+        // (not the camera), so the computed angles give the opposite direction.
+        let yaw = -(direction.x.atan2(direction.z));
+        let pitch = (direction.y)
             .asin()
             .clamp(-PI / 2.0 + 0.001, PI / 2.0 - 0.001);
 
@@ -898,5 +1127,6 @@ impl Drop for ViewCubeRenderer {
         self.pick_depth_texture.destroy();
         self.pick_staging_buffer.destroy();
         self.visual_depth_texture.destroy();
+        self.label_texture.destroy();
     }
 }

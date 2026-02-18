@@ -47,6 +47,7 @@ pub struct Controller {
     viewcube_hovered: u32,
     viewcube_click_pending: bool,
     viewcube_animating: bool,
+    right_panel_width: f32,
 }
 
 impl Controller {
@@ -65,6 +66,7 @@ impl Controller {
             viewcube_hovered: PICK_NONE,
             viewcube_click_pending: false,
             viewcube_animating: false,
+            right_panel_width: 0.0,
         }
     }
 
@@ -72,7 +74,8 @@ impl Controller {
         // Check if mouse click is inside view cube region
         let intercept = if let Event::MousePressed(event::MouseButton::Left) = &event {
             let sw = self.settings.width;
-            let cube_x = sw as f32 - VIEWCUBE_SIZE as f32 - VIEWCUBE_MARGIN as f32;
+            let cube_x =
+                sw as f32 - VIEWCUBE_SIZE as f32 - VIEWCUBE_MARGIN as f32 - self.right_panel_width;
             let cube_y = VIEWCUBE_MARGIN as f32;
             let mx = self.state.position.x;
             let my = self.state.position.y;
@@ -357,7 +360,7 @@ impl Controller {
             },
         );
 
-        SidePanel::right("SidePanelRight")
+        let right_panel_response = SidePanel::right("SidePanelRight")
             .min_width(300.0)
             .show_animated(ctx, self.show_right_side_panel, |ui| {
                 CollapsingState::load_with_default_open(ui.ctx(), "Tractography".into(), false)
@@ -447,11 +450,23 @@ impl Controller {
                         });
                     });
             });
+
+        // Track right panel width so the view cube can shift left when the panel is open.
+        // The egui rect is in logical points; multiply by pixels_per_point to get physical pixels
+        // (settings.width/height are physical).
+        let ppp = ctx.pixels_per_point();
+        self.right_panel_width = right_panel_response
+            .map(|r| r.response.rect.width() * ppp)
+            .unwrap_or(0.0);
     }
 
     /// Returns the currently hovered view cube face ID (or PICK_NONE).
     pub fn viewcube_hovered_id(&self) -> u32 {
         self.viewcube_hovered
+    }
+
+    pub fn right_panel_width(&self) -> f32 {
+        self.right_panel_width
     }
 
     /// Update view cube hover state based on current mouse position.
@@ -460,8 +475,9 @@ impl Controller {
         let sh = self.settings.height;
         let mx = self.state.position.x;
         let my = self.state.position.y;
+        let rpw = self.right_panel_width;
 
-        if viewcube.screen_to_pick(mx, my, sw, sh).is_some() {
+        if viewcube.screen_to_pick(mx, my, sw, sh, rpw).is_some() {
             // We're in the region; hovered_id will be updated after pick pass readback
             // For now just keep current hovered state
         } else {
@@ -476,9 +492,10 @@ impl Controller {
         let sh = self.settings.height;
         let mx = self.state.position.x;
         let my = self.state.position.y;
+        let rpw = self.right_panel_width;
 
         // Update hover: read the pick pixel at current mouse position
-        if let Some((px, py)) = viewcube.screen_to_pick(mx, my, sw, sh) {
+        if let Some((px, py)) = viewcube.screen_to_pick(mx, my, sw, sh, rpw) {
             let id = viewcube.read_pick_pixel(gpu, px, py);
             self.viewcube_hovered = id;
         } else {
@@ -489,7 +506,7 @@ impl Controller {
         if self.viewcube_click_pending {
             self.viewcube_click_pending = false;
 
-            if let Some((px, py)) = viewcube.screen_to_pick(mx, my, sw, sh) {
+            if let Some((px, py)) = viewcube.screen_to_pick(mx, my, sw, sh, rpw) {
                 let id = viewcube.read_pick_pixel(gpu, px, py);
                 if id != PICK_NONE {
                     if let Some(target) = ViewCubeTarget::from_id(id) {
