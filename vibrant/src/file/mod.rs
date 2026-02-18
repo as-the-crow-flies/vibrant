@@ -182,3 +182,30 @@ impl FileStage {
 }
 
 static QUEUE: LazyLock<Mutex<FileStage>> = LazyLock::new(|| Mutex::new(FileStage::default()));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_save_path_queues_correctly() {
+        // Initially no save queued
+        // Note: other tests may have left state in QUEUE, so we clear first
+        QUEUE.lock().unwrap().save = None;
+
+        assert!(!FileStage::about_to_save());
+
+        let path = PathBuf::from("/tmp/test_screenshot.png");
+        FileStage::save_path(path.clone());
+
+        assert!(FileStage::about_to_save());
+
+        // on_save should consume the path
+        let mut received = None;
+        FileStage::on_save(|p| received = Some(p));
+        assert_eq!(received, Some(path));
+
+        // After consuming, no more save queued
+        assert!(!FileStage::about_to_save());
+    }
+}

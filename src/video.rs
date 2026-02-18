@@ -76,11 +76,10 @@ impl VideoEncoder {
             ));
         }
 
-        let stdin = self
-            .child
-            .stdin
-            .as_mut()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "ffmpeg stdin unavailable"))?;
+        let stdin =
+            self.child.stdin.as_mut().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::BrokenPipe, "ffmpeg stdin unavailable")
+            })?;
         stdin.write_all(data)
     }
 
@@ -105,5 +104,69 @@ impl VideoEncoder {
             log::info!("ffmpeg finished successfully");
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    fn ffmpeg_available() -> bool {
+        Command::new("ffmpeg")
+            .arg("-version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok()
+    }
+
+    #[test]
+    fn test_write_frame_size_mismatch() {
+        if !ffmpeg_available() {
+            eprintln!("Skipping test_write_frame_size_mismatch: ffmpeg not in PATH");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("test.mp4");
+        let mut encoder = VideoEncoder::new(&output, 64, 64, 30).unwrap();
+
+        // Correct size = 64*64*4 = 16384. Send a wrong size.
+        let wrong_data = vec![0u8; 100];
+        let result = encoder.write_frame(&wrong_data);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+
+        // Clean up: kill the child process to avoid zombie
+        drop(encoder);
+    }
+
+    #[test]
+    fn test_video_encoder_roundtrip() {
+        if !ffmpeg_available() {
+            eprintln!("Skipping test_video_encoder_roundtrip: ffmpeg not in PATH");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("roundtrip.mp4");
+        let w = 64u32;
+        let h = 64u32;
+        let mut encoder = VideoEncoder::new(&output, w, h, 30).unwrap();
+
+        // Write 3 dummy frames (solid color)
+        let frame = vec![128u8; (w * h * 4) as usize];
+        for _ in 0..3 {
+            encoder.write_frame(&frame).unwrap();
+        }
+
+        encoder.finish().unwrap();
+
+        // Verify the output file exists and is non-empty
+        assert!(output.exists(), "Output file should exist");
+        let metadata = std::fs::metadata(&output).unwrap();
+        assert!(metadata.len() > 0, "Output file should be non-empty");
     }
 }

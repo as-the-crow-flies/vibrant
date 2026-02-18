@@ -178,3 +178,109 @@ impl Camera {
         self.far
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f32::consts::PI;
+
+    #[test]
+    fn test_animate_to_sets_state() {
+        let mut cam = Camera::new();
+        assert!(!cam.is_animating());
+
+        cam.animate_to(1.0, 0.5, 0.4);
+        assert!(cam.is_animating());
+        assert_eq!(cam.anim_target_yaw, 1.0);
+        assert_eq!(cam.anim_target_pitch, 0.5);
+    }
+
+    #[test]
+    fn test_tick_animation_at_start() {
+        let mut cam = Camera::new();
+        cam.yaw = 0.0;
+        cam.pitch = 0.0;
+        cam.animate_to(1.0, 0.5, 1.0);
+
+        // Tick a tiny amount — should still be near start
+        cam.tick_animation(0.001);
+        assert!(cam.yaw.abs() < 0.01);
+        assert!(cam.pitch.abs() < 0.01);
+        assert!(cam.is_animating());
+    }
+
+    #[test]
+    fn test_tick_animation_at_end() {
+        let mut cam = Camera::new();
+        cam.yaw = 0.0;
+        cam.pitch = 0.0;
+        cam.animate_to(1.0, 0.5, 0.4);
+
+        // Tick past the full duration
+        let still_animating = cam.tick_animation(1.0);
+        assert!(!still_animating);
+        assert!(!cam.is_animating());
+        assert!((cam.yaw - 1.0).abs() < 1e-6);
+        assert!((cam.pitch - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_tick_animation_midpoint() {
+        let mut cam = Camera::new();
+        cam.yaw = 0.0;
+        cam.pitch = 0.0;
+        cam.animate_to(2.0, 1.0, 1.0);
+
+        // At t=0.5, smoothstep = 3*(0.5)^2 - 2*(0.5)^3 = 0.5
+        cam.tick_animation(0.5);
+        assert!((cam.yaw - 1.0).abs() < 1e-6, "yaw at midpoint: {}", cam.yaw);
+        assert!(
+            (cam.pitch - 0.5).abs() < 1e-6,
+            "pitch at midpoint: {}",
+            cam.pitch
+        );
+    }
+
+    #[test]
+    fn test_cancel_animation() {
+        let mut cam = Camera::new();
+        cam.animate_to(1.0, 0.5, 1.0);
+        cam.tick_animation(0.3);
+        let yaw_before = cam.yaw;
+        let pitch_before = cam.pitch;
+
+        cam.cancel_animation();
+        assert!(!cam.is_animating());
+
+        // yaw/pitch should be preserved at the point of cancellation
+        assert_eq!(cam.yaw, yaw_before);
+        assert_eq!(cam.pitch, pitch_before);
+    }
+
+    #[test]
+    fn test_rotate_pitch_clamp() {
+        let mut cam = Camera::new();
+
+        // Rotate pitch far positive — should clamp to PI/2
+        cam.rotate(0.0, 100.0);
+        assert!((cam.pitch - PI / 2.0).abs() < 1e-6);
+
+        // Reset and rotate pitch far negative — should clamp to -PI/2
+        cam.pitch = 0.0;
+        cam.rotate(0.0, -100.0);
+        assert!((cam.pitch + PI / 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_zoom_clamp() {
+        let mut cam = Camera::new();
+
+        // Zoom way in — should clamp to 0.01
+        cam.zoom(-100.0);
+        assert!((cam.distance - 0.01).abs() < 1e-6);
+
+        // Zoom way out — should clamp to 5.0
+        cam.zoom(200.0);
+        assert!((cam.distance - 5.0).abs() < 1e-6);
+    }
+}

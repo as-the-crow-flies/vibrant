@@ -444,3 +444,17 @@ impl<const N: usize> Fps<N> {
         total / N as f32
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_config_default() {
+        let config = AppConfig::default();
+        assert!(config.input.is_empty());
+        assert_eq!(config.mode, AppMode::Interactive);
+        assert!(!config.auto_rotate);
+        assert_eq!(config.rotate_speed, 10.0);
+    }
+}

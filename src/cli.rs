@@ -61,3 +61,59 @@ impl CliArgs {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::AppMode;
+    use clap::Parser;
+
+    #[test]
+    fn test_cli_default_interactive() {
+        // No flags → Interactive mode
+        let args = CliArgs::parse_from(["vibrant"]);
+        let config = args.into_config();
+        assert_eq!(config.mode, AppMode::Interactive);
+        assert!(config.input.is_empty());
+        assert!(!config.auto_rotate);
+        assert_eq!(config.rotate_speed, 10.0);
+    }
+
+    #[test]
+    fn test_cli_screenshot_mode() {
+        let args = CliArgs::parse_from(["vibrant", "--screenshot", "out.png"]);
+        let config = args.into_config();
+        match &config.mode {
+            AppMode::Screenshot { output } => {
+                assert_eq!(output, &PathBuf::from("out.png"));
+            }
+            other => panic!("Expected Screenshot mode, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_cli_video_mode() {
+        let args = CliArgs::parse_from([
+            "vibrant",
+            "--video",
+            "out.mp4",
+            "--fps",
+            "60",
+            "--duration",
+            "5",
+        ]);
+        let config = args.into_config();
+        match &config.mode {
+            AppMode::Video {
+                output,
+                fps,
+                duration,
+            } => {
+                assert_eq!(output, &PathBuf::from("out.mp4"));
+                assert_eq!(*fps, 60);
+                assert_eq!(*duration, 5);
+            }
+            other => panic!("Expected Video mode, got {:?}", other),
+        }
+    }
+}

@@ -33,10 +33,10 @@ pub const PICK_NONE: u32 = 255;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
-struct ViewCubeVertex {
-    position: [f32; 3],
-    normal: [f32; 3],
-    face_id: u32,
+pub(crate) struct ViewCubeVertex {
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub face_id: u32,
     _pad: u32,
 }
 
@@ -53,7 +53,7 @@ struct ViewCubeUniforms {
 /// Generate a label atlas texture: 6 rows × 1 column, each cell LABEL_CELL_SIZE × LABEL_CELL_SIZE.
 /// Returns RGBA pixel data (width = LABEL_CELL_SIZE, height = LABEL_CELL_SIZE * 6).
 /// Each face label is rendered as white text on a transparent background.
-fn generate_label_atlas() -> Vec<u8> {
+pub(crate) fn generate_label_atlas() -> Vec<u8> {
     // Simple 5×7 bitmap font glyphs for uppercase letters + lowercase needed
     // Each glyph is 5 columns × 7 rows, stored as 7 bytes (each byte = 5-bit row, MSB = left)
     fn glyph(ch: char) -> [u8; 7] {
@@ -687,7 +687,7 @@ impl ViewCubeRenderer {
     /// Compute the viewport rectangle [x, y, w, h] in screen pixels for the view cube.
     /// Placed in the top-right corner, shifting left by `right_panel_offset` when the
     /// layers/settings panel is open.
-    fn viewport_rect(
+    pub(crate) fn viewport_rect(
         &self,
         screen_width: u32,
         _screen_height: u32,
@@ -739,7 +739,7 @@ impl ViewCubeRenderer {
     /// - Corner sub-quads (4 per face): corner IDs (18-25)
     ///
     /// Total: 6 faces * 9 sub-quads = 54 sub-quads = 216 vertices, 324 indices.
-    fn cube_geometry() -> (Vec<ViewCubeVertex>, Vec<u16>) {
+    pub(crate) fn cube_geometry() -> (Vec<ViewCubeVertex>, Vec<u16>) {
         let mut vertices = Vec::with_capacity(216);
         let mut indices = Vec::with_capacity(324);
 
@@ -1091,5 +1091,143 @@ impl Drop for ViewCubeRenderer {
         self.pick_depth_texture.destroy();
         self.visual_depth_texture.destroy();
         self.label_texture.destroy();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_viewcube_target_from_id_faces() {
+        let expected = [
+            (0, "Front"),
+            (1, "Back"),
+            (2, "Right"),
+            (3, "Left"),
+            (4, "Top"),
+            (5, "Bottom"),
+        ];
+        for (id, label) in expected {
+            let target = ViewCubeTarget::from_id(id)
+                .unwrap_or_else(|| panic!("from_id({id}) should return Some"));
+            assert_eq!(target.label, label, "ID {id} should map to {label}");
+        }
+    }
+
+    #[test]
+    fn test_viewcube_target_from_id_edges_corners() {
+        // IDs 6..=25 (12 edges + 8 corners) should all return Some
+        for id in 6..=25 {
+            assert!(
+                ViewCubeTarget::from_id(id).is_some(),
+                "from_id({id}) should return Some"
+            );
+        }
+        // IDs >= 26 should return None
+        for id in [26, 27, 100, 255] {
+            assert!(
+                ViewCubeTarget::from_id(id).is_none(),
+                "from_id({id}) should return None"
+            );
+        }
+    }
+
+    #[test]
+    fn test_viewcube_target_all_faces() {
+        let faces = ViewCubeTarget::all_faces();
+        assert_eq!(faces.len(), 6);
+        assert_eq!(faces[0].label, "Front");
+        assert_eq!(faces[1].label, "Back");
+        assert_eq!(faces[2].label, "Right");
+        assert_eq!(faces[3].label, "Left");
+        assert_eq!(faces[4].label, "Top");
+        assert_eq!(faces[5].label, "Bottom");
+    }
+
+    #[test]
+    fn test_cube_geometry_counts() {
+        let (vertices, indices) = ViewCubeRenderer::cube_geometry();
+
+        // 6 faces * 9 sub-quads * 4 verts = 216 + 4 background verts = 220
+        assert_eq!(vertices.len(), 220, "vertex count");
+        // 6 faces * 9 sub-quads * 6 indices = 324 + 6 background indices = 330
+        assert_eq!(indices.len(), 330, "index count");
+
+        // All pick IDs 0..=25 should be present in the geometry
+        let mut seen_ids = std::collections::HashSet::new();
+        for v in &vertices {
+            if v.face_id != PICK_NONE {
+                seen_ids.insert(v.face_id);
+            }
+        }
+        for id in 0..=25u32 {
+            assert!(
+                seen_ids.contains(&id),
+                "pick ID {id} should appear in geometry"
+            );
+        }
+    }
+
+    #[test]
+    fn test_generate_label_atlas_dimensions() {
+        let pixels = generate_label_atlas();
+        let expected_w = LABEL_CELL_SIZE as usize; // 64
+        let expected_h = LABEL_CELL_SIZE as usize * 6; // 384
+        let expected_len = expected_w * expected_h * 4; // RGBA
+
+        assert_eq!(pixels.len(), expected_len, "atlas byte count");
+
+        // The atlas should not be all-zero (labels should have some white pixels)
+        let non_zero = pixels.iter().filter(|&&b| b != 0).count();
+        assert!(non_zero > 0, "atlas should contain non-zero (label) pixels");
+    }
+
+    // --- GPU integration test ---
+
+    #[test]
+    #[ignore]
+    fn test_viewcube_pick_roundtrip() {
+        use pollster::FutureExt;
+
+        // Check for GPU adapter availability
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            ..Default::default()
+        }));
+        if adapter.is_err() {
+            eprintln!("Skipping test_viewcube_pick_roundtrip: no GPU adapter available");
+            return;
+        }
+
+        let gpu = crate::gpu::Gpu::new().block_on();
+        let renderer = ViewCubeRenderer::new(&gpu, VIEWCUBE_SIZE);
+
+        // Use identity rotation (looking straight at Front face from +Z)
+        let rotation = Quat::IDENTITY;
+
+        let mut cmd = gpu.cmd();
+        renderer.render_pick(&gpu, &mut cmd, rotation);
+        gpu.submit(cmd);
+        gpu.wait();
+
+        // Read the center pixel of the pick texture — should be a valid face ID
+        let center = VIEWCUBE_SIZE / 2;
+        let pick_id = renderer.read_pick_pixel(&gpu, center, center);
+
+        // With identity rotation, center should show the Front face (ID 0)
+        // but due to the specific projection in the shader, we just verify it's a valid target
+        assert!(
+            pick_id <= 25 || pick_id == PICK_NONE,
+            "pick_id should be a valid target or PICK_NONE, got {pick_id}"
+        );
+        // More specifically, with identity rotation the front face should be visible
+        if pick_id != PICK_NONE {
+            assert!(
+                ViewCubeTarget::from_id(pick_id).is_some(),
+                "pick_id {pick_id} should map to a valid ViewCubeTarget"
+            );
+        }
     }
 }

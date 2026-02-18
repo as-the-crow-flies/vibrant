@@ -91,6 +91,7 @@ mod test {
     use crate::file::{volume::VolumeFile, File};
 
     #[test]
+    #[ignore] // Requires developer-specific file path
     fn can_read_nifti_file() {
         let file = File {
             name: "T1w_acpc_dc_restore_1.25.nii.gz".to_owned(),
@@ -104,6 +105,7 @@ mod test {
     }
 
     #[test]
+    #[ignore] // Requires developer-specific file path
     fn can_read_integer_nifti_file() {
         let file = File {
             name: "T1w_acpc_dc_restore_1.25.nii.gz".to_owned(),
