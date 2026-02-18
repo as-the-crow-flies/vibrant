@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
@@ -12,10 +12,13 @@ pub struct VideoEncoder {
 
 impl VideoEncoder {
     /// Spawn an ffmpeg process ready to receive raw RGBA frames.
-    pub fn new(output: &Path, width: u32, height: u32, fps: u32) -> Self {
+    ///
+    /// Returns an error if the output directory cannot be created or ffmpeg
+    /// cannot be spawned (e.g. not installed / not in PATH).
+    pub fn new(output: &Path, width: u32, height: u32, fps: u32) -> io::Result<Self> {
         if let Some(parent) = output.parent() {
             if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).unwrap();
+                std::fs::create_dir_all(parent)?;
             }
         }
 
@@ -47,51 +50,60 @@ impl VideoEncoder {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
-            .spawn()
-            .expect("Failed to start ffmpeg. Is ffmpeg installed and in PATH?");
+            .spawn()?;
 
-        Self {
+        Ok(Self {
             child,
             width,
             height,
-        }
+        })
     }
 
     /// Write a single RGBA frame to ffmpeg's stdin.
-    pub fn write_frame(&mut self, data: &[u8]) {
+    ///
+    /// Returns an error if the frame data size is wrong or the write fails
+    /// (e.g. ffmpeg has exited / pipe broken).
+    pub fn write_frame(&mut self, data: &[u8]) -> io::Result<()> {
         let expected = (self.width * self.height * 4) as usize;
-        assert_eq!(
-            data.len(),
-            expected,
-            "Frame data size mismatch: got {} bytes, expected {}",
-            data.len(),
-            expected
-        );
+        if data.len() != expected {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "Frame data size mismatch: got {} bytes, expected {}",
+                    data.len(),
+                    expected
+                ),
+            ));
+        }
 
-        let stdin = self.child.stdin.as_mut().expect("ffmpeg stdin");
-        stdin
-            .write_all(data)
-            .expect("Failed to write frame to ffmpeg");
+        let stdin = self
+            .child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "ffmpeg stdin unavailable"))?;
+        stdin.write_all(data)
     }
 
     /// Close stdin and wait for ffmpeg to finish encoding.
-    pub fn finish(mut self) {
+    ///
+    /// Returns an error if ffmpeg exits with a non-zero status.
+    pub fn finish(mut self) -> io::Result<()> {
         // Drop stdin to signal EOF
         drop(self.child.stdin.take());
 
-        let output = self
-            .child
-            .wait_with_output()
-            .expect("Failed to wait for ffmpeg");
+        let output = self.child.wait_with_output()?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            log::error!(
-                "ffmpeg exited with status: {}. stderr:\n{}",
-                output.status,
-                stderr
-            );
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "ffmpeg exited with status: {}. stderr:\n{}",
+                    output.status, stderr
+                ),
+            ))
         } else {
             log::info!("ffmpeg finished successfully");
+            Ok(())
         }
     }
 }

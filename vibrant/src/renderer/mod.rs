@@ -4,6 +4,7 @@ pub mod ui;
 pub mod viewcube;
 pub mod wgsl;
 
+use std::io;
 use std::sync::Arc;
 
 use crate::{
@@ -64,7 +65,7 @@ impl Renderer {
     }
 
     /// Read back the current frame as raw RGBA bytes. Returns (data, width, height).
-    pub async fn read_frame(&self, gpu: &Gpu) -> (Vec<u8>, u32, u32) {
+    pub async fn read_frame(&self, gpu: &Gpu) -> io::Result<(Vec<u8>, u32, u32)> {
         gpu.read_frame(self.surface.buffer().color().texture())
             .await
     }
@@ -185,8 +186,12 @@ impl Renderer {
         surface.present(gpu, cmd);
 
         FileStage::on_save(|path| {
-            gpu.save(path, surface.buffer().color().texture())
+            if let Err(e) = gpu
+                .save(path, surface.buffer().color().texture())
                 .block_on()
+            {
+                log::error!("Failed to save screenshot: {}", e);
+            }
         });
     }
 }

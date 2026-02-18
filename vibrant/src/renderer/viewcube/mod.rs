@@ -181,7 +181,6 @@ pub struct ViewCubeRenderer {
     pick_texture_view: TextureView,
     pick_depth_texture: Texture,
     pick_depth_view: TextureView,
-    pick_staging_buffer: Buffer,
     visual_depth_texture: Texture,
     visual_depth_view: TextureView,
     visual_screen_w: u32,
@@ -479,14 +478,6 @@ impl ViewCubeRenderer {
         let pick_depth_texture = Self::create_depth_texture(gpu, size, size, "ViewCube.pick_depth");
         let pick_depth_view = pick_depth_texture.create_view(&TextureViewDescriptor::default());
 
-        // Staging buffer for 1-pixel readback (4 bytes RGBA)
-        let pick_staging_buffer = gpu.device().create_buffer(&BufferDescriptor {
-            label: Some("ViewCube.pick_staging"),
-            size: 256, // min bytes_per_row for copy is 256
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
         // Initial visual depth texture — will be recreated on first render() to match screen size
         let visual_depth_texture = Self::create_depth_texture(gpu, 1, 1, "ViewCube.visual_depth");
         let visual_depth_view = visual_depth_texture.create_view(&TextureViewDescriptor::default());
@@ -504,7 +495,6 @@ impl ViewCubeRenderer {
             pick_texture_view,
             pick_depth_texture,
             pick_depth_view,
-            pick_staging_buffer,
             visual_depth_texture,
             visual_depth_view,
             visual_screen_w: 0,
@@ -678,41 +668,15 @@ impl ViewCubeRenderer {
             return PICK_NONE;
         }
 
-        let mut cmd = gpu.cmd();
-        cmd.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &self.pick_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d { x: px, y: py, z: 0 },
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &self.pick_staging_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(256),
-                    rows_per_image: None,
-                },
-            },
-            Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-        );
-        gpu.submit(cmd);
-        gpu.wait();
+        let pixel = gpu.read_pixel(&self.pick_texture, px, py).block_on();
 
-        let data: Vec<u8> = gpu.read(&self.pick_staging_buffer).block_on();
-        self.pick_staging_buffer.unmap();
-
-        if data.is_empty() || data[3] == 0 {
-            // Transparent / background
+        // Alpha == 0 means background (transparent clear color)
+        if pixel[3] == 0 {
             return PICK_NONE;
         }
 
         // Red channel contains (face_id + 1) encoded as r/255.0, so raw byte = face_id + 1
-        let raw_id = data[0] as u32;
+        let raw_id = pixel[0] as u32;
         if raw_id == 0 {
             PICK_NONE
         } else {
@@ -1125,7 +1089,6 @@ impl Drop for ViewCubeRenderer {
     fn drop(&mut self) {
         self.pick_texture.destroy();
         self.pick_depth_texture.destroy();
-        self.pick_staging_buffer.destroy();
         self.visual_depth_texture.destroy();
         self.label_texture.destroy();
     }

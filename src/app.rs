@@ -169,29 +169,63 @@ impl App {
                             self.controller.settings_mut().auto_rotate = true;
                             self.controller.settings_mut().auto_rotate_speed = rotate_speed;
 
-                            let (_, w, h) = renderer.read_frame(&self.gpu).block_on();
-                            self.video_encoder = Some(VideoEncoder::new(output, w, h, fps));
-                            log::info!(
-                                "Video recording started: {}x{} @ {} fps, {} seconds ({} frames)",
-                                w,
-                                h,
-                                fps,
-                                duration,
-                                self.video_total_frames
-                            );
+                            match renderer.read_frame(&self.gpu).block_on() {
+                                Ok((_, w, h)) => {
+                                    match VideoEncoder::new(output, w, h, fps) {
+                                        Ok(encoder) => {
+                                            log::info!(
+                                                "Video recording started: {}x{} @ {} fps, {} seconds ({} frames)",
+                                                w, h, fps, duration, self.video_total_frames
+                                            );
+                                            self.video_encoder = Some(encoder);
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to start video encoder: {}", e);
+                                            event_loop.exit();
+                                            return;
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to read frame for video init: {}", e);
+                                    event_loop.exit();
+                                    return;
+                                }
+                            }
                         }
 
                         if self.video_frames_written < self.video_total_frames {
                             // Read back the frame that was just rendered above
-                            let (data, _, _) = renderer.read_frame(&self.gpu).block_on();
-                            if let Some(encoder) = &mut self.video_encoder {
-                                encoder.write_frame(&data);
+                            match renderer.read_frame(&self.gpu).block_on() {
+                                Ok((data, _, _)) => {
+                                    if let Some(encoder) = &mut self.video_encoder {
+                                        if let Err(e) = encoder.write_frame(&data) {
+                                            log::error!("Failed to write video frame: {}", e);
+                                            // Take the encoder to finish/drop it gracefully
+                                            if let Some(enc) = self.video_encoder.take() {
+                                                let _ = enc.finish();
+                                            }
+                                            event_loop.exit();
+                                            return;
+                                        }
+                                    }
+                                    self.video_frames_written += 1;
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to read frame for video: {}", e);
+                                    if let Some(enc) = self.video_encoder.take() {
+                                        let _ = enc.finish();
+                                    }
+                                    event_loop.exit();
+                                    return;
+                                }
                             }
-                            self.video_frames_written += 1;
                         } else {
                             // Done: finish encoding and exit
                             if let Some(encoder) = self.video_encoder.take() {
-                                encoder.finish();
+                                if let Err(e) = encoder.finish() {
+                                    log::error!("Failed to finalize video: {}", e);
+                                }
                             }
                             log::info!("Video saved, exiting.");
                             event_loop.exit();
