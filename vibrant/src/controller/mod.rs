@@ -488,6 +488,22 @@ impl Controller {
         self.right_panel_width
     }
 
+    /// Returns true when the viewcube pick pass is needed this frame.
+    /// The pick pass is only required when the mouse cursor is inside (or near)
+    /// the viewcube bounding region, or when a click is pending.  Skipping the
+    /// pick pass avoids an extra GPU submission + readback every frame.
+    pub fn needs_viewcube_pick(&self, viewcube: &ViewCubeRenderer) -> bool {
+        if self.viewcube_click_pending {
+            return true;
+        }
+        let sw = self.settings.width;
+        let sh = self.settings.height;
+        let mx = self.state.position.x;
+        let my = self.state.position.y;
+        let rpw = self.right_panel_width;
+        viewcube.screen_to_pick(mx, my, sw, sh, rpw).is_some()
+    }
+
     /// Update view cube hover state based on current mouse position.
     pub fn update_viewcube_hover(&mut self, viewcube: &ViewCubeRenderer) {
         let sw = self.settings.width;

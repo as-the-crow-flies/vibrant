@@ -164,14 +164,20 @@ impl Renderer {
                 right_panel_offset,
             );
 
-            self.viewcube.render_pick(gpu, &mut cmd, camera_rotation);
-        }
+            // Only record the pick pass, submit, and perform readback when the
+            // mouse is inside the viewcube region or a click is pending.  This
+            // avoids an extra GPU command-buffer submission + synchronous pixel
+            // readback every frame when the cursor is elsewhere on the screen.
+            if controller.needs_viewcube_pick(&self.viewcube) {
+                self.viewcube.render_pick(gpu, &mut cmd, camera_rotation);
 
-        // Submit pick pass and handle viewcube click/hover readback
-        // We need to submit the pick pass commands before reading back
-        gpu.submit(cmd);
-        controller.handle_viewcube_pick(&self.viewcube, gpu);
-        let mut cmd = gpu.cmd();
+                gpu.submit(cmd);
+                controller.handle_viewcube_pick(&self.viewcube, gpu);
+                cmd = gpu.cmd();
+            } else {
+                controller.update_viewcube_hover(&self.viewcube);
+            }
+        }
 
         if !FileStage::about_to_save() {
             self.ui.render(
