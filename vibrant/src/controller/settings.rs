@@ -58,6 +58,7 @@ pub struct Settings {
     pub focal_distance: f32,
     pub aperture: f32,
     pub depth_of_field: bool,
+    pub blur_kernel_size: u32,
 }
 
 impl Settings {
@@ -96,6 +97,7 @@ impl Settings {
             depth_of_field: true,
             focal_distance: 1.0,
             aperture: 1.0,
+            blur_kernel_size: 16,
         }
     }
 }

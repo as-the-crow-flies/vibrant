@@ -252,6 +252,10 @@ impl Controller {
                         ui.separator();
                         ui.label("Post Processing");
                         ui.separator();
+                        ui.add(
+                            Slider::new(&mut self.settings.blur_kernel_size, 1..=32)
+                                .text("Blur Kernel Size"),
+                        );
                         ui.checkbox(&mut self.settings.bloom, "Bloom");
                         ui.add_enabled(
                             self.settings.bloom,
