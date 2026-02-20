@@ -65,6 +65,10 @@ fn visit(
 
             let c = shade(v0, v1, RADIUS, hit_position, settings, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER);
 
+            if (DEPTH == 1.0) {
+                DEPTH = distance;
+            }
+
             COLOR += (1.0 - COLOR.a) * vec4<f32>(c.rgb * c.a, c.a);
 
             if (COLOR.a > 0.95) { break; }

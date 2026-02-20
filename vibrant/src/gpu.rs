@@ -108,7 +108,7 @@ impl Gpu {
         &self,
         label: &str,
         layout: &PipelineLayout,
-        target: ColorTargetState,
+        targets: &[Option<ColorTargetState>],
         module: &ShaderModule,
     ) -> RenderPipeline {
         self.device()
@@ -128,7 +128,7 @@ impl Gpu {
                 fragment: Some(FragmentState {
                     module,
                     entry_point: Some("fragment"),
-                    targets: &[Some(target)],
+                    targets: targets,
                     compilation_options: Default::default(),
                 }),
                 multisample: Default::default(),

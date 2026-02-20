@@ -7,7 +7,7 @@ use crate::{
     controller::settings::Settings,
     gpu::Gpu,
     renderer::{environment::Environment, wgsl::TRACE},
-    surface::{color::ColorBuffer, culling::CullingBuffer, Frame},
+    surface::{color::ColorBuffer, culling::CullingBuffer, depth::DepthBuffer, Frame},
 };
 
 pub struct RayTracingLineRenderPipeline {
@@ -26,7 +26,7 @@ impl RayTracingLineRenderPipeline {
                     &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target(),
+                &[Some(ColorBuffer::target()), Some(DepthBuffer::target())],
                 &gpu.shader(&(TRACE.to_string() + include_str!("opaque.wgsl"))),
             ),
             transparent: gpu.quad(
@@ -37,7 +37,7 @@ impl RayTracingLineRenderPipeline {
                     &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target(),
+                &[Some(ColorBuffer::target()), Some(DepthBuffer::target())],
                 &gpu.shader(&(TRACE.to_string() + include_str!("transparent.wgsl"))),
             ),
         }
@@ -52,7 +52,10 @@ impl RayTracingLineRenderPipeline {
         line: &LineBuffer,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_clear())],
+            color_attachments: &[
+                Some(frame.color().attachment_clear()),
+                Some(frame.depth().attachment_clear()), // @location(1)
+            ],
             label: Some("Ray"),
             ..Default::default()
         });
