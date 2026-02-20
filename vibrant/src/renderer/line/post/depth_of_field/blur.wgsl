@@ -5,26 +5,12 @@
 @group(3) @binding(0) var DEPTH: texture_2d<f32>;
 @group(3) @binding(1) var DEPTH_SAMPLER: sampler;
 
-const SIGMA: f32 = 2.5;  // focal length
+const SIGMA: f32 = 5.0;
+const RADIUS: i32 = 16;
 
-// fn gaussianWeight(x: f32, sigma: f32) -> f32 {
-//     return 1 / (sqrt(2 * PI * sigma^2) * exp(-x^2 / (2 * sigma^2)));
-// }
-// G(x) = \frac{1}{\sqrt{2\pi\sigma^2}}e^{-\frac{x^2}{2\sigma^2}}
-// one-dimensional Gaussian kernel
-// fig 5.17 : https://nana.lecturer.pens.ac.id/index_files/referensi/computer_vision/Computer%20Vision.pdf
-const W_1 = 1 / (sqrt(2 * PI * SIGMA * SIGMA) * exp(-(1 * 1) / (2 * SIGMA * SIGMA)));  // gaussianWeight(1.0, SIGMA);
-const W_2 = 1 / (sqrt(2 * PI * SIGMA * SIGMA) * exp(-(2 * 2) / (2 * SIGMA * SIGMA)));  // gaussianWeight(2.0, SIGMA);
-const W_3 = 1 / (sqrt(2 * PI * SIGMA * SIGMA) * exp(-(3 * 3) / (2 * SIGMA * SIGMA)));  // gaussianWeight(3.0, SIGMA);
-const W_4 = 1 / (sqrt(2 * PI * SIGMA * SIGMA) * exp(-(4 * 4) / (2 * SIGMA * SIGMA)));  // gaussianWeight(4.0, SIGMA);
-const W_5 = 1 / (sqrt(2 * PI * SIGMA * SIGMA) * exp(-(5 * 5) / (2 * SIGMA * SIGMA)));  // gaussianWeight(5.0, SIGMA);
-
-const W_NORMALIZED = 2 + W_1 + W_2 + W_3 + W_4 + W_5;
-const N_1 = W_1 / W_NORMALIZED;
-const N_2 = W_2 / W_NORMALIZED;
-const N_3 = W_3 / W_NORMALIZED;
-const N_4 = W_4 / W_NORMALIZED;
-const N_5 = W_5 / W_NORMALIZED;
+fn gaussian(x: f32) -> f32 {
+    return exp(-(x * x) / (2.0 * SIGMA * SIGMA));
+}
 
 @compute
 @workgroup_size(4, 4, 1)
@@ -39,19 +25,16 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>) {
     let coc = abs(depth - ENVIRONMENT.settings.focal_distance) * ENVIRONMENT.settings.aperture;
     let step = DIRECTION * texel * coc;
 
-    var result = textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv, 0.0).rgb * N_1;
+    var total_weight: f32 = 0.0;
+    var result = vec3<f32>(0.0);
 
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv + step * 1.0, 0.0).rgb * N_2;
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv - step * 1.0, 0.0).rgb * N_2;
+    for (var i: i32 = -RADIUS; i <= RADIUS; i++) {
+        let w = gaussian(f32(i));
+        result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv + step * f32(i), 0.0).rgb * w;
+        total_weight += w;
+    }
 
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv + step * 2.0, 0.0).rgb * N_3;
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv - step * 2.0, 0.0).rgb * N_3;
-
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv + step * 3.0, 0.0).rgb * N_4;
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv - step * 3.0, 0.0).rgb * N_4;
-
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv + step * 4.0, 0.0).rgb * N_5;
-    result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv - step * 4.0, 0.0).rgb * N_5;
+    result /= total_weight;
 
     textureStore(DESTINATION, pixel.xy, vec4<f32>(result, 1.0));
 }
