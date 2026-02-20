@@ -13,9 +13,10 @@ pub struct DepthOfFieldRenderPipeline {
 
 impl DepthOfFieldRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let blur_source = include_str!("blur.wgsl");
-        let blur_h_source = format!("const DIRECTION = vec2<f32>(1.0, 0.0);\n{}", blur_source);
-        let blur_v_source = format!("const DIRECTION = vec2<f32>(0.0, 1.0);\n{}", blur_source);
+        let preamble = include_str!("blur.wgsl");
+        let kernel = include_str!("../blur.wgsl");
+        let blur_h_source = format!("const DIRECTION = vec2<f32>(1.0, 0.0);\n{preamble}{kernel}");
+        let blur_v_source = format!("const DIRECTION = vec2<f32>(0.0, 1.0);\n{preamble}{kernel}");
 
         let blur_layout = gpu.pipeline_layout(&[
             &Environment::layout(gpu),
