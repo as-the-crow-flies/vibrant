@@ -2,6 +2,7 @@ pub mod bloom;
 pub mod color;
 pub mod culling;
 pub mod depth;
+pub mod dof;
 pub mod occlusion;
 pub mod occupancy;
 
@@ -10,6 +11,7 @@ use std::any::type_name;
 use bloom::BloomBuffer;
 use color::ColorBuffer;
 use depth::DepthBuffer;
+use dof::DofBuffer;
 use log::warn;
 use occlusion::OcclusionBuffer;
 use occupancy::OccupancyBuffer;
@@ -32,6 +34,7 @@ pub struct Frame {
     depth: DepthBuffer,
     post: ColorBuffer,
     bloom: BloomBuffer,
+    dof: DofBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -44,6 +47,7 @@ impl Frame {
         let depth = DepthBuffer::new(gpu, settings.width, settings.height);
         let post = ColorBuffer::new(gpu, settings.width, settings.height);
         let bloom = BloomBuffer::new(gpu, settings.width, settings.height);
+        let dof = DofBuffer::new(gpu, settings.width, settings.height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -66,6 +70,7 @@ impl Frame {
             depth,
             post,
             bloom,
+            dof,
             occupancy,
             occlusion,
             culling,
@@ -87,6 +92,10 @@ impl Frame {
 
     pub fn bloom(&self) -> &BloomBuffer {
         &self.bloom
+    }
+
+    pub fn dof(&self) -> &DofBuffer {
+        &self.dof
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {

@@ -94,6 +94,9 @@ impl Environment {
                 bytes_of(&controller.settings().bloom_threshold),
                 bytes_of(&controller.settings().bloom_intensity),
                 bytes_of(&controller.settings().bloom_spread),
+                bytes_of(&controller.settings().focal_distance),
+                bytes_of(&controller.settings().aperture),
+                bytes_of(&(controller.settings().depth_of_field as u32)),
             ]
             .concat(),
         );
