@@ -21,6 +21,9 @@ struct Settings {
     bloom_threshold: f32,
     bloom_intensity: f32,
     bloom_spread: f32,
+    focal_distance: f32,
+    aperture: f32,
+    depth_of_field: u32,
 }
 
 struct Segment {
