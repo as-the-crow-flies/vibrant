@@ -24,6 +24,7 @@ struct Settings {
     focal_distance: f32,
     aperture: f32,
     depth_of_field: u32,
+    blur_kernel_size: u32,
 }
 
 struct Segment {

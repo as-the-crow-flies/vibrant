@@ -97,6 +97,7 @@ impl Environment {
                 bytes_of(&controller.settings().focal_distance),
                 bytes_of(&controller.settings().aperture),
                 bytes_of(&(controller.settings().depth_of_field as u32)),
+                bytes_of(&controller.settings().blur_kernel_size),
             ]
             .concat(),
         );

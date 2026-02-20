@@ -1,8 +1,5 @@
-const SIGMA: f32 = 5.0;
-const RADIUS: i32 = 16;
-
-fn gaussian(x: f32) -> f32 {
-    return exp(-(x * x) / (2.0 * SIGMA * SIGMA));
+fn gaussian(x: f32, sigma: f32) -> f32 {
+    return exp(-(x * x) / (2.0 * sigma * sigma));
 }
 
 @compute
@@ -15,11 +12,14 @@ fn main(@builtin(global_invocation_id) pixel: vec3<u32>) {
     let uv = (vec2<f32>(pixel.xy) + 0.5) * texel;
     let step = compute_step(uv, texel);
 
+    let radius = i32(ENVIRONMENT.settings.blur_kernel_size);
+    let sigma = f32(radius) / 3.0;
+
     var total_weight: f32 = 0.0;
     var result = vec3<f32>(0.0);
 
-    for (var i: i32 = -RADIUS; i <= RADIUS; i++) {
-        let w = gaussian(f32(i));
+    for (var i: i32 = -radius; i <= radius; i++) {
+        let w = gaussian(f32(i), sigma);
         result += textureSampleLevel(SOURCE, SOURCE_SAMPLER, uv + step * f32(i), 0.0).rgb * w;
         total_weight += w;
     }
