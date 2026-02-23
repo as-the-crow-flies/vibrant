@@ -181,7 +181,7 @@ impl Controller {
                             Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"),
                         );
                         ui.add(
-                            Slider::new(&mut self.settings.ambient_light, 0.0..=20.0)
+                            Slider::new(&mut self.settings.ambient_light, 0.0..=100.0)
                                 .text("Ambient Light"),
                         );
                         ui.add(

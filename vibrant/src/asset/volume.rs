@@ -10,8 +10,9 @@ use wgpu::{
 use crate::gpu::Gpu;
 
 pub struct PhysicalVolume {
-    absorption_transmission: Texture,
-    scattering_roughness: Texture,
+    absorption: Texture,
+    scattering: Texture,
+    extinction: Texture,
     transform: Buffer,
     binding_read: BindGroup,
     binding_write: BindGroup,
@@ -30,7 +31,7 @@ impl PhysicalVolume {
             .min(size.depth_or_array_layers)
             .ilog2();
 
-        let texture = TextureDescriptor {
+        let descriptor = TextureDescriptor {
             label,
             size,
             mip_level_count,
@@ -41,8 +42,9 @@ impl PhysicalVolume {
             view_formats: &[],
         };
 
-        let absorption_transmission = gpu.device().create_texture(&texture);
-        let scattering_roughness = gpu.device().create_texture(&texture);
+        let absorption = gpu.device().create_texture(&descriptor);
+        let scattering = gpu.device().create_texture(&descriptor);
+        let extinction = gpu.device().create_texture(&descriptor);
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -53,7 +55,7 @@ impl PhysicalVolume {
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
             lod_min_clamp: 0.0,
-            lod_max_clamp: 0.0,
+            lod_max_clamp: mip_level_count as f32,
             compare: None,
             anisotropy_clamp: 1,
             border_color: Some(SamplerBorderColor::Zero),
@@ -72,21 +74,27 @@ impl PhysicalVolume {
                 BindGroupEntry {
                     binding: 0,
                     resource: BindingResource::TextureView(
-                        &absorption_transmission.create_view(&TextureViewDescriptor::default()),
+                        &absorption.create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::TextureView(
-                        &scattering_roughness.create_view(&TextureViewDescriptor::default()),
+                        &scattering.create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::Sampler(&sampler),
+                    resource: BindingResource::TextureView(
+                        &extinction.create_view(&TextureViewDescriptor::default()),
+                    ),
                 },
                 BindGroupEntry {
                     binding: 3,
+                    resource: BindingResource::Sampler(&sampler),
+                },
+                BindGroupEntry {
+                    binding: 4,
                     resource: transform.as_entire_binding(),
                 },
             ],
@@ -98,7 +106,7 @@ impl PhysicalVolume {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&absorption_transmission.create_view(
+                    resource: BindingResource::TextureView(&absorption.create_view(
                         &TextureViewDescriptor {
                             mip_level_count: Some(1),
                             ..Default::default()
@@ -107,7 +115,7 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&scattering_roughness.create_view(
+                    resource: BindingResource::TextureView(&scattering.create_view(
                         &TextureViewDescriptor {
                             mip_level_count: Some(1),
                             ..Default::default()
@@ -116,10 +124,19 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::Sampler(&sampler),
+                    resource: BindingResource::TextureView(&extinction.create_view(
+                        &TextureViewDescriptor {
+                            mip_level_count: Some(1),
+                            ..Default::default()
+                        },
+                    )),
                 },
                 BindGroupEntry {
                     binding: 3,
+                    resource: BindingResource::Sampler(&sampler),
+                },
+                BindGroupEntry {
+                    binding: 4,
                     resource: transform.as_entire_binding(),
                 },
             ],
@@ -134,51 +151,73 @@ impl PhysicalVolume {
                     entries: &[
                         BindGroupEntry {
                             binding: 0,
-                            resource: BindingResource::TextureView(
-                                &absorption_transmission.create_view(&TextureViewDescriptor {
+                            resource: BindingResource::TextureView(&absorption.create_view(
+                                &TextureViewDescriptor {
                                     label,
                                     base_mip_level: level,
                                     mip_level_count: Some(1),
                                     ..Default::default()
-                                }),
-                            ),
+                                },
+                            )),
                         },
                         BindGroupEntry {
                             binding: 1,
-                            resource: BindingResource::TextureView(
-                                &scattering_roughness.create_view(&TextureViewDescriptor {
+                            resource: BindingResource::TextureView(&scattering.create_view(
+                                &TextureViewDescriptor {
                                     label,
                                     base_mip_level: level,
                                     mip_level_count: Some(1),
                                     ..Default::default()
-                                }),
-                            ),
+                                },
+                            )),
                         },
                         BindGroupEntry {
                             binding: 2,
-                            resource: BindingResource::Sampler(&sampler),
+                            resource: BindingResource::TextureView(&extinction.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
                         },
                         BindGroupEntry {
                             binding: 3,
-                            resource: BindingResource::TextureView(
-                                &absorption_transmission.create_view(&TextureViewDescriptor {
-                                    label,
-                                    base_mip_level: level + 1,
-                                    mip_level_count: Some(1),
-                                    ..Default::default()
-                                }),
-                            ),
+                            resource: BindingResource::Sampler(&sampler),
                         },
                         BindGroupEntry {
                             binding: 4,
-                            resource: BindingResource::TextureView(
-                                &scattering_roughness.create_view(&TextureViewDescriptor {
+                            resource: BindingResource::TextureView(&absorption.create_view(
+                                &TextureViewDescriptor {
                                     label,
                                     base_mip_level: level + 1,
                                     mip_level_count: Some(1),
                                     ..Default::default()
-                                }),
-                            ),
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 5,
+                            resource: BindingResource::TextureView(&scattering.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level + 1,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 6,
+                            resource: BindingResource::TextureView(&extinction.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level + 1,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
                         },
                     ],
                 })
@@ -186,8 +225,9 @@ impl PhysicalVolume {
             .collect();
 
         Self {
-            absorption_transmission,
-            scattering_roughness,
+            absorption,
+            scattering,
+            extinction,
             transform,
             binding_read,
             binding_write,
@@ -196,7 +236,7 @@ impl PhysicalVolume {
     }
 
     pub fn size(&self) -> UVec3 {
-        let extend = self.absorption_transmission.size();
+        let extend = self.absorption.size();
 
         UVec3::new(extend.width, extend.height, extend.depth_or_array_layers)
     }
@@ -243,11 +283,21 @@ impl PhysicalVolume {
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
+                        },
                         count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 3,
+                        visibility,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
                         visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
@@ -290,11 +340,21 @@ impl PhysicalVolume {
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::FORMAT,
+                            view_dimension: TextureViewDimension::D3,
+                        },
                         count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 3,
+                        visibility,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
                         visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
@@ -337,11 +397,21 @@ impl PhysicalVolume {
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
+                        },
                         count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 3,
+                        visibility,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
                         visibility,
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::WriteOnly,
@@ -351,7 +421,17 @@ impl PhysicalVolume {
                         count: None,
                     },
                     BindGroupLayoutEntry {
-                        binding: 4,
+                        binding: 5,
+                        visibility,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::FORMAT,
+                            view_dimension: TextureViewDimension::D3,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 6,
                         visibility,
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::WriteOnly,
@@ -367,8 +447,9 @@ impl PhysicalVolume {
 
 impl Drop for PhysicalVolume {
     fn drop(&mut self) {
-        self.absorption_transmission.destroy();
-        self.scattering_roughness.destroy();
+        self.absorption.destroy();
+        self.scattering.destroy();
+        self.extinction.destroy();
         self.transform.destroy();
     }
 }

@@ -129,9 +129,24 @@ impl VolumeSegmenationBuffer {
             .is_integer()
             .then(|| {
                 vec![
-                    VolumeSegmentationMaterial::new("Nothing"),
-                    VolumeSegmentationMaterial::new("White Matter"),
-                    VolumeSegmentationMaterial::new("Gray Matter"),
+                    VolumeSegmentationMaterial {
+                        name: "Nothing".to_string(),
+                        absorption: [0.0, 0.0, 0.0],
+                        scattering: [0.0, 0.0, 0.0],
+                        anisotropy: 0.0,
+                    },
+                    VolumeSegmentationMaterial {
+                        name: "White Matter".to_string(),
+                        absorption: [0.1, 0.1, 0.1],
+                        scattering: [0.5, 0.5, 0.5],
+                        anisotropy: 0.0,
+                    },
+                    VolumeSegmentationMaterial {
+                        name: "Gray Matter".to_string(),
+                        absorption: [0.1, 0.1, 0.1],
+                        scattering: [0.5, 0.5, 0.5],
+                        anisotropy: 0.0,
+                    },
                     VolumeSegmentationMaterial::new("CSF"),
                     VolumeSegmentationMaterial::new("Bone"),
                     VolumeSegmentationMaterial::new("Scalp"),

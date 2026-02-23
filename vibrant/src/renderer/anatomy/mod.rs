@@ -46,6 +46,9 @@ impl AnatomyRenderer {
         self.transfer
             .dispatch(cmd, environment, segmentation, volume);
 
-        self.trace.dispatch(cmd, environment, frame, volume);
+        self.radiance.dispatch(cmd, environment, volume, radiance);
+
+        self.trace
+            .dispatch(cmd, environment, frame, volume, radiance);
     }
 }

@@ -1,7 +1,7 @@
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
-    asset::volume::PhysicalVolume,
+    asset::{radiance::RadianceVolume, volume::PhysicalVolume},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::ColorBuffer, Frame},
@@ -18,6 +18,7 @@ impl AnatomyTracePipeline {
                 "AnatomyTrace",
                 &gpu.pipeline_layout(&[
                     &PhysicalVolume::layout_read(gpu),
+                    &RadianceVolume::layout_read(gpu),
                     &Environment::layout(gpu),
                 ]),
                 ColorBuffer::target(),
@@ -32,6 +33,7 @@ impl AnatomyTracePipeline {
         environment: &Environment,
         frame: &Frame,
         volume: &PhysicalVolume,
+        radiance: &RadianceVolume,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             color_attachments: &[Some(frame.post().attachment_clear())],
@@ -40,7 +42,8 @@ impl AnatomyTracePipeline {
 
         pass.set_pipeline(&self.trace);
         pass.set_bind_group(0, volume.binding_read(), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(1, radiance.binding_read(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }
