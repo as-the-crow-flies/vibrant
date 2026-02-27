@@ -1,8 +1,9 @@
 use std::{f32::consts::PI, io::Cursor};
 
 use flate2::read::GzDecoder;
-use glam::{Mat4, Vec3};
+use glam::{Mat4, UVec3, Vec3};
 use nifti::{InMemNiftiObject, NiftiObject, NiftiType};
+use wgpu::{TextureFormat, TextureSampleType};
 
 use crate::file::File;
 
@@ -24,6 +25,30 @@ impl VolumeType {
 
     pub fn is_integer(&self) -> bool {
         !self.is_float()
+    }
+}
+
+impl Into<TextureFormat> for VolumeType {
+    fn into(self) -> TextureFormat {
+        match self {
+            VolumeType::Uint8 => TextureFormat::R8Uint,
+            VolumeType::Uint16 => TextureFormat::R16Uint,
+            VolumeType::Uint32 => TextureFormat::R32Uint,
+            VolumeType::Int8 => TextureFormat::R8Sint,
+            VolumeType::Int16 => TextureFormat::R16Sint,
+            VolumeType::Int32 => TextureFormat::R32Sint,
+            VolumeType::Float32 => TextureFormat::R32Float,
+        }
+    }
+}
+
+impl Into<TextureSampleType> for VolumeType {
+    fn into(self) -> TextureSampleType {
+        match self {
+            VolumeType::Uint8 | VolumeType::Uint16 | VolumeType::Uint32 => TextureSampleType::Uint,
+            VolumeType::Int8 | VolumeType::Int16 | VolumeType::Int32 => TextureSampleType::Sint,
+            VolumeType::Float32 => TextureSampleType::Float { filterable: true },
+        }
     }
 }
 
@@ -106,7 +131,7 @@ impl VolumeFile {
         self.ty
     }
 
-    pub fn dim(&self) -> &[u16] {
-        &self.dim
+    pub fn size(&self) -> UVec3 {
+        UVec3::new(self.dim[0] as u32, self.dim[1] as u32, self.dim[2] as u32)
     }
 }

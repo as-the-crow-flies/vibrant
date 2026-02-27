@@ -158,6 +158,10 @@ impl FileStage {
     fn publish_save_path(path: PathBuf) {
         QUEUE.lock().unwrap().save = Some(path);
     }
+
+    pub fn load_volume_fractions() {
+        todo!()
+    }
 }
 
 static QUEUE: LazyLock<Mutex<FileStage>> = LazyLock::new(|| Mutex::new(FileStage::default()));

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::{
     asset::{
         radiance::RadianceVolume, segmentation::VolumeSegmenationBuffer,
-        transform::TransformBuffer, volume::PhysicalVolume,
+        transform::TransformBuffer, volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
     },
     file::bounds::Bounds,
     renderer::{anatomy::AnatomyRenderer, line::LineRenderer},
@@ -89,22 +89,25 @@ impl Renderer {
             self.asset.segmentations.extend(
                 volumes
                     .iter()
+                    .filter(|volume| volume.ty().is_integer())
                     .map(|volume| VolumeSegmenationBuffer::new(gpu, volume)),
             );
 
-            if let (Some(volume), Some(segmentation)) =
-                (volumes.last(), self.asset.segmentations.last())
-            {
+            self.asset.volume_fractions.extend(
+                volumes
+                    .iter()
+                    .filter(|volume| volume.ty().is_float())
+                    .map(|volume| VolumeFractionBuffer::new(gpu, volume)),
+            );
+
+            if let Some(volume) = volumes.last() {
                 self.asset.transform = Some(TransformBuffer::new(gpu, volume.transform()));
 
                 if self.asset.physical_volume.is_none() {
-                    self.asset.physical_volume = Some(PhysicalVolume::new(
-                        gpu,
-                        segmentation.size(),
-                        volume.transform(),
-                    ));
+                    self.asset.physical_volume =
+                        Some(PhysicalVolume::new(gpu, volume.size(), volume.transform()));
 
-                    self.asset.radiance = Some(RadianceVolume::new(gpu, segmentation.size()))
+                    self.asset.radiance = Some(RadianceVolume::new(gpu, volume.size()))
                 }
             }
         });
@@ -127,26 +130,19 @@ impl Renderer {
         for volume in &self.asset.segmentations {
             volume.update_settings(gpu);
         }
+        for volume in &self.asset.volume_fractions {
+            volume.update_settings(gpu);
+        }
 
         let mut cmd = gpu.cmd();
 
-        if let (Some(segmentation), Some(volume), Some(radiance)) = (
-            self.asset
-                .segmentations
-                .iter()
-                .find(|&volume| volume.ty().is_integer()),
-            &self.asset.physical_volume,
-            &self.asset.radiance,
-        ) {
-            self.anatomy.render(
-                &mut cmd,
-                &self.environment,
-                surface.frame(),
-                segmentation,
-                volume,
-                radiance,
-            );
-        }
+        self.anatomy.render(
+            &mut cmd,
+            controller,
+            &self.environment,
+            surface.frame(),
+            &self.asset,
+        );
 
         if let (Some(line), Some(transform)) = (&self.asset.line, &self.asset.transform) {
             self.line.render(

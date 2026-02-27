@@ -62,7 +62,7 @@ impl Settings {
             volume: 256,
             radius: 0.25,
             lighting: 1.0,
-            ambient_light: 1.0,
+            ambient_light: 0.5,
             direct_light: 1.0,
             tangent_color: 1.0,
             shadows: 0.0,

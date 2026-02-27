@@ -7,7 +7,7 @@ use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
     BufferBindingType, BufferUsages, Extent3d, FilterMode, SamplerBindingType, SamplerBorderColor,
-    SamplerDescriptor, ShaderStages, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    SamplerDescriptor, ShaderStages, Texture, TextureDescriptor, TextureDimension,
     TextureSampleType, TextureUsages, TextureViewDimension,
 };
 
@@ -74,9 +74,9 @@ impl VolumeSegmenationBuffer {
         let label = Some(type_name::<Self>());
 
         let size = Extent3d {
-            width: file.dim()[0] as u32,
-            height: file.dim()[1] as u32,
-            depth_or_array_layers: file.dim()[2] as u32,
+            width: file.size().x,
+            height: file.size().y,
+            depth_or_array_layers: file.size().z,
         };
 
         let texture = gpu.device().create_texture_with_data(
@@ -87,15 +87,7 @@ impl VolumeSegmenationBuffer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D3,
-                format: match file.ty() {
-                    VolumeType::Uint8 => TextureFormat::R8Uint,
-                    VolumeType::Uint16 => TextureFormat::R16Uint,
-                    VolumeType::Uint32 => TextureFormat::R32Uint,
-                    VolumeType::Int8 => TextureFormat::R8Sint,
-                    VolumeType::Int16 => TextureFormat::R16Sint,
-                    VolumeType::Int32 => TextureFormat::R32Sint,
-                    VolumeType::Float32 => TextureFormat::R32Float,
-                },
+                format: file.ty().into(),
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
             },
@@ -172,18 +164,7 @@ impl VolumeSegmenationBuffer {
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
-            layout: &Self::layout(
-                gpu,
-                match file.ty() {
-                    VolumeType::Uint8 | VolumeType::Uint16 | VolumeType::Uint32 => {
-                        TextureSampleType::Uint
-                    }
-                    VolumeType::Int8 | VolumeType::Int16 | VolumeType::Int32 => {
-                        TextureSampleType::Sint
-                    }
-                    VolumeType::Float32 => TextureSampleType::Float { filterable: true },
-                },
-            ),
+            layout: &Self::layout(gpu, file.ty().into()),
             entries: &[
                 BindGroupEntry {
                     binding: 0,
