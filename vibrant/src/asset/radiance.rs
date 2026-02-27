@@ -51,8 +51,6 @@ pub struct RadianceVolume {
     binding_read: BindGroup,
     binding_write: BindGroup,
 
-    sampler: Sampler,
-
     cascades: Vec<Vec<Cascade>>,
     cascade_index_buffers: Vec<Buffer>,
     binding_cascades: Vec<BindGroup>,
@@ -236,7 +234,6 @@ impl RadianceVolume {
             binding_write,
             cascades,
             cascade_index_buffers,
-            sampler,
             binding_cascades,
             radiance_resolution,
             cascade_resolutions,

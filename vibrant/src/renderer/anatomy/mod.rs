@@ -49,7 +49,7 @@ impl AnatomyRenderer {
         asset: &Asset,
     ) {
         if let (Some(volume), Some(radiance)) = (&asset.physical_volume, &asset.radiance) {
-            if controller.volumes().changed() {
+            if controller.volumes().changed() || controller.segmentations().changed() {
                 self.transfer.dispatch(
                     cmd,
                     environment,

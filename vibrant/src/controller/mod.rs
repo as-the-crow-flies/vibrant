@@ -21,6 +21,7 @@ use settings::Settings;
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
+use crate::controller::widgets::segmentation::SegmentationsWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
 use crate::{
     asset::Asset,
@@ -41,6 +42,7 @@ pub struct Controller {
     time: Instant,
 
     volumes_widget: VolumesWidget,
+    segmentations_widget: SegmentationsWidget,
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
@@ -57,6 +59,7 @@ impl Controller {
             time: Instant::now(),
 
             volumes_widget: VolumesWidget::new(),
+            segmentations_widget: SegmentationsWidget::new(),
 
             show_left_side_panel: false,
             show_right_side_panel: true,
@@ -65,6 +68,10 @@ impl Controller {
 
     pub fn volumes(&self) -> &VolumesWidget {
         &self.volumes_widget
+    }
+
+    pub fn segmentations(&self) -> &SegmentationsWidget {
+        &self.segmentations_widget
     }
 
     pub fn event(&mut self, event: Event) {
@@ -379,6 +386,7 @@ impl Controller {
                 });
 
             self.volumes_widget.show(ui, &mut asset.volume_fractions);
+            self.segmentations_widget.show(ui, &mut asset.segmentations);
         });
     }
 

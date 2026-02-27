@@ -9,9 +9,9 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     if (any(voxel >= textureDimensions(DST))) { return; }
 
     let gaussian =
-        0.15 * textureLoad(SRC, voxel - DIRECTION) +
-        0.70 * textureLoad(SRC, voxel            ) +
-        0.15 * textureLoad(SRC, voxel + DIRECTION);
+        0.1 * textureLoad(SRC, voxel - DIRECTION) +
+        0.9 * textureLoad(SRC, voxel            ) +
+        0.1 * textureLoad(SRC, voxel + DIRECTION);
 
     textureStore(DST, voxel, gaussian);
 }

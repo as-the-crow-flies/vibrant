@@ -16,7 +16,6 @@ pub struct PhysicalVolume {
     gradient: Texture,
     tmp: Texture,
     transform: Buffer,
-    sampler: Sampler,
     binding_read: BindGroup,
     binding_write: BindGroup,
     binding_gradient: BindGroup,
@@ -227,7 +226,6 @@ impl PhysicalVolume {
             gradient,
             transform,
             tmp,
-            sampler,
             binding_read,
             binding_write,
             binding_gradient,
@@ -450,5 +448,6 @@ impl Drop for PhysicalVolume {
         self.extinction.destroy();
         self.gradient.destroy();
         self.transform.destroy();
+        self.tmp.destroy();
     }
 }
