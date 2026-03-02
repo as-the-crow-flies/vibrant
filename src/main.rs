@@ -3,6 +3,7 @@ use pollster::FutureExt;
 
 pub mod app;
 pub mod cli;
+pub mod video;
 
 fn main() {
     env_logger::builder()

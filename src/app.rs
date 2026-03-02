@@ -6,6 +6,10 @@ use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::video::VideoEncoder;
+use pollster::FutureExt;
+
 use vibrant::controller::{event::Event, Controller};
 use vibrant::renderer::Renderer;
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
@@ -24,6 +28,12 @@ pub enum AppMode {
     Interactive,
     /// Render a single frame, save as PNG, then exit
     Screenshot { output: PathBuf },
+    /// Render frames over a duration, pipe to ffmpeg, then exit
+    Video {
+        output: PathBuf,
+        fps: u32,
+        duration: u32,
+    },
 }
 
 /// Configuration passed from CLI (or defaults for WASM).
@@ -58,10 +68,19 @@ struct App {
     config: AppConfig,
     frames_rendered: u32,
     screenshot_triggered: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    video_encoder: Option<VideoEncoder>,
+    video_frames_written: u32,
+    video_total_frames: u32,
 }
 
 impl App {
     fn new(gpu: Gpu, config: AppConfig) -> Self {
+        let video_total_frames = if let AppMode::Video { fps, duration, .. } = &config.mode {
+            fps * duration
+        } else {
+            0
+        };
         Self {
             gpu,
             window: None,
@@ -72,6 +91,10 @@ impl App {
             config,
             frames_rendered: 0,
             screenshot_triggered: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            video_encoder: None,
+            video_frames_written: 0,
+            video_total_frames,
         }
     }
 
@@ -94,7 +117,21 @@ impl App {
             WindowEvent::RedrawRequested => {
                 self.fps.tick();
 
-                renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
+                // Use fixed dt for video mode, real-time dt otherwise
+                #[cfg(not(target_arch = "wasm32"))]
+                let dt = if let AppMode::Video { fps, .. } = &self.config.mode {
+                    if self.video_encoder.is_some() {
+                        1.0 / *fps as f32
+                    } else {
+                        self.fps.seconds()
+                    }
+                } else {
+                    self.fps.seconds()
+                };
+                #[cfg(target_arch = "wasm32")]
+                let dt = self.fps.seconds();
+
+                renderer.render(&self.gpu, window, &mut self.controller, dt);
 
                 self.frames_rendered += 1;
 
@@ -115,6 +152,86 @@ impl App {
                         log::info!("Screenshot saved, exiting.");
                         event_loop.exit();
                         return;
+                    }
+                }
+
+                // Video mode: once assets are loaded, start encoding frames.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let AppMode::Video {
+                    ref output,
+                    fps,
+                    duration,
+                } = self.config.mode
+                {
+                    if renderer.has_assets() && self.frames_rendered >= 3 {
+                        // Initialize encoder on first video frame
+                        if self.video_encoder.is_none() {
+                            // Force auto-rotate: full 360 degrees over the video duration
+                            let rotate_speed = 360.0 / duration as f32;
+                            self.controller.settings_mut().auto_rotate = true;
+                            self.controller.settings_mut().auto_rotate_speed = rotate_speed;
+
+                            match renderer.read_frame(&self.gpu).block_on() {
+                                Ok((_, w, h)) => {
+                                    match VideoEncoder::new(output, w, h, fps) {
+                                        Ok(encoder) => {
+                                            log::info!(
+                                                "Video recording started: {}x{} @ {} fps, {} seconds ({} frames)",
+                                                w, h, fps, duration, self.video_total_frames
+                                            );
+                                            self.video_encoder = Some(encoder);
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to start video encoder: {}", e);
+                                            event_loop.exit();
+                                            return;
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to read frame for video init: {}", e);
+                                    event_loop.exit();
+                                    return;
+                                }
+                            }
+                        }
+
+                        if self.video_frames_written < self.video_total_frames {
+                            // Read back the frame that was just rendered above
+                            match renderer.read_frame(&self.gpu).block_on() {
+                                Ok((data, _, _)) => {
+                                    if let Some(encoder) = &mut self.video_encoder {
+                                        if let Err(e) = encoder.write_frame(&data) {
+                                            log::error!("Failed to write video frame: {}", e);
+                                            if let Some(enc) = self.video_encoder.take() {
+                                                let _ = enc.finish();
+                                            }
+                                            event_loop.exit();
+                                            return;
+                                        }
+                                    }
+                                    self.video_frames_written += 1;
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to read frame for video: {}", e);
+                                    if let Some(enc) = self.video_encoder.take() {
+                                        let _ = enc.finish();
+                                    }
+                                    event_loop.exit();
+                                    return;
+                                }
+                            }
+                        } else {
+                            // Done: finish encoding and exit
+                            if let Some(encoder) = self.video_encoder.take() {
+                                if let Err(e) = encoder.finish() {
+                                    log::error!("Failed to finalize video: {}", e);
+                                }
+                            }
+                            log::info!("Video saved, exiting.");
+                            event_loop.exit();
+                            return;
+                        }
                     }
                 }
 

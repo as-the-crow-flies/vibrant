@@ -14,6 +14,18 @@ pub struct CliArgs {
     #[arg(long)]
     pub screenshot: Option<PathBuf>,
 
+    /// Render a video to this path and exit
+    #[arg(long)]
+    pub video: Option<PathBuf>,
+
+    /// Video frame rate (default: 30)
+    #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(1..))]
+    pub fps: u32,
+
+    /// Video duration in seconds (default: 10)
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u32).range(1..))]
+    pub duration: u32,
+
     /// Enable auto-rotation of the camera
     #[arg(long)]
     pub auto_rotate: bool,
@@ -34,6 +46,12 @@ impl CliArgs {
         let mode = if let Some(ref path) = self.screenshot {
             AppMode::Screenshot {
                 output: path.clone(),
+            }
+        } else if let Some(ref path) = self.video {
+            AppMode::Video {
+                output: path.clone(),
+                fps: self.fps,
+                duration: self.duration,
             }
         } else {
             AppMode::Interactive
@@ -75,6 +93,32 @@ mod tests {
                 assert_eq!(output, &PathBuf::from("out.png"));
             }
             other => panic!("Expected Screenshot mode, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_cli_video_mode() {
+        let args = CliArgs::parse_from([
+            "vibrant",
+            "--video",
+            "out.mp4",
+            "--fps",
+            "60",
+            "--duration",
+            "5",
+        ]);
+        let config = args.into_config();
+        match &config.mode {
+            AppMode::Video {
+                output,
+                fps,
+                duration,
+            } => {
+                assert_eq!(output, &PathBuf::from("out.mp4"));
+                assert_eq!(*fps, 60);
+                assert_eq!(*duration, 5);
+            }
+            other => panic!("Expected Video mode, got {:?}", other),
         }
     }
 }

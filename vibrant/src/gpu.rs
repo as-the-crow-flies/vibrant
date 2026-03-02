@@ -328,4 +328,77 @@ impl Gpu {
 
         Ok(())
     }
+
+    /// Read back a frame as raw RGBA bytes.
+    ///
+    /// Returns `(data, width, height)` on success. Returns an error if the texture
+    /// format is not `Bgra8Unorm`.
+    pub async fn read_frame(&self, texture: &Texture) -> io::Result<(Vec<u8>, u32, u32)> {
+        if texture.format() != TextureFormat::Bgra8Unorm {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("read_frame: expected Bgra8Unorm texture, got {:?}", texture.format()),
+            ));
+        }
+
+        let pixel = 4u32;
+        let width = texture.width();
+        let height = texture.height();
+
+        let bytes_per_row_unpadded = width * pixel;
+        let bytes_per_row_padded = align_to(bytes_per_row_unpadded, COPY_BYTES_PER_ROW_ALIGNMENT);
+        let buffer_size = (bytes_per_row_padded as u64) * (height as u64);
+
+        let result = self.device.create_buffer(&BufferDescriptor {
+            label: Some("read_frame.staging"),
+            size: buffer_size,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut cmd = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        cmd.copy_texture_to_buffer(
+            TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            TexelCopyBufferInfo {
+                buffer: &result,
+                layout: TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row_padded),
+                    rows_per_image: None,
+                },
+            },
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit([cmd.finish()]);
+
+        // Map the staging buffer and extract RGBA pixels row-by-row,
+        // handling potential padding between rows and converting BGRA -> RGBA.
+        let (sender, receiver) = channel();
+        result.slice(..).map_async(MapMode::Read, |x| {
+            let _ = sender.send(x);
+        });
+        self.wait();
+        receiver
+            .await
+            .expect("communication failed")
+            .expect("buffer mapping failed");
+
+        let mapped = result.slice(..).get_mapped_range();
+        let buffer = extract_rgba_from_padded_bgra(&mapped, width, height, bytes_per_row_padded);
+        drop(mapped);
+        result.unmap();
+
+        Ok((buffer, width, height))
+    }
 }

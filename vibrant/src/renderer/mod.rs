@@ -3,6 +3,7 @@ pub mod line;
 pub mod ui;
 pub mod wgsl;
 
+use std::io;
 use std::sync::Arc;
 
 use crate::{
@@ -57,6 +58,12 @@ impl Renderer {
 
     pub fn has_assets(&self) -> bool {
         self.asset.line.is_some()
+    }
+
+    /// Read back the current frame as raw RGBA bytes. Returns (data, width, height).
+    pub async fn read_frame(&self, gpu: &Gpu) -> io::Result<(Vec<u8>, u32, u32)> {
+        gpu.read_frame(self.surface.buffer().color().texture())
+            .await
     }
 
     pub fn render(
