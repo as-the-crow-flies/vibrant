@@ -51,8 +51,10 @@ fn vertex(input: VertexInput) -> VertexOutput {
     let rotated_normal = (u.rotation * vec4<f32>(input.normal, 0.0)).xyz;
 
     // Simple orthographic projection filling the viewport.
-    // The cube is in [-1,1], scale down to ~60% of the viewport.
-    let scale = 0.6;
+    // The cube diagonal extends to sqrt(3) ≈ 1.73, so we need scale ≤ 1/sqrt(3)
+    // to prevent vertex clipping when a corner points directly at the camera.
+    // Use 0.54 (≈ 1/1.85) for a small margin.
+    let scale = 0.54;
     let x_ndc = rotated.x * scale;
     let y_ndc = rotated.y * scale;
     // Map z to [0,1] for depth. Negate z so that faces pointing towards the
