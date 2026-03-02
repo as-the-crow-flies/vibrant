@@ -5,12 +5,12 @@ use futures::channel::oneshot::channel;
 use log::info;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
-    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor,
-    COPY_BYTES_PER_ROW_ALIGNMENT, Extent3d, Features, FragmentState, Limits, MapMode, Origin3d,
-    PipelineLayout, PipelineLayoutDescriptor, PollType, PowerPreference, PrimitiveState,
-    PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo, TexelCopyBufferLayout,
-    TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat, VertexState,
+    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Extent3d, Features,
+    FragmentState, Limits, MapMode, Origin3d, PipelineLayout, PipelineLayoutDescriptor, PollType,
+    PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo,
+    TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
+    VertexState, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use crate::renderer::wgsl::COMMON;
@@ -240,7 +240,10 @@ impl Gpu {
         if texture.format() != TextureFormat::Bgra8Unorm {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("save: expected Bgra8Unorm texture, got {:?}", texture.format()),
+                format!(
+                    "save: expected Bgra8Unorm texture, got {:?}",
+                    texture.format()
+                ),
             ));
         }
 
@@ -316,12 +319,12 @@ impl Gpu {
             (0.30000, 0.60000),
             (0.15000, 0.06000),
         ));
-        let mut png_writer = enc.write_header().map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("PNG header error: {e}"))
-        })?;
-        png_writer.write_image_data(&buffer).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("PNG write error: {e}"))
-        })?;
+        let mut png_writer = enc
+            .write_header()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("PNG header error: {e}")))?;
+        png_writer
+            .write_image_data(&buffer)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("PNG write error: {e}")))?;
 
         Ok(())
     }

@@ -22,9 +22,9 @@ pub struct CliArgs {
     #[arg(long, default_value_t = 10.0)]
     pub rotate_speed: f32,
 
-    /// Enable post-processing effects (bloom) for screenshots and video
+    /// Disable visual effects (bloom, etc.) in screenshots and video
     #[arg(long)]
-    pub render_effects: bool,
+    pub disable_visual_effects: bool,
 }
 
 impl CliArgs {
@@ -44,7 +44,7 @@ impl CliArgs {
             mode,
             auto_rotate: self.auto_rotate,
             rotate_speed: self.rotate_speed,
-            render_effects: self.render_effects,
+            disable_visual_effects: self.disable_visual_effects,
         }
     }
 }
