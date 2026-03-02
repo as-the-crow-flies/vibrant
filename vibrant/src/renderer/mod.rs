@@ -62,7 +62,7 @@ impl Renderer {
 
     /// Read back the current frame as raw RGBA bytes. Returns (data, width, height).
     pub async fn read_frame(&self, gpu: &Gpu) -> io::Result<(Vec<u8>, u32, u32)> {
-        gpu.read_frame(self.surface.buffer().color().texture())
+        gpu.read_frame(self.surface.buffer().post().texture())
             .await
     }
 
