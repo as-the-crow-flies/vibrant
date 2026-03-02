@@ -1116,6 +1116,54 @@ mod tests {
     }
 
     #[test]
+    fn test_viewcube_target_face_orientations() {
+        // Verify yaw/pitch values produce camera orientations that point at
+        // the expected face.  With our camera convention (left-handed,
+        // yaw around Y, pitch around X), these are the expected angles:
+        let eps = 1e-5;
+
+        // Front (+Z): yaw=0, pitch=0
+        let front = ViewCubeTarget::from_id(0).unwrap();
+        assert!((front.yaw).abs() < eps, "Front yaw={}", front.yaw);
+        assert!((front.pitch).abs() < eps, "Front pitch={}", front.pitch);
+
+        // Back (-Z): yaw=±π, pitch=0
+        let back = ViewCubeTarget::from_id(1).unwrap();
+        assert!((back.yaw.abs() - PI).abs() < eps, "Back yaw={}", back.yaw);
+        assert!((back.pitch).abs() < eps, "Back pitch={}", back.pitch);
+
+        // Right (+X): yaw=-π/2, pitch=0
+        let right = ViewCubeTarget::from_id(2).unwrap();
+        assert!(
+            (right.yaw - (-PI / 2.0)).abs() < eps,
+            "Right yaw={}",
+            right.yaw
+        );
+        assert!((right.pitch).abs() < eps, "Right pitch={}", right.pitch);
+
+        // Left (-X): yaw=π/2, pitch=0
+        let left = ViewCubeTarget::from_id(3).unwrap();
+        assert!((left.yaw - (PI / 2.0)).abs() < eps, "Left yaw={}", left.yaw);
+        assert!((left.pitch).abs() < eps, "Left pitch={}", left.pitch);
+
+        // Top (+Y): pitch near -π/2 (looking down)
+        let top = ViewCubeTarget::from_id(4).unwrap();
+        assert!(
+            (top.pitch - (PI / 2.0 - 0.001)).abs() < eps,
+            "Top pitch={}",
+            top.pitch
+        );
+
+        // Bottom (-Y): pitch near π/2 (looking up)
+        let bottom = ViewCubeTarget::from_id(5).unwrap();
+        assert!(
+            (bottom.pitch - (-PI / 2.0 + 0.001)).abs() < eps,
+            "Bottom pitch={}",
+            bottom.pitch
+        );
+    }
+
+    #[test]
     fn test_viewcube_target_from_id_edges_corners() {
         // IDs 6..=25 (12 edges + 8 corners) should all return Some
         for id in 6..=25 {

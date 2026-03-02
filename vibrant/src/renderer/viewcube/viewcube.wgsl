@@ -55,9 +55,11 @@ fn vertex(input: VertexInput) -> VertexOutput {
     let scale = 0.6;
     let x_ndc = rotated.x * scale;
     let y_ndc = rotated.y * scale;
-    // Map z to [0,1] for depth. The cube diagonal extends to sqrt(3) ≈ 1.73,
-    // so divide by 2*sqrt(3) ≈ 3.4641 to ensure all vertices stay within [0,1] clip range.
-    let z_ndc = rotated.z / (2.0 * sqrt(3.0)) + 0.5;
+    // Map z to [0,1] for depth. Negate z so that faces pointing towards the
+    // camera (+Z when unrotated) get *smaller* depth values and win the depth
+    // test (CompareFunction::Less). The cube diagonal extends to sqrt(3) ≈ 1.73,
+    // so divide by 2*sqrt(3) ≈ 3.4641 to keep all vertices within [0,1].
+    let z_ndc = -rotated.z / (2.0 * sqrt(3.0)) + 0.5;
 
     output.position = vec4<f32>(x_ndc, y_ndc, z_ndc, 1.0);
     output.normal = rotated_normal;
