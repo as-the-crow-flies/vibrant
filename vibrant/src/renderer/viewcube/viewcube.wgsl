@@ -174,9 +174,9 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
         return vec4<f32>(encoded, 0.0, 0.0, 1.0);
     }
 
-    // Background quad: dark semi-transparent backdrop
+    // Background quad: fully transparent so the post buffer shows through
     if input.face_id == 255u {
-        return vec4<f32>(0.12, 0.12, 0.14, 0.85);
+        return vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
 
     // Visual mode: flat-shaded lighting in object space.
