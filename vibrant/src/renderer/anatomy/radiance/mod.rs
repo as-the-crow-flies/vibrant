@@ -3,7 +3,7 @@ use std::iter::zip;
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::{radiance::RadianceVolume, volume::PhysicalVolume},
+    asset::{hdri::HdriBuffer, radiance::RadianceVolume, volume::PhysicalVolume},
     gpu::Gpu,
     renderer::environment::Environment,
 };
@@ -24,6 +24,7 @@ impl AnatomyRadiancePipeline {
                     &PhysicalVolume::layout_read(gpu),
                     &Environment::layout(gpu),
                     &RadianceVolume::layout_cascade(gpu),
+                    &HdriBuffer::layout(gpu),
                 ]),
                 &gpu.shader(&[common, include_str!("cascade.wgsl")].concat()),
             ),
@@ -43,6 +44,7 @@ impl AnatomyRadiancePipeline {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
+        hdri: &HdriBuffer,
         volume: &PhysicalVolume,
         radiance: &RadianceVolume,
     ) {
@@ -52,6 +54,7 @@ impl AnatomyRadiancePipeline {
 
         pass.set_bind_group(0, volume.binding_read(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(3, hdri.binding(), &[]);
 
         for (resolution, binding) in
             zip(radiance.cascade_resolutions(), radiance.binding_cascades()).rev()

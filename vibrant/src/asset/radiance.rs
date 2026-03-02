@@ -84,11 +84,11 @@ impl RadianceVolume {
         let n_directions = 6u32;
 
         let radiance_resolution = UVec3::new(size.width, size.height, size.depth_or_array_layers);
-        let cascade_resolutions = (0..n_cascades)
+        let cascade_resolutions = (1..=n_cascades)
             .map(|cascade| {
                 UVec3::new(
-                    size.width,
-                    size.height,
+                    size.width >> 1,
+                    size.height >> 1,
                     size.depth_or_array_layers >> cascade,
                 )
             })

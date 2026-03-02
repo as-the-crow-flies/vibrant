@@ -23,6 +23,8 @@ futures = "0.3"
 itertools = "0.13"
 integer-sqrt = "0.1"
 random_color = "1.1.0"
+exr = "1.74"
+half = { version = "2.7", features = ["bytemuck"] }
 
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::{
     asset::{
-        radiance::RadianceVolume, segmentation::VolumeSegmenationBuffer,
+        hdri::HdriBuffer, radiance::RadianceVolume, segmentation::VolumeSegmenationBuffer,
         transform::TransformBuffer, volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
     },
     file::bounds::Bounds,
@@ -109,6 +109,16 @@ impl Renderer {
 
                     self.asset.radiance = Some(RadianceVolume::new(gpu, volume.size()))
                 }
+
+                if self.asset.hdri.is_none() {
+                    self.asset.hdri = Some(HdriBuffer::white(gpu))
+                }
+            }
+        });
+
+        FileStage::on_hdris(|hdris| {
+            for hdri in hdris {
+                self.asset.hdri = Some(HdriBuffer::from_file(gpu, &hdri));
             }
         });
 

@@ -48,7 +48,9 @@ impl AnatomyRenderer {
         frame: &Frame,
         asset: &Asset,
     ) {
-        if let (Some(volume), Some(radiance)) = (&asset.physical_volume, &asset.radiance) {
+        if let (Some(volume), Some(radiance), Some(hdri)) =
+            (&asset.physical_volume, &asset.radiance, &asset.hdri)
+        {
             if controller.volumes().changed() || controller.segmentations().changed() {
                 self.transfer.dispatch(
                     cmd,
@@ -58,32 +60,33 @@ impl AnatomyRenderer {
                     volume,
                 );
 
-                self.gaussian.dispatch(
-                    cmd,
-                    volume.binding_absorption(),
-                    volume.binding_tmp(),
-                    volume.size(),
-                );
-                self.gaussian.dispatch(
-                    cmd,
-                    volume.binding_scattering(),
-                    volume.binding_tmp(),
-                    volume.size(),
-                );
-                self.gaussian.dispatch(
-                    cmd,
-                    volume.binding_extinction(),
-                    volume.binding_tmp(),
-                    volume.size(),
-                );
+                // self.gaussian.dispatch(
+                //     cmd,
+                //     volume.binding_absorption(),
+                //     volume.binding_tmp(),
+                //     volume.size(),
+                // );
+                // self.gaussian.dispatch(
+                //     cmd,
+                //     volume.binding_scattering(),
+                //     volume.binding_tmp(),
+                //     volume.size(),
+                // );
+                // self.gaussian.dispatch(
+                //     cmd,
+                //     volume.binding_extinction(),
+                //     volume.binding_tmp(),
+                //     volume.size(),
+                // );
 
                 self.gradient.dispatch(cmd, volume);
 
-                self.radiance.dispatch(cmd, environment, volume, radiance);
+                self.radiance
+                    .dispatch(cmd, environment, hdri, volume, radiance);
             }
 
             self.trace
-                .dispatch(cmd, environment, frame, volume, radiance);
+                .dispatch(cmd, environment, hdri, frame, volume, radiance);
         }
     }
 }

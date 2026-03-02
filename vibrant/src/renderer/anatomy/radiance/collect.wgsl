@@ -12,9 +12,8 @@
 fn main(@builtin(global_invocation_id) texel: vec3<u32>) {
     let uv = (vec3<f32>(texel) + 0.5) / vec3<f32>(textureDimensions(IRRADIANCE));
 
-    let transmission = vec3<f32>(1.0);
-    // let extinction = textureSampleLevel(EXTINCTION, SAMPLER, uv, 0.0).rgb;
-    // let transmission = exp(-STEP_SIZE * extinction);
+    let extinction = textureSampleLevel(EXTINCTION, SAMPLER, uv, 0.0).rgb;
+    let transmission = exp(-STEP_SIZE * extinction);
 
     let irradiance =
         textureSampleLevel(CASCADE_IN_POS_X, CASCADE_SAMPLER, uv, 0.0) +

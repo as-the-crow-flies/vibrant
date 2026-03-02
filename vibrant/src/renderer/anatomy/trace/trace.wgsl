@@ -9,6 +9,9 @@
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+@group(3) @binding(0) var HDRI: texture_2d<f32>;
+@group(3) @binding(1) var HDRI_SAMPLER: sampler;
+
 @vertex
 fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
     return vec4<f32>(
@@ -26,22 +29,20 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));
 
+    let direction_world = normalize(far - near);
+
     let origin = (TRANSFORM * vec4<f32>(near, 1.0)).xyz;
-    let direction = (TRANSFORM * vec4<f32>(normalize(far - near), 0.0)).xyz;
+    let direction = (TRANSFORM * vec4<f32>(direction_world, 0.0)).xyz;
 
     let hit = intersectAABB(origin, direction);
 
     if (hit.x > hit.y) {
-        return vec4<f32>(1.0, 1.0, 1.0, 0.0);
+        return vec4<f32>(aces(sample_hdri(direction_world)), 0.0);
     }
 
     let t0 = max(hit.x, 0.0) + hash(pixel.xy + fract(ENVIRONMENT.time));
     let t1 = hit.y;
 
-    return raymarch(vec2<f32>(pixel.xy), origin, direction, t0, t1);
-}
-
-fn raymarch(pixel: vec2<f32>, origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec4<f32> {
     let light_direction = (TRANSFORM * vec4<f32>(ENVIRONMENT.light, 0.0)).xyz;
 
     var transmittance = vec3<f32>(1.0);
@@ -80,11 +81,24 @@ fn raymarch(pixel: vec2<f32>, origin: vec3<f32>, direction: vec3<f32>, t0: f32, 
         // if (all(transmittance <= vec3<f32>(0.01))) { break; }
     }
 
-    return vec4<f32>(transmittance + color.rgb, 1.0);
+    return vec4<f32>(aces(sample_hdri(direction_world) * transmittance + color.rgb), 1.0);
+}
+
+fn aces(x: vec3<f32>) -> vec3<f32> {
+  let a = 2.51;
+  let b = 0.03;
+  let c = 2.43;
+  let d = 0.59;
+  let e = 0.14;
+  return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
 fn sample_ambient(origin: vec3<f32>) -> vec3<f32> {
     return textureSampleLevel(IRRADIANCE, SAMPLER, origin, 0.0).rgb;
+}
+
+fn sample_hdri(direction: vec3<f32>) -> vec3<f32> {
+    return textureSampleLevel(HDRI, HDRI_SAMPLER, equirectangular(direction), 0.0).rgb;
 }
 
 fn minimum(v: vec3<f32>) -> f32 {

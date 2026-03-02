@@ -553,3 +553,7 @@ fn unpack_normal(packed: u32) -> vec3<f32> {
 fn hash(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
+
+fn equirectangular(d: vec3<f32>) -> vec2<f32> {
+    return vec2<f32>(0.5 - atan2(d.z, d.x) / (2.0 * PI), acos(d.y) / PI);
+}

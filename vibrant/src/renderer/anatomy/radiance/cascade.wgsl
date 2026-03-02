@@ -16,6 +16,9 @@
 @group(2) @binding(13) var CASCADE_OUT_NEG_Y: texture_storage_3d<rgba32float, write>;
 @group(2) @binding(14) var CASCADE_OUT_NEG_Z: texture_storage_3d<rgba32float, write>;
 
+@group(3) @binding(0) var HDRI: texture_2d<f32>;
+@group(3) @binding(1) var HDRI_SAMPLER: sampler;
+
 var<private> SOURCE_DIM: vec3<u32>;
 var<private> SOURCE_DIM_INV: vec3<f32>;
 
@@ -25,13 +28,6 @@ var<private> CASCADE_IN_DIM: vec3<u32>;
 var<private> DIRECTION_COUNT: u32;
 
 const MAX_CASCADE: u32 = 5u;
-
-const FRAME_POS_X: mat3x3<f32> = mat3x3<f32>(vec3<f32>( 1.0, 0.0, 0.0), vec3<f32>( 0.0, 1.0, 0.0), vec3<f32>(0.0, 0.0, 1.0));
-const FRAME_POS_Y: mat3x3<f32> = mat3x3<f32>(vec3<f32>( 0.0, 1.0, 0.0), vec3<f32>( 1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0));
-const FRAME_POS_Z: mat3x3<f32> = mat3x3<f32>(vec3<f32>( 0.0, 0.0, 1.0), vec3<f32>( 1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0));
-const FRAME_NEG_X: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-1.0, 0.0, 0.0), vec3<f32>( 0.0,-1.0, 0.0), vec3<f32>(0.0, 0.0,-1.0));
-const FRAME_NEG_Y: mat3x3<f32> = mat3x3<f32>(vec3<f32>( 0.0,-1.0, 0.0), vec3<f32>(-1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0,-1.0));
-const FRAME_NEG_Z: mat3x3<f32> = mat3x3<f32>(vec3<f32>( 0.0, 0.0,-1.0), vec3<f32>(-1.0, 0.0, 0.0), vec3<f32>(0.0,-1.0, 0.0));
 
 @compute
 @workgroup_size(4, 4, 4)
@@ -47,7 +43,7 @@ fn main(@builtin(global_invocation_id) texel: vec3<u32>) {
     DIRECTION_COUNT = 2u << CASCADE_INDEX;
 
     let voxel = texel % CASCADE_OUT_DIM;
-    let uv = (vec3<f32>(voxel) + 0.5) * f32(1u << CASCADE_INDEX) / vec3<f32>(SOURCE_DIM);
+    let uv = (vec3<f32>(voxel) + 0.5) * f32(2u << CASCADE_INDEX) / vec3<f32>(SOURCE_DIM);
     let origin = uv * vec3<f32>(SOURCE_DIM);
 
     // Compute Ray intervals as Harmonic Series (and their cumulative sum)
@@ -56,11 +52,11 @@ fn main(@builtin(global_invocation_id) texel: vec3<u32>) {
     // let t1 = t0 + interval; // 1 5 21 85 213 ...
 
     // Compute Ray intervals as Harmonic Series (and their cumulative sum)
-    let interval = f32(1u << (CASCADE_INDEX)); // 1 2 4 8 16 32 ...
+    let interval = f32(2u << (CASCADE_INDEX)); // 1 2 4 8 16 32 ...
     let t0 = interval - 1.0; // 0 1 3 7 15 31 ...
     let t1 = t0 + interval; // 1 3 7 15 31 63 ...
 
-    let direction = 2u * (texel.xy / CASCADE_OUT_DIM.xy);
+    let direction =  texel.xy / CASCADE_OUT_DIM.xy;
 
     textureStore(CASCADE_OUT_POS_X, texel, radiance(CASCADE_IN_POS_X, FRAME_POS_X, voxel, origin, direction, t0, t1));
     textureStore(CASCADE_OUT_NEG_X, texel, radiance(CASCADE_IN_NEG_X, FRAME_NEG_X, voxel, origin, direction, t0, t1));
@@ -84,7 +80,7 @@ fn radiance(
     if (CASCADE_INDEX < MAX_CASCADE) {
         for (var i=0u; i<2u; i++) {
             for (var j=0u; j<2u; j++) {
-                let index = direction_index + vec2<u32>(i,j);
+                let index = 2u * direction_index + vec2<u32>(i,j);
                 let da = index_to_direction(index, frame);
                 let ri = radiance_interval(origin, da.xyz, t0, t1);
                 let cascade = cascade_radiance(cascade_in, voxel, index);
@@ -93,7 +89,8 @@ fn radiance(
             }
         }
     } else if (CASCADE_INDEX == MAX_CASCADE) {
-        radiance = vec3<f32>(1.0);
+        let direction = TRANSFORM_INVERSE * vec4<f32>(index_to_direction(direction_index, frame).xyz, 0.0);
+        radiance = textureSampleLevel(HDRI, HDRI_SAMPLER, equirectangular(normalize(direction.xyz)), 0.0).rgb;
     }
 
     return vec4<f32>(radiance, 0.0);

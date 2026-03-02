@@ -1,7 +1,7 @@
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
-    asset::{radiance::RadianceVolume, volume::PhysicalVolume},
+    asset::{hdri::HdriBuffer, radiance::RadianceVolume, volume::PhysicalVolume},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::ColorBuffer, Frame},
@@ -20,6 +20,7 @@ impl AnatomyTracePipeline {
                     &PhysicalVolume::layout_read(gpu),
                     &RadianceVolume::layout_read(gpu),
                     &Environment::layout(gpu),
+                    &HdriBuffer::layout(gpu),
                 ]),
                 ColorBuffer::target(),
                 &gpu.shader(include_str!("trace.wgsl")),
@@ -31,6 +32,7 @@ impl AnatomyTracePipeline {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
+        hdri: &HdriBuffer,
         frame: &Frame,
         volume: &PhysicalVolume,
         radiance: &RadianceVolume,
@@ -44,6 +46,7 @@ impl AnatomyTracePipeline {
         pass.set_bind_group(0, volume.binding_read(), &[]);
         pass.set_bind_group(1, radiance.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(3, hdri.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

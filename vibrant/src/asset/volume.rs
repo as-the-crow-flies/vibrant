@@ -16,6 +16,7 @@ pub struct PhysicalVolume {
     gradient: Texture,
     tmp: Texture,
     transform: Buffer,
+    transform_inverse: Buffer,
     binding_read: BindGroup,
     binding_write: BindGroup,
     binding_gradient: BindGroup,
@@ -76,6 +77,12 @@ impl PhysicalVolume {
             border_color: None,
         });
 
+        let transform_inverse = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytes_of(&transform.inverse()),
+            usage: BufferUsages::UNIFORM,
+        });
+
         let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytes_of(&transform),
@@ -110,6 +117,10 @@ impl PhysicalVolume {
                     binding: 5,
                     resource: transform.as_entire_binding(),
                 },
+                BindGroupEntry {
+                    binding: 6,
+                    resource: transform_inverse.as_entire_binding(),
+                },
             ],
         });
 
@@ -140,6 +151,10 @@ impl PhysicalVolume {
                 BindGroupEntry {
                     binding: 5,
                     resource: transform.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 6,
+                    resource: transform_inverse.as_entire_binding(),
                 },
             ],
         });
@@ -225,6 +240,7 @@ impl PhysicalVolume {
             extinction,
             gradient,
             transform,
+            transform_inverse,
             tmp,
             binding_read,
             binding_write,
@@ -307,6 +323,16 @@ impl PhysicalVolume {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -356,6 +382,16 @@ impl PhysicalVolume {
                     },
                     BindGroupLayoutEntry {
                         binding: 5,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 6,
                         visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
@@ -448,6 +484,7 @@ impl Drop for PhysicalVolume {
         self.extinction.destroy();
         self.gradient.destroy();
         self.transform.destroy();
+        self.transform_inverse.destroy();
         self.tmp.destroy();
     }
 }

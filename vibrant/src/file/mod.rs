@@ -1,4 +1,5 @@
 pub mod bounds;
+pub mod hdri;
 pub mod line;
 pub mod volume;
 
@@ -11,6 +12,8 @@ use std::{
 };
 
 use log::warn;
+
+use crate::file::hdri::HdriFile;
 
 pub struct File {
     name: String,
@@ -42,6 +45,7 @@ impl File {
 pub struct FileStage {
     pub lines: Vec<LineFile>,
     pub volumes: Vec<VolumeFile>,
+    pub hdris: Vec<HdriFile>,
     pub save: Option<PathBuf>,
 }
 
@@ -87,6 +91,7 @@ impl FileStage {
     fn load_files(files: Vec<File>) {
         let mut lines: Vec<LineFile> = Vec::new();
         let mut volumes: Vec<VolumeFile> = Vec::new();
+        let mut hdris: Vec<HdriFile> = Vec::new();
 
         for file in files {
             if file.name().ends_with(".tck") {
@@ -95,6 +100,8 @@ impl FileStage {
                 lines.push(LineFile::from_obj(file));
             } else if file.name().ends_with(".nii.gz") {
                 volumes.push(VolumeFile::from_nifti(&file));
+            } else if file.name().ends_with(".exr") {
+                hdris.push(HdriFile::from_exr(&file));
             } else {
                 warn!(
                     "Cannot open `{}`. Supported file types are [.tck .obj .nii.gz]",
@@ -103,12 +110,10 @@ impl FileStage {
             }
         }
 
-        if !lines.is_empty() {
-            QUEUE.lock().unwrap().lines.extend(lines);
-        }
-
-        if !volumes.is_empty() {
-            QUEUE.lock().unwrap().volumes.extend(volumes);
+        if let Ok(stage) = QUEUE.lock().as_mut() {
+            stage.lines.extend(lines);
+            stage.volumes.extend(volumes);
+            stage.hdris.extend(hdris);
         }
     }
 
@@ -140,6 +145,14 @@ impl FileStage {
 
         if !data.volumes.is_empty() {
             callback(data.volumes.drain(..).collect());
+        }
+    }
+
+    pub fn on_hdris(callback: impl FnOnce(Vec<HdriFile>)) {
+        let mut data = QUEUE.lock().unwrap();
+
+        if !data.hdris.is_empty() {
+            callback(data.hdris.drain(..).collect());
         }
     }
 

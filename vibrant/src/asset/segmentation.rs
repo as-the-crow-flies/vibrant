@@ -18,6 +18,7 @@ use crate::{
 
 pub struct VolumeSegmentationMaterial {
     pub name: String,
+    pub visible: bool,
     pub absorption: [f32; 3],
     pub scattering: [f32; 3],
     pub anisotropy: f32,
@@ -27,26 +28,34 @@ impl VolumeSegmentationMaterial {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
-            absorption: [0.0; 3],
-            scattering: [0.0; 3],
+            visible: true,
+            absorption: [0.3; 3],
+            scattering: [0.3; 3],
             anisotropy: 0.0,
         }
     }
 
     fn to_buffer(&self) -> VolumeSegmentationMaterialBuffer {
-        VolumeSegmentationMaterialBuffer {
-            absorption: [
-                (self.absorption[0] * 255.0) as u8,
-                (self.absorption[1] * 255.0) as u8,
-                (self.absorption[2] * 255.0) as u8,
-                255,
-            ],
-            scattering: [
-                (self.scattering[0] * 255.0) as u8,
-                (self.scattering[1] * 255.0) as u8,
-                (self.scattering[2] * 255.0) as u8,
-                255,
-            ],
+        if self.visible {
+            VolumeSegmentationMaterialBuffer {
+                absorption: [
+                    (self.absorption[0] * 255.0) as u8,
+                    (self.absorption[1] * 255.0) as u8,
+                    (self.absorption[2] * 255.0) as u8,
+                    255,
+                ],
+                scattering: [
+                    (self.scattering[0] * 255.0) as u8,
+                    (self.scattering[1] * 255.0) as u8,
+                    (self.scattering[2] * 255.0) as u8,
+                    255,
+                ],
+            }
+        } else {
+            VolumeSegmentationMaterialBuffer {
+                absorption: [0, 0, 0, 255],
+                scattering: [0, 0, 0, 255],
+            }
         }
     }
 }
@@ -123,22 +132,13 @@ impl VolumeSegmenationBuffer {
                 vec![
                     VolumeSegmentationMaterial {
                         name: "Nothing".to_string(),
+                        visible: false,
                         absorption: [0.0, 0.0, 0.0],
                         scattering: [0.0, 0.0, 0.0],
                         anisotropy: 0.0,
                     },
-                    VolumeSegmentationMaterial {
-                        name: "White Matter".to_string(),
-                        absorption: [0.1, 0.1, 0.1],
-                        scattering: [0.5, 0.5, 0.5],
-                        anisotropy: 0.0,
-                    },
-                    VolumeSegmentationMaterial {
-                        name: "Gray Matter".to_string(),
-                        absorption: [0.1, 0.1, 0.1],
-                        scattering: [0.5, 0.5, 0.5],
-                        anisotropy: 0.0,
-                    },
+                    VolumeSegmentationMaterial::new("White Matter"),
+                    VolumeSegmentationMaterial::new("Gray Matter"),
                     VolumeSegmentationMaterial::new("CSF"),
                     VolumeSegmentationMaterial::new("Bone"),
                     VolumeSegmentationMaterial::new("Scalp"),

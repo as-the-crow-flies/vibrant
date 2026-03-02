@@ -1,3 +1,4 @@
+pub mod hdri;
 pub mod line;
 pub mod radiance;
 pub mod segmentation;
@@ -11,7 +12,9 @@ use segmentation::VolumeSegmenationBuffer;
 use transform::TransformBuffer;
 use volume::PhysicalVolume;
 
-use crate::asset::{radiance::RadianceVolume, volume_fraction::VolumeFractionBuffer};
+use crate::asset::{
+    hdri::HdriBuffer, radiance::RadianceVolume, volume_fraction::VolumeFractionBuffer,
+};
 
 #[derive(Default)]
 pub struct Asset {
@@ -21,4 +24,5 @@ pub struct Asset {
     pub volume_fractions: Vec<VolumeFractionBuffer>,
     pub physical_volume: Option<PhysicalVolume>,
     pub radiance: Option<RadianceVolume>,
+    pub hdri: Option<HdriBuffer>,
 }

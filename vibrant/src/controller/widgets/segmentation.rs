@@ -45,6 +45,8 @@ impl SegmentationsWidget {
                                 false,
                             )
                             .show_header(ui, |ui| {
+                                self.changed |= ui.checkbox(&mut setting.visible, "").changed();
+
                                 self.changed |=
                                     ui.color_edit_button_rgb(&mut setting.absorption).changed();
 
