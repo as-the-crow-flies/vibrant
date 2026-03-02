@@ -1,6 +1,7 @@
 pub mod environment;
 pub mod line;
 pub mod ui;
+pub mod viewcube;
 pub mod wgsl;
 
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use crate::{
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
+use viewcube::ViewCubeRenderer;
 use winit::window::Window;
 
 use crate::{
@@ -27,6 +29,7 @@ pub struct Renderer {
     egui: egui_winit::State,
     line: LineRenderer,
     ui: UiRenderer,
+    viewcube: ViewCubeRenderer,
     environment: Environment,
     asset: Asset,
 }
@@ -45,6 +48,7 @@ impl Renderer {
             surface: Surface::new(gpu, window),
             line: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
+            viewcube: ViewCubeRenderer::new(gpu, viewcube::VIEWCUBE_SIZE),
 
             environment: Environment::new(gpu),
             asset: Asset::default(),
@@ -108,6 +112,18 @@ impl Renderer {
 
         let mut cmd = gpu.cmd();
 
+        // Clear the post buffer at the start of each frame to prevent stale
+        // egui panel pixels from persisting when panels animate closed.
+        {
+            let _clear_pass = cmd.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("clear_post"),
+                color_attachments: &[Some(surface.buffer().post().attachment_srgb_clear())],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        }
+
         if let (Some(line), Some(transform)) = (&self.asset.line, &self.asset.transform) {
             self.line.render(
                 &mut cmd,
@@ -119,6 +135,41 @@ impl Renderer {
                 needs_transform,
                 needs_update,
             );
+        }
+
+        // Render view cube on top of the post-processed buffer
+        {
+            let camera_rotation = controller.camera().rotation();
+            let sw = controller.settings().width;
+            let sh = controller.settings().height;
+            let hovered_id = controller.viewcube_hovered_id();
+
+            let right_panel_offset = controller.right_panel_width();
+
+            self.viewcube.render(
+                gpu,
+                &mut cmd,
+                surface.buffer().post().view(),
+                camera_rotation,
+                sw,
+                sh,
+                hovered_id,
+                right_panel_offset,
+            );
+
+            // Only record the pick pass, submit, and perform readback when the
+            // mouse is inside the viewcube region or a click is pending.  This
+            // avoids an extra GPU command-buffer submission + synchronous pixel
+            // readback every frame when the cursor is elsewhere on the screen.
+            if controller.needs_viewcube_pick(&self.viewcube) {
+                self.viewcube.render_pick(gpu, &mut cmd, camera_rotation);
+
+                gpu.submit(cmd);
+                controller.handle_viewcube_pick(&self.viewcube, gpu);
+                cmd = gpu.cmd();
+            } else {
+                controller.update_viewcube_hover(&self.viewcube);
+            }
         }
 
         if !FileStage::about_to_save() {
