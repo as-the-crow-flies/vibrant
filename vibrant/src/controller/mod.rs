@@ -72,8 +72,11 @@ impl Controller {
         }
     }
 
-    pub fn event(&mut self, event: Event) {
-        // Check if mouse click is inside view cube region
+    pub fn event(&mut self, event: Event, egui_consumed: bool) {
+        // Check if mouse click is inside view cube region.
+        // This check runs even when egui consumed the event because
+        // the view cube is rendered outside of egui — clicks on it
+        // would otherwise be swallowed by egui's input handling.
         let intercept = if let Event::MousePressed(event::MouseButton::Left) = &event {
             let sw = self.settings.width;
             let cube_x =
@@ -86,6 +89,9 @@ impl Controller {
                 && my >= cube_y
                 && my < cube_y + VIEWCUBE_SIZE as f32
             {
+                log::info!(
+                    "viewcube click stored at ({mx:.0}, {my:.0}), cube region: ({cube_x:.0}, {cube_y:.0})"
+                );
                 self.viewcube_click_pending = Some((mx, my));
                 true
             } else {
@@ -95,9 +101,26 @@ impl Controller {
             false
         };
 
+        // Always update raw input state (position, button flags, etc.)
+        // so the controller has current mouse coordinates for hover and
+        // subsequent click detection.
         self.state = self.state.update(event);
 
-        if !intercept {
+        // When the left click was consumed by the viewcube, clear the
+        // button state so that subsequent MouseMoved events (which arrive
+        // while the button is still physically held) don't trigger
+        // camera.update() with state.left == true.  Without this,
+        // camera.update() would rotate the camera by the tiny mouse delta
+        // and — crucially — call cancel_animation(), killing the viewcube
+        // animation before it even starts.
+        if intercept {
+            self.state.left = false;
+            self.state.pressed = false;
+        }
+
+        // Skip camera/light updates when egui consumed the event or
+        // the click was intercepted for the view cube.
+        if !intercept && !egui_consumed {
             self.camera.update(&self.state);
             self.light.update(&self.state);
             // If the user interacted while the viewcube was animating,
@@ -549,12 +572,27 @@ impl Controller {
         if let Some((click_x, click_y)) = self.viewcube_click_pending.take() {
             if let Some((px, py)) = viewcube.screen_to_pick(click_x, click_y, sw, sh, rpw) {
                 let id = viewcube.read_pick_pixel(gpu, px, py);
+                log::info!(
+                    "viewcube pick: click=({click_x:.0},{click_y:.0}) px=({px},{py}) id={id} (sw={sw},sh={sh},rpw={rpw:.0})"
+                );
                 if id != PICK_NONE {
                     if let Some(target) = ViewCubeTarget::from_id(id) {
+                        log::info!(
+                            "viewcube animate to '{}': yaw={:.3} pitch={:.3} (current yaw={:.3} pitch={:.3})",
+                            target.label,
+                            target.yaw,
+                            target.pitch,
+                            self.camera.yaw,
+                            self.camera.pitch
+                        );
                         self.camera.animate_to(target.yaw, target.pitch, 0.4);
                         self.viewcube_animating = true;
                     }
                 }
+            } else {
+                log::info!(
+                    "viewcube pick: click=({click_x:.0},{click_y:.0}) outside cube region (sw={sw},sh={sh},rpw={rpw:.0})"
+                );
             }
         }
     }

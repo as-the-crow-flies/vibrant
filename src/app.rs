@@ -124,9 +124,11 @@ impl App {
         }
 
         if let Some(vibrant_event) = vibrant_event(event) {
-            if !consumed_by_egui {
-                self.controller.event(vibrant_event);
-            }
+            // Always forward events to the controller so it can detect
+            // viewcube clicks even when egui claims the input.  The
+            // controller uses the `egui_consumed` flag to skip camera/
+            // light updates for events handled by the UI.
+            self.controller.event(vibrant_event, consumed_by_egui);
         }
     }
 
