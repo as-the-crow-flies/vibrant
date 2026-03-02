@@ -211,6 +211,10 @@ impl App {
                                         }
                                     }
                                     self.video_frames_written += 1;
+                                    eprint!(
+                                        "\rRendering frame {}/{}...",
+                                        self.video_frames_written, self.video_total_frames
+                                    );
                                 }
                                 Err(e) => {
                                     log::error!("Failed to read frame for video: {}", e);
@@ -228,6 +232,10 @@ impl App {
                                     log::error!("Failed to finalize video: {}", e);
                                 }
                             }
+                            eprintln!(
+                                "\rRendering frame {0}/{0}... done.",
+                                self.video_total_frames
+                            );
                             log::info!("Video saved, exiting.");
                             event_loop.exit();
                             return;
