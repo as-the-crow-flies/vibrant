@@ -55,6 +55,10 @@ impl Renderer {
         &mut self.egui
     }
 
+    pub fn has_assets(&self) -> bool {
+        self.asset.line.is_some()
+    }
+
     pub fn render(
         &mut self,
         gpu: &Gpu,
@@ -130,8 +134,12 @@ impl Renderer {
         surface.present(gpu, cmd);
 
         FileStage::on_save(|path| {
-            gpu.save(path, surface.buffer().color().texture())
+            if let Err(e) = gpu
+                .save(path, surface.buffer().color().texture())
                 .block_on()
+            {
+                log::error!("Failed to save screenshot: {}", e);
+            }
         });
     }
 }

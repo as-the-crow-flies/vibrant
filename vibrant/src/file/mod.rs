@@ -160,4 +160,68 @@ impl FileStage {
     }
 }
 
+impl FileStage {
+    /// Load a file from a path programmatically (no dialog).
+    /// Used by CLI mode.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_path(path: PathBuf) -> std::io::Result<()> {
+        use std::fs;
+
+        let name = path
+            .file_name()
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("path has no file name: {:?}", path),
+                )
+            })?
+            .to_str()
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("non-UTF-8 file name: {:?}", path),
+                )
+            })?
+            .to_owned();
+
+        let data = fs::read(&path)?;
+
+        Self::load_files(vec![File::new(&name, data)]);
+        Ok(())
+    }
+
+    /// Queue a save path programmatically (no dialog).
+    /// Used by CLI mode.
+    pub fn save_path(path: PathBuf) {
+        Self::publish_save_path(path);
+    }
+}
+
 static QUEUE: LazyLock<Mutex<FileStage>> = LazyLock::new(|| Mutex::new(FileStage::default()));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_save_path_queues_correctly() {
+        // Initially no save queued
+        // Note: other tests may have left state in QUEUE, so we clear first
+        QUEUE.lock().unwrap().save = None;
+
+        assert!(!FileStage::about_to_save());
+
+        let path = PathBuf::from("/tmp/test_screenshot.png");
+        FileStage::save_path(path.clone());
+
+        assert!(FileStage::about_to_save());
+
+        // on_save should consume the path
+        let mut received = None;
+        FileStage::on_save(|p| received = Some(p));
+        assert_eq!(received, Some(path));
+
+        // After consuming, no more save queued
+        assert!(!FileStage::about_to_save());
+    }
+}

@@ -1,5 +1,7 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use vibrant::controller::event::{Key, MouseButton};
+use vibrant::file::FileStage;
 use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
@@ -15,6 +17,35 @@ use winit::{
     window::{self, WindowId},
 };
 
+/// The mode the application should run in.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AppMode {
+    /// Normal interactive GUI mode
+    Interactive,
+    /// Render a single frame, save as PNG, then exit
+    Screenshot { output: PathBuf },
+}
+
+/// Configuration passed from CLI (or defaults for WASM).
+#[derive(Debug, Clone)]
+pub struct AppConfig {
+    pub input: Vec<PathBuf>,
+    pub mode: AppMode,
+    pub auto_rotate: bool,
+    pub rotate_speed: f32,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            input: Vec::new(),
+            mode: AppMode::Interactive,
+            auto_rotate: false,
+            rotate_speed: 10.0,
+        }
+    }
+}
+
 struct App {
     gpu: Gpu,
     window: Option<Arc<window::Window>>,
@@ -22,10 +53,13 @@ struct App {
     controller: Controller,
     focused: bool,
     fps: Fps<8>,
+    config: AppConfig,
+    frames_rendered: u32,
+    screenshot_triggered: bool,
 }
 
 impl App {
-    fn new(gpu: Gpu) -> Self {
+    fn new(gpu: Gpu, config: AppConfig) -> Self {
         Self {
             gpu,
             window: None,
@@ -33,6 +67,9 @@ impl App {
             controller: Controller::new(),
             focused: true,
             fps: Fps::new(),
+            config,
+            frames_rendered: 0,
+            screenshot_triggered: false,
         }
     }
 
@@ -56,6 +93,28 @@ impl App {
                 self.fps.tick();
 
                 renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
+
+                self.frames_rendered += 1;
+
+                // Screenshot mode: wait for assets to load and a few frames for GPU
+                // pipeline warmup, then trigger a save and exit.
+                if let AppMode::Screenshot { ref output } = self.config.mode {
+                    if renderer.has_assets()
+                        && self.frames_rendered >= 3
+                        && !self.screenshot_triggered
+                    {
+                        self.screenshot_triggered = true;
+                        FileStage::save_path(output.clone());
+                        // Need one more frame to execute the save in render()
+                        self.request_redraw();
+                        return;
+                    }
+                    if self.screenshot_triggered && self.frames_rendered >= 4 {
+                        log::info!("Screenshot saved, exiting.");
+                        event_loop.exit();
+                        return;
+                    }
+                }
 
                 self.request_redraw();
             }
@@ -108,6 +167,20 @@ impl ApplicationHandler for App {
 
         self.window = Some(window);
         self.renderer = Some(renderer);
+
+        // Apply CLI settings
+        if self.config.auto_rotate {
+            self.controller.settings_mut().auto_rotate = true;
+            self.controller.settings_mut().auto_rotate_speed = self.config.rotate_speed;
+        }
+
+        // Load input files specified via CLI
+        #[cfg(not(target_arch = "wasm32"))]
+        for path in &self.config.input {
+            if let Err(e) = FileStage::load_path(path.clone()) {
+                log::error!("Failed to load {:?}: {}", path, e);
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
@@ -210,9 +283,9 @@ fn keycode(code: KeyCode) -> Option<Key> {
     }
 }
 
-pub async fn run() {
+pub async fn run(config: AppConfig) {
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App::new(Gpu::new().await);
+    let mut app = App::new(Gpu::new().await, config);
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -253,5 +326,19 @@ impl<const N: usize> Fps<N> {
             .sum();
 
         total / N as f32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_config_default() {
+        let config = AppConfig::default();
+        assert!(config.input.is_empty());
+        assert_eq!(config.mode, AppMode::Interactive);
+        assert!(!config.auto_rotate);
+        assert_eq!(config.rotate_speed, 10.0);
     }
 }

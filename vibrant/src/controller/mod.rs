@@ -421,6 +421,10 @@ impl Controller {
         &self.settings
     }
 
+    pub fn settings_mut(&mut self) -> &mut Settings {
+        &mut self.settings
+    }
+
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         self.settings.width = size.width;
         self.settings.height = size.height;
