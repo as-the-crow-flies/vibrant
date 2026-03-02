@@ -135,7 +135,7 @@ impl Renderer {
 
         FileStage::on_save(|path| {
             if let Err(e) = gpu
-                .save(path, surface.buffer().color().texture())
+                .save(path, surface.buffer().post().texture())
                 .block_on()
             {
                 log::error!("Failed to save screenshot: {}", e);
