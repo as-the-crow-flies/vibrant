@@ -45,7 +45,9 @@ pub struct Controller {
 
     // View cube state
     viewcube_hovered: u32,
-    viewcube_click_pending: bool,
+    /// Stores the mouse position (screen pixels) at the moment of a click
+    /// inside the viewcube region. `None` means no click pending.
+    viewcube_click_pending: Option<(f32, f32)>,
     viewcube_animating: bool,
     right_panel_width: f32,
 }
@@ -64,7 +66,7 @@ impl Controller {
             show_right_side_panel: false,
 
             viewcube_hovered: PICK_NONE,
-            viewcube_click_pending: false,
+            viewcube_click_pending: None,
             viewcube_animating: false,
             right_panel_width: 0.0,
         }
@@ -84,7 +86,7 @@ impl Controller {
                 && my >= cube_y
                 && my < cube_y + VIEWCUBE_SIZE as f32
             {
-                self.viewcube_click_pending = true;
+                self.viewcube_click_pending = Some((mx, my));
                 true
             } else {
                 false
@@ -497,7 +499,7 @@ impl Controller {
     /// the viewcube bounding region, or when a click is pending.  Skipping the
     /// pick pass avoids an extra GPU submission + readback every frame.
     pub fn needs_viewcube_pick(&self, viewcube: &ViewCubeRenderer) -> bool {
-        if self.viewcube_click_pending {
+        if self.viewcube_click_pending.is_some() {
             return true;
         }
         let sw = self.settings.width;
@@ -541,11 +543,11 @@ impl Controller {
             self.viewcube_hovered = PICK_NONE;
         }
 
-        // Handle pending click
-        if self.viewcube_click_pending {
-            self.viewcube_click_pending = false;
-
-            if let Some((px, py)) = viewcube.screen_to_pick(mx, my, sw, sh, rpw) {
+        // Handle pending click — use the stored click position so a quick
+        // click-and-release still triggers the animation even if the cursor
+        // has moved since the press event.
+        if let Some((click_x, click_y)) = self.viewcube_click_pending.take() {
+            if let Some((px, py)) = viewcube.screen_to_pick(click_x, click_y, sw, sh, rpw) {
                 let id = viewcube.read_pick_pixel(gpu, px, py);
                 if id != PICK_NONE {
                     if let Some(target) = ViewCubeTarget::from_id(id) {
