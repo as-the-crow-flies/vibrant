@@ -144,6 +144,11 @@ impl ApplicationHandler for App {
         let mut attributes = window::Window::default_attributes();
         attributes = attributes.with_title("VIBRANT").with_maximized(true);
 
+        // Hide the window for non-interactive CLI modes (screenshot, video)
+        if self.config.mode != AppMode::Interactive {
+            attributes = attributes.with_visible(false);
+        }
+
         #[cfg(target_arch = "wasm32")]
         {
             use wasm_bindgen::JsCast;
