@@ -33,6 +33,7 @@ pub struct AppConfig {
     pub mode: AppMode,
     pub auto_rotate: bool,
     pub rotate_speed: f32,
+    pub render_effects: bool,
 }
 
 impl Default for AppConfig {
@@ -42,6 +43,7 @@ impl Default for AppConfig {
             mode: AppMode::Interactive,
             auto_rotate: false,
             rotate_speed: 10.0,
+            render_effects: false,
         }
     }
 }
@@ -172,6 +174,10 @@ impl ApplicationHandler for App {
         if self.config.auto_rotate {
             self.controller.settings_mut().auto_rotate = true;
             self.controller.settings_mut().auto_rotate_speed = self.config.rotate_speed;
+        }
+
+        if self.config.render_effects {
+            self.controller.settings_mut().bloom = true;
         }
 
         // Load input files specified via CLI
@@ -340,5 +346,6 @@ mod tests {
         assert_eq!(config.mode, AppMode::Interactive);
         assert!(!config.auto_rotate);
         assert_eq!(config.rotate_speed, 10.0);
+        assert!(!config.render_effects);
     }
 }

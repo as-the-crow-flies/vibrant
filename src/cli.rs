@@ -21,6 +21,10 @@ pub struct CliArgs {
     /// Auto-rotation speed in degrees per second (default: 10.0)
     #[arg(long, default_value_t = 10.0)]
     pub rotate_speed: f32,
+
+    /// Enable post-processing effects (bloom) for screenshots and video
+    #[arg(long)]
+    pub render_effects: bool,
 }
 
 impl CliArgs {
@@ -40,6 +44,7 @@ impl CliArgs {
             mode,
             auto_rotate: self.auto_rotate,
             rotate_speed: self.rotate_speed,
+            render_effects: self.render_effects,
         }
     }
 }
