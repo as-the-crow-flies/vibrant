@@ -1,3 +1,5 @@
+use crate::controller::selection_volume::SelectionVolume;
+
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineVoxelizationMode {
     #[default]
@@ -55,6 +57,11 @@ pub struct Settings {
     pub bloom_threshold: f32,
     pub bloom_intensity: f32,
     pub bloom_spread: f32,
+    pub selection_volume: SelectionVolume,
+    pub selection_scale: f32,
+    pub selection_offset_x: f32,
+    pub selection_offset_y: f32,
+    pub selection_offset_z: f32,
 }
 
 impl Settings {
@@ -90,6 +97,11 @@ impl Settings {
             bloom_threshold: 0.25,
             bloom_intensity: 1.0,
             bloom_spread: 2.5,
+            selection_volume: SelectionVolume::None,
+            selection_scale: 1.0,
+            selection_offset_x: 0.0,
+            selection_offset_y: 0.0,
+            selection_offset_z: 0.0,
         }
     }
 }

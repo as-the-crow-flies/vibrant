@@ -94,6 +94,11 @@ impl Environment {
                 bytes_of(&controller.settings().bloom_threshold),
                 bytes_of(&controller.settings().bloom_intensity),
                 bytes_of(&controller.settings().bloom_spread),
+                bytes_of(&(controller.settings().selection_volume as u32)),
+                bytes_of(&controller.settings().selection_scale),
+                bytes_of(&controller.settings().selection_offset_x),
+                bytes_of(&controller.settings().selection_offset_y),
+                bytes_of(&controller.settings().selection_offset_z),
             ]
             .concat(),
         );

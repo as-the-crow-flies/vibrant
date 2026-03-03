@@ -21,6 +21,11 @@ struct Settings {
     bloom_threshold: f32,
     bloom_intensity: f32,
     bloom_spread: f32,
+    selection_volume: u32,
+    selection_scale: f32,
+    selection_offset_x: f32,
+    selection_offset_y: f32,
+    selection_offset_z: f32,
 }
 
 struct Segment {
