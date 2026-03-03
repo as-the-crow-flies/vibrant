@@ -26,6 +26,8 @@ use super::gpu::Gpu;
 pub struct Frame {
     color: ColorBuffer,
     post: ColorBuffer,
+    bloom_a: ColorBuffer,
+    bloom_b: ColorBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -36,6 +38,8 @@ impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         let color = ColorBuffer::new(gpu, settings.width, settings.height);
         let post = ColorBuffer::new(gpu, settings.width, settings.height);
+        let bloom_a = ColorBuffer::new(gpu, settings.width, settings.height);
+        let bloom_b = ColorBuffer::new(gpu, settings.width, settings.height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -56,6 +60,8 @@ impl Frame {
         Self {
             color,
             post,
+            bloom_a,
+            bloom_b,
             occupancy,
             occlusion,
             culling,
@@ -69,6 +75,14 @@ impl Frame {
 
     pub fn post(&self) -> &ColorBuffer {
         &self.post
+    }
+
+    pub fn bloom_a(&self) -> &ColorBuffer {
+        &self.bloom_a
+    }
+
+    pub fn bloom_b(&self) -> &ColorBuffer {
+        &self.bloom_b
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {
