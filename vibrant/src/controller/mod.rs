@@ -287,6 +287,10 @@ impl Controller {
                         ui.separator();
                         ui.label("Post Processing");
                         ui.separator();
+                        ui.add(
+                            Slider::new(&mut self.settings.blur_kernel_size, 1..=32)
+                                .text("Blur Kernel Size"),
+                        );
                         ui.checkbox(&mut self.settings.bloom, "Bloom");
                         ui.add_enabled(
                             self.settings.bloom,
@@ -302,6 +306,17 @@ impl Controller {
                             self.settings.bloom,
                             Slider::new(&mut self.settings.bloom_spread, 1.0..=5.0)
                                 .text("Bloom Spread"),
+                        );
+                        ui.separator();
+                        ui.checkbox(&mut self.settings.depth_of_field, "Depth of Field");
+                        ui.add_enabled(
+                            self.settings.depth_of_field,
+                            Slider::new(&mut self.settings.focal_distance, 0.01..=3.0)
+                                .text("Focal Distance"),
+                        );
+                        ui.add_enabled(
+                            self.settings.depth_of_field,
+                            Slider::new(&mut self.settings.aperture, 0.01..=5.0).text("Aperture"),
                         );
                     });
 

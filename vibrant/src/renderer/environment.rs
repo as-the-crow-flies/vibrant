@@ -100,6 +100,10 @@ impl Environment {
                 bytes_of(&controller.settings().selection_offset_y),
                 bytes_of(&controller.settings().selection_offset_z),
                 bytes_of(&(controller.settings().selection_extend_lines as u32)),
+                bytes_of(&controller.settings().focal_distance),
+                bytes_of(&controller.settings().aperture),
+                bytes_of(&(controller.settings().depth_of_field as u32)),
+                bytes_of(&controller.settings().blur_kernel_size),
             ]
             .concat(),
         );

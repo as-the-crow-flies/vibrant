@@ -16,7 +16,7 @@ impl VolumeLineRenderPipeline {
             pipeline: gpu.quad(
                 "Volume",
                 &gpu.pipeline_layout(&[&Frame::layout(gpu), &Environment::layout(gpu)]),
-                ColorBuffer::target(),
+                &[Some(ColorBuffer::target())],
                 &gpu.shader(include_str!("volume.wgsl")),
             ),
         }

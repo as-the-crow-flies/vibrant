@@ -11,6 +11,12 @@ var<private> DIM_INV: f32;
 var<private> DIR_INV: f32;
 var<private> RADIUS: f32;
 var<private> ALPHA: f32;
+var<private> DEPTH: f32 = 1.0;
+
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+    @location(1) depth: vec4<f32>,
+}
 
 @vertex
 fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
@@ -23,7 +29,7 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 }
 
 @fragment
-fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
+fn fragment(@builtin(position) pixel: vec4<f32>) -> FragmentOutput {
     DIM = f32(ENVIRONMENT.volume);
     DIM_INV = 1.0 / DIM;
     RADIUS = ENVIRONMENT.settings.radius * DIM_INV;
@@ -38,10 +44,14 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let direction = normalize(far - near);
 
     let result = raymarch(origin, direction);
+    return FragmentOutput(
+        select(vec4<f32>(0.0), result, result.a > 0.0),
+        vec4<f32>(DEPTH, 0.0, 0.0, 1.0)
+    );
 
-    if (result.a > 0.0) { return result; }
-    else { return vec4<f32>(0.0); }
-    // else { return background(origin, direction); }
+    // if (result.a > 0.0) { return result; }
+    // else { return vec4<f32>(0.0); }
+    // // else { return background(origin, direction); }
 }
 
 fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {

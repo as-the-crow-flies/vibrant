@@ -63,6 +63,10 @@ pub struct Settings {
     pub selection_offset_y: f32,
     pub selection_offset_z: f32,
     pub selection_extend_lines: bool,
+    pub focal_distance: f32,
+    pub aperture: f32,
+    pub depth_of_field: bool,
+    pub blur_kernel_size: u32,
 }
 
 impl Settings {
@@ -104,6 +108,10 @@ impl Settings {
             selection_offset_y: 0.0,
             selection_offset_z: 0.0,
             selection_extend_lines: false,
+            depth_of_field: true,
+            focal_distance: 1.0,
+            aperture: 1.0,
+            blur_kernel_size: 16,
         }
     }
 }

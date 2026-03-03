@@ -43,6 +43,10 @@ fn visit(
         }
     }
 
+    if (HIT.index != U32_MAX && DEPTH == 1.0) {
+        DEPTH = HIT.distance;
+    }
+
     return HIT.index != U32_MAX;
 }
 
