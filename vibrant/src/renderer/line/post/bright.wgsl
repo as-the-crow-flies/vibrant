@@ -17,7 +17,6 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = pixel.xy / vec2<f32>(ENVIRONMENT.surface);
     let color = textureSample(COLOR, SAMPLER, uv).rgb;
 
-    // Bloom parameters now come from Rust Settings via Environment uniform.
     let threshold = ENVIRONMENT.settings.bloom_threshold;
     let soft_knee = ENVIRONMENT.settings.bloom_soft_knee;
 
