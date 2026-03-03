@@ -62,6 +62,7 @@ pub struct Settings {
     pub selection_offset_x: f32,
     pub selection_offset_y: f32,
     pub selection_offset_z: f32,
+    pub selection_extend_lines: bool,
 }
 
 impl Settings {
@@ -102,6 +103,7 @@ impl Settings {
             selection_offset_x: 0.0,
             selection_offset_y: 0.0,
             selection_offset_z: 0.0,
+            selection_extend_lines: false,
         }
     }
 }

@@ -26,6 +26,7 @@ struct Settings {
     selection_offset_x: f32,
     selection_offset_y: f32,
     selection_offset_z: f32,
+    selection_extend_lines: u32,
 }
 
 struct Segment {

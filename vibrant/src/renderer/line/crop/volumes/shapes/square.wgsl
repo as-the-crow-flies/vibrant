@@ -63,6 +63,9 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         ENVIRONMENT.settings.selection_offset_z
     );
 
+    let extend = ENVIRONMENT.settings.selection_extend_lines == TRUE;
+
+    var intersects = false;
     var total_length = 0u;
     for (var i=0u; i<crop_length; i++) {
         let index = LINE_INDEX_RAW[start + offset_start + i];
@@ -73,25 +76,35 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             abs(v0.x) <= half_size && abs(v0.y) <= half_size && abs(v0.z) <= half_size &&
             abs(v1.x) <= half_size && abs(v1.y) <= half_size && abs(v1.z) <= half_size
         ) {
-           total_length++;
+            intersects = true;
+            total_length++;
         }
     }
 
-    let offset_line = atomicAdd(&LINE_LENGTH, total_length);
+    if (extend) {
+        if (!intersects) { return; }
+        let offset_line = atomicAdd(&LINE_LENGTH, crop_length);
 
-    var offset_index = 0u;
+        for (var i=0u; i<crop_length; i++) {
+            LINE_INDEX[offset_line + i] = LINE_INDEX_RAW[start + offset_start + i];
+        }
+    } else {
+        let offset_line = atomicAdd(&LINE_LENGTH, total_length);
 
-    for (var i=0u; i<crop_length; i++) {
-        let index = LINE_INDEX_RAW[start + offset_start + i];
-        let v0 = LINE_VERTEX[index].xyz - offset;
-        let v1 = LINE_VERTEX[index + 1].xyz - offset;
+        var offset_index = 0u;
 
-        if (
-            abs(v0.x) <= half_size && abs(v0.y) <= half_size && abs(v0.z) <= half_size &&
-            abs(v1.x) <= half_size && abs(v1.y) <= half_size && abs(v1.z) <= half_size
-        ) {
-            LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
-            offset_index++;
+        for (var i=0u; i<crop_length; i++) {
+            let index = LINE_INDEX_RAW[start + offset_start + i];
+            let v0 = LINE_VERTEX[index].xyz - offset;
+            let v1 = LINE_VERTEX[index + 1].xyz - offset;
+
+            if (
+                abs(v0.x) <= half_size && abs(v0.y) <= half_size && abs(v0.z) <= half_size &&
+                abs(v1.x) <= half_size && abs(v1.y) <= half_size && abs(v1.z) <= half_size
+            ) {
+                LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
+                offset_index++;
+            }
         }
     }
 }

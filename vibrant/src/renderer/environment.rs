@@ -99,6 +99,7 @@ impl Environment {
                 bytes_of(&controller.settings().selection_offset_x),
                 bytes_of(&controller.settings().selection_offset_y),
                 bytes_of(&controller.settings().selection_offset_z),
+                bytes_of(&(controller.settings().selection_extend_lines as u32)),
             ]
             .concat(),
         );
