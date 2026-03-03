@@ -20,6 +20,7 @@ pub struct GlobalLineSettings {
     pub color_visible: bool,
 }
 
+#[derive(Debug)]
 pub struct LineSettings {
     pub name: String,
     pub selected: bool,

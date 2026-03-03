@@ -29,6 +29,21 @@ use crate::{
 };
 
 #[derive(Debug)]
+pub enum Layer {
+    Line(String),
+    Group(Vec<String>)
+}
+
+impl Layer {
+    fn contains_name(&self, name: &str) -> bool {
+        match self {
+            Layer::Line(line_name) => line_name == name,
+            Layer::Group(names) => names.contains(&name.to_string()),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Controller {
     state: ControllerState,
     camera: Camera,
@@ -39,6 +54,8 @@ pub struct Controller {
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
+
+    layers: Vec<Layer>,
 }
 
 impl Controller {
@@ -53,6 +70,8 @@ impl Controller {
 
             show_left_side_panel: false,
             show_right_side_panel: false,
+
+            layers: Vec::new(),
         }
     }
 
@@ -64,6 +83,15 @@ impl Controller {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
+        if let Some(lines) = &mut asset.line {
+            for line in lines.settings() {
+                if !self.layers.iter().any(|layer| layer.contains_name(&line.name)) {
+                    let layer = Layer::Line(line.name.clone());
+                    self.layers.push(layer);
+                }
+            }
+        }
+
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -365,24 +393,30 @@ impl Controller {
                                 })
                                 .body(|_| {});
 
-                                for line in lines.settings() {
-                                    let id = ui.make_persistent_id(&line.name);
-                                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                                        .show_header(ui, |ui| {
-                                            ui.toggle_value(&mut line.visible, "👁");
-                                            ui.color_edit_button_srgb(&mut line.color);
-                                            ui.label(&line.name);
-                                        })
-                                        .body(|ui| {
-                                            ui.add(
-                                                Slider::new(&mut line.crop_start, 0.0..=1.0)
-                                                    .text("Crop Start"),
-                                            );
-                                            ui.add(
-                                                Slider::new(&mut line.crop_end, 0.0..=1.0)
-                                                    .text("Crop End"),
-                                            );
-                                        });
+                                for layer in self.layers.iter() {
+                                    match layer {
+                                        Layer::Line(name) => {
+                                            let line = lines.settings().iter_mut().find(|line| line.name == *name).unwrap();
+                                            let id = ui.make_persistent_id(&line.name);
+                                            CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                                                .show_header(ui, |ui| {
+                                                    ui.toggle_value(&mut line.visible, "👁");
+                                                    ui.color_edit_button_srgb(&mut line.color);
+                                                    ui.label(&line.name);
+                                                })
+                                                .body(|ui| {
+                                                    ui.add(
+                                                        Slider::new(&mut line.crop_start, 0.0..=1.0)
+                                                            .text("Crop Start"),
+                                                    );
+                                                    ui.add(
+                                                        Slider::new(&mut line.crop_end, 0.0..=1.0)
+                                                            .text("Crop End"),
+                                                    );
+                                                });
+                                        },
+                                        Layer::Group(group_lines) => {},
+                                    }
                                 }
                             }
                         });
