@@ -64,7 +64,7 @@ impl LineRenderer {
             self.transform.dispatch(cmd, line, transform, environment);
         }
 
-        self.crop.dispatch(cmd, line, environment);
+        self.crop.dispatch(cmd, line, environment, settings);
 
         self.occupancy
             .dispatch(cmd, frame, environment, settings, line);

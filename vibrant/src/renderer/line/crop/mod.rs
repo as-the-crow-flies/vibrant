@@ -1,6 +1,9 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
-use crate::{asset::line::LineBuffer, gpu::Gpu, renderer::environment::Environment};
+use crate::{
+    asset::line::LineBuffer, controller::settings::Settings, gpu::Gpu,
+    renderer::environment::Environment,
+};
 
 pub mod volumes;
 
@@ -27,9 +30,15 @@ impl LineCropPipeline {
         }
     }
 
-    pub fn dispatch(&self, cmd: &mut CommandEncoder, line: &LineBuffer, environment: &Environment) {
+    pub fn dispatch(
+        &self,
+        cmd: &mut CommandEncoder,
+        line: &LineBuffer,
+        environment: &Environment,
+        settings: &Settings,
+    ) {
         self.crop(cmd, line, environment);
-        self.volumes.dispatch(cmd, line, environment);
+        self.volumes.dispatch(cmd, line, environment, settings);
         self.adjacency(cmd, line);
     }
 
