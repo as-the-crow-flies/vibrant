@@ -249,20 +249,6 @@ impl Controller {
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
                         );
-
-                        // Bloom settings
-                        ui.add(
-                            Slider::new(&mut self.settings.bloom_threshold, 0.0..=2.0)
-                                .text("Bloom Threshold"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.bloom_soft_knee, 0.0..=1.0)
-                                .text("Bloom Soft Knee"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.bloom_intensity, 0.0..=5.0)
-                                .text("Bloom Intensity")
-                        );
                     });
 
                 egui::TopBottomPanel::bottom("bottom_panel")

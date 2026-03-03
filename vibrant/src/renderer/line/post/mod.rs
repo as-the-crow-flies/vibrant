@@ -7,102 +7,30 @@ use crate::{
 };
 
 pub struct PostProcessingPipeline {
-    bright: RenderPipeline,
-    blur_x: RenderPipeline,
-    blur_y: RenderPipeline,
-    composite: RenderPipeline,
+    pipeline: RenderPipeline,
 }
 
 impl PostProcessingPipeline {
     pub fn new(gpu: &Gpu) -> PostProcessingPipeline {
         PostProcessingPipeline {
-            bright: gpu.quad(
-                "Post::Bloom::Bright",
+            pipeline: gpu.quad(
+                "Post",
                 &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-                ColorBuffer::target(),
-                &gpu.shader(include_str!("bright.wgsl")),
-            ),
-            blur_x: gpu.quad(
-                "Post::Bloom::BlurX",
-                &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-                ColorBuffer::target(),
-                &gpu.shader(include_str!("blur_x.wgsl")),
-            ),
-            blur_y: gpu.quad(
-                "Post::Bloom::BlurY",
-                &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-                ColorBuffer::target(),
-                &gpu.shader(include_str!("blur_y.wgsl")),
-            ),
-            composite: gpu.quad(
-                "Post::Bloom::Composite",
-                &gpu.pipeline_layout(&[
-                    &Environment::layout(gpu),
-                    &ColorBuffer::layout(gpu),
-                    &ColorBuffer::layout(gpu),
-                ]),
                 ColorBuffer::target_srgb(),
-                &gpu.shader(include_str!("composite.wgsl")),
+                &gpu.shader(include_str!("post.wgsl")),
             ),
         }
     }
 
     pub fn dispatch(&self, cmd: &mut CommandEncoder, environment: &Environment, frame: &Frame) {
-        // Step 1: Extract only bright pixels from scene color.
-        {
-            let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-                label: Some("Post::Bloom::Bright"),
-                color_attachments: &[Some(frame.bloom_a().attachment_clear())],
-                ..Default::default()
-            });
+        let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+            color_attachments: &[Some(frame.post().attachment_srgb())],
+            ..Default::default()
+        });
 
-            pass.set_pipeline(&self.bright);
-            pass.set_bind_group(0, environment.binding(), &[]);
-            pass.set_bind_group(1, frame.color().binding(), &[]);
-            pass.draw(0..6, 0..1);
-        }
-
-        // Step 2: Blur horizontally into temporary ping-pong target.
-        {
-            let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-                label: Some("Post::Bloom::BlurX"),
-                color_attachments: &[Some(frame.bloom_b().attachment_clear())],
-                ..Default::default()
-            });
-
-            pass.set_pipeline(&self.blur_x);
-            pass.set_bind_group(0, environment.binding(), &[]);
-            pass.set_bind_group(1, frame.bloom_a().binding(), &[]);
-            pass.draw(0..6, 0..1);
-        }
-
-        // Step 3: Blur vertically to complete separable Gaussian blur.
-        {
-            let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-                label: Some("Post::Bloom::BlurY"),
-                color_attachments: &[Some(frame.bloom_a().attachment_clear())],
-                ..Default::default()
-            });
-
-            pass.set_pipeline(&self.blur_y);
-            pass.set_bind_group(0, environment.binding(), &[]);
-            pass.set_bind_group(1, frame.bloom_b().binding(), &[]);
-            pass.draw(0..6, 0..1);
-        }
-
-        // Step 4: Add blurred bloom back onto original scene and write to final post target.
-        {
-            let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-                label: Some("Post::Bloom::Composite"),
-                color_attachments: &[Some(frame.post().attachment_srgb())],
-                ..Default::default()
-            });
-
-            pass.set_pipeline(&self.composite);
-            pass.set_bind_group(0, environment.binding(), &[]);
-            pass.set_bind_group(1, frame.color().binding(), &[]);
-            pass.set_bind_group(2, frame.bloom_a().binding(), &[]);
-            pass.draw(0..6, 0..1);
-        }
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, environment.binding(), &[]);
+        pass.set_bind_group(1, frame.color().binding(), &[]);
+        pass.draw(0..6, 0..1);
     }
 }

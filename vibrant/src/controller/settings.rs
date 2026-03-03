@@ -51,9 +51,6 @@ pub struct Settings {
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
     pub plane: f32,
-    pub bloom_threshold: f32,
-    pub bloom_soft_knee: f32,
-    pub bloom_intensity: f32,
 }
 
 impl Settings {
@@ -83,9 +80,6 @@ impl Settings {
             crop_z_end: 1.0,
             workgroups: 64,
             plane: 0.33,
-            bloom_threshold: 0.15,
-            bloom_soft_knee: 1.0,
-            bloom_intensity: 3.0,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }

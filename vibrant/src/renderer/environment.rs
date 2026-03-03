@@ -90,9 +90,6 @@ impl Environment {
                 bytes_of(&controller.settings().crop_z_start),
                 bytes_of(&controller.settings().crop_z_end),
                 bytes_of(&controller.settings().plane),
-                bytes_of(&controller.settings().bloom_threshold),
-                bytes_of(&controller.settings().bloom_soft_knee),
-                bytes_of(&controller.settings().bloom_intensity),
             ]
             .concat(),
         );
