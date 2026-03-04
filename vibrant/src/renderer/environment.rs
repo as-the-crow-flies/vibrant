@@ -93,6 +93,8 @@ impl Environment {
                 bytes_of(&controller.settings().bloom_threshold),
                 bytes_of(&controller.settings().bloom_soft_knee),
                 bytes_of(&controller.settings().bloom_intensity),
+                bytes_of(&controller.settings().tone_mapping_exposure),
+                bytes_of(&(controller.settings().tone_mapping_enabled as u32)), 
             ]
             .concat(),
         );

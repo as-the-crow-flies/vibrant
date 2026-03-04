@@ -263,6 +263,13 @@ impl Controller {
                             Slider::new(&mut self.settings.bloom_intensity, 0.0..=5.0)
                                 .text("Bloom Intensity")
                         );
+                        ui.checkbox(
+                            &mut self.settings.tone_mapping_enabled, "Tone Mapping (ACES)"
+                        );
+                        ui.add(
+                            Slider::new(&mut self.settings.tone_mapping_exposure, 0.0..=5.0)
+                                .text("Exposure")
+                        );
                     });
 
                 egui::TopBottomPanel::bottom("bottom_panel")

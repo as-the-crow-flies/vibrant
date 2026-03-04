@@ -20,6 +20,8 @@ struct Settings {
     bloom_threshold: f32,
     bloom_soft_knee: f32,
     bloom_intensity: f32,
+    tone_mapping_exposure: f32,
+    tone_mapping_enabled: u32,
 }
 
 struct Segment {
@@ -504,6 +506,21 @@ fn linear_to_srgb(c: f32) -> f32 {
         1.055 * pow(c, 1.0 / 2.4) - 0.055,
         c > 0.0031308
     );
+}
+
+// ACES tone mapping
+fn aces(x: vec3<f32>) -> vec3<f32> {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+fn tone_map(color: vec3<f32>, exposure: f32) -> vec3<f32> {
+    // Apply exposure first, then ACES curve
+    return aces(color * exposure);
 }
 
 fn linear_to_srgb_vec3(c: vec3<f32>) -> vec3<f32> {

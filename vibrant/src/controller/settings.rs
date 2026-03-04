@@ -54,6 +54,8 @@ pub struct Settings {
     pub bloom_threshold: f32,
     pub bloom_soft_knee: f32,
     pub bloom_intensity: f32,
+    pub tone_mapping_exposure: f32,
+    pub tone_mapping_enabled: bool,
 }
 
 impl Settings {
@@ -86,6 +88,8 @@ impl Settings {
             bloom_threshold: 0.15,
             bloom_soft_knee: 1.0,
             bloom_intensity: 3.0,
+            tone_mapping_exposure: 1.0,
+            tone_mapping_enabled: true,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }
