@@ -9,8 +9,7 @@ use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    collapsing_header::CollapsingState, Align, ComboBox, Frame, Layout, Margin, ScrollArea,
-    SidePanel, Slider, Ui,
+    Align, Button, ComboBox, Frame, Layout, Margin, ScrollArea, SidePanel, Slider, Ui, collapsing_header::CollapsingState
 };
 use event::Event;
 use itertools::Itertools;
@@ -393,7 +392,7 @@ impl Controller {
                                 })
                                 .body(|_| {});
 
-                                for layer in self.layers.iter() {
+                                for layer in self.layers.iter_mut() {
                                     match layer {
                                         Layer::Line(name) => {
                                             let line = lines.settings().iter_mut().find(|line| line.name == *name).unwrap();
@@ -413,9 +412,16 @@ impl Controller {
                                                         Slider::new(&mut line.crop_end, 0.0..=1.0)
                                                             .text("Crop End"),
                                                     );
+                                                    if ui.add(
+                                                        Button::new("Create Group")
+                                                    ).clicked() {
+                                                        let newLayer = Layer::Group(vec![line.name.clone()]);
+                                                        *layer = newLayer;
+                                                    };
                                                 });
                                         },
-                                        Layer::Group(group_lines) => {},
+                                        Layer::Group(group_lines) => {
+                                        },
                                     }
                                 }
                             }
