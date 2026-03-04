@@ -1,18 +1,34 @@
 use std::any::type_name;
 
+use bytemuck::{bytes_of, Pod, Zeroable};
 use glam::UVec2;
 use half::f16;
-use wgpu::{util::DeviceExt, wgt::TextureDataOrder, *};
+use wgpu::{
+    util::{BufferInitDescriptor, DeviceExt},
+    wgt::TextureDataOrder,
+    *,
+};
 
 use crate::{file::hdri::HdriFile, gpu::Gpu};
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct HdriBufferSettings {
+    pub rotation: f32,
+    pub strength: f32,
+}
+
 pub struct HdriBuffer {
+    name: String,
+    settings: HdriBufferSettings,
+
     texture: Texture,
+    settings_buffer: Buffer,
     binding: BindGroup,
 }
 
 impl HdriBuffer {
-    pub fn new(gpu: &Gpu, size: UVec2, data: &[[half::f16; 4]]) -> Self {
+    pub fn new(gpu: &Gpu, name: &str, size: UVec2, data: &[[half::f16; 4]]) -> Self {
         let label = Some(type_name::<Self>());
 
         let mip_level_count = size.min_element().ilog2();
@@ -52,6 +68,17 @@ impl HdriBuffer {
             border_color: None,
         });
 
+        let settings = HdriBufferSettings {
+            rotation: 0.0,
+            strength: 1.0,
+        };
+
+        let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytes_of(&settings),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu),
@@ -66,18 +93,45 @@ impl HdriBuffer {
                     binding: 1,
                     resource: BindingResource::Sampler(&sampler),
                 },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &settings_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
             ],
         });
 
-        Self { texture, binding }
+        Self {
+            name: name.to_string(),
+            settings,
+            texture,
+            settings_buffer,
+            binding,
+        }
     }
 
     pub fn from_file(gpu: &Gpu, file: &HdriFile) -> Self {
-        Self::new(gpu, file.size(), file.data())
+        Self::new(gpu, file.name(), file.size(), file.data())
     }
 
     pub fn white(gpu: &Gpu) -> Self {
-        Self::new(gpu, UVec2::ONE, &[[f16::ONE; 4]])
+        Self::new(gpu, "default", UVec2::ONE, &[[f16::ONE; 4]])
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn settings_mut(&mut self) -> &mut HdriBufferSettings {
+        &mut self.settings
+    }
+
+    pub fn update_settings(&self, gpu: &Gpu) {
+        gpu.queue()
+            .write_buffer(&self.settings_buffer, 0, bytes_of(&self.settings));
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -105,6 +159,16 @@ impl HdriBuffer {
                         binding: 1,
                         visibility,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
                         count: None,
                     },
                 ],

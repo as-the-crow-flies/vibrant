@@ -21,6 +21,7 @@ use settings::Settings;
 use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
+use crate::controller::widgets::hdri::HdriWidget;
 use crate::controller::widgets::segmentation::SegmentationsWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
 use crate::{
@@ -41,6 +42,7 @@ pub struct Controller {
     settings: Settings,
     time: Instant,
 
+    hdri_widget: HdriWidget,
     volumes_widget: VolumesWidget,
     segmentations_widget: SegmentationsWidget,
 
@@ -58,12 +60,17 @@ impl Controller {
             settings: Settings::new(),
             time: Instant::now(),
 
+            hdri_widget: HdriWidget::new(),
             volumes_widget: VolumesWidget::new(),
             segmentations_widget: SegmentationsWidget::new(),
 
             show_left_side_panel: false,
             show_right_side_panel: true,
         }
+    }
+
+    pub fn hdri(&self) -> &HdriWidget {
+        &self.hdri_widget
     }
 
     pub fn volumes(&self) -> &VolumesWidget {
@@ -384,6 +391,10 @@ impl Controller {
                         }
                     });
                 });
+
+            if let Some(hdri) = &mut asset.hdri {
+                self.hdri_widget.show(ui, hdri);
+            }
 
             self.volumes_widget.show(ui, &mut asset.volume_fractions);
             self.segmentations_widget.show(ui, &mut asset.segmentations);

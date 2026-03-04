@@ -14,17 +14,13 @@ pub struct PhysicalVolume {
     scattering: Texture,
     extinction: Texture,
     gradient: Texture,
-    tmp: Texture,
+    ping: Texture,
+    pong: Texture,
     transform: Buffer,
     transform_inverse: Buffer,
     binding_read: BindGroup,
     binding_write: BindGroup,
     binding_gradient: BindGroup,
-
-    binding_absorption: BindGroup,
-    binding_scattering: BindGroup,
-    binding_extinction: BindGroup,
-    binding_tmp: BindGroup,
 }
 
 impl PhysicalVolume {
@@ -54,13 +50,16 @@ impl PhysicalVolume {
         let scattering = gpu.device().create_texture(&descriptor);
         let extinction = gpu.device().create_texture(&descriptor);
         let gradient = gpu.device().create_texture(&descriptor);
-        let tmp = gpu.device().create_texture(&descriptor);
 
         let absorption_view = absorption.create_view(&TextureViewDescriptor::default());
         let scattering_view = scattering.create_view(&TextureViewDescriptor::default());
         let extinction_view = extinction.create_view(&TextureViewDescriptor::default());
         let gradient_view = gradient.create_view(&TextureViewDescriptor::default());
-        let tmp_view = gradient.create_view(&TextureViewDescriptor::default());
+
+        let ping = gpu.device().create_texture(&descriptor);
+        let pong = gpu.device().create_texture(&descriptor);
+        let ping_view = ping.create_view(&TextureViewDescriptor::default());
+        let pong_view = pong.create_view(&TextureViewDescriptor::default());
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -171,65 +170,13 @@ impl PhysicalVolume {
                     binding: 1,
                     resource: BindingResource::TextureView(&gradient_view),
                 },
-            ],
-        });
-
-        let binding_absorption = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_texture(gpu),
-            entries: &[
                 BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&absorption_view),
+                    binding: 2,
+                    resource: BindingResource::TextureView(&ping_view),
                 },
                 BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        let binding_scattering = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_texture(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&scattering_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        let binding_extinction = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_texture(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&extinction_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        let binding_tmp = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_texture(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&tmp_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
+                    binding: 3,
+                    resource: BindingResource::TextureView(&pong_view),
                 },
             ],
         });
@@ -241,14 +188,11 @@ impl PhysicalVolume {
             gradient,
             transform,
             transform_inverse,
-            tmp,
+            ping,
+            pong,
             binding_read,
             binding_write,
             binding_gradient,
-            binding_absorption,
-            binding_scattering,
-            binding_extinction,
-            binding_tmp,
         }
     }
 
@@ -405,36 +349,7 @@ impl PhysicalVolume {
     }
 
     pub fn layout_gradient(gpu: &Gpu) -> BindGroupLayout {
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::ReadWrite,
-                            format: PhysicalVolume::FORMAT,
-                            view_dimension: TextureViewDimension::D3,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::ReadWrite,
-                            format: PhysicalVolume::FORMAT,
-                            view_dimension: TextureViewDimension::D3,
-                        },
-                        count: None,
-                    },
-                ],
-            })
-    }
-
-    pub fn layout_texture(gpu: &Gpu) -> BindGroupLayout {
-        let binding_type = BindingType::StorageTexture {
+        let binding_type_read_write = BindingType::StorageTexture {
             access: StorageTextureAccess::ReadWrite,
             format: PhysicalVolume::FORMAT,
             view_dimension: TextureViewDimension::D3,
@@ -447,33 +362,29 @@ impl PhysicalVolume {
                     BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::COMPUTE,
-                        ty: binding_type,
+                        ty: binding_type_read_write,
                         count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: binding_type_read_write,
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: binding_type_read_write,
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: binding_type_read_write,
                         count: None,
                     },
                 ],
             })
-    }
-
-    pub fn binding_absorption(&self) -> &BindGroup {
-        &self.binding_absorption
-    }
-
-    pub fn binding_scattering(&self) -> &BindGroup {
-        &self.binding_scattering
-    }
-
-    pub fn binding_extinction(&self) -> &BindGroup {
-        &self.binding_extinction
-    }
-
-    pub fn binding_tmp(&self) -> &BindGroup {
-        &self.binding_tmp
     }
 }
 
@@ -485,6 +396,7 @@ impl Drop for PhysicalVolume {
         self.gradient.destroy();
         self.transform.destroy();
         self.transform_inverse.destroy();
-        self.tmp.destroy();
+        self.ping.destroy();
+        self.pong.destroy();
     }
 }

@@ -10,13 +10,10 @@ use crate::{
 
 pub struct AnatomyRadiancePipeline {
     cascade: ComputePipeline,
-    collect: ComputePipeline,
 }
 
 impl AnatomyRadiancePipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let common = include_str!("common.wgsl");
-
         Self {
             cascade: gpu.compute(
                 "RadiancePipeline",
@@ -26,16 +23,7 @@ impl AnatomyRadiancePipeline {
                     &RadianceVolume::layout_cascade(gpu),
                     &HdriBuffer::layout(gpu),
                 ]),
-                &gpu.shader(&[common, include_str!("cascade.wgsl")].concat()),
-            ),
-            collect: gpu.compute(
-                "RadiancePipeline",
-                &gpu.pipeline_layout(&[
-                    &PhysicalVolume::layout_read(gpu),
-                    &Environment::layout(gpu),
-                    &RadianceVolume::layout_write(gpu),
-                ]),
-                &gpu.shader(&[common, include_str!("collect.wgsl")].concat()),
+                &gpu.shader(&include_str!("cascade.wgsl")),
             ),
         }
     }
@@ -56,23 +44,13 @@ impl AnatomyRadiancePipeline {
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.set_bind_group(3, hdri.binding(), &[]);
 
-        for (resolution, binding) in
-            zip(radiance.cascade_resolutions(), radiance.binding_cascades()).rev()
-        {
+        for (cascade, binding) in zip(radiance.cascades(), radiance.binding_cascades()).rev() {
             pass.set_bind_group(2, binding, &[]);
             pass.dispatch_workgroups(
-                resolution.x.div_ceil(4),
-                resolution.y.div_ceil(4),
-                resolution.z.div_ceil(4),
+                cascade.size().x.div_ceil(4),
+                cascade.size().y.div_ceil(4),
+                cascade.size().z.div_ceil(4),
             );
         }
-
-        pass.set_pipeline(&self.collect);
-        pass.set_bind_group(2, radiance.binding_write(), &[]);
-        pass.dispatch_workgroups(
-            radiance.radiance_resolution().x.div_ceil(4),
-            radiance.radiance_resolution().y.div_ceil(4),
-            radiance.radiance_resolution().z.div_ceil(4),
-        );
     }
 }

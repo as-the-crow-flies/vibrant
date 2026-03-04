@@ -1,4 +1,3 @@
-pub mod gaussian;
 pub mod gradient;
 pub mod radiance;
 pub mod trace;
@@ -12,9 +11,8 @@ use crate::{
     gpu::Gpu,
     renderer::{
         anatomy::{
-            gaussian::GaussianPipeline, gradient::GradientPipeline,
-            radiance::AnatomyRadiancePipeline, trace::AnatomyTracePipeline,
-            transfer::AnatomyTransferPipeline,
+            gradient::GradientPipeline, radiance::AnatomyRadiancePipeline,
+            trace::AnatomyTracePipeline, transfer::AnatomyTransferPipeline,
         },
         environment::Environment,
     },
@@ -23,7 +21,6 @@ use crate::{
 
 pub struct AnatomyRenderer {
     transfer: AnatomyTransferPipeline,
-    gaussian: GaussianPipeline,
     gradient: GradientPipeline,
     radiance: AnatomyRadiancePipeline,
     trace: AnatomyTracePipeline,
@@ -33,7 +30,6 @@ impl AnatomyRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             transfer: AnatomyTransferPipeline::new(gpu),
-            gaussian: GaussianPipeline::new(gpu),
             gradient: GradientPipeline::new(gpu),
             radiance: AnatomyRadiancePipeline::new(gpu),
             trace: AnatomyTracePipeline::new(gpu),
@@ -51,7 +47,11 @@ impl AnatomyRenderer {
         if let (Some(volume), Some(radiance), Some(hdri)) =
             (&asset.physical_volume, &asset.radiance, &asset.hdri)
         {
-            if controller.volumes().changed() || controller.segmentations().changed() {
+            let data_changed =
+                controller.volumes().changed() || controller.segmentations().changed();
+            let lighting_changed = data_changed | controller.hdri().changed();
+
+            if data_changed {
                 self.transfer.dispatch(
                     cmd,
                     environment,
@@ -60,27 +60,10 @@ impl AnatomyRenderer {
                     volume,
                 );
 
-                // self.gaussian.dispatch(
-                //     cmd,
-                //     volume.binding_absorption(),
-                //     volume.binding_tmp(),
-                //     volume.size(),
-                // );
-                // self.gaussian.dispatch(
-                //     cmd,
-                //     volume.binding_scattering(),
-                //     volume.binding_tmp(),
-                //     volume.size(),
-                // );
-                // self.gaussian.dispatch(
-                //     cmd,
-                //     volume.binding_extinction(),
-                //     volume.binding_tmp(),
-                //     volume.size(),
-                // );
-
                 self.gradient.dispatch(cmd, volume);
+            }
 
+            if lighting_changed {
                 self.radiance
                     .dispatch(cmd, environment, hdri, volume, radiance);
             }

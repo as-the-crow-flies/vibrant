@@ -1,114 +1,115 @@
-use std::{any::type_name, iter::zip};
+use std::{any::type_name, iter::zip, num::NonZero};
 
 use glam::UVec3;
 use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    wgt::TextureViewDescriptor,
     *,
 };
 
 use crate::gpu::Gpu;
 
-struct Cascade {
-    texture: Texture,
-    view: TextureView,
+pub struct Cascade {
+    radiance: Vec<Texture>,
+    radiance_views: Vec<TextureView>,
+    transmission: Vec<Texture>,
+    transmission_views: Vec<TextureView>,
+    size: UVec3,
 }
 
 impl Cascade {
-    const FORMAT: TextureFormat = TextureFormat::Rgba32Float;
-
-    pub fn new(gpu: &Gpu, size: Extent3d) -> Self {
-        let texture = gpu.device().create_texture(&TextureDescriptor {
+    pub fn new(gpu: &Gpu, size: UVec3, format: TextureFormat, directions: u32) -> Self {
+        let descriptor = TextureDescriptor {
             label: Some(type_name::<Self>()),
-            size,
+            size: Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: size.z,
+            },
             mip_level_count: 1,
             sample_count: 1,
+            format,
             dimension: TextureDimension::D3,
-            format: Self::FORMAT,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
             view_formats: &[],
-        });
+        };
 
-        let view = texture.create_view(&TextureViewDescriptor::default());
+        let radiance = (0..directions)
+            .map(|_| gpu.device().create_texture(&descriptor))
+            .collect_vec();
 
-        Self { texture, view }
+        let radiance_views = radiance
+            .iter()
+            .map(|texture| texture.create_view(&TextureViewDescriptor::default()))
+            .collect_vec();
+
+        let transmission = (0..directions)
+            .map(|_| gpu.device().create_texture(&descriptor))
+            .collect_vec();
+
+        let transmission_views = transmission
+            .iter()
+            .map(|texture| texture.create_view(&TextureViewDescriptor::default()))
+            .collect_vec();
+
+        Self {
+            radiance,
+            radiance_views,
+            transmission,
+            transmission_views,
+            size,
+        }
     }
 
-    fn view(&self) -> &TextureView {
-        &self.view
+    pub fn radiance_views(&self) -> Vec<&TextureView> {
+        self.radiance_views.iter().collect_vec()
+    }
+
+    pub fn transmission_views(&self) -> Vec<&TextureView> {
+        self.transmission_views.iter().collect_vec()
+    }
+
+    pub fn size(&self) -> UVec3 {
+        self.size
     }
 }
 
 impl Drop for Cascade {
     fn drop(&mut self) {
-        self.texture.destroy();
+        for texture in &self.radiance {
+            texture.destroy();
+        }
+
+        for texture in &self.transmission {
+            texture.destroy();
+        }
     }
 }
 
 pub struct RadianceVolume {
-    radiance: Cascade,
+    cascades: Vec<Cascade>,
+    cascade_indices: Vec<Buffer>,
+    cascade_bindings: Vec<BindGroup>,
+
     binding_read: BindGroup,
-    binding_write: BindGroup,
-
-    cascades: Vec<Vec<Cascade>>,
-    cascade_index_buffers: Vec<Buffer>,
-    binding_cascades: Vec<BindGroup>,
-
-    radiance_resolution: UVec3,
-    cascade_resolutions: Vec<UVec3>,
 }
 
 impl RadianceVolume {
-    const FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+    const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    const N_CASCADES: u32 = 7;
+    const N_DIRECTIONS: u32 = 6;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
-        let size = Extent3d {
-            width: size.x,
-            height: size.y,
-            depth_or_array_layers: size.z,
-        };
-
-        let radiance = Cascade::new(
-            gpu,
-            Extent3d {
-                width: size.width,
-                height: size.height,
-                depth_or_array_layers: size.depth_or_array_layers,
-            },
-        );
-
-        let n_cascades = 7u32;
-        let n_directions = 6u32;
-
-        let radiance_resolution = UVec3::new(size.width, size.height, size.depth_or_array_layers);
-        let cascade_resolutions = (1..=n_cascades)
+        let cascades = (0..Self::N_CASCADES)
             .map(|cascade| {
-                UVec3::new(
-                    size.width >> 1,
-                    size.height >> 1,
-                    size.depth_or_array_layers >> cascade,
+                Cascade::new(
+                    gpu,
+                    UVec3::new(size.x, size.y, size.z >> cascade),
+                    Self::FORMAT,
+                    Self::N_DIRECTIONS,
                 )
-            })
-            .collect_vec();
-
-        let cascades = cascade_resolutions
-            .iter()
-            .map(|size| {
-                (1..=n_directions)
-                    .map(|_| {
-                        Cascade::new(
-                            gpu,
-                            Extent3d {
-                                width: size.x,
-                                height: size.y,
-                                depth_or_array_layers: size.z,
-                            },
-                        )
-                    })
-                    .collect_vec()
             })
             .collect_vec();
 
@@ -127,7 +128,7 @@ impl RadianceVolume {
             border_color: None,
         });
 
-        let cascade_index_buffers = (0..n_cascades)
+        let cascade_indices = (0..Self::N_CASCADES)
             .map(|cascade| {
                 gpu.device().create_buffer_init(&BufferInitDescriptor {
                     label: Some(&format!("Cascade Index {}", cascade)),
@@ -137,26 +138,49 @@ impl RadianceVolume {
             })
             .collect_vec();
 
-        let binding_cascades = zip(
+        let cascade_bindings = zip(
             zip(cascades.iter(), cascades.iter().skip(1)),
-            cascade_index_buffers.iter(),
+            &cascade_indices,
         )
-        .map(|((cascades_out, cascades_in), index)| {
+        .map(|((cascade_out, cascade_in), index)| {
             gpu.device().create_bind_group(&BindGroupDescriptor {
                 label,
                 layout: &Self::layout_cascade(gpu),
                 entries: &[
+                    cascade_out
+                        .radiance_views()
+                        .iter()
+                        .enumerate()
+                        .map(|(index, view)| BindGroupEntry {
+                            binding: index as u32,
+                            resource: BindingResource::TextureView(view),
+                        })
+                        .collect_vec(),
+                    cascade_out
+                        .transmission_views()
+                        .iter()
+                        .enumerate()
+                        .map(|(index, view)| BindGroupEntry {
+                            binding: Self::N_DIRECTIONS + index as u32,
+                            resource: BindingResource::TextureView(view),
+                        })
+                        .collect_vec(),
+                    cascade_in
+                        .radiance_views()
+                        .iter()
+                        .enumerate()
+                        .map(|(index, view)| BindGroupEntry {
+                            binding: 2 * Self::N_DIRECTIONS + index as u32,
+                            resource: BindingResource::TextureView(view),
+                        })
+                        .collect_vec(),
                     vec![
                         BindGroupEntry {
-                            binding: 0,
-                            resource: BindingResource::TextureView(&radiance.view()),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
+                            binding: 3 * Self::N_DIRECTIONS,
                             resource: BindingResource::Sampler(&sampler),
                         },
                         BindGroupEntry {
-                            binding: 2,
+                            binding: 3 * Self::N_DIRECTIONS + 1,
                             resource: BindingResource::Buffer(BufferBinding {
                                 buffer: &index,
                                 offset: 0,
@@ -164,22 +188,6 @@ impl RadianceVolume {
                             }),
                         },
                     ],
-                    cascades_in
-                        .iter()
-                        .enumerate()
-                        .map(|(i, cascade)| BindGroupEntry {
-                            binding: (i + 3) as u32,
-                            resource: BindingResource::TextureView(&cascade.view()),
-                        })
-                        .collect_vec(),
-                    cascades_out
-                        .iter()
-                        .enumerate()
-                        .map(|(i, cascade)| BindGroupEntry {
-                            binding: (i + 9) as u32,
-                            resource: BindingResource::TextureView(&cascade.view()),
-                        })
-                        .collect_vec(),
                 ]
                 .concat(),
             })
@@ -192,51 +200,64 @@ impl RadianceVolume {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&radiance.view()),
+                    resource: BindingResource::TextureViewArray(&cascades[0].radiance_views()),
                 },
                 BindGroupEntry {
                     binding: 1,
+                    resource: BindingResource::TextureViewArray(&cascades[1].radiance_views()),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::TextureViewArray(&cascades[2].radiance_views()),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::TextureViewArray(&cascades[3].radiance_views()),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: BindingResource::TextureViewArray(&cascades[4].radiance_views()),
+                },
+                BindGroupEntry {
+                    binding: 5,
+                    resource: BindingResource::TextureViewArray(&cascades[5].radiance_views()),
+                },
+                BindGroupEntry {
+                    binding: 6,
+                    resource: BindingResource::TextureViewArray(&cascades[0].transmission_views()),
+                },
+                BindGroupEntry {
+                    binding: 7,
+                    resource: BindingResource::TextureViewArray(&cascades[1].transmission_views()),
+                },
+                BindGroupEntry {
+                    binding: 8,
+                    resource: BindingResource::TextureViewArray(&cascades[2].transmission_views()),
+                },
+                BindGroupEntry {
+                    binding: 9,
+                    resource: BindingResource::TextureViewArray(&cascades[3].transmission_views()),
+                },
+                BindGroupEntry {
+                    binding: 10,
+                    resource: BindingResource::TextureViewArray(&cascades[4].transmission_views()),
+                },
+                BindGroupEntry {
+                    binding: 11,
+                    resource: BindingResource::TextureViewArray(&cascades[5].transmission_views()),
+                },
+                BindGroupEntry {
+                    binding: 12,
                     resource: BindingResource::Sampler(&sampler),
                 },
             ],
         });
 
-        let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_write(gpu),
-            entries: &[
-                [
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: BindingResource::TextureView(&radiance.view()),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::Sampler(&sampler),
-                    },
-                ]
-                .to_vec(),
-                cascades[0]
-                    .iter()
-                    .enumerate()
-                    .map(|(i, cascade)| BindGroupEntry {
-                        binding: (i + 2) as u32,
-                        resource: BindingResource::TextureView(&cascade.view()),
-                    })
-                    .collect_vec(),
-            ]
-            .concat(),
-        });
-
         Self {
-            radiance,
             binding_read,
-            binding_write,
             cascades,
-            cascade_index_buffers,
-            binding_cascades,
-            radiance_resolution,
-            cascade_resolutions,
+            cascade_indices,
+            cascade_bindings,
         }
     }
 
@@ -244,12 +265,12 @@ impl RadianceVolume {
         &self.binding_read
     }
 
-    pub fn binding_write(&self) -> &BindGroup {
-        &self.binding_write
+    pub fn binding_cascades(&self) -> &[BindGroup] {
+        &self.cascade_bindings
     }
 
-    pub fn binding_cascades(&self) -> &[BindGroup] {
-        &self.binding_cascades
+    pub fn cascades(&self) -> &[Cascade] {
+        &self.cascades
     }
 
     pub fn layout_read(gpu: &Gpu) -> BindGroupLayout {
@@ -263,49 +284,81 @@ impl RadianceVolume {
                         binding: 0,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: None,
+                        count: NonZero::new(6),
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 10,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 11,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: NonZero::new(6),
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 12,
                         visibility,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
-            })
-    }
-
-    pub fn layout_write(gpu: &Gpu) -> BindGroupLayout {
-        let visibility = ShaderStages::FRAGMENT | ShaderStages::COMPUTE;
-
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    vec![
-                        BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility,
-                            ty: Self::binding_type_write(),
-                            count: None,
-                        },
-                        BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility,
-                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                    (2..8)
-                        .map(|i| BindGroupLayoutEntry {
-                            binding: i as u32,
-                            visibility,
-                            ty: Self::binding_type_read(),
-                            count: None,
-                        })
-                        .collect_vec(),
-                ]
-                .concat(),
             })
     }
 
@@ -316,21 +369,31 @@ impl RadianceVolume {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    vec![
-                        BindGroupLayoutEntry {
-                            binding: 0,
+                    (0..2 * Self::N_DIRECTIONS)
+                        .map(|index| BindGroupLayoutEntry {
+                            binding: index as u32,
+                            visibility,
+                            ty: Self::binding_type_write(),
+                            count: None,
+                        })
+                        .collect_vec(),
+                    (2 * Self::N_DIRECTIONS..3 * Self::N_DIRECTIONS)
+                        .map(|index| BindGroupLayoutEntry {
+                            binding: index as u32,
                             visibility,
                             ty: Self::binding_type_read(),
                             count: None,
-                        },
+                        })
+                        .collect_vec(),
+                    vec![
                         BindGroupLayoutEntry {
-                            binding: 1,
+                            binding: 3 * Self::N_DIRECTIONS,
                             visibility,
                             ty: BindingType::Sampler(SamplerBindingType::Filtering),
                             count: None,
                         },
                         BindGroupLayoutEntry {
-                            binding: 2,
+                            binding: 3 * Self::N_DIRECTIONS + 1,
                             visibility,
                             ty: BindingType::Buffer {
                                 ty: BufferBindingType::Uniform,
@@ -340,22 +403,6 @@ impl RadianceVolume {
                             count: None,
                         },
                     ],
-                    (3..9)
-                        .map(|i| BindGroupLayoutEntry {
-                            binding: i as u32,
-                            visibility,
-                            ty: Self::binding_type_read(),
-                            count: None,
-                        })
-                        .collect_vec(),
-                    (9..15)
-                        .map(|i| BindGroupLayoutEntry {
-                            binding: i as u32,
-                            visibility,
-                            ty: Self::binding_type_write(),
-                            count: None,
-                        })
-                        .collect_vec(),
                 ]
                 .concat(),
             })
@@ -376,19 +423,11 @@ impl RadianceVolume {
             view_dimension: TextureViewDimension::D3,
         }
     }
-
-    pub fn radiance_resolution(&self) -> UVec3 {
-        self.radiance_resolution
-    }
-
-    pub fn cascade_resolutions(&self) -> &[UVec3] {
-        &self.cascade_resolutions
-    }
 }
 
 impl Drop for RadianceVolume {
     fn drop(&mut self) {
-        for buffer in &self.cascade_index_buffers {
+        for buffer in &self.cascade_indices {
             buffer.destroy();
         }
     }

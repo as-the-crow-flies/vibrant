@@ -4,13 +4,29 @@
 @group(0) @binding(3) var GRADIENT: texture_3d<f32>;
 @group(0) @binding(4) var SAMPLER: sampler;
 @group(0) @binding(5) var<uniform> TRANSFORM: mat4x4<f32>;
+@group(0) @binding(6) var<uniform> TRANSFORM_INVERSE: mat4x4<f32>;
 
-@group(1) @binding(0) var IRRADIANCE: texture_3d<f32>;
+@group(1) @binding(0) var RADIANCE_0: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding(1) var RADIANCE_1: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding(2) var RADIANCE_2: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding(3) var RADIANCE_3: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding(4) var RADIANCE_4: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding(5) var RADIANCE_5: binding_array<texture_3d<f32>, 6>;
+
+@group(1) @binding( 6) var TRANSMISSION_0: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding( 7) var TRANSMISSION_1: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding( 8) var TRANSMISSION_2: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding( 9) var TRANSMISSION_3: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding(10) var TRANSMISSION_4: binding_array<texture_3d<f32>, 6>;
+@group(1) @binding(11) var TRANSMISSION_5: binding_array<texture_3d<f32>, 6>;
+
+@group(1) @binding(12) var CASCADE_SAMPLER: sampler;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 @group(3) @binding(0) var HDRI: texture_2d<f32>;
 @group(3) @binding(1) var HDRI_SAMPLER: sampler;
+@group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
 
 @vertex
 fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
@@ -63,22 +79,27 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
         if (any(extinction < vec3<f32>(1E-5))) { continue; }
 
         let gradient = sample_gradient(sample);
-        let gradient_norm = gradient.xyz / (gradient.a + 1E-5);
+        let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
-        let normal_offset = 0.01 * gradient_norm * ENVIRONMENT.settings.lighting;
-        let light = ENVIRONMENT.settings.ambient_light * sample_ambient(sample);
-        let light_sample = light * material.scattering * phase_function;
+        let diffuse = sample_diffuse(sample - 0.005 * gradient_norm);
+        let diffuse_sample = ENVIRONMENT.settings.ambient_light * diffuse * material.scattering * phase_function;
+
+        let reflection = normalize(reflect(direction_norm, gradient_norm));
+
+        let reflection_world = TRANSFORM_INVERSE * vec4<f32>(reflection, 0.0);
+        let reflection_color = sample_hdri(reflection_world.xyz);
+        let reflection_sample = reflection_color * gradient.a * ENVIRONMENT.settings.lighting;
+
+        let specular = gradient.a * ENVIRONMENT.settings.lighting * sample_specular(sample, reflection);
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
-        // let gradient_color = normalize(abs(gradient.xyz) + 1E-5);
-        // color += gradient_color * transmittance * transmittance_in_step;
-
-        color += transmittance * transmittance_in_step * light_sample;
+        // color += ENVIRONMENT.settings.ambient_light * abs(gradient.xyz) * transmittance * transmittance_in_step;
+        color += transmittance * transmittance_in_step * (diffuse_sample + specular);
 
         transmittance *= exp(-extinction);
 
-        // if (all(transmittance <= vec3<f32>(0.01))) { break; }
+        if (all(transmittance <= vec3<f32>(1E-5))) { break; }
     }
 
     return vec4<f32>(aces(sample_hdri(direction_world) * transmittance + color.rgb), 1.0);
@@ -93,12 +114,19 @@ fn aces(x: vec3<f32>) -> vec3<f32> {
   return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
-fn sample_ambient(origin: vec3<f32>) -> vec3<f32> {
-    return textureSampleLevel(IRRADIANCE, SAMPLER, origin, 0.0).rgb;
+fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {
+    return
+        textureSampleLevel(RADIANCE_0[0], CASCADE_SAMPLER, uv, 0.0).rgb +
+        textureSampleLevel(RADIANCE_0[1], CASCADE_SAMPLER, uv, 0.0).rgb +
+        textureSampleLevel(RADIANCE_0[2], CASCADE_SAMPLER, uv, 0.0).rgb +
+        textureSampleLevel(RADIANCE_0[3], CASCADE_SAMPLER, uv, 0.0).rgb +
+        textureSampleLevel(RADIANCE_0[4], CASCADE_SAMPLER, uv, 0.0).rgb +
+        textureSampleLevel(RADIANCE_0[5], CASCADE_SAMPLER, uv, 0.0).rgb;
 }
 
 fn sample_hdri(direction: vec3<f32>) -> vec3<f32> {
-    return textureSampleLevel(HDRI, HDRI_SAMPLER, equirectangular(direction), 0.0).rgb;
+    let sample = equirectangular(direction, HDRI_SETTINGS.rotation);
+    return HDRI_SETTINGS.strength * textureSampleLevel(HDRI, HDRI_SAMPLER, sample, 0.0).rgb;
 }
 
 fn minimum(v: vec3<f32>) -> f32 {
@@ -122,6 +150,153 @@ fn sample_material(sample: vec3<f32>) -> Material {
 fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
     let gradient_raw = tex(GRADIENT, sample);
     return vec4<f32>(2.0 * gradient_raw.xyz - 1.0, gradient_raw.a);
+}
+
+fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+    let coordinate = cube_coordinate(direction);
+
+    if (ENVIRONMENT.settings.smoothing > 0.5) {
+        let specular =
+            sample_transmission(uv, coordinate, 0) *
+            sample_transmission(uv, coordinate, 1) *
+            sample_transmission(uv, coordinate, 2) *
+            sample_transmission(uv, coordinate, 3) *
+            sample_transmission(uv, coordinate, 4) *
+            sample_radiance(uv, coordinate, 5);
+
+        return specular.rgb;
+    } else {
+        return sample_radiance(uv, coordinate, 5).rgb;
+    }
+}
+
+fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) -> vec3<f32> {
+    let size = f32(1 << level);
+
+    let direction = vec3<f32>(floor(coordinate.uv * size) / size, 0.0);
+    let position = vec3<f32>(uv.xy / size, uv.z);
+
+    return direction + position;
+}
+
+fn sample_transmission(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) -> vec4<f32> {
+    let sample = cascade_sample(uv, coordinate, level);
+
+    if (level == 0) {
+        switch coordinate.face {
+            case 0 : { return tex(TRANSMISSION_0[0], sample); }
+            case 1 : { return tex(TRANSMISSION_0[1], sample); }
+            case 2 : { return tex(TRANSMISSION_0[2], sample); }
+            case 3 : { return tex(TRANSMISSION_0[3], sample); }
+            case 4 : { return tex(TRANSMISSION_0[4], sample); }
+            default: { return tex(TRANSMISSION_0[5], sample); }
+        }
+    } else if (level == 1) {
+        switch coordinate.face {
+            case 0 : { return tex(TRANSMISSION_1[0], sample); }
+            case 1 : { return tex(TRANSMISSION_1[1], sample); }
+            case 2 : { return tex(TRANSMISSION_1[2], sample); }
+            case 3 : { return tex(TRANSMISSION_1[3], sample); }
+            case 4 : { return tex(TRANSMISSION_1[4], sample); }
+            default: { return tex(TRANSMISSION_1[5], sample); }
+        }
+    } else if (level == 2) {
+        switch coordinate.face {
+            case 0 : { return tex(TRANSMISSION_2[0], sample); }
+            case 1 : { return tex(TRANSMISSION_2[1], sample); }
+            case 2 : { return tex(TRANSMISSION_2[2], sample); }
+            case 3 : { return tex(TRANSMISSION_2[3], sample); }
+            case 4 : { return tex(TRANSMISSION_2[4], sample); }
+            default: { return tex(TRANSMISSION_2[5], sample); }
+        }
+    } else if (level == 3) {
+        switch coordinate.face {
+            case 0 : { return tex(TRANSMISSION_3[0], sample); }
+            case 1 : { return tex(TRANSMISSION_3[1], sample); }
+            case 2 : { return tex(TRANSMISSION_3[2], sample); }
+            case 3 : { return tex(TRANSMISSION_3[3], sample); }
+            case 4 : { return tex(TRANSMISSION_3[4], sample); }
+            default: { return tex(TRANSMISSION_3[5], sample); }
+        }
+    } else if (level == 4) {
+        switch coordinate.face {
+            case 0 : { return tex(TRANSMISSION_4[0], sample); }
+            case 1 : { return tex(TRANSMISSION_4[1], sample); }
+            case 2 : { return tex(TRANSMISSION_4[2], sample); }
+            case 3 : { return tex(TRANSMISSION_4[3], sample); }
+            case 4 : { return tex(TRANSMISSION_4[4], sample); }
+            default: { return tex(TRANSMISSION_4[5], sample); }
+        }
+    } else {
+        switch coordinate.face {
+            case 0 : { return tex(TRANSMISSION_5[0], sample); }
+            case 1 : { return tex(TRANSMISSION_5[1], sample); }
+            case 2 : { return tex(TRANSMISSION_5[2], sample); }
+            case 3 : { return tex(TRANSMISSION_5[3], sample); }
+            case 4 : { return tex(TRANSMISSION_5[4], sample); }
+            default: { return tex(TRANSMISSION_5[5], sample); }
+        }
+    }
+}
+
+fn sample_radiance(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) -> vec4<f32> {
+    let sample = cascade_sample(uv, coordinate, level);
+
+    if (level == 0) {
+        switch coordinate.face {
+            case 0 : { return tex(RADIANCE_0[0], sample); }
+            case 1 : { return tex(RADIANCE_0[1], sample); }
+            case 2 : { return tex(RADIANCE_0[2], sample); }
+            case 3 : { return tex(RADIANCE_0[3], sample); }
+            case 4 : { return tex(RADIANCE_0[4], sample); }
+            default: { return tex(RADIANCE_0[5], sample); }
+        }
+    } else if (level == 1) {
+        switch coordinate.face {
+            case 0 : { return tex(RADIANCE_1[0], sample); }
+            case 1 : { return tex(RADIANCE_1[1], sample); }
+            case 2 : { return tex(RADIANCE_1[2], sample); }
+            case 3 : { return tex(RADIANCE_1[3], sample); }
+            case 4 : { return tex(RADIANCE_1[4], sample); }
+            default: { return tex(RADIANCE_1[5], sample); }
+        }
+    } else if (level == 2) {
+        switch coordinate.face {
+            case 0 : { return tex(RADIANCE_2[0], sample); }
+            case 1 : { return tex(RADIANCE_2[1], sample); }
+            case 2 : { return tex(RADIANCE_2[2], sample); }
+            case 3 : { return tex(RADIANCE_2[3], sample); }
+            case 4 : { return tex(RADIANCE_2[4], sample); }
+            default: { return tex(RADIANCE_2[5], sample); }
+        }
+    } else if (level == 3) {
+        switch coordinate.face {
+            case 0 : { return tex(RADIANCE_3[0], sample); }
+            case 1 : { return tex(RADIANCE_3[1], sample); }
+            case 2 : { return tex(RADIANCE_3[2], sample); }
+            case 3 : { return tex(RADIANCE_3[3], sample); }
+            case 4 : { return tex(RADIANCE_3[4], sample); }
+            default: { return tex(RADIANCE_3[5], sample); }
+        }
+    } else if (level == 4) {
+        switch coordinate.face {
+            case 0 : { return tex(RADIANCE_4[0], sample); }
+            case 1 : { return tex(RADIANCE_4[1], sample); }
+            case 2 : { return tex(RADIANCE_4[2], sample); }
+            case 3 : { return tex(RADIANCE_4[3], sample); }
+            case 4 : { return tex(RADIANCE_4[4], sample); }
+            default: { return tex(RADIANCE_4[5], sample); }
+        }
+    } else {
+        switch coordinate.face {
+            case 0 : { return tex(RADIANCE_5[0], sample); }
+            case 1 : { return tex(RADIANCE_5[1], sample); }
+            case 2 : { return tex(RADIANCE_5[2], sample); }
+            case 3 : { return tex(RADIANCE_5[3], sample); }
+            case 4 : { return tex(RADIANCE_5[4], sample); }
+            default: { return tex(RADIANCE_5[5], sample); }
+        }
+    }
 }
 
 struct ColorGradient {
@@ -181,6 +356,74 @@ fn adaptive_step(density: f32, gradient: f32, min_step: f32, max_step: f32) -> f
     return clamp(step, min_step, max_step);
 }
 
-fn tex(tex: texture_3d<f32>, coords: vec3<f32>) -> vec4<f32> {
-    return textureSampleLevel(tex, SAMPLER, coords, 0.0);
+fn tex(tex: texture_3d<f32>, uv: vec3<f32>) -> vec4<f32> {
+    return textureSampleLevel(tex, SAMPLER, uv, 0.0);
+}
+
+struct CubeCoordinate {
+    face: i32,
+    uv: vec2<f32>,
+};
+
+fn cube_coordinate(dir: vec3<f32>) -> CubeCoordinate {
+    let a = abs(dir);
+
+    // Major axis masks
+    let x_major = a.x >= a.y && a.x >= a.z;
+    let y_major = a.y >= a.z && a.y > a.x;
+    let z_major = !(x_major || y_major);
+
+    let sign_x = dir.x > 0.0;
+    let sign_y = dir.y > 0.0;
+    let sign_z = dir.z > 0.0;
+
+    var face: i32 = 0;
+    var uv: vec2<f32>;
+    var ma: f32;
+
+    // X faces
+    let uv_x_pos = vec2(-dir.z, -dir.y);
+    let uv_x_neg = vec2( dir.z, -dir.y);
+
+    // Y faces
+    let uv_y_pos = vec2(dir.x, dir.z);
+    let uv_y_neg = vec2(dir.x, -dir.z);
+
+    // Z faces
+    let uv_z_pos = vec2(dir.x, -dir.y);
+    let uv_z_neg = vec2(-dir.x, -dir.y);
+
+    uv = select(
+        select(uv_x_neg, uv_x_pos, sign_x),
+        select(uv_y_neg, uv_y_pos, sign_y),
+        y_major
+    );
+
+    uv = select(
+        uv,
+        select(uv_z_neg, uv_z_pos, sign_z),
+        z_major
+    );
+
+    ma = select(
+        select(a.x, a.y, y_major),
+        a.z,
+        z_major
+    );
+
+    face = select(
+        select(3, 0, sign_x),          // -X / +X
+        select(4, 1, sign_y),          // -Y / +Y
+        y_major
+    );
+
+    face = select(
+        face,
+        select(5, 2, sign_z),          // -Z / +Z
+        z_major
+    );
+
+    let uv_final = uv / ma * 0.5 + vec2(0.5);
+
+    return CubeCoordinate(face, uv_final);
 }

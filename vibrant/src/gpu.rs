@@ -47,10 +47,12 @@ impl Gpu {
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                     max_storage_buffers_per_shader_stage: limits
                         .max_storage_buffers_per_shader_stage,
-                    max_storage_textures_per_shader_stage: 6,
+                    max_storage_textures_per_shader_stage: 12,
+                    max_binding_array_elements_per_shader_stage: 72,
                     ..Default::default()
                 },
                 required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | Features::TEXTURE_BINDING_ARRAY
                     | Features::FLOAT32_FILTERABLE
                     | Features::ADDRESS_MODE_CLAMP_TO_BORDER
                     | Features::ADDRESS_MODE_CLAMP_TO_ZERO,
