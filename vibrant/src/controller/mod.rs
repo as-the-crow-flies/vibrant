@@ -2,6 +2,7 @@ pub mod camera;
 pub mod event;
 pub mod light;
 pub mod segment;
+pub mod selection_volume;
 pub mod settings;
 pub mod state;
 
@@ -23,6 +24,7 @@ use crate::{
     asset::Asset,
     controller::{
         segment::Segment,
+        selection_volume::SelectionVolume,
         settings::{LineDisplayMode, LineVoxelizationMode},
     },
     file::FileStage,
@@ -248,6 +250,39 @@ impl Controller {
                         ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
+                        );
+                        ui.separator();
+                        ui.label("Selection Volume");
+                        ComboBox::from_label("Selection Volume")
+                            .selected_text(format!("{:?}", self.settings.selection_volume))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.settings.selection_volume,
+                                    SelectionVolume::None,
+                                    "None",
+                                );
+                                ui.selectable_value(
+                                    &mut self.settings.selection_volume,
+                                    SelectionVolume::Box,
+                                    "Box",
+                                );
+                            });
+                        ui.checkbox(&mut self.settings.selection_extend_lines, "Extend Lines");
+                        ui.add(
+                            egui::Slider::new(&mut self.settings.selection_scale, 0.0..=5.0)
+                                .text("Scale"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut self.settings.selection_offset_x, -1.0..=1.0)
+                                .text("Offset X"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut self.settings.selection_offset_y, -1.0..=1.0)
+                                .text("Offset Y"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut self.settings.selection_offset_z, -1.0..=1.0)
+                                .text("Offset Z"),
                         );
                         ui.separator();
                         ui.label("Post Processing");
