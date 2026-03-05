@@ -16,12 +16,38 @@ impl LineSelectionPipeline {
         let layout =
             gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false), &Environment::layout(gpu)]);
 
+        // TODO: currently hardcoded to be two boxes, one small one customizable in the editor.
+        //       need to make this dynamic through a menu...
+        let square_source: String = include_str!("shapes/preamble.wgsl")
+            .to_string()
+            .replace(
+                "//DISPATCH-CALL-MARKER//",
+                "
+                    let a = in_square(
+                        ENVIRONMENT.settings.selection_scale,
+                        ENVIRONMENT.settings.selection_offset_x,
+                        ENVIRONMENT.settings.selection_offset_y,
+                        ENVIRONMENT.settings.selection_offset_z,
+                        crop_length, start, offset_start
+                    );
+                    let b = in_square(
+                        0.5, 0.125, 0.125, 0.125,
+                        crop_length, start, offset_start
+                    );
+
+                    if (!a || !b) { return; }
+                ",
+            )
+            .replace(
+                "//DISPATCH-INSERT-MARKER//",
+                include_str!("shapes/square.wgsl"),
+            );
+        // .replace("//DISPATCH-MARKER//", include_str!("shapes/square.wgsl"));
+
+        println!("{}", square_source);
+
         Self {
-            box_selection: gpu.compute(
-                "Selection (Box)",
-                &layout,
-                &gpu.shader(include_str!("shapes/square.wgsl")),
-            ),
+            box_selection: gpu.compute("Selection (Box)", &layout, &gpu.shader(&square_source)),
         }
     }
 
