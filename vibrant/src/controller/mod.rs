@@ -42,6 +42,11 @@ impl Layer {
     }
 }
 
+pub struct Location {
+    group_index: usize,
+    line_index: usize,
+}
+
 #[derive(Debug)]
 pub struct Controller {
     state: ControllerState,
@@ -392,47 +397,7 @@ impl Controller {
                                 })
                                 .body(|_| {});
 
-                                for layer in self.layers.iter_mut() {
-                                    match layer {
-                                        Layer::Line(name) => {
-                                            let line = lines.settings().iter_mut().find(|line| line.name == *name).unwrap();
-                                            let id = ui.make_persistent_id(&line.name);
-                                            CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                                                .show_header(ui, |ui| {
-                                                    ui.toggle_value(&mut line.visible, "👁");
-                                                    ui.color_edit_button_srgb(&mut line.color);
-                                                    ui.label(&line.name);
-                                                    let response = ui.label("⠿");
-
-                                                    if response.drag_started() {
-                                                        println!("started dragging line {}\n", line.name);
-                                                    }
-
-                                                    if response.drag_stopped() {
-                                                        println!("stopped dragging line {}\n", line.name);
-                                                    }
-                                                })
-                                                .body(|ui| {
-                                                    ui.add(
-                                                        Slider::new(&mut line.crop_start, 0.0..=1.0)
-                                                            .text("Crop Start"),
-                                                    );
-                                                    ui.add(
-                                                        Slider::new(&mut line.crop_end, 0.0..=1.0)
-                                                            .text("Crop End"),
-                                                    );
-                                                    if ui.add(
-                                                        Button::new("Create Group")
-                                                    ).clicked() {
-                                                        let newLayer = Layer::Group(vec![line.name.clone()]);
-                                                        *layer = newLayer;
-                                                    };
-                                                });
-                                        },
-                                        Layer::Group(group_lines) => {
-                                        },
-                                    }
-                                }
+                                self.tractography_layers(ui, lines);
                             }
                         });
                     });
@@ -477,6 +442,50 @@ impl Controller {
 
     pub fn time(&self) -> f32 {
         Instant::now().duration_since(self.time).as_secs_f32()
+    }
+
+    pub fn tractography_layers (&mut self, ui: &mut Ui, lines: &mut crate::asset::line::LineBuffer) {
+        for layer in self.layers.iter_mut() {
+            match layer {
+                Layer::Line(name) => {
+                    let line = lines.settings().iter_mut().find(|line| line.name == *name).unwrap();
+                    let id = ui.make_persistent_id(&line.name);
+                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                        .show_header(ui, |ui| {
+                            ui.toggle_value(&mut line.visible, "👁");
+                            ui.color_edit_button_srgb(&mut line.color);
+                            ui.label(&line.name);
+                            let response = ui.label("⠿");
+
+                            if response.drag_started() {
+                                println!("started dragging line {}\n", line.name);
+                            }
+
+                            if response.drag_stopped() {
+                                println!("stopped dragging line {}\n", line.name);
+                            }
+                        })
+                        .body(|ui| {
+                            ui.add(
+                                Slider::new(&mut line.crop_start, 0.0..=1.0)
+                                    .text("Crop Start"),
+                            );
+                            ui.add(
+                                Slider::new(&mut line.crop_end, 0.0..=1.0)
+                                    .text("Crop End"),
+                            );
+                            if ui.add(
+                                Button::new("Create Group")
+                            ).clicked() {
+                                let new_layer = Layer::Group(vec![line.name.clone()]);
+                                *layer = new_layer;
+                            };
+                        });
+                },
+                Layer::Group(group_lines) => {
+                },
+            }
+        }
     }
 }
 
