@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    Align, Button, ComboBox, Frame, Layout, Margin, ScrollArea, SidePanel, Slider, Ui, collapsing_header::CollapsingState
+    Align, Button, ComboBox, Frame, Layout, Margin, ScrollArea, SidePanel, Slider, Ui, collapsing_header::CollapsingState, Sense
 };
 use event::Event;
 use itertools::Itertools;
@@ -402,6 +402,15 @@ impl Controller {
                                                     ui.toggle_value(&mut line.visible, "👁");
                                                     ui.color_edit_button_srgb(&mut line.color);
                                                     ui.label(&line.name);
+                                                    let response = ui.label("⠿");
+
+                                                    if response.drag_started() {
+                                                        println!("started dragging line {}\n", line.name);
+                                                    }
+
+                                                    if response.drag_stopped() {
+                                                        println!("stopped dragging line {}\n", line.name);
+                                                    }
                                                 })
                                                 .body(|ui| {
                                                     ui.add(
