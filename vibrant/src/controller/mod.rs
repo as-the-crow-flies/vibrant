@@ -445,7 +445,7 @@ impl Controller {
     }
 
     pub fn tractography_layers (&mut self, ui: &mut Ui, lines: &mut crate::asset::line::LineBuffer) {
-        for layer in self.layers.iter_mut() {
+        for (index, layer) in self.layers.iter_mut().enumerate() {
             match layer {
                 Layer::Line(name) => {
                     let line = lines.settings().iter_mut().find(|line| line.name == *name).unwrap();
@@ -464,6 +464,8 @@ impl Controller {
                             if response.drag_stopped() {
                                 println!("stopped dragging line {}\n", line.name);
                             }
+
+                            drop_zone(ui, id, Location { group_index: 0, line_index: index });
                         })
                         .body(|ui| {
                             ui.add(
@@ -495,4 +497,25 @@ fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool
     ui.toggle_value(&mut checked, text)
         .clicked()
         .then_some(checked)
+}
+
+fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location) {
+    let frame = Frame::default().inner_margin(4.0);
+    let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
+        let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.line_index));
+
+        let response = ui
+            .dnd_drag_source(item_id, item_location, |ui| {
+                ui.label(format!("id: {:?}", item_id));
+            })
+            .response;
+        
+        // Detect drops onto this item:
+        if let (Some(pointer), Some(hovered_payload)) = 
+            (ui.input(|i| i.pointer.interact_pos()), response.dnd_hover_payload::<Location>(),) {
+                println!("Drop detected");
+        }
+    });
+
+
 }
