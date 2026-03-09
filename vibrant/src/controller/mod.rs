@@ -514,6 +514,10 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location) {
         if let (Some(pointer), Some(hovered_payload)) = 
             (ui.input(|i| i.pointer.interact_pos()), response.dnd_hover_payload::<Location>(),) {
                 println!("Drop detected");
+
+            if let Some(dragged_payload) = response.dnd_release_payload::<Location>() {
+                println!("Drop released");
+            }
         }
     });
 
