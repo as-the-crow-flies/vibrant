@@ -230,8 +230,8 @@ impl Surface {
     }
 
     pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
-        if settings.width == self.buffer.color().width()
-            && settings.height == self.buffer.color().height()
+        if settings.width == self.buffer.ui().width()
+            && settings.height == self.buffer.ui().height()
             && settings.render_width == self.buffer.color().width()
             && settings.render_height == self.buffer.color().height()
             && settings.volume == self.buffer.occupancy().resolution()
