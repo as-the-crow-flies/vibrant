@@ -39,6 +39,11 @@ pub struct Controller {
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
+
+    prefer_hdr_output: bool,
+    output_hdr_supported: bool,
+    output_hdr: bool,
+    output_format: String,
 }
 
 impl Controller {
@@ -53,7 +58,30 @@ impl Controller {
 
             show_left_side_panel: false,
             show_right_side_panel: false,
+            prefer_hdr_output: false,
+            output_hdr_supported: false,
+            output_hdr: false,
+            output_format: "Unknown".to_string(),
         }
+    }
+
+    pub fn set_output_mode(
+        &mut self,
+        output_hdr: bool,
+        output_format: String,
+        output_hdr_supported: bool,
+    ) {
+        self.output_hdr = output_hdr;
+        self.output_format = output_format;
+        self.output_hdr_supported = output_hdr_supported;
+
+        if !output_hdr_supported {
+            self.prefer_hdr_output = false;
+        }
+    }
+
+    pub fn prefer_hdr_output(&self) -> bool {
+        self.prefer_hdr_output
     }
 
     pub fn event(&mut self, event: Event) {
@@ -263,12 +291,40 @@ impl Controller {
                             Slider::new(&mut self.settings.bloom_intensity, 0.0..=5.0)
                                 .text("Bloom Intensity")
                         );
-                        ui.checkbox(
-                            &mut self.settings.tone_mapping_enabled, "Tone Mapping (ACES)"
+
+
+                        ui.separator();
+                        ui.heading("HDR Output");
+
+                        if self.output_hdr_supported {
+                            ui.checkbox(&mut self.prefer_hdr_output, "Enable HDR Output");
+                        } else {
+                            let mut enabled = false;
+                            ui.add_enabled(
+                                false,
+                                egui::Checkbox::new(&mut enabled, "Enable HDR Output"),
+                            );
+                            ui.label("HDR unavailable on current display/surface");
+                        }
+
+                        ui.label(format!(
+                            "Current: {}",
+                            if self.output_hdr { "HDR" } else { "SDR" }
+                        ));
+                        ui.label(format!(
+                            "Requested: {}",
+                            if self.prefer_hdr_output { "HDR" } else { "SDR" }
+                        ));
+                        ui.label(format!("Format: {}", self.output_format));
+
+                        // Key HDR mapping controls for SDR UI placement on HDR displays.
+                        ui.add(
+                            Slider::new(&mut self.settings.hdr_paper_white_nits, 80.0..=400.0)
+                                .text("Paper White (nits)"),
                         );
                         ui.add(
-                            Slider::new(&mut self.settings.tone_mapping_exposure, 0.0..=5.0)
-                                .text("Exposure")
+                            Slider::new(&mut self.settings.hdr_peak_nits, 400.0..=2000.0)
+                                .text("Peak Brightness (nits)"),
                         );
                     });
 

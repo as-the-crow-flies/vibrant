@@ -20,8 +20,7 @@ struct Settings {
     bloom_threshold: f32,
     bloom_soft_knee: f32,
     bloom_intensity: f32,
-    tone_mapping_exposure: f32,
-    tone_mapping_enabled: u32,
+    // tone mapping removed; HDR parameters handled elsewhere
 }
 
 struct Segment {

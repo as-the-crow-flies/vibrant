@@ -54,8 +54,8 @@ pub struct Settings {
     pub bloom_threshold: f32,
     pub bloom_soft_knee: f32,
     pub bloom_intensity: f32,
-    pub tone_mapping_exposure: f32,
-    pub tone_mapping_enabled: bool,
+    pub hdr_paper_white_nits: f32,
+    pub hdr_peak_nits: f32,
 }
 
 impl Settings {
@@ -85,11 +85,11 @@ impl Settings {
             crop_z_end: 1.0,
             workgroups: 64,
             plane: 0.33,
-            bloom_threshold: 0.15,
+            bloom_threshold: 0.5,
             bloom_soft_knee: 1.0,
             bloom_intensity: 3.0,
-            tone_mapping_exposure: 1.0,
-            tone_mapping_enabled: true,
+            hdr_paper_white_nits: 200.0,
+            hdr_peak_nits: 1000.0,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }
