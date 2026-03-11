@@ -262,7 +262,7 @@ impl VolumeSegmenationBuffer {
         &self.binding
     }
 
-    pub fn settings(&mut self) -> &mut [VolumeSegmentationMaterial] {
+    pub fn settings_mut(&mut self) -> &mut [VolumeSegmentationMaterial] {
         &mut self.settings
     }
 

@@ -3,7 +3,7 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use egui::{collapsing_header::CollapsingState, ScrollArea, Slider, Ui};
+use egui::{collapsing_header::CollapsingState, Slider, Ui};
 
 use crate::asset::hdri::HdriBuffer;
 
@@ -31,9 +31,13 @@ impl HdriWidget {
         self.changed = hash != self.hash;
         self.hash = hash;
 
-        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), false)
+        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), self.changed)
             .show_header(ui, |ui| ui.heading("Environment Map"))
             .body(|ui| {
+                if ui.button("Show/Hide").clicked() {
+                    hdri.settings_mut().show = 1 - hdri.settings_mut().show;
+                }
+
                 self.changed |= ui
                     .add(Slider::new(&mut hdri.settings_mut().strength, 0.0..=2.0).text("Strength"))
                     .changed();

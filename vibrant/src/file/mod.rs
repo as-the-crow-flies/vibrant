@@ -7,6 +7,7 @@ pub use line::*;
 pub use volume::*;
 
 use std::{
+    fs,
     path::PathBuf,
     sync::{LazyLock, Mutex},
 };
@@ -38,6 +39,15 @@ impl File {
 
     pub fn into_data(self) -> Vec<u8> {
         self.data
+    }
+}
+
+impl From<&str> for File {
+    fn from(value: &str) -> Self {
+        File {
+            name: value.to_string(),
+            data: fs::read(value).expect("Could not read file"),
+        }
     }
 }
 

@@ -4,14 +4,14 @@ pub mod line;
 pub mod ui;
 pub mod wgsl;
 
-use std::sync::Arc;
+use std::{fs, sync::Arc};
 
 use crate::{
     asset::{
         hdri::HdriBuffer, radiance::RadianceVolume, segmentation::VolumeSegmenationBuffer,
         transform::TransformBuffer, volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
     },
-    file::bounds::Bounds,
+    file::{bounds::Bounds, hdri::HdriFile, File, VolumeFile},
     renderer::{anatomy::AnatomyRenderer, line::LineRenderer},
 };
 use environment::Environment;
@@ -73,6 +73,53 @@ impl Renderer {
     ) {
         let mut needs_transform = false;
         let needs_update = true;
+
+        if self.asset.hdri.is_none() {
+            self.asset.hdri = Some(HdriBuffer::from_file(
+                gpu,
+                &HdriFile::from_exr(&File::new(
+                    "Hdri",
+                    fs::read("/Users/bkraaijeveld/Data/hdri/photo_studio_loft_hall_1k.exr")
+                        .unwrap(),
+                )),
+            ));
+
+            // let volume = VolumeFile::from_nifti(&File::new(
+            //     "Volume",
+            //     fs::read("/Users/bkraaijeveld/Data/HCP-100307/m2m_hcp-100307/final_tissues.nii.gz")
+            //         .unwrap(),
+            // ));
+
+            // self.asset
+            //     .segmentations
+            //     .push(VolumeSegmenationBuffer::new(gpu, &volume));
+
+            let volume_0 = VolumeFile::from_nifti(
+                &"/Users/bkraaijeveld/Data/HCP-100307/fsl/100307_pve_0.nii.gz".into(),
+            );
+
+            let volume_1 = VolumeFile::from_nifti(
+                &"/Users/bkraaijeveld/Data/HCP-100307/fsl/100307_pve_1.nii.gz".into(),
+            );
+
+            let volume_2 = VolumeFile::from_nifti(
+                &"/Users/bkraaijeveld/Data/HCP-100307/fsl/100307_pve_2.nii.gz".into(),
+            );
+
+            self.asset.volume_fractions = vec![
+                VolumeFractionBuffer::new(gpu, &volume_0),
+                VolumeFractionBuffer::new(gpu, &volume_1),
+                VolumeFractionBuffer::new(gpu, &volume_2),
+            ];
+
+            self.asset.radiance = Some(RadianceVolume::new(gpu, volume_0.size()));
+
+            self.asset.physical_volume = Some(PhysicalVolume::new(
+                gpu,
+                volume_0.size(),
+                volume_0.transform(),
+            ));
+        }
 
         FileStage::on_lines(|lines| {
             self.asset.line = Some(LineBuffer::new(gpu, &lines));

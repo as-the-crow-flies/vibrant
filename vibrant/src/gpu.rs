@@ -14,7 +14,7 @@ use wgpu::{
     VertexState,
 };
 
-use crate::renderer::wgsl::COMMON;
+use crate::renderer::wgsl::{COMMON, PBR};
 
 pub struct Gpu {
     instance: wgpu::Instance,
@@ -88,7 +88,7 @@ impl Gpu {
     pub fn shader(&self, source: &str) -> ShaderModule {
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + source)),
+            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + PBR + source)),
         })
     }
 

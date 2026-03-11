@@ -23,7 +23,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     // let delta = abs(vec3<f32>(voxel) - midpoint);
 
-    // let sphere = vec3<f32>(0.5 - 0.5 * smoothstep(-0.05, 0.05, (length(delta) / min_size) - 0.25));
+    // let sphere = vec3<f32>(0.8 - 0.8 * smoothstep(-0.05, 0.05, (length(delta) / min_size) - 0.25));
     // let axes =  vec3<f32>(0.1 - 0.1 * smoothstep(-0.05, 0.05, min(min(delta.x, delta.y), delta.z) - 1.0));
 
     // let absorption = sphere;
@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let absorption = unpack4x8unorm(material.absorption).rgb;
     let scattering = unpack4x8unorm(material.scattering).rgb;
 
-    textureStore(ABSORPTION, voxel, vec4<f32>(absorption, 0.0));
-    textureStore(SCATTERING, voxel, vec4<f32>(scattering, 0.0));
-    textureStore(EXTINCTION, voxel, vec4<f32>(absorption + scattering, 0.0));
+    textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + vec4<f32>(absorption, 0.0));
+    textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + vec4<f32>(scattering, 0.0));
+    textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + vec4<f32>(absorption + scattering, 0.0));
 }

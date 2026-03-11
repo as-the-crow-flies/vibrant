@@ -102,11 +102,11 @@ impl RadianceVolume {
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
-        let cascades = (0..Self::N_CASCADES)
+        let cascades = (1..=Self::N_CASCADES)
             .map(|cascade| {
                 Cascade::new(
                     gpu,
-                    UVec3::new(size.x, size.y, size.z >> cascade),
+                    UVec3::new(size.x >> 1, size.y >> 1, size.z >> cascade),
                     Self::FORMAT,
                     Self::N_DIRECTIONS,
                 )

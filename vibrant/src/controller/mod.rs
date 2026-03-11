@@ -202,7 +202,7 @@ impl Controller {
                                 .text("Streamline Radius"),
                         );
                         ui.add(
-                            Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"),
+                            Slider::new(&mut self.settings.lighting, 0.0..=10.0).text("Lighting"),
                         );
                         ui.add(
                             Slider::new(&mut self.settings.ambient_light, 0.0..=10.0)
@@ -323,27 +323,33 @@ impl Controller {
             },
         );
 
-        SidePanel::right("SidePanelRight").show_animated(ctx, self.show_right_side_panel, |ui| {
-            CollapsingState::load_with_default_open(ui.ctx(), "Tractography".into(), false)
-                .show_header(ui, |ui| ui.heading("Tractography"))
-                .body(|ui| {
-                    ScrollArea::new([false, true]).show(ui, |ui| {
-                        if let Some(lines) = &mut asset.line {
-                            lines.settings_global().selected = lines
-                                .settings()
-                                .iter()
-                                .map(|settings| settings.selected)
-                                .all_equal_value()
-                                .ok();
+        SidePanel::right("SidePanelRight")
+            .min_width(300.0)
+            .show_animated(ctx, self.show_right_side_panel, |ui| {
+                CollapsingState::load_with_default_open(ui.ctx(), "Tractography".into(), false)
+                    .show_header(ui, |ui| ui.heading("Tractography"))
+                    .body(|ui| {
+                        ScrollArea::new([false, true]).show(ui, |ui| {
+                            if let Some(lines) = &mut asset.line {
+                                lines.settings_global().selected = lines
+                                    .settings()
+                                    .iter()
+                                    .map(|settings| settings.selected)
+                                    .all_equal_value()
+                                    .ok();
 
-                            lines.settings_global().visible = lines
-                                .settings()
-                                .iter()
-                                .map(|settings| settings.visible)
-                                .all_equal_value()
-                                .ok();
+                                lines.settings_global().visible = lines
+                                    .settings()
+                                    .iter()
+                                    .map(|settings| settings.visible)
+                                    .all_equal_value()
+                                    .ok();
 
-                            CollapsingState::load_with_default_open(ui.ctx(), "Line".into(), false)
+                                CollapsingState::load_with_default_open(
+                                    ui.ctx(),
+                                    "Line".into(),
+                                    false,
+                                )
                                 .show_header(ui, |ui| {
                                     if let Some(visible) =
                                         ternary_checkbox(ui, lines.settings_global().visible, "👁")
@@ -369,36 +375,36 @@ impl Controller {
                                 })
                                 .body(|_| {});
 
-                            for line in lines.settings() {
-                                let id = ui.make_persistent_id(&line.name);
-                                CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                                    .show_header(ui, |ui| {
-                                        ui.toggle_value(&mut line.visible, "👁");
-                                        ui.color_edit_button_srgb(&mut line.color);
-                                        ui.label(&line.name);
-                                    })
-                                    .body(|ui| {
-                                        ui.add(
-                                            Slider::new(&mut line.crop_start, 0.0..=1.0)
-                                                .text("Crop Start"),
-                                        );
-                                        ui.add(
-                                            Slider::new(&mut line.crop_end, 0.0..=1.0)
-                                                .text("Crop End"),
-                                        );
-                                    });
+                                for line in lines.settings() {
+                                    let id = ui.make_persistent_id(&line.name);
+                                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                                        .show_header(ui, |ui| {
+                                            ui.toggle_value(&mut line.visible, "👁");
+                                            ui.color_edit_button_srgb(&mut line.color);
+                                            ui.label(&line.name);
+                                        })
+                                        .body(|ui| {
+                                            ui.add(
+                                                Slider::new(&mut line.crop_start, 0.0..=1.0)
+                                                    .text("Crop Start"),
+                                            );
+                                            ui.add(
+                                                Slider::new(&mut line.crop_end, 0.0..=1.0)
+                                                    .text("Crop End"),
+                                            );
+                                        });
+                                }
                             }
-                        }
+                        });
                     });
-                });
 
-            if let Some(hdri) = &mut asset.hdri {
-                self.hdri_widget.show(ui, hdri);
-            }
+                if let Some(hdri) = &mut asset.hdri {
+                    self.hdri_widget.show(ui, hdri);
+                }
 
-            self.volumes_widget.show(ui, &mut asset.volume_fractions);
-            self.segmentations_widget.show(ui, &mut asset.segmentations);
-        });
+                self.volumes_widget.show(ui, &mut asset.volume_fractions);
+                self.segmentations_widget.show(ui, &mut asset.segmentations);
+            });
     }
 
     pub fn camera(&self) -> &Camera {

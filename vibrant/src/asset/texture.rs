@@ -1,17 +1,10 @@
 use std::{any::type_name, marker::PhantomData};
 
-use wgpu::{
-    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, CommandEncoder,
-    Extent3d, FilterMode, ImageSubresourceRange, Sampler, SamplerBindingType, SamplerBorderColor,
-    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureAspect,
-    TextureDescriptor, TextureFormat, TextureSampleType, TextureUsages, TextureView,
-    TextureViewDescriptor, TextureViewDimension,
-};
+use wgpu::*;
 
 use crate::gpu::Gpu;
 
-pub trait ScalarTextureFormat {
+pub trait MipTextureFormat {
     fn format() -> TextureFormat;
     fn sample_type() -> TextureSampleType;
     fn sampler_type() -> SamplerBindingType {
@@ -22,11 +15,12 @@ pub trait ScalarTextureFormat {
     }
 }
 
+pub struct Rgba16Float {}
 pub struct Rgba8Unorm {}
 pub struct R32Float {}
 pub struct R32Uint {}
 
-impl ScalarTextureFormat for R32Float {
+impl MipTextureFormat for R32Float {
     fn format() -> TextureFormat {
         TextureFormat::R32Float
     }
@@ -36,7 +30,17 @@ impl ScalarTextureFormat for R32Float {
     }
 }
 
-impl ScalarTextureFormat for Rgba8Unorm {
+impl MipTextureFormat for Rgba16Float {
+    fn format() -> TextureFormat {
+        TextureFormat::Rgba16Float
+    }
+
+    fn sample_type() -> TextureSampleType {
+        TextureSampleType::Float { filterable: true }
+    }
+}
+
+impl MipTextureFormat for Rgba8Unorm {
     fn format() -> TextureFormat {
         TextureFormat::Rgba8Unorm
     }
@@ -46,7 +50,7 @@ impl ScalarTextureFormat for Rgba8Unorm {
     }
 }
 
-impl ScalarTextureFormat for R32Uint {
+impl MipTextureFormat for R32Uint {
     fn format() -> TextureFormat {
         TextureFormat::R32Uint
     }
@@ -59,7 +63,7 @@ impl ScalarTextureFormat for R32Uint {
 pub type MipTexture3D<Format> = MipTexture<3, Format>;
 pub type MipTexture2D<Format> = MipTexture<2, Format>;
 
-pub struct MipTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
+pub struct MipTexture<const DIMENSION: u32, Format: MipTextureFormat> {
     texture: Texture,
     view: TextureView,
     sampler: Sampler,
@@ -69,11 +73,18 @@ pub struct MipTexture<const DIMENSION: u32, Format: ScalarTextureFormat> {
     phantom: PhantomData<Format>,
 }
 
-impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Format> {
-    pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32, filter: FilterMode) -> Self {
+impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Format> {
+    pub fn new(
+        gpu: &Gpu,
+        width: u32,
+        height: u32,
+        depth: u32,
+        filter: FilterMode,
+        address: AddressMode,
+    ) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mip_level_count = width.min(height).ilog2();
+        let mip_level_count = width.min(height).ilog2().max(1);
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
             label,
@@ -100,9 +111,9 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
-            address_mode_u: AddressMode::ClampToBorder,
-            address_mode_v: AddressMode::ClampToBorder,
-            address_mode_w: AddressMode::ClampToBorder,
+            address_mode_u: address,
+            address_mode_v: address,
+            address_mode_w: address,
             border_color: Some(SamplerBorderColor::Zero),
             mag_filter: filter,
             min_filter: filter,
@@ -208,6 +219,10 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
         }
     }
 
+    pub fn size(&self) -> Extent3d {
+        self.texture.size()
+    }
+
     pub fn resolution(&self) -> u32 {
         self.texture.width()
     }
@@ -239,6 +254,41 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
                 resource: BindingResource::Sampler(&self.sampler),
             },
         ]
+    }
+
+    pub fn copy_from(&self, cmd: &mut CommandEncoder, source: &Texture) {
+        cmd.copy_texture_to_texture(
+            TexelCopyTextureInfo {
+                texture: source,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            TexelCopyTextureInfo {
+                texture: &self.texture,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            self.size(),
+        );
+    }
+
+    pub fn mipmap(&self, cmd: &mut CommandEncoder, pipeline: &ComputePipeline) {
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+
+        pass.set_pipeline(pipeline);
+        for (level, binding) in self.bindings_mipmap().iter().enumerate() {
+            let size = self
+                .size()
+                .mip_level_size(level as u32, TextureDimension::D2);
+            pass.set_bind_group(0, binding, &[]);
+            pass.dispatch_workgroups(
+                size.width.div_ceil(4),
+                size.height.div_ceil(4),
+                size.depth_or_array_layers.div_ceil(4),
+            );
+        }
     }
 
     pub fn clear(&self, cmd: &mut CommandEncoder) {
@@ -353,7 +403,7 @@ impl<const DIMENSION: u32, Format: ScalarTextureFormat> MipTexture<DIMENSION, Fo
     }
 }
 
-impl<const DIMENSION: u32, Format: ScalarTextureFormat> Drop for MipTexture<DIMENSION, Format> {
+impl<const DIMENSION: u32, Format: MipTextureFormat> Drop for MipTexture<DIMENSION, Format> {
     fn drop(&mut self) {
         self.texture.destroy();
     }

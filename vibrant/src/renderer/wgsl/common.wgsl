@@ -53,7 +53,8 @@ struct LineSettings {
 
 struct HdriSettings {
     rotation: f32,
-    strength: f32
+    strength: f32,
+    show: u32,
 }
 
 struct Vertex {
@@ -560,6 +561,77 @@ fn hash(co: vec2<f32>) -> f32 {
 }
 
 fn equirectangular(direction: vec3<f32>, rotation: f32) -> vec2<f32> {
+    let d = rotation_y(rotation * 2.0 * PI) * normalize(direction);
+    return vec2<f32>(0.5 - atan2(d.z, d.x) / (2.0 * PI), acos(d.y) / PI);
+}
+
+fn rotation_y(angle: f32) -> mat3x3<f32> {
+    let c = cos(angle);
+    let s = sin(angle);
+
+    return mat3x3<f32>(
+        vec3<f32>( c, 0.0, -s),
+        vec3<f32>(0.0, 1.0, 0.0),
+        vec3<f32>( s, 0.0,  c)
+    );
+}
+
+struct CubeCoordinates {
+    face: i32,
+    uv: vec2<f32>,
+};
+
+fn cubemap_encode(direction: vec3<f32>) -> CubeCoordinates {
     let d = normalize(direction);
-    return vec2<f32>(rotation + 0.5 - atan2(d.z, d.x) / (2.0 * PI), acos(d.y) / PI);
+    let ad = abs(d);
+
+    var face: i32;
+    var uv: vec2<f32>;
+
+    if (ad.x >= ad.y && ad.x >= ad.z) {
+        if (d.x > 0.0) {
+            face = 0; // +X
+            uv = vec2(-d.z, -d.y) / ad.x;
+        } else {
+            face = 3; // -X
+            uv = vec2(d.z, -d.y) / ad.x;
+        }
+    } else if (ad.y >= ad.x && ad.y >= ad.z) {
+        if (d.y > 0.0) {
+            face = 1; // +Y
+            uv = vec2(d.x, d.z) / ad.y;
+        } else {
+            face = 4; // -Y
+            uv = vec2(d.x, -d.z) / ad.y;
+        }
+    } else {
+        if (d.z > 0.0) {
+            face = 2; // +Z
+            uv = vec2(d.x, -d.y) / ad.z;
+        } else {
+            face = 5; // -Z
+            uv = vec2(-d.x, -d.y) / ad.z;
+        }
+    }
+
+    uv = uv * 0.5 + 0.5;
+
+    return CubeCoordinates(face, uv);
+}
+
+fn cubemap_decode(c: CubeCoordinates) -> vec3<f32> {
+    let uv = c.uv * 2.0 - 1.0;
+
+    var dir: vec3<f32>;
+
+    switch (c.face) {
+        case 0: { dir = vec3( 1.0, -uv.y, -uv.x); } // +X
+        case 3: { dir = vec3(-1.0, -uv.y,  uv.x); } // -X
+        case 1: { dir = vec3( uv.x,  1.0,  uv.y); } // +Y
+        case 4: { dir = vec3( uv.x, -1.0, -uv.y); } // -Y
+        case 2: { dir = vec3( uv.x, -uv.y,  1.0); } // +Z
+        default: { dir = vec3(-uv.x, -uv.y, -1.0); } // -Z
+    }
+
+    return normalize(dir);
 }

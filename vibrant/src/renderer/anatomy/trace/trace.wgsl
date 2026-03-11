@@ -85,11 +85,6 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
         let diffuse_sample = ENVIRONMENT.settings.ambient_light * diffuse * material.scattering * phase_function;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
-
-        let reflection_world = TRANSFORM_INVERSE * vec4<f32>(reflection, 0.0);
-        let reflection_color = sample_hdri(reflection_world.xyz);
-        let reflection_sample = reflection_color * gradient.a * ENVIRONMENT.settings.lighting;
-
         let specular = gradient.a * ENVIRONMENT.settings.lighting * sample_specular(sample, reflection);
 
         let transmittance_in_step = 1.0 - exp(-extinction);
@@ -115,16 +110,18 @@ fn aces(x: vec3<f32>) -> vec3<f32> {
 }
 
 fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {
-    return
+    return 4.0 * PI * (
         textureSampleLevel(RADIANCE_0[0], CASCADE_SAMPLER, uv, 0.0).rgb +
         textureSampleLevel(RADIANCE_0[1], CASCADE_SAMPLER, uv, 0.0).rgb +
         textureSampleLevel(RADIANCE_0[2], CASCADE_SAMPLER, uv, 0.0).rgb +
         textureSampleLevel(RADIANCE_0[3], CASCADE_SAMPLER, uv, 0.0).rgb +
         textureSampleLevel(RADIANCE_0[4], CASCADE_SAMPLER, uv, 0.0).rgb +
-        textureSampleLevel(RADIANCE_0[5], CASCADE_SAMPLER, uv, 0.0).rgb;
+        textureSampleLevel(RADIANCE_0[5], CASCADE_SAMPLER, uv, 0.0).rgb);
 }
 
 fn sample_hdri(direction: vec3<f32>) -> vec3<f32> {
+    if (HDRI_SETTINGS.show == 0) { return vec3<f32>(0.0); }
+
     let sample = equirectangular(direction, HDRI_SETTINGS.rotation);
     return HDRI_SETTINGS.strength * textureSampleLevel(HDRI, HDRI_SAMPLER, sample, 0.0).rgb;
 }
@@ -153,24 +150,22 @@ fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
 }
 
 fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
-    let coordinate = cube_coordinate(direction);
+    let coordinate = cubemap_encode(direction);
+
+    let max_level = u32(ENVIRONMENT.settings.tangent_color * 5.0);
+
+    var transmission = vec3<f32>(1.0);
 
     if (ENVIRONMENT.settings.smoothing > 0.5) {
-        let specular =
-            sample_transmission(uv, coordinate, 0) *
-            sample_transmission(uv, coordinate, 1) *
-            sample_transmission(uv, coordinate, 2) *
-            sample_transmission(uv, coordinate, 3) *
-            sample_transmission(uv, coordinate, 4) *
-            sample_radiance(uv, coordinate, 5);
-
-        return specular.rgb;
-    } else {
-        return sample_radiance(uv, coordinate, 5).rgb;
+        for (var level = 0u; level < max_level; level++) {
+            transmission *= sample_transmission(uv, coordinate, level).rgb;
+        }
     }
+
+    return transmission * sample_radiance(uv, coordinate, max_level).rgb;
 }
 
-fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) -> vec3<f32> {
+fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
     let size = f32(1 << level);
 
     let direction = vec3<f32>(floor(coordinate.uv * size) / size, 0.0);
@@ -179,7 +174,18 @@ fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) -> vec3
     return direction + position;
 }
 
-fn sample_transmission(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) -> vec4<f32> {
+fn level_dim(level: u32) -> vec3<u32> {
+    switch level {
+        case 0: { return textureDimensions(TRANSMISSION_0[0]); }
+        case 1: { return textureDimensions(TRANSMISSION_1[0]); }
+        case 2: { return textureDimensions(TRANSMISSION_2[0]); }
+        case 3: { return textureDimensions(TRANSMISSION_3[0]); }
+        case 4: { return textureDimensions(TRANSMISSION_4[0]); }
+        default: { return textureDimensions(TRANSMISSION_5[0]); }
+    }
+}
+
+fn sample_transmission(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec4<f32> {
     let sample = cascade_sample(uv, coordinate, level);
 
     if (level == 0) {
@@ -239,7 +245,20 @@ fn sample_transmission(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) ->
     }
 }
 
-fn sample_radiance(uv: vec3<f32>, coordinate: CubeCoordinate, level: u32) -> vec4<f32> {
+// fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
+//     let dim = level_dim(level);
+//     let original_texel = uv * vec3<f32>(textureDimensions(EXTINCTION));
+//     let cascade_texel = original_texel / f32(2 << level);
+
+//     let n_directions = f32(1 << level);
+//     let cascade_dim = vec3<f32>(dim >> vec3<u32>(level, level, 0));
+//     let cascade_direction = vec3<f32>(floor(coordinate.uv * n_directions) / n_directions, 0.0);
+
+//     let texel = cascade_direction * cascade_dim + cascade_texel;
+//     return texel / vec3<f32>(dim);
+// }
+
+fn sample_radiance(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec4<f32> {
     let sample = cascade_sample(uv, coordinate, level);
 
     if (level == 0) {
@@ -358,72 +377,4 @@ fn adaptive_step(density: f32, gradient: f32, min_step: f32, max_step: f32) -> f
 
 fn tex(tex: texture_3d<f32>, uv: vec3<f32>) -> vec4<f32> {
     return textureSampleLevel(tex, SAMPLER, uv, 0.0);
-}
-
-struct CubeCoordinate {
-    face: i32,
-    uv: vec2<f32>,
-};
-
-fn cube_coordinate(dir: vec3<f32>) -> CubeCoordinate {
-    let a = abs(dir);
-
-    // Major axis masks
-    let x_major = a.x >= a.y && a.x >= a.z;
-    let y_major = a.y >= a.z && a.y > a.x;
-    let z_major = !(x_major || y_major);
-
-    let sign_x = dir.x > 0.0;
-    let sign_y = dir.y > 0.0;
-    let sign_z = dir.z > 0.0;
-
-    var face: i32 = 0;
-    var uv: vec2<f32>;
-    var ma: f32;
-
-    // X faces
-    let uv_x_pos = vec2(-dir.z, -dir.y);
-    let uv_x_neg = vec2( dir.z, -dir.y);
-
-    // Y faces
-    let uv_y_pos = vec2(dir.x, dir.z);
-    let uv_y_neg = vec2(dir.x, -dir.z);
-
-    // Z faces
-    let uv_z_pos = vec2(dir.x, -dir.y);
-    let uv_z_neg = vec2(-dir.x, -dir.y);
-
-    uv = select(
-        select(uv_x_neg, uv_x_pos, sign_x),
-        select(uv_y_neg, uv_y_pos, sign_y),
-        y_major
-    );
-
-    uv = select(
-        uv,
-        select(uv_z_neg, uv_z_pos, sign_z),
-        z_major
-    );
-
-    ma = select(
-        select(a.x, a.y, y_major),
-        a.z,
-        z_major
-    );
-
-    face = select(
-        select(3, 0, sign_x),          // -X / +X
-        select(4, 1, sign_y),          // -Y / +Y
-        y_major
-    );
-
-    face = select(
-        face,
-        select(5, 2, sign_z),          // -Z / +Z
-        z_major
-    );
-
-    let uv_final = uv / ma * 0.5 + vec2(0.5);
-
-    return CubeCoordinate(face, uv_final);
 }

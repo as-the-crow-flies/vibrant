@@ -48,8 +48,14 @@ impl CullingBuffer {
             mapped_at_creation: false,
         });
 
-        let culling: MipTexture3D<R32Float> =
-            MipTexture3D::new(gpu, resolution, resolution, resolution, FilterMode::Linear);
+        let culling: MipTexture3D<R32Float> = MipTexture3D::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            FilterMode::Linear,
+            wgpu::AddressMode::ClampToBorder,
+        );
 
         let entries = &[
             BindGroupEntry {

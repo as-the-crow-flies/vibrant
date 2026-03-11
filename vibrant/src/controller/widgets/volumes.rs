@@ -21,7 +21,11 @@ impl VolumesWidget {
         }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, volumes: &mut [VolumeFractionBuffer]) {
+    pub fn show(&mut self, ui: &mut Ui, volumes: &mut Vec<VolumeFractionBuffer>) {
+        if volumes.is_empty() {
+            return;
+        }
+
         self.changed = false;
 
         let mut hasher = DefaultHasher::new();
@@ -33,17 +37,24 @@ impl VolumesWidget {
         self.changed = hash != self.hash;
         self.hash = hash;
 
-        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), false)
-            .show_header(ui, |ui| ui.heading("Volume Fractions"))
+        let mut index_to_remove: Option<usize> = None;
+
+        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), self.changed)
+            .show_header(ui, |ui| ui.heading("Volumes"))
             .body(|ui| {
                 ScrollArea::new([false, true]).show(ui, |ui| {
-                    for volume in volumes {
+                    for (index, volume) in volumes.iter_mut().enumerate() {
                         CollapsingState::load_with_default_open(
                             ui.ctx(),
                             volume.settings_mut().name.to_string().into(),
-                            false,
+                            self.changed,
                         )
                         .show_header(ui, |ui| {
+                            if ui.button("🗑").clicked() {
+                                index_to_remove = Some(index);
+                                self.changed = true;
+                            }
+
                             self.changed |= ui
                                 .checkbox(&mut volume.settings_mut().visible, "")
                                 .changed();
@@ -62,6 +73,10 @@ impl VolumesWidget {
                     }
                 })
             });
+
+        if let Some(index) = index_to_remove {
+            volumes.remove(index);
+        }
     }
 
     pub fn changed(&self) -> bool {

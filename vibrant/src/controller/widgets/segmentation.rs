@@ -21,7 +21,11 @@ impl SegmentationsWidget {
         }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, segmentation: &mut [VolumeSegmenationBuffer]) {
+    pub fn show(&mut self, ui: &mut Ui, segmentation: &mut Vec<VolumeSegmenationBuffer>) {
+        if segmentation.is_empty() {
+            return;
+        }
+
         self.changed = false;
 
         let mut hasher = DefaultHasher::new();
@@ -33,33 +37,54 @@ impl SegmentationsWidget {
         self.changed = hash != self.hash;
         self.hash = hash;
 
-        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), false)
-            .show_header(ui, |ui| ui.heading("Volume Segmentation"))
+        let mut index_to_remove: Option<usize> = None;
+
+        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), self.changed)
+            .show_header(ui, |ui| ui.heading("Segmentation"))
             .body(|ui| {
                 ScrollArea::new([false, true]).show(ui, |ui| {
-                    for volume in segmentation {
-                        for setting in volume.settings() {
-                            CollapsingState::load_with_default_open(
-                                ui.ctx(),
-                                setting.name.to_string().into(),
-                                false,
-                            )
-                            .show_header(ui, |ui| {
-                                self.changed |= ui.checkbox(&mut setting.visible, "").changed();
+                    for (index, volume) in segmentation.iter_mut().enumerate() {
+                        CollapsingState::load_with_default_open(
+                            ui.ctx(),
+                            volume.name().to_string().into(),
+                            false,
+                        )
+                        .show_header(ui, |ui| {
+                            if ui.button("🗑").clicked() {
+                                index_to_remove = Some(index);
+                                self.changed = true;
+                            }
 
-                                self.changed |=
-                                    ui.color_edit_button_rgb(&mut setting.absorption).changed();
+                            ui.label(volume.name());
+                        })
+                        .body(|ui| {
+                            for setting in volume.settings_mut() {
+                                CollapsingState::load_with_default_open(
+                                    ui.ctx(),
+                                    setting.name.to_string().into(),
+                                    false,
+                                )
+                                .show_header(ui, |ui| {
+                                    self.changed |= ui.checkbox(&mut setting.visible, "").changed();
 
-                                self.changed |=
-                                    ui.color_edit_button_rgb(&mut setting.scattering).changed();
+                                    self.changed |=
+                                        ui.color_edit_button_rgb(&mut setting.absorption).changed();
 
-                                ui.label(setting.name.to_string());
-                            })
-                            .body(|_| {});
-                        }
+                                    self.changed |=
+                                        ui.color_edit_button_rgb(&mut setting.scattering).changed();
+
+                                    ui.label(setting.name.to_string());
+                                })
+                                .body(|_| {});
+                            }
+                        });
                     }
                 })
             });
+
+        if let Some(index) = index_to_remove {
+            segmentation.remove(index);
+        }
     }
 
     pub fn changed(&self) -> bool {
