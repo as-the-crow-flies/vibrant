@@ -86,7 +86,19 @@ impl Renderer {
             }
         });
 
+        self.surface.update_output_mode(
+            gpu,
+            controller.settings(),
+            controller.prefer_hdr_output(),
+        );
+
         let surface = self.surface.maybe_resize(gpu, &controller.settings());
+
+        controller.set_output_mode(
+            surface.hdr_output(),
+            format!("{:?}", surface.format()),
+            surface.hdr_supported(),
+        );
 
         let input = self.egui.take_egui_input(window);
         let output = self

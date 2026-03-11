@@ -41,7 +41,7 @@ impl PostProcessingPipeline {
                     &ColorBuffer::layout(gpu),
                     &ColorBuffer::layout(gpu),
                 ]),
-                ColorBuffer::target_srgb(),
+                ColorBuffer::target(),
                 &gpu.shader(include_str!("composite.wgsl")),
             ),
         }
@@ -94,7 +94,7 @@ impl PostProcessingPipeline {
         {
             let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Post::Bloom::Composite"),
-                color_attachments: &[Some(frame.post().attachment_srgb())],
+                color_attachments: &[Some(frame.post().attachment())],
                 ..Default::default()
             });
 

@@ -18,19 +18,11 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = pixel.xy / vec2<f32>(ENVIRONMENT.surface);
     let intensity = ENVIRONMENT.settings.bloom_intensity;
-    let exposure = ENVIRONMENT.settings.tone_mapping_exposure;
-    let tone_mapping_enabled = ENVIRONMENT.settings.tone_mapping_enabled;
 
     let scene = textureSample(SCENE, SCENE_SAMPLER, uv).rgb;
     let bloom = textureSample(BLOOM, BLOOM_SAMPLER, uv).rgb;
 
     let combined = scene + bloom * intensity;
 
-    let result = select(
-        combined,                      // tone mapping OFF
-        aces(combined * exposure),     // tone mapping ON — ACES curve
-        tone_mapping_enabled == 1u
-    );
-
-    return vec4<f32>(result, 1.0);
+    return vec4<f32>(combined, 1.0);
 }

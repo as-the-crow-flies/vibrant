@@ -3,7 +3,7 @@ use std::any::type_name;
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
-    Color, ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
+    Color, Extent3d, FilterMode, LoadOp, Operations,
     RenderPassColorAttachment, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp,
     Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
     TextureView, TextureViewDescriptor, TextureViewDimension,
@@ -11,14 +11,14 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
-pub struct ColorBuffer {
+pub struct UiBuffer {
     texture: Texture,
     view: TextureView,
     binding: BindGroup,
 }
 
-impl ColorBuffer {
-    pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+impl UiBuffer {
+    pub const FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());
@@ -34,9 +34,7 @@ impl ColorBuffer {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: Self::FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT
-                | TextureUsages::TEXTURE_BINDING
-                | TextureUsages::COPY_SRC,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[Self::FORMAT],
         });
 
@@ -79,40 +77,8 @@ impl ColorBuffer {
         }
     }
 
-    pub fn width(&self) -> u32 {
-        self.texture.width()
-    }
-
-    pub fn height(&self) -> u32 {
-        self.texture.height()
-    }
-
-    pub fn texture(&self) -> &Texture {
-        &self.texture
-    }
-
     pub fn binding(&self) -> &BindGroup {
         &self.binding
-    }
-
-    pub fn target() -> ColorTargetState {
-        ColorTargetState {
-            format: Self::FORMAT,
-            blend: None,
-            write_mask: ColorWrites::all(),
-        }
-    }
-
-    pub fn attachment<'a>(&'a self) -> RenderPassColorAttachment<'a> {
-        RenderPassColorAttachment {
-            view: &self.view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Load,
-                store: StoreOp::Store,
-            },
-        }
     }
 
     pub fn attachment_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
@@ -134,7 +100,7 @@ impl ColorBuffer {
                 entries: &[
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        visibility: ShaderStages::FRAGMENT,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Float { filterable: true },
                             view_dimension: TextureViewDimension::D2,
@@ -144,7 +110,7 @@ impl ColorBuffer {
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        visibility: ShaderStages::FRAGMENT,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
@@ -153,7 +119,7 @@ impl ColorBuffer {
     }
 }
 
-impl Drop for ColorBuffer {
+impl Drop for UiBuffer {
     fn drop(&mut self) {
         self.texture.destroy();
     }
