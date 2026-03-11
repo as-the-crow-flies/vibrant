@@ -43,11 +43,11 @@ pub struct Frame {
 
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
-        let color = ColorBuffer::new(gpu, settings.width, settings.height);
-        let post = ColorBuffer::new(gpu, settings.width, settings.height);
+        let color = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
+        let post = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let ui = UiBuffer::new(gpu, settings.width, settings.height);
-        let bloom_a = ColorBuffer::new(gpu, settings.width, settings.height);
-        let bloom_b = ColorBuffer::new(gpu, settings.width, settings.height);
+        let bloom_a = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
+        let bloom_b = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -232,6 +232,8 @@ impl Surface {
     pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
         if settings.width == self.buffer.color().width()
             && settings.height == self.buffer.color().height()
+            && settings.render_width == self.buffer.color().width()
+            && settings.render_height == self.buffer.color().height()
             && settings.volume == self.buffer.occupancy().resolution()
         {
             return self;

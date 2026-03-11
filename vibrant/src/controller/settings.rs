@@ -27,6 +27,9 @@ pub enum LineDisplayMode {
 pub struct Settings {
     pub width: u32,
     pub height: u32,
+    pub render_scale: f32,
+    pub render_width: u32,
+    pub render_height: u32,
     pub volume: u32,
     pub radius: f32,
     pub lighting: f32,
@@ -64,6 +67,9 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
+            render_scale: 1.0,
+            render_width: 1920,
+            render_height: 1080,
             volume: 256,
             radius: 0.25,
             lighting: 0.725,
@@ -95,5 +101,10 @@ impl Settings {
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
         }
+    }
+
+    pub fn update_render_size(&mut self) {
+        self.render_width = (self.width as f32 * self.render_scale).round().max(1.0) as u32;
+        self.render_height = (self.height as f32 * self.render_scale).round().max(1.0) as u32;
     }
 }

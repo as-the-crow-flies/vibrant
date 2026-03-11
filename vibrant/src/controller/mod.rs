@@ -293,6 +293,20 @@ impl Controller {
                                 .text("Bloom Intensity")
                         );
 
+                        
+                        if ui
+                            .add(Slider::new(&mut self.settings.render_scale, 0.25..=2.0)
+                                .text("Render Scale"))
+                            .changed()
+                        {
+                            self.settings.update_render_size();
+                        }
+
+                        ui.label(format!(
+                            "3D Render Resolution: {} x {}",
+                            self.settings.render_width, self.settings.render_height
+                        ));
+
 
                         ui.separator();
                         ui.heading("HDR Output");
@@ -483,6 +497,7 @@ impl Controller {
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         self.settings.width = size.width;
         self.settings.height = size.height;
+        self.settings.update_render_size();
     }
 
     pub fn time(&self) -> f32 {

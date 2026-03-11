@@ -57,8 +57,8 @@ impl Environment {
             0,
             &[
                 bytes_of(&[
-                    controller.settings().width,
-                    controller.settings().height,
+                    controller.settings().render_width,
+                    controller.settings().render_height,
                     controller.settings().volume,
                 ]),
                 bytes_of(&controller.time()),
@@ -93,7 +93,6 @@ impl Environment {
                 bytes_of(&controller.settings().bloom_threshold),
                 bytes_of(&controller.settings().bloom_soft_knee),
                 bytes_of(&controller.settings().bloom_intensity),
-                // tone mapping fields removed in HDR settings commit
             ]
             .concat(),
         );

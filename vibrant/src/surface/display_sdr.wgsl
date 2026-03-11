@@ -19,7 +19,7 @@ fn tonemap_reinhard(x: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
-    let dim = vec2<f32>(textureDimensions(COLOR));
+    let dim = vec2<f32>(textureDimensions(UI));
     let uv = pixel.xy / dim;
 
     // Scene stays in linear HDR here, then gets mapped once for SDR output.

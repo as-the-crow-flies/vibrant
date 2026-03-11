@@ -81,6 +81,14 @@ impl UiBuffer {
         &self.binding
     }
 
+    pub fn width(&self) -> u32 {
+        self.texture.width()
+    }
+
+    pub fn height(&self) -> u32 {
+        self.texture.height()
+    }
+
     pub fn attachment_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view,
