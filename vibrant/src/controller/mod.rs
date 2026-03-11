@@ -279,6 +279,7 @@ impl Controller {
                         );
 
                         // Bloom settings
+                        ui.checkbox(&mut self.settings.bloom_enabled, "Enable Bloom");
                         ui.add(
                             Slider::new(&mut self.settings.bloom_threshold, 0.0..=2.0)
                                 .text("Bloom Threshold"),
