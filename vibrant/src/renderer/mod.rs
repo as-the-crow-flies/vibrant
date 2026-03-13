@@ -84,16 +84,6 @@ impl Renderer {
                 )),
             ));
 
-            // let volume = VolumeFile::from_nifti(&File::new(
-            //     "Volume",
-            //     fs::read("/Users/bkraaijeveld/Data/HCP-100307/m2m_hcp-100307/final_tissues.nii.gz")
-            //         .unwrap(),
-            // ));
-
-            // self.asset
-            //     .segmentations
-            //     .push(VolumeSegmenationBuffer::new(gpu, &volume));
-
             let volume_0 = VolumeFile::from_nifti(
                 &"/Users/bkraaijeveld/Data/HCP-100307/fsl/100307_pve_0.nii.gz".into(),
             );

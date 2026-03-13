@@ -81,11 +81,14 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
         let gradient = sample_gradient(sample);
         let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
-        let diffuse = sample_diffuse(sample - 0.005 * gradient_norm);
+        // let light_sample = sample - 0.005 * gradient_norm;
+        let light_sample = sample;
+
+        let diffuse = sample_diffuse(light_sample);
         let diffuse_sample = ENVIRONMENT.settings.ambient_light * diffuse * material.scattering * phase_function;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
-        let specular = gradient.a * ENVIRONMENT.settings.lighting * sample_specular(sample, reflection);
+        let specular = gradient.a * ENVIRONMENT.settings.lighting * sample_specular(light_sample, reflection);
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
@@ -101,12 +104,12 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
 }
 
 fn aces(x: vec3<f32>) -> vec3<f32> {
-  let a = 2.51;
-  let b = 0.03;
-  let c = 2.43;
-  let d = 0.59;
-  let e = 0.14;
-  return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
 fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {
@@ -166,12 +169,16 @@ fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
 }
 
 fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
-    let size = f32(1 << level);
+    let root_dim = level_dim(0);
+    let cascade_dim = level_dim(level);
+    let direction_dim = root_dim >> vec3<u32>(level);
 
-    let direction = vec3<f32>(floor(coordinate.uv * size) / size, 0.0);
-    let position = vec3<f32>(uv.xy / size, uv.z);
+    let n_directions = f32(1u << level);
+    let direction_index = vec3<u32>(vec2<u32>(coordinate.uv * n_directions), 0);
 
-    return direction + position;
+    let voxel = vec3<u32>(uv * vec3<f32>(root_dim) / n_directions);
+
+    return vec3<f32>(direction_index * direction_dim + voxel) / vec3<f32>(cascade_dim);
 }
 
 fn level_dim(level: u32) -> vec3<u32> {
@@ -244,19 +251,6 @@ fn sample_transmission(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -
         }
     }
 }
-
-// fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
-//     let dim = level_dim(level);
-//     let original_texel = uv * vec3<f32>(textureDimensions(EXTINCTION));
-//     let cascade_texel = original_texel / f32(2 << level);
-
-//     let n_directions = f32(1 << level);
-//     let cascade_dim = vec3<f32>(dim >> vec3<u32>(level, level, 0));
-//     let cascade_direction = vec3<f32>(floor(coordinate.uv * n_directions) / n_directions, 0.0);
-
-//     let texel = cascade_direction * cascade_dim + cascade_texel;
-//     return texel / vec3<f32>(dim);
-// }
 
 fn sample_radiance(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec4<f32> {
     let sample = cascade_sample(uv, coordinate, level);
