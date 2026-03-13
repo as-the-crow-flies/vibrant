@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    Align, Button, ComboBox, Frame, Layout, Margin, ScrollArea, SidePanel, Slider, Ui, collapsing_header::CollapsingState, Sense
+    Align, Button, ComboBox, Frame, Layout, Margin, ScrollArea, SidePanel, Slider, Ui, collapsing_header::CollapsingState, Sense, Color32
 };
 use event::Event;
 use itertools::Itertools;
@@ -42,6 +42,7 @@ impl Layer {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Location {
     group_index: usize,
     line_index: usize,
@@ -504,8 +505,10 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location) {
     let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
         let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.line_index));
 
+        let row_idx = item_location.line_index;
+
         let response = ui
-            .dnd_drag_source(item_id, item_location, |ui| {
+            .dnd_drag_source(item_id, item_location.clone(), |ui| {
                 ui.label(format!("id: {:?}", item_id));
             })
             .response;
@@ -514,6 +517,29 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location) {
         if let (Some(pointer), Some(hovered_payload)) = 
             (ui.input(|i| i.pointer.interact_pos()), response.dnd_hover_payload::<Location>(),) {
                 println!("Drop detected");
+
+                let rect = response.rect;
+
+                let line_index = item_location.line_index;
+                let group_index = item_location.group_index;
+
+                //https://github.com/emilk/egui/blob/main/crates/egui_demo_lib/src/demo/drag_and_drop.rs
+                // Preview insertion:
+                let stroke = egui::Stroke::new(1.0, Color32::WHITE);
+                let insert_row_idx = 
+                    if hovered_payload.group_index == group_index && hovered_payload.line_index == line_index {
+                    // We are dragged onto ourselves
+                    ui.painter().hline(rect.x_range(), rect.center().y, stroke);
+                    row_idx
+                } else if pointer.y < rect.center().y {
+                    // Above us
+                    ui.painter().hline(rect.x_range(), rect.top(), stroke);
+                    row_idx
+                } else {
+                    // Below us
+                    ui.painter().hline(rect.x_range(), rect.bottom(), stroke);
+                    row_idx + 1
+                };
 
             if let Some(dragged_payload) = response.dnd_release_payload::<Location>() {
                 println!("Drop released");
