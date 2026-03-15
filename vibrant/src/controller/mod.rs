@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    Align, Button, ComboBox, Frame, Layout, Margin, ScrollArea, SidePanel, Slider, Ui, collapsing_header::CollapsingState, Sense, Color32
+    Align, Button, Color32, ComboBox, Frame, Layout, Margin, ScrollArea, Sense, SidePanel, Slider, Ui, collapsing_header::CollapsingState, debug_text::print
 };
 use event::Event;
 use itertools::Itertools;
@@ -19,7 +19,7 @@ use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    asset::Asset,
+    asset::{Asset, line},
     controller::{
         segment::Segment,
         settings::{LineDisplayMode, LineVoxelizationMode},
@@ -27,7 +27,7 @@ use crate::{
     file::FileStage,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Layer {
     Line(String),
     Group(Vec<String>)
@@ -42,7 +42,7 @@ impl Layer {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Location {
     group_index: usize,
     line_index: usize,
@@ -92,6 +92,7 @@ impl Controller {
             for line in lines.settings() {
                 if !self.layers.iter().any(|layer| layer.contains_name(&line.name)) {
                     let layer = Layer::Line(line.name.clone());
+                    println!("Adding layer for line {}", line.name);
                     self.layers.push(layer);
                 }
             }
@@ -446,6 +447,9 @@ impl Controller {
     }
 
     pub fn tractography_layers (&mut self, ui: &mut Ui, lines: &mut crate::asset::line::LineBuffer) {
+        let mut from = None;
+        let mut to = None;
+
         for (index, layer) in self.layers.iter_mut().enumerate() {
             match layer {
                 Layer::Line(name) => {
@@ -466,7 +470,7 @@ impl Controller {
                                 println!("stopped dragging line {}\n", line.name);
                             }
 
-                            drop_zone(ui, id, Location { group_index: 0, line_index: index });
+                            drop_zone(ui, id, Location { group_index: 0, line_index: index }, &mut from, &mut to);
                         })
                         .body(|ui| {
                             ui.add(
@@ -489,6 +493,82 @@ impl Controller {
                 },
             }
         }
+
+        if let (Some(from), Some(mut to)) = (from, to) {
+            println!("Move line from group {} line {} to group {} line {}", from.group_index, from.line_index, to.group_index, to.line_index);
+
+            let from_layer = self.get_line_by_indexes(from.group_index, from.line_index);
+            let to_layer = self.get_line_by_indexes(to.group_index, to.line_index);
+            println!("from_layer: {:?}", from_layer);
+            println!("to_layer: {:?}", to_layer);
+
+            if let Some(name) = from_layer {
+                let mut layers = self.layers.clone();
+
+                layers = self.remove_line_from_layers_by_name(layers, &name);
+                layers = self.insert_line_into_layers_by_name_and_indexes(layers, &name, to.group_index, to.line_index);
+
+                self.layers = layers;
+            }
+        }
+    }
+
+    fn get_line_by_indexes (&self, group_index: usize, line_index: usize) -> Option<&String> {
+        if group_index == 0 {
+            self.layers
+                .iter()
+                .filter_map(|layer| {
+                    if let Layer::Line(s) = layer {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                })
+                .nth(line_index)
+        } else {
+            self.layers
+                .iter()
+                .filter_map(|layer| {
+                    if let Layer::Group(lines) = layer {
+                        Some(lines)
+                    } else {
+                        None
+                    }
+                })
+                .nth(group_index - 1)
+                .and_then(|group| group.get(line_index))
+        }
+    }
+
+    fn remove_line_from_layers_by_name (&self, mut layers: Vec<Layer>, name: &str) -> Vec<Layer> {
+        println!("Removing line {} from layers", name);
+        println!("Number of layers: {}", layers.len());
+        for layer in &mut layers {
+            if let Layer::Group(group_lines) = layer {
+                group_lines.retain(|line_name| line_name != name);
+            }
+        }
+
+        layers.retain(|layer| match layer {
+            Layer::Line(line_name) => line_name != name,
+            Layer::Group(group_lines) => !group_lines.is_empty(),
+        });
+
+        println!("Number of layers: {}", layers.len());
+        layers
+    }
+
+    fn insert_line_into_layers_by_name_and_indexes (&self, mut layers: Vec<Layer>, name: &str, group_index: usize, line_index: usize) -> Vec<Layer> {
+        println!("Inserting line {} into layers at group index {} and line index {}", name, group_index, line_index);
+        if group_index == 0 {
+            layers.insert(line_index, Layer::Line(name.to_string()));
+        } else {
+            if let Some(Layer::Group(group_lines)) = layers.get_mut(group_index - 1) {
+                group_lines.insert(line_index, name.to_string());
+            }
+        }
+
+        layers
     }
 }
 
@@ -500,7 +580,7 @@ fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool
         .then_some(checked)
 }
 
-fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location) {
+fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut Option<Location>, to: &mut Option<Location>) {
     let frame = Frame::default().inner_margin(4.0);
     let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
         let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.line_index));
@@ -514,38 +594,45 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location) {
             .response;
         
         // Detect drops onto this item:
-        if let (Some(pointer), Some(hovered_payload)) = 
-            (ui.input(|i| i.pointer.interact_pos()), response.dnd_hover_payload::<Location>(),) {
-                println!("Drop detected");
+        if let (Some(pointer), Some(hovered_payload)) = (
+            ui.input(|i| i.pointer.interact_pos()), 
+            response.dnd_hover_payload::<Location>(),
+        ) {
+            println!("Drop detected");
 
-                let rect = response.rect;
+            let rect = response.rect;
 
-                let line_index = item_location.line_index;
-                let group_index = item_location.group_index;
+            let line_index = item_location.line_index;
+            let group_index = item_location.group_index;
 
-                //https://github.com/emilk/egui/blob/main/crates/egui_demo_lib/src/demo/drag_and_drop.rs
-                // Preview insertion:
-                let stroke = egui::Stroke::new(1.0, Color32::WHITE);
-                let insert_row_idx = 
-                    if hovered_payload.group_index == group_index && hovered_payload.line_index == line_index {
-                    // We are dragged onto ourselves
-                    ui.painter().hline(rect.x_range(), rect.center().y, stroke);
-                    row_idx
-                } else if pointer.y < rect.center().y {
-                    // Above us
-                    ui.painter().hline(rect.x_range(), rect.top(), stroke);
-                    row_idx
-                } else {
-                    // Below us
-                    ui.painter().hline(rect.x_range(), rect.bottom(), stroke);
-                    row_idx + 1
-                };
+            //https://github.com/emilk/egui/blob/main/crates/egui_demo_lib/src/demo/drag_and_drop.rs
+            // Preview insertion:
+            let stroke = egui::Stroke::new(1.0, Color32::WHITE);
+            let insert_row_idx = 
+            if hovered_payload.group_index == group_index && hovered_payload.line_index == line_index {
+                // We are dragged onto ourselves
+                ui.painter().hline(rect.x_range(), rect.center().y, stroke);
+                row_idx
+            } else if pointer.y < rect.center().y {
+                // Above us
+                ui.painter().hline(rect.x_range(), rect.top(), stroke);
+                row_idx
+            } else {
+                // Below us
+                ui.painter().hline(rect.x_range(), rect.bottom(), stroke);
+                row_idx + 1
+            };
 
             if let Some(dragged_payload) = response.dnd_release_payload::<Location>() {
                 println!("Drop released");
+
+                *from = Some((*dragged_payload).clone());
+                *to = Some(item_location);
+
+                println!("Move line from group {} line {} to group {} line {}", dragged_payload.group_index, dragged_payload.line_index, group_index, insert_row_idx);
+                println!("from: {:?}", from.as_ref().unwrap());
+                println!("to: {:?}", to.as_ref().unwrap());
             }
         }
     });
-
-
 }
