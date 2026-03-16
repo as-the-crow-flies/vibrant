@@ -89,6 +89,10 @@ impl Camera {
         self.distance = (self.distance + zoom).clamp(0.01, 5.0);
     }
 
+    pub fn set_distance(&mut self, distance: f32) {
+        self.distance = distance.clamp(0.01, 5.0);
+    }
+
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
         self.yaw += yaw;
         self.pitch = (self.pitch + pitch).clamp(-PI / 2.0, PI / 2.0)
@@ -104,5 +108,31 @@ impl Camera {
 
     pub fn far(&self) -> f32 {
         self.far
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_distance_sets_absolute_camera_distance() {
+        let mut camera = Camera::new();
+        camera.zoom(1.0);
+
+        camera.set_distance(0.5);
+
+        assert_eq!(camera.distance, 0.5);
+    }
+
+    #[test]
+    fn test_set_distance_clamps_camera_distance() {
+        let mut camera = Camera::new();
+
+        camera.set_distance(-1.0);
+        assert_eq!(camera.distance, 0.01);
+
+        camera.set_distance(100.0);
+        assert_eq!(camera.distance, 5.0);
     }
 }

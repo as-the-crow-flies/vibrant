@@ -23,7 +23,7 @@ pub enum AppMode {
     /// Normal interactive GUI mode
     Interactive,
     /// Render a single frame, save as PNG, then exit
-    Screenshot { output: PathBuf },
+    Screenshot { output: PathBuf, zoom: Option<f32> },
 }
 
 /// Configuration passed from CLI (or defaults for WASM).
@@ -100,7 +100,7 @@ impl App {
 
                 // Screenshot mode: wait for assets to load and a few frames for GPU
                 // pipeline warmup, then trigger a save and exit.
-                if let AppMode::Screenshot { ref output } = self.config.mode {
+                if let AppMode::Screenshot { ref output, .. } = self.config.mode {
                     if renderer.has_assets()
                         && self.frames_rendered >= 3
                         && !self.screenshot_triggered
@@ -136,6 +136,25 @@ impl App {
 
     fn request_redraw(&self) {
         self.window().request_redraw();
+    }
+}
+
+fn apply_cli_settings(config: &AppConfig, controller: &mut Controller) {
+    if config.auto_rotate {
+        controller.settings_mut().auto_rotate = true;
+        controller.settings_mut().auto_rotate_speed = config.rotate_speed;
+    }
+
+    if let AppMode::Screenshot {
+        zoom: Some(distance),
+        ..
+    } = config.mode
+    {
+        controller.set_camera_distance(distance);
+    }
+
+    if config.disable_visual_effects {
+        controller.settings_mut().bloom = false;
     }
 }
 
@@ -176,14 +195,7 @@ impl ApplicationHandler for App {
         self.renderer = Some(renderer);
 
         // Apply CLI settings
-        if self.config.auto_rotate {
-            self.controller.settings_mut().auto_rotate = true;
-            self.controller.settings_mut().auto_rotate_speed = self.config.rotate_speed;
-        }
-
-        if self.config.disable_visual_effects {
-            self.controller.settings_mut().bloom = false;
-        }
+        apply_cli_settings(&self.config, &mut self.controller);
 
         // Load input files specified via CLI
         #[cfg(not(target_arch = "wasm32"))]
@@ -343,6 +355,7 @@ impl<const N: usize> Fps<N> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vibrant::controller::Controller;
 
     #[test]
     fn test_app_config_default() {
@@ -352,5 +365,62 @@ mod tests {
         assert!(!config.auto_rotate);
         assert_eq!(config.rotate_speed, 10.0);
         assert!(!config.disable_visual_effects);
+    }
+
+    #[test]
+    fn test_screenshot_zoom_is_stored_in_mode() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Screenshot {
+                output: PathBuf::from("out.png"),
+                zoom: Some(0.5),
+            },
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+
+        match config.mode {
+            AppMode::Screenshot { output, zoom } => {
+                assert_eq!(output, PathBuf::from("out.png"));
+                assert_eq!(zoom, Some(0.5));
+            }
+            other => panic!("Expected Screenshot mode, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_screenshot_zoom_applies_to_controller() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Screenshot {
+                output: PathBuf::from("out.png"),
+                zoom: Some(0.5),
+            },
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+        let mut controller = Controller::new();
+
+        apply_cli_settings(&config, &mut controller);
+
+        assert_eq!(controller.camera().view().w_axis.z, 0.5);
+    }
+
+    #[test]
+    fn test_interactive_mode_does_not_apply_zoom() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Interactive,
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+        let mut controller = Controller::new();
+
+        apply_cli_settings(&config, &mut controller);
+
+        assert_eq!(controller.camera().view().w_axis.z, 0.75);
     }
 }

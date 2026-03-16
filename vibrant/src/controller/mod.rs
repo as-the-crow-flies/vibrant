@@ -425,6 +425,10 @@ impl Controller {
         &self.camera
     }
 
+    pub fn set_camera_distance(&mut self, distance: f32) {
+        self.camera.set_distance(distance);
+    }
+
     pub fn light(&self) -> &Light {
         &self.light
     }

@@ -25,6 +25,9 @@ pub struct CliArgs {
     /// Disable visual effects (bloom, etc.) in screenshots and video
     #[arg(long)]
     pub disable_visual_effects: bool,
+
+    #[arg(long)]
+    pub zoom: Option<f32>,
 }
 
 impl CliArgs {
@@ -34,6 +37,7 @@ impl CliArgs {
         let mode = if let Some(ref path) = self.screenshot {
             AppMode::Screenshot {
                 output: path.clone(),
+                zoom: self.zoom,
             }
         } else {
             AppMode::Interactive
@@ -71,9 +75,34 @@ mod tests {
         let args = CliArgs::parse_from(["vibrant", "--screenshot", "out.png"]);
         let config = args.into_config();
         match &config.mode {
-            AppMode::Screenshot { output } => {
+            AppMode::Screenshot { output, zoom } => {
                 assert_eq!(output, &PathBuf::from("out.png"));
+                assert_eq!(*zoom, None);
             }
+            other => panic!("Expected Screenshot mode, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_cli_accepts_zoom_argument_for_screenshot_mode() {
+        let args = CliArgs::try_parse_from([
+            "vibrant",
+            "--input",
+            "AF_left.tck",
+            "--screenshot",
+            "out.png",
+            "--zoom",
+            "1.5",
+        ]);
+
+        assert!(
+            args.is_ok(),
+            "expected --zoom <distance> baseline to parse successfully for screenshot mode"
+        );
+
+        let config = args.unwrap().into_config();
+        match config.mode {
+            AppMode::Screenshot { zoom, .. } => assert_eq!(zoom, Some(1.5)),
             other => panic!("Expected Screenshot mode, got {:?}", other),
         }
     }
