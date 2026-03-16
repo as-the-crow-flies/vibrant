@@ -1,7 +1,6 @@
 pub mod camera;
 pub mod event;
 pub mod light;
-pub mod segment;
 pub mod selection_volume;
 pub mod settings;
 pub mod state;
@@ -23,7 +22,6 @@ use winit::dpi::PhysicalSize;
 use crate::{
     asset::Asset,
     controller::{
-        segment::Segment,
         selection_volume::SelectionVolume,
         settings::{LineDisplayMode, LineVoxelizationMode},
     },
@@ -35,7 +33,6 @@ pub struct Controller {
     state: ControllerState,
     camera: Camera,
     light: Light,
-    segment: Segment,
     settings: Settings,
     time: Instant,
 
@@ -49,7 +46,6 @@ impl Controller {
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::default(),
-            segment: Segment::new(),
             settings: Settings::new(),
             time: Instant::now(),
 
@@ -266,6 +262,11 @@ impl Controller {
                                     SelectionVolume::Box,
                                     "Box",
                                 );
+                                ui.selectable_value(
+                                    &mut self.settings.selection_volume,
+                                    SelectionVolume::Sphere,
+                                    "Sphere",
+                                );
                             });
                         ui.checkbox(&mut self.settings.selection_extend_lines, "Extend Lines");
                         ui.add(
@@ -461,10 +462,6 @@ impl Controller {
 
     pub fn light(&self) -> &Light {
         &self.light
-    }
-
-    pub fn segment(&self) -> &Segment {
-        &self.segment
     }
 
     pub fn settings(&self) -> &Settings {
