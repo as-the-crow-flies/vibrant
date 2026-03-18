@@ -33,11 +33,6 @@ struct Settings {
     blur_kernel_size: u32,
 }
 
-struct Segment {
-    position: vec3<f32>,
-    radius: f32
-}
-
 struct Camera {
     transform: mat4x4<f32>,
     projection: mat4x4<f32>,
@@ -51,7 +46,6 @@ struct Environment {
     volume: u32,
     time: f32,
     camera: Camera,
-    segment: Segment,
     light: vec3<f32>,
     light_: f32,
     settings: Settings

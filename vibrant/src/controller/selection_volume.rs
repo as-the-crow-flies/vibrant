@@ -3,4 +3,5 @@ pub enum SelectionVolume {
     #[default]
     None,
     Box,
+    Sphere,
 }
