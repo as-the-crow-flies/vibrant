@@ -58,7 +58,7 @@ impl PostProcessingPipeline {
         settings: &Settings,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.post().attachment_srgb())],
+            color_attachments: &[Some(frame.post().attachment_srgb_clear())],
             ..Default::default()
         });
 

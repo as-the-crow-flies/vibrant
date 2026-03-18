@@ -1,8 +1,7 @@
-use std::{any::type_name, borrow::Cow, path::PathBuf};
+use std::{any::type_name, borrow::Cow, io, path::PathBuf};
 
 use bytemuck::Pod;
 use futures::channel::oneshot::channel;
-use itertools::Itertools;
 use log::info;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
@@ -11,10 +10,42 @@ use wgpu::{
     PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
     RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo,
     TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
-    VertexState,
+    VertexState, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use crate::renderer::wgsl::COMMON;
+
+/// Round `value` up to the next multiple of `align`.
+pub(crate) fn align_to(value: u32, align: u32) -> u32 {
+    ((value + align - 1) / align) * align
+}
+
+/// Extract tightly-packed RGBA rows from a mapped buffer that may have padded rows (BGRA source).
+pub(crate) fn extract_rgba_from_padded_bgra(
+    mapped: &[u8],
+    width: u32,
+    height: u32,
+    bytes_per_row_padded: u32,
+) -> Vec<u8> {
+    let bytes_per_row_unpadded = width * 4;
+    let mut output = Vec::with_capacity((width * height * 4) as usize);
+
+    for row in 0..height {
+        let src_start = (row * bytes_per_row_padded) as usize;
+        let src_end = src_start + bytes_per_row_unpadded as usize;
+        let row_bytes = &mapped[src_start..src_end];
+
+        // Reorder each pixel from BGRA to RGBA
+        for pixel in row_bytes.chunks_exact(4) {
+            output.push(pixel[2]);
+            output.push(pixel[1]);
+            output.push(pixel[0]);
+            output.push(pixel[3]);
+        }
+    }
+
+    output
+}
 
 pub struct Gpu {
     instance: wgpu::Instance,
@@ -201,16 +232,28 @@ impl Gpu {
         return bytemuck::cast_slice(&view).to_owned();
     }
 
-    pub async fn save(&self, path: PathBuf, texture: &Texture) {
-        assert!(texture.format() == TextureFormat::Bgra8Unorm);
+    pub async fn save(&self, path: PathBuf, texture: &Texture) -> io::Result<()> {
+        if texture.format() != TextureFormat::Bgra8Unorm {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "save: expected Bgra8Unorm texture, got {:?}",
+                    texture.format()
+                ),
+            ));
+        }
 
-        let pixel = 4;
-        let width = (texture.width() / 64) * 64;
+        let pixel = 4u32;
+        let width = texture.width();
         let height = texture.height();
 
+        let bytes_per_row_unpadded = width * pixel;
+        let bytes_per_row_padded = align_to(bytes_per_row_unpadded, COPY_BYTES_PER_ROW_ALIGNMENT);
+        let buffer_size = (bytes_per_row_padded as u64) * (height as u64);
+
         let result = self.device.create_buffer(&BufferDescriptor {
-            label: Some("read.result"),
-            size: (width * height * pixel) as u64,
+            label: Some("save.staging"),
+            size: buffer_size,
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -222,18 +265,14 @@ impl Gpu {
             TexelCopyTextureInfo {
                 texture,
                 mip_level: 0,
-                origin: Origin3d {
-                    x: (texture.width() - width) / 2, // Center Crop
-                    y: 0,
-                    z: 0,
-                },
+                origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
             TexelCopyBufferInfo {
                 buffer: &result,
                 layout: TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(width * pixel), // Must be multiple of 256
+                    bytes_per_row: Some(bytes_per_row_padded),
                     rows_per_image: None,
                 },
             },
@@ -245,15 +284,27 @@ impl Gpu {
         );
         self.queue.submit([cmd.finish()]);
 
-        let buffer = self
-            .read(&result)
+        // Map the staging buffer and extract RGBA pixels row-by-row,
+        // handling potential padding between rows and converting BGRA -> RGBA.
+        let (sender, receiver) = channel();
+        result.slice(..).map_async(MapMode::Read, |x| {
+            let _ = sender.send(x);
+        });
+        self.wait();
+        receiver
             .await
-            .into_iter()
-            .tuples()
-            .flat_map(|(b, g, r, a)| [r, g, b, a])
-            .collect_vec();
+            .expect("communication failed")
+            .expect("buffer mapping failed");
 
-        let file = std::fs::File::create(path).unwrap();
+        let mapped = result.slice(..).get_mapped_range();
+        let buffer = extract_rgba_from_padded_bgra(&mapped, width, height, bytes_per_row_padded);
+        drop(mapped);
+        result.unmap();
+
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::File::create(&path)?;
         let writer = &mut std::io::BufWriter::new(file);
         let mut enc = png::Encoder::new(writer, width, height);
         enc.set_color(png::ColorType::Rgba);
@@ -264,7 +315,13 @@ impl Gpu {
             (0.30000, 0.60000),
             (0.15000, 0.06000),
         ));
-        let mut writer = enc.write_header().unwrap();
-        writer.write_image_data(&buffer).unwrap();
+        let mut png_writer = enc
+            .write_header()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("PNG header error: {e}")))?;
+        png_writer
+            .write_image_data(&buffer)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("PNG write error: {e}")))?;
+
+        Ok(())
     }
 }
