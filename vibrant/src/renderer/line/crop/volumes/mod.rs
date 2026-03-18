@@ -9,6 +9,7 @@ use crate::{
 
 pub struct LineSelectionPipeline {
     box_selection: ComputePipeline,
+    sphere_selection: ComputePipeline,
 }
 
 impl LineSelectionPipeline {
@@ -47,7 +48,16 @@ impl LineSelectionPipeline {
         println!("{}", square_source);
 
         Self {
-            box_selection: gpu.compute("Selection (Box)", &layout, &gpu.shader(&square_source)),
+            box_selection: gpu.compute(
+                "Selection (Box)",
+                &layout,
+                &gpu.shader(include_str!("shapes/square.wgsl")),
+            ),
+            sphere_selection: gpu.compute(
+                "Selection (Sphere)",
+                &layout,
+                &gpu.shader(include_str!("shapes/sphere.wgsl")),
+            ),
         }
     }
 
@@ -61,6 +71,7 @@ impl LineSelectionPipeline {
         let pipeline = match settings.selection_volume {
             SelectionVolume::None => return,
             SelectionVolume::Box => &self.box_selection,
+            SelectionVolume::Sphere => &self.sphere_selection,
         };
 
         self.selection(cmd, line, environment, pipeline);
