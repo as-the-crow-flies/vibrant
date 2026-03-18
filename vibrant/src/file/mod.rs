@@ -211,7 +211,8 @@ mod tests {
 
         assert!(!FileStage::about_to_save());
 
-        let path = PathBuf::from("/tmp/test_screenshot.png");
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir.path().join("test_screenshot.png");
         FileStage::save_path(path.clone());
 
         assert!(FileStage::about_to_save());

@@ -21,10 +21,6 @@ pub(crate) fn align_to(value: u32, align: u32) -> u32 {
 }
 
 /// Extract tightly-packed RGBA rows from a mapped buffer that may have padded rows (BGRA source).
-///
-/// The GPU copy produces rows of `bytes_per_row_padded` bytes, but only the first
-/// `bytes_per_row_unpadded` bytes of each row contain pixel data. This function copies
-/// those bytes row-by-row and converts each pixel from BGRA to RGBA order.
 pub(crate) fn extract_rgba_from_padded_bgra(
     mapped: &[u8],
     width: u32,
@@ -41,10 +37,10 @@ pub(crate) fn extract_rgba_from_padded_bgra(
 
         // Reorder each pixel from BGRA to RGBA
         for pixel in row_bytes.chunks_exact(4) {
-            output.push(pixel[2]); // R (was at index 2 in BGRA)
-            output.push(pixel[1]); // G (stays)
-            output.push(pixel[0]); // B (was at index 0 in BGRA)
-            output.push(pixel[3]); // A (stays)
+            output.push(pixel[2]);
+            output.push(pixel[1]);
+            output.push(pixel[0]);
+            output.push(pixel[3]);
         }
     }
 
