@@ -6,8 +6,6 @@ pub mod settings;
 pub mod state;
 pub mod widgets;
 
-use std::time::Instant;
-
 use camera::Camera;
 use egui::ComboBox;
 use egui::{
@@ -19,6 +17,7 @@ use itertools::Itertools;
 use light::Light;
 use settings::Settings;
 use state::ControllerState;
+use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
 use crate::controller::widgets::hdri::HdriWidget;

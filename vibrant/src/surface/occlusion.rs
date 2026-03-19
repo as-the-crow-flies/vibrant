@@ -24,7 +24,7 @@ impl OcclusionBuffer {
             resolution,
             resolution,
             FilterMode::Linear,
-            AddressMode::ClampToBorder,
+            AddressMode::ClampToEdge,
         );
         let directional = MipTexture3D::<R32Float>::new(
             gpu,
@@ -32,7 +32,7 @@ impl OcclusionBuffer {
             resolution,
             resolution,
             FilterMode::Linear,
-            AddressMode::ClampToBorder,
+            AddressMode::ClampToEdge,
         );
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {

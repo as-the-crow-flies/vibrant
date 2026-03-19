@@ -577,7 +577,7 @@ fn rotation_y(angle: f32) -> mat3x3<f32> {
 }
 
 struct CubeCoordinates {
-    face: i32,
+    face: u32,
     uv: vec2<f32>,
 };
 
@@ -585,31 +585,31 @@ fn cubemap_encode(direction: vec3<f32>) -> CubeCoordinates {
     let d = normalize(direction);
     let ad = abs(d);
 
-    var face: i32;
+    var face: u32;
     var uv: vec2<f32>;
 
     if (ad.x >= ad.y && ad.x >= ad.z) {
         if (d.x > 0.0) {
-            face = 0; // +X
+            face = 0u; // +X
             uv = vec2(-d.z, -d.y) / ad.x;
         } else {
-            face = 3; // -X
+            face = 3u; // -X
             uv = vec2(d.z, -d.y) / ad.x;
         }
     } else if (ad.y >= ad.x && ad.y >= ad.z) {
         if (d.y > 0.0) {
-            face = 1; // +Y
+            face = 1u; // +Y
             uv = vec2(d.x, d.z) / ad.y;
         } else {
-            face = 4; // -Y
+            face = 4u; // -Y
             uv = vec2(d.x, -d.z) / ad.y;
         }
     } else {
         if (d.z > 0.0) {
-            face = 2; // +Z
+            face = 2u; // +Z
             uv = vec2(d.x, -d.y) / ad.z;
         } else {
-            face = 5; // -Z
+            face = 5u; // -Z
             uv = vec2(-d.x, -d.y) / ad.z;
         }
     }
@@ -625,11 +625,11 @@ fn cubemap_decode(c: CubeCoordinates) -> vec3<f32> {
     var dir: vec3<f32>;
 
     switch (c.face) {
-        case 0: { dir = vec3( 1.0, -uv.y, -uv.x); } // +X
-        case 3: { dir = vec3(-1.0, -uv.y,  uv.x); } // -X
-        case 1: { dir = vec3( uv.x,  1.0,  uv.y); } // +Y
-        case 4: { dir = vec3( uv.x, -1.0, -uv.y); } // -Y
-        case 2: { dir = vec3( uv.x, -uv.y,  1.0); } // +Z
+        case 0u: { dir = vec3( 1.0, -uv.y, -uv.x); } // +X
+        case 3u: { dir = vec3(-1.0, -uv.y,  uv.x); } // -X
+        case 1u: { dir = vec3( uv.x,  1.0,  uv.y); } // +Y
+        case 4u: { dir = vec3( uv.x, -1.0, -uv.y); } // -Y
+        case 2u: { dir = vec3( uv.x, -uv.y,  1.0); } // +Z
         default: { dir = vec3(-uv.x, -uv.y, -1.0); } // -Z
     }
 

@@ -54,7 +54,7 @@ impl CullingBuffer {
             resolution,
             resolution,
             FilterMode::Linear,
-            wgpu::AddressMode::ClampToBorder,
+            wgpu::AddressMode::ClampToEdge,
         );
 
         let entries = &[

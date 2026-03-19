@@ -114,7 +114,7 @@ impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Forma
             address_mode_u: address,
             address_mode_v: address,
             address_mode_w: address,
-            border_color: Some(SamplerBorderColor::Zero),
+            border_color: None,
             mag_filter: filter,
             min_filter: filter,
             mipmap_filter: filter,

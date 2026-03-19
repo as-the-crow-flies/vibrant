@@ -6,20 +6,18 @@
 @group(0) @binding(5) var<uniform> TRANSFORM: mat4x4<f32>;
 @group(0) @binding(6) var<uniform> TRANSFORM_INVERSE: mat4x4<f32>;
 
-@group(1) @binding(0) var RADIANCE_0: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding(1) var RADIANCE_1: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding(2) var RADIANCE_2: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding(3) var RADIANCE_3: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding(4) var RADIANCE_4: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding(5) var RADIANCE_5: binding_array<texture_3d<f32>, 6>;
-
-@group(1) @binding( 6) var TRANSMISSION_0: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding( 7) var TRANSMISSION_1: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding( 8) var TRANSMISSION_2: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding( 9) var TRANSMISSION_3: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding(10) var TRANSMISSION_4: binding_array<texture_3d<f32>, 6>;
-@group(1) @binding(11) var TRANSMISSION_5: binding_array<texture_3d<f32>, 6>;
-
+@group(1) @binding( 0) var RADIANCE_0: texture_3d<f32>;
+@group(1) @binding( 1) var RADIANCE_1: texture_3d<f32>;
+@group(1) @binding( 2) var RADIANCE_2: texture_3d<f32>;
+@group(1) @binding( 3) var RADIANCE_3: texture_3d<f32>;
+@group(1) @binding( 4) var RADIANCE_4: texture_3d<f32>;
+@group(1) @binding( 5) var RADIANCE_5: texture_3d<f32>;
+@group(1) @binding( 6) var TRANSMISSION_0: texture_3d<f32>;
+@group(1) @binding( 7) var TRANSMISSION_1: texture_3d<f32>;
+@group(1) @binding( 8) var TRANSMISSION_2: texture_3d<f32>;
+@group(1) @binding( 9) var TRANSMISSION_3: texture_3d<f32>;
+@group(1) @binding(10) var TRANSMISSION_4: texture_3d<f32>;
+@group(1) @binding(11) var TRANSMISSION_5: texture_3d<f32>;
 @group(1) @binding(12) var CASCADE_SAMPLER: sampler;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
@@ -113,13 +111,16 @@ fn aces(x: vec3<f32>) -> vec3<f32> {
 }
 
 fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {
-    return 4.0 * PI * (
-        textureSampleLevel(RADIANCE_0[0], CASCADE_SAMPLER, uv, 0.0).rgb +
-        textureSampleLevel(RADIANCE_0[1], CASCADE_SAMPLER, uv, 0.0).rgb +
-        textureSampleLevel(RADIANCE_0[2], CASCADE_SAMPLER, uv, 0.0).rgb +
-        textureSampleLevel(RADIANCE_0[3], CASCADE_SAMPLER, uv, 0.0).rgb +
-        textureSampleLevel(RADIANCE_0[4], CASCADE_SAMPLER, uv, 0.0).rgb +
-        textureSampleLevel(RADIANCE_0[5], CASCADE_SAMPLER, uv, 0.0).rgb);
+    var diffuse = vec3<f32>(0.0);
+
+    for (var face=0u; face<6u; face++) {
+        let sample = uv * vec3<f32>(1.0, 1.0, 0.1666666666666) +
+            vec3<f32>(face) * vec3<f32>(0.0, 0.0, 0.1666666667);
+
+        diffuse += tex(RADIANCE_0, sample).rgb;
+    }
+
+    return 4.0 * PI * diffuse;
 }
 
 fn sample_hdri(direction: vec3<f32>) -> vec3<f32> {
@@ -169,175 +170,56 @@ fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
 }
 
 fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
-    let root_dim = level_dim(0);
-    let cascade_dim = level_dim(level);
+    let root_dim = level_dim(0) / vec3<u32>(1, 1, 6);
+    let cascade_dim = level_dim(level) / vec3<u32>(1, 1, 6);
     let direction_dim = root_dim >> vec3<u32>(level);
+
+    let face = vec3<u32>(0u, 0u, coordinate.face * cascade_dim.z);
 
     let n_directions = f32(1u << level);
     let direction_index = vec3<u32>(vec2<u32>(coordinate.uv * n_directions), 0);
+    let direction = direction_index * direction_dim;
 
     let voxel = vec3<u32>(uv * vec3<f32>(root_dim) / n_directions);
 
-    return vec3<f32>(direction_index * direction_dim + voxel) / vec3<f32>(cascade_dim);
+    return vec3<f32>(face + direction + voxel) / vec3<f32>(level_dim(level));
 }
 
 fn level_dim(level: u32) -> vec3<u32> {
     switch level {
-        case 0: { return textureDimensions(TRANSMISSION_0[0]); }
-        case 1: { return textureDimensions(TRANSMISSION_1[0]); }
-        case 2: { return textureDimensions(TRANSMISSION_2[0]); }
-        case 3: { return textureDimensions(TRANSMISSION_3[0]); }
-        case 4: { return textureDimensions(TRANSMISSION_4[0]); }
-        default: { return textureDimensions(TRANSMISSION_5[0]); }
+        case 0  : { return textureDimensions(RADIANCE_0); }
+        case 1  : { return textureDimensions(RADIANCE_1); }
+        case 2  : { return textureDimensions(RADIANCE_2); }
+        case 3  : { return textureDimensions(RADIANCE_3); }
+        case 4  : { return textureDimensions(RADIANCE_4); }
+        default : { return textureDimensions(RADIANCE_5); }
     }
 }
 
-fn sample_transmission(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec4<f32> {
+fn sample_transmission(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
     let sample = cascade_sample(uv, coordinate, level);
 
-    if (level == 0) {
-        switch coordinate.face {
-            case 0 : { return tex(TRANSMISSION_0[0], sample); }
-            case 1 : { return tex(TRANSMISSION_0[1], sample); }
-            case 2 : { return tex(TRANSMISSION_0[2], sample); }
-            case 3 : { return tex(TRANSMISSION_0[3], sample); }
-            case 4 : { return tex(TRANSMISSION_0[4], sample); }
-            default: { return tex(TRANSMISSION_0[5], sample); }
-        }
-    } else if (level == 1) {
-        switch coordinate.face {
-            case 0 : { return tex(TRANSMISSION_1[0], sample); }
-            case 1 : { return tex(TRANSMISSION_1[1], sample); }
-            case 2 : { return tex(TRANSMISSION_1[2], sample); }
-            case 3 : { return tex(TRANSMISSION_1[3], sample); }
-            case 4 : { return tex(TRANSMISSION_1[4], sample); }
-            default: { return tex(TRANSMISSION_1[5], sample); }
-        }
-    } else if (level == 2) {
-        switch coordinate.face {
-            case 0 : { return tex(TRANSMISSION_2[0], sample); }
-            case 1 : { return tex(TRANSMISSION_2[1], sample); }
-            case 2 : { return tex(TRANSMISSION_2[2], sample); }
-            case 3 : { return tex(TRANSMISSION_2[3], sample); }
-            case 4 : { return tex(TRANSMISSION_2[4], sample); }
-            default: { return tex(TRANSMISSION_2[5], sample); }
-        }
-    } else if (level == 3) {
-        switch coordinate.face {
-            case 0 : { return tex(TRANSMISSION_3[0], sample); }
-            case 1 : { return tex(TRANSMISSION_3[1], sample); }
-            case 2 : { return tex(TRANSMISSION_3[2], sample); }
-            case 3 : { return tex(TRANSMISSION_3[3], sample); }
-            case 4 : { return tex(TRANSMISSION_3[4], sample); }
-            default: { return tex(TRANSMISSION_3[5], sample); }
-        }
-    } else if (level == 4) {
-        switch coordinate.face {
-            case 0 : { return tex(TRANSMISSION_4[0], sample); }
-            case 1 : { return tex(TRANSMISSION_4[1], sample); }
-            case 2 : { return tex(TRANSMISSION_4[2], sample); }
-            case 3 : { return tex(TRANSMISSION_4[3], sample); }
-            case 4 : { return tex(TRANSMISSION_4[4], sample); }
-            default: { return tex(TRANSMISSION_4[5], sample); }
-        }
-    } else {
-        switch coordinate.face {
-            case 0 : { return tex(TRANSMISSION_5[0], sample); }
-            case 1 : { return tex(TRANSMISSION_5[1], sample); }
-            case 2 : { return tex(TRANSMISSION_5[2], sample); }
-            case 3 : { return tex(TRANSMISSION_5[3], sample); }
-            case 4 : { return tex(TRANSMISSION_5[4], sample); }
-            default: { return tex(TRANSMISSION_5[5], sample); }
-        }
+    switch level {
+        case 0u : { return tex(TRANSMISSION_0, sample).rgb; }
+        case 1u : { return tex(TRANSMISSION_1, sample).rgb; }
+        case 2u : { return tex(TRANSMISSION_2, sample).rgb; }
+        case 3u : { return tex(TRANSMISSION_3, sample).rgb; }
+        case 4u : { return tex(TRANSMISSION_4, sample).rgb; }
+        default : { return tex(TRANSMISSION_5, sample).rgb; }
     }
 }
 
-fn sample_radiance(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec4<f32> {
+fn sample_radiance(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
     let sample = cascade_sample(uv, coordinate, level);
 
-    if (level == 0) {
-        switch coordinate.face {
-            case 0 : { return tex(RADIANCE_0[0], sample); }
-            case 1 : { return tex(RADIANCE_0[1], sample); }
-            case 2 : { return tex(RADIANCE_0[2], sample); }
-            case 3 : { return tex(RADIANCE_0[3], sample); }
-            case 4 : { return tex(RADIANCE_0[4], sample); }
-            default: { return tex(RADIANCE_0[5], sample); }
-        }
-    } else if (level == 1) {
-        switch coordinate.face {
-            case 0 : { return tex(RADIANCE_1[0], sample); }
-            case 1 : { return tex(RADIANCE_1[1], sample); }
-            case 2 : { return tex(RADIANCE_1[2], sample); }
-            case 3 : { return tex(RADIANCE_1[3], sample); }
-            case 4 : { return tex(RADIANCE_1[4], sample); }
-            default: { return tex(RADIANCE_1[5], sample); }
-        }
-    } else if (level == 2) {
-        switch coordinate.face {
-            case 0 : { return tex(RADIANCE_2[0], sample); }
-            case 1 : { return tex(RADIANCE_2[1], sample); }
-            case 2 : { return tex(RADIANCE_2[2], sample); }
-            case 3 : { return tex(RADIANCE_2[3], sample); }
-            case 4 : { return tex(RADIANCE_2[4], sample); }
-            default: { return tex(RADIANCE_2[5], sample); }
-        }
-    } else if (level == 3) {
-        switch coordinate.face {
-            case 0 : { return tex(RADIANCE_3[0], sample); }
-            case 1 : { return tex(RADIANCE_3[1], sample); }
-            case 2 : { return tex(RADIANCE_3[2], sample); }
-            case 3 : { return tex(RADIANCE_3[3], sample); }
-            case 4 : { return tex(RADIANCE_3[4], sample); }
-            default: { return tex(RADIANCE_3[5], sample); }
-        }
-    } else if (level == 4) {
-        switch coordinate.face {
-            case 0 : { return tex(RADIANCE_4[0], sample); }
-            case 1 : { return tex(RADIANCE_4[1], sample); }
-            case 2 : { return tex(RADIANCE_4[2], sample); }
-            case 3 : { return tex(RADIANCE_4[3], sample); }
-            case 4 : { return tex(RADIANCE_4[4], sample); }
-            default: { return tex(RADIANCE_4[5], sample); }
-        }
-    } else {
-        switch coordinate.face {
-            case 0 : { return tex(RADIANCE_5[0], sample); }
-            case 1 : { return tex(RADIANCE_5[1], sample); }
-            case 2 : { return tex(RADIANCE_5[2], sample); }
-            case 3 : { return tex(RADIANCE_5[3], sample); }
-            case 4 : { return tex(RADIANCE_5[4], sample); }
-            default: { return tex(RADIANCE_5[5], sample); }
-        }
+    switch level {
+        case 0u : { return tex(RADIANCE_0, sample).rgb; }
+        case 1u : { return tex(RADIANCE_1, sample).rgb; }
+        case 2u : { return tex(RADIANCE_2, sample).rgb; }
+        case 3u : { return tex(RADIANCE_3, sample).rgb; }
+        case 4u : { return tex(RADIANCE_4, sample).rgb; }
+        default : { return tex(RADIANCE_5, sample).rgb; }
     }
-}
-
-struct ColorGradient {
-    color: vec3<f32>,
-    gradient: vec3<f32>
-}
-
-fn sample_extinction(position: vec3<f32>) -> ColorGradient {
-    let extinction = textureSampleLevel(EXTINCTION, SAMPLER, position, 0.0).rgb;
-
-    let sample = position * vec3<f32>(1.0, 1.0, 0.333333);
-
-    let dx = textureSampleLevel(GRADIENT, SAMPLER, sample + vec3<f32>(0.0, 0.0, 0.000000), 0.0).rgb;
-    let dy = textureSampleLevel(GRADIENT, SAMPLER, sample + vec3<f32>(0.0, 0.0, 0.333333), 0.0).rgb;
-    let dz = textureSampleLevel(GRADIENT, SAMPLER, sample + vec3<f32>(0.0, 0.0, 0.666666), 0.0).rgb;
-
-    let l = fract(position * vec3<f32>(textureDimensions(EXTINCTION)));
-
-    let color = extinction
-        + (1.0 - l.x) * l.x * dx
-        + (1.0 - l.y) * l.y * dy
-        + (1.0 - l.z) * l.z * dz;
-
-    let gradient = dx + dy + dz;
-
-    if (ENVIRONMENT.settings.lighting > 0.5) { return ColorGradient(extinction, gradient); }
-
-    return ColorGradient(color, gradient);
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
@@ -361,12 +243,6 @@ fn intersectAABB(origin: vec3<f32>, direction: vec3<f32>) -> vec2<f32> {
     let tMax = min(min(tMaxVec.x, tMaxVec.y), tMaxVec.z);
 
     return vec2<f32>(tMin, tMax);
-}
-
-fn adaptive_step(density: f32, gradient: f32, min_step: f32, max_step: f32) -> f32 {
-    let eps = 1e-5;
-    let step = min(0.5 / (gradient + eps), 0.5 / (density + eps));
-    return clamp(step, min_step, max_step);
 }
 
 fn tex(tex: texture_3d<f32>, uv: vec3<f32>) -> vec4<f32> {

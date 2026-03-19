@@ -1,30 +1,31 @@
-use std::{any::type_name, iter::zip, num::NonZero};
+use std::{any::type_name, iter::zip};
 
 use glam::UVec3;
 use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
+    wgt::TextureViewDescriptor,
     *,
 };
 
 use crate::gpu::Gpu;
 
 pub struct Cascade {
-    radiance: Vec<Texture>,
-    radiance_views: Vec<TextureView>,
-    transmission: Vec<Texture>,
-    transmission_views: Vec<TextureView>,
+    radiance: Texture,
+    radiance_view: TextureView,
+    transmission: Texture,
+    transmission_view: TextureView,
     size: UVec3,
 }
 
 impl Cascade {
-    pub fn new(gpu: &Gpu, size: UVec3, format: TextureFormat, directions: u32) -> Self {
+    pub fn new(gpu: &Gpu, size: UVec3, format: TextureFormat) -> Self {
         let descriptor = TextureDescriptor {
             label: Some(type_name::<Self>()),
             size: Extent3d {
                 width: size.x,
                 height: size.y,
-                depth_or_array_layers: size.z,
+                depth_or_array_layers: size.z * 6,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -34,39 +35,19 @@ impl Cascade {
             view_formats: &[],
         };
 
-        let radiance = (0..directions)
-            .map(|_| gpu.device().create_texture(&descriptor))
-            .collect_vec();
+        let radiance = gpu.device().create_texture(&descriptor);
+        let radiance_view = radiance.create_view(&TextureViewDescriptor::default());
 
-        let radiance_views = radiance
-            .iter()
-            .map(|texture| texture.create_view(&TextureViewDescriptor::default()))
-            .collect_vec();
-
-        let transmission = (0..directions)
-            .map(|_| gpu.device().create_texture(&descriptor))
-            .collect_vec();
-
-        let transmission_views = transmission
-            .iter()
-            .map(|texture| texture.create_view(&TextureViewDescriptor::default()))
-            .collect_vec();
+        let transmission = gpu.device().create_texture(&descriptor);
+        let transmission_view = transmission.create_view(&TextureViewDescriptor::default());
 
         Self {
             radiance,
-            radiance_views,
+            radiance_view,
             transmission,
-            transmission_views,
+            transmission_view,
             size,
         }
-    }
-
-    pub fn radiance_views(&self) -> Vec<&TextureView> {
-        self.radiance_views.iter().collect_vec()
-    }
-
-    pub fn transmission_views(&self) -> Vec<&TextureView> {
-        self.transmission_views.iter().collect_vec()
     }
 
     pub fn size(&self) -> UVec3 {
@@ -76,13 +57,8 @@ impl Cascade {
 
 impl Drop for Cascade {
     fn drop(&mut self) {
-        for texture in &self.radiance {
-            texture.destroy();
-        }
-
-        for texture in &self.transmission {
-            texture.destroy();
-        }
+        self.radiance.destroy();
+        self.transmission.destroy();
     }
 }
 
@@ -97,7 +73,6 @@ pub struct RadianceVolume {
 impl RadianceVolume {
     const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     const N_CASCADES: u32 = 7;
-    const N_DIRECTIONS: u32 = 6;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
@@ -108,7 +83,6 @@ impl RadianceVolume {
                     gpu,
                     UVec3::new(size.x >> 1, size.y >> 1, size.z >> cascade),
                     Self::FORMAT,
-                    Self::N_DIRECTIONS,
                 )
             })
             .collect_vec();
@@ -147,49 +121,31 @@ impl RadianceVolume {
                 label,
                 layout: &Self::layout_cascade(gpu),
                 entries: &[
-                    cascade_out
-                        .radiance_views()
-                        .iter()
-                        .enumerate()
-                        .map(|(index, view)| BindGroupEntry {
-                            binding: index as u32,
-                            resource: BindingResource::TextureView(view),
-                        })
-                        .collect_vec(),
-                    cascade_out
-                        .transmission_views()
-                        .iter()
-                        .enumerate()
-                        .map(|(index, view)| BindGroupEntry {
-                            binding: Self::N_DIRECTIONS + index as u32,
-                            resource: BindingResource::TextureView(view),
-                        })
-                        .collect_vec(),
-                    cascade_in
-                        .radiance_views()
-                        .iter()
-                        .enumerate()
-                        .map(|(index, view)| BindGroupEntry {
-                            binding: 2 * Self::N_DIRECTIONS + index as u32,
-                            resource: BindingResource::TextureView(view),
-                        })
-                        .collect_vec(),
-                    vec![
-                        BindGroupEntry {
-                            binding: 3 * Self::N_DIRECTIONS,
-                            resource: BindingResource::Sampler(&sampler),
-                        },
-                        BindGroupEntry {
-                            binding: 3 * Self::N_DIRECTIONS + 1,
-                            resource: BindingResource::Buffer(BufferBinding {
-                                buffer: &index,
-                                offset: 0,
-                                size: None,
-                            }),
-                        },
-                    ],
-                ]
-                .concat(),
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&cascade_out.radiance_view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::TextureView(&cascade_out.transmission_view),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: BindingResource::TextureView(&cascade_in.radiance_view),
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: BindingResource::Sampler(&sampler),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: BindingResource::Buffer(BufferBinding {
+                            buffer: &index,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                ],
             })
         })
         .collect_vec();
@@ -200,51 +156,51 @@ impl RadianceVolume {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureViewArray(&cascades[0].radiance_views()),
+                    resource: BindingResource::TextureView(&cascades[0].radiance_view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureViewArray(&cascades[1].radiance_views()),
+                    resource: BindingResource::TextureView(&cascades[1].radiance_view),
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::TextureViewArray(&cascades[2].radiance_views()),
+                    resource: BindingResource::TextureView(&cascades[2].radiance_view),
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: BindingResource::TextureViewArray(&cascades[3].radiance_views()),
+                    resource: BindingResource::TextureView(&cascades[3].radiance_view),
                 },
                 BindGroupEntry {
                     binding: 4,
-                    resource: BindingResource::TextureViewArray(&cascades[4].radiance_views()),
+                    resource: BindingResource::TextureView(&cascades[4].radiance_view),
                 },
                 BindGroupEntry {
                     binding: 5,
-                    resource: BindingResource::TextureViewArray(&cascades[5].radiance_views()),
+                    resource: BindingResource::TextureView(&cascades[5].radiance_view),
                 },
                 BindGroupEntry {
                     binding: 6,
-                    resource: BindingResource::TextureViewArray(&cascades[0].transmission_views()),
+                    resource: BindingResource::TextureView(&cascades[0].transmission_view),
                 },
                 BindGroupEntry {
                     binding: 7,
-                    resource: BindingResource::TextureViewArray(&cascades[1].transmission_views()),
+                    resource: BindingResource::TextureView(&cascades[1].transmission_view),
                 },
                 BindGroupEntry {
                     binding: 8,
-                    resource: BindingResource::TextureViewArray(&cascades[2].transmission_views()),
+                    resource: BindingResource::TextureView(&cascades[2].transmission_view),
                 },
                 BindGroupEntry {
                     binding: 9,
-                    resource: BindingResource::TextureViewArray(&cascades[3].transmission_views()),
+                    resource: BindingResource::TextureView(&cascades[3].transmission_view),
                 },
                 BindGroupEntry {
                     binding: 10,
-                    resource: BindingResource::TextureViewArray(&cascades[4].transmission_views()),
+                    resource: BindingResource::TextureView(&cascades[4].transmission_view),
                 },
                 BindGroupEntry {
                     binding: 11,
-                    resource: BindingResource::TextureViewArray(&cascades[5].transmission_views()),
+                    resource: BindingResource::TextureView(&cascades[5].transmission_view),
                 },
                 BindGroupEntry {
                     binding: 12,
@@ -284,73 +240,73 @@ impl RadianceVolume {
                         binding: 0,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 4,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 5,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 6,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 7,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 8,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 9,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 10,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 11,
                         visibility,
                         ty: Self::binding_type_read(),
-                        count: NonZero::new(6),
+                        count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 12,
@@ -369,42 +325,41 @@ impl RadianceVolume {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    (0..2 * Self::N_DIRECTIONS)
-                        .map(|index| BindGroupLayoutEntry {
-                            binding: index as u32,
-                            visibility,
-                            ty: Self::binding_type_write(),
-                            count: None,
-                        })
-                        .collect_vec(),
-                    (2 * Self::N_DIRECTIONS..3 * Self::N_DIRECTIONS)
-                        .map(|index| BindGroupLayoutEntry {
-                            binding: index as u32,
-                            visibility,
-                            ty: Self::binding_type_read(),
-                            count: None,
-                        })
-                        .collect_vec(),
-                    vec![
-                        BindGroupLayoutEntry {
-                            binding: 3 * Self::N_DIRECTIONS,
-                            visibility,
-                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                            count: None,
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility,
+                        ty: Self::binding_type_write(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility,
+                        ty: Self::binding_type_write(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility,
+                        ty: Self::binding_type_read(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
                         },
-                        BindGroupLayoutEntry {
-                            binding: 3 * Self::N_DIRECTIONS + 1,
-                            visibility,
-                            ty: BindingType::Buffer {
-                                ty: BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                    ],
-                ]
-                .concat(),
+                        count: None,
+                    },
+                ],
             })
     }
 

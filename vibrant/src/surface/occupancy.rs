@@ -38,7 +38,7 @@ impl OccupancyBuffer {
             resolution,
             resolution,
             FilterMode::Linear,
-            AddressMode::ClampToBorder,
+            AddressMode::ClampToEdge,
         );
         let count = MipTexture3D::new(
             gpu,
@@ -46,7 +46,7 @@ impl OccupancyBuffer {
             resolution,
             resolution,
             FilterMode::Nearest,
-            AddressMode::ClampToBorder,
+            AddressMode::ClampToEdge,
         );
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
