@@ -276,6 +276,7 @@ impl HdriBuffer {
 
 impl Drop for HdriBuffer {
     fn drop(&mut self) {
+        self.texture.destroy();
         self.settings_buffer.destroy();
     }
 }
