@@ -102,8 +102,10 @@ impl AntiAliasingPipeline {
         frame: &Frame,
         settings: &Settings,
     ) {
-        match settings.aa_mode {
-            AntiAliasingMode::Off | AntiAliasingMode::SSAA => {
+        // When Adaptive is active, effective_aa_mode holds the resolved mode.
+        let effective = settings.effective_aa_mode;
+        match effective {
+            AntiAliasingMode::Off | AntiAliasingMode::SSAA | AntiAliasingMode::Adaptive => {
                 self.dispatch_passthrough(cmd, environment, frame)
             }
             AntiAliasingMode::SMAA => self.dispatch_smaa(cmd, environment, frame),

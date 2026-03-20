@@ -86,6 +86,14 @@ impl Renderer {
             }
         });
 
+        let input = self.egui.take_egui_input(window);
+        let output = self
+            .egui
+            .egui_ctx()
+            .run(input, |ctx| controller.ui(ctx, &mut self.asset, dt));
+        self.egui
+            .handle_platform_output(&window, output.platform_output.clone());
+
         self.surface.update_output_mode(
             gpu,
             controller.settings(),
@@ -99,14 +107,6 @@ impl Renderer {
             format!("{:?}", surface.format()),
             surface.hdr_supported(),
         );
-
-        let input = self.egui.take_egui_input(window);
-        let output = self
-            .egui
-            .egui_ctx()
-            .run(input, |ctx| controller.ui(ctx, &mut self.asset, dt));
-        self.egui
-            .handle_platform_output(&window, output.platform_output.clone());
 
         self.environment.update(gpu, &controller);
 
