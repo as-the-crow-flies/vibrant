@@ -4,6 +4,24 @@ use glam::{Mat4, Quat, Vec2, Vec3};
 
 use super::state::ControllerState;
 
+// Camera motion intensity, derived from frame-to-frame view matrix change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MotionLevel {
+    Still,
+    Slow,
+    Fast,
+}
+
+impl std::fmt::Display for MotionLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MotionLevel::Still => write!(f, "Still"),
+            MotionLevel::Slow => write!(f, "Slow"),
+            MotionLevel::Fast => write!(f, "Fast"),
+        }
+    }
+}
+
 // Halton low-discrepancy sequence for sub-pixel jitter
 fn halton(index: u32, base: u32) -> f32 {
     let mut f = 1.0f32;
@@ -28,6 +46,11 @@ pub struct Camera {
     pub fov: f32,
     near: f32,
     far: f32,
+
+    // motion detection
+    prev_view: Mat4,
+    velocity: f32,
+    motion_level: MotionLevel,
 }
 
 impl Camera {
@@ -42,6 +65,9 @@ impl Camera {
             fov: PI / 3.0,
             near: 0.01,
             far: 10.0,
+            prev_view: Mat4::IDENTITY,
+            velocity: 0.0,
+            motion_level: MotionLevel::Still,
         }
     }
 
@@ -75,6 +101,32 @@ impl Camera {
         }
 
         self.zoom(-0.1 * state.scroll.y);
+    }
+
+    /// called every frame (from ui()) to update velocity with smooth decay.
+    pub fn tick(&mut self) {
+        // compute instantaneous change from view matrix difference.
+        let current_view = self.view();
+        let diff = current_view - self.prev_view;
+        let raw = (0..4)
+            .map(|i| diff.col(i).length_squared())
+            .sum::<f32>()
+            .sqrt();
+        self.prev_view = current_view;
+
+        // smoothing: fast rise, moderate decay
+        self.velocity = self.velocity * 0.5 + raw * 0.5;
+
+        // classify into three levels.
+        const STILL_THRESHOLD: f32 = 0.0001;
+        const FAST_THRESHOLD: f32 = 0.01;
+        self.motion_level = if self.velocity < STILL_THRESHOLD {
+            MotionLevel::Still
+        } else if self.velocity < FAST_THRESHOLD {
+            MotionLevel::Slow
+        } else {
+            MotionLevel::Fast
+        };
     }
 
     pub fn aspect(&self) -> f32 {
@@ -117,6 +169,14 @@ impl Camera {
 
     pub fn far(&self) -> f32 {
         self.far
+    }
+
+    pub fn velocity(&self) -> f32 {
+        self.velocity
+    }
+
+    pub fn motion_level(&self) -> MotionLevel {
+        self.motion_level
     }
 
     /// compute sub-pixel jitter for TAA

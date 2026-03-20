@@ -96,6 +96,7 @@ impl Controller {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
+        self.camera.tick();
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -300,6 +301,11 @@ impl Controller {
                         // anti-aliasing mode selector
                         ui.separator();
                         ui.label("Anti-Aliasing");
+                        ui.label(format!(
+                            "Camera: {} (v={:.6})",
+                            self.camera.motion_level(),
+                            self.camera.velocity()
+                        ));
                         let prev_aa_mode = self.settings.aa_mode;
                         ComboBox::from_label("AA Mode")
                             .selected_text(format!("{:?}", self.settings.aa_mode))
