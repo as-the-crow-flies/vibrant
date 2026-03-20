@@ -93,6 +93,8 @@ impl Environment {
                 bytes_of(&controller.settings().bloom_threshold),
                 bytes_of(&controller.settings().bloom_soft_knee),
                 bytes_of(&controller.settings().bloom_intensity),
+                bytes_of(&controller.settings().smaa_threshold),
+                bytes_of(&controller.settings().smaa_max_search_steps),
             ]
             .concat(),
         );

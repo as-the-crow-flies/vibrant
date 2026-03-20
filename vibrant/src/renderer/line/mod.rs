@@ -1,3 +1,4 @@
+pub mod aa;
 pub mod crop;
 pub mod cull;
 pub mod occlusion;
@@ -9,6 +10,8 @@ pub mod transform;
 
 use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
+
+use aa::AntiAliasingPipeline;
 
 use crate::{
     asset::{line::LineBuffer, transform::TransformBuffer},
@@ -33,6 +36,8 @@ pub struct LineRenderer {
     populate: LinePopulatePipeline,
     render: LineRenderPipeline,
     post: PostProcessingPipeline,
+    // Anti-aliasing pass: runs after post-processing, writes to frame.aa.
+    aa: AntiAliasingPipeline,
 }
 
 impl LineRenderer {
@@ -46,6 +51,7 @@ impl LineRenderer {
             populate: LinePopulatePipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
             post: PostProcessingPipeline::new(gpu),
+            aa: AntiAliasingPipeline::new(gpu),
         }
     }
 
@@ -80,5 +86,7 @@ impl LineRenderer {
             .dispatch(cmd, environment, frame, line, settings);
 
         self.post.dispatch(cmd, environment, frame, settings);
+
+        self.aa.dispatch(cmd, environment, frame, settings);
     }
 }

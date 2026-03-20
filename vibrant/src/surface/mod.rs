@@ -32,9 +32,15 @@ use super::gpu::Gpu;
 pub struct Frame {
     color: ColorBuffer,
     post: ColorBuffer,
+    // anti-aliasing output buffer
+    aa: ColorBuffer,
     ui: UiBuffer,
     bloom_a: ColorBuffer,
     bloom_b: ColorBuffer,
+    // SMAA edge detection buffer
+    smaa_edges: ColorBuffer,
+    // SMAA blend weight buffer
+    smaa_blend: ColorBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -45,9 +51,12 @@ impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         let color = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let post = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
+        let aa = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let ui = UiBuffer::new(gpu, settings.width, settings.height);
         let bloom_a = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let bloom_b = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
+        let smaa_edges = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
+        let smaa_blend = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -68,9 +77,12 @@ impl Frame {
         Self {
             color,
             post,
+            aa,
             ui,
             bloom_a,
             bloom_b,
+            smaa_edges,
+            smaa_blend,
             occupancy,
             occlusion,
             culling,
@@ -84,6 +96,18 @@ impl Frame {
 
     pub fn post(&self) -> &ColorBuffer {
         &self.post
+    }
+
+    pub fn aa(&self) -> &ColorBuffer {
+        &self.aa
+    }
+
+    pub fn smaa_edges(&self) -> &ColorBuffer {
+        &self.smaa_edges
+    }
+
+    pub fn smaa_blend(&self) -> &ColorBuffer {
+        &self.smaa_blend
     }
 
     pub fn ui(&self) -> &UiBuffer {
@@ -333,7 +357,7 @@ impl Surface {
                     pass.set_pipeline(&self.display_sdr);
                 }
 
-                pass.set_bind_group(0, self.buffer.post().binding(), &[]);
+                pass.set_bind_group(0, self.buffer.aa().binding(), &[]);
                 pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
                 if self.hdr_output {
                     pass.set_bind_group(2, &self.hdr_params_binding, &[]);

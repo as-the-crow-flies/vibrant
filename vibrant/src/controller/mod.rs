@@ -23,7 +23,7 @@ use crate::{
     asset::Asset,
     controller::{
         segment::Segment,
-        settings::{LineDisplayMode, LineVoxelizationMode},
+        settings::{AntiAliasingMode, LineDisplayMode, LineVoxelizationMode},
     },
     file::FileStage,
 };
@@ -293,7 +293,39 @@ impl Controller {
                                 .text("Bloom Intensity")
                         );
 
-                        
+                        // anti-aliasing mode selector
+                        ui.separator();
+                        ui.label("Anti-Aliasing");
+                        ComboBox::from_label("AA Mode")
+                            .selected_text(format!("{:?}", self.settings.aa_mode))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.settings.aa_mode,
+                                    AntiAliasingMode::Off,
+                                    "Off",
+                                );
+                                ui.selectable_value(
+                                    &mut self.settings.aa_mode,
+                                    AntiAliasingMode::SMAA,
+                                    "SMAA",
+                                );
+                            });
+
+                        // SMAA tuning parameters — only shown when SMAA is active.
+                        if self.settings.aa_mode == AntiAliasingMode::SMAA {
+                            ui.add(
+                                Slider::new(&mut self.settings.smaa_threshold, 0.05..=0.20)
+                                    .text("Edge Threshold")
+                            );
+                            let mut steps = self.settings.smaa_max_search_steps as i32;
+                            if ui.add(
+                                Slider::new(&mut steps, 4..=32)
+                                    .text("Max Search Steps")
+                            ).changed() {
+                                self.settings.smaa_max_search_steps = steps as u32;
+                            }
+                        }
+
                         if ui
                             .add(Slider::new(&mut self.settings.render_scale, 0.25..=2.0)
                                 .text("Render Scale"))

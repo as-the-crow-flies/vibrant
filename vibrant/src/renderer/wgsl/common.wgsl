@@ -20,7 +20,9 @@ struct Settings {
     bloom_threshold: f32,
     bloom_soft_knee: f32,
     bloom_intensity: f32,
-    // tone mapping removed; HDR parameters handled elsewhere
+    // SMAA tuning parameters
+    smaa_threshold: f32,
+    smaa_max_search_steps: u32,
 }
 
 struct Segment {

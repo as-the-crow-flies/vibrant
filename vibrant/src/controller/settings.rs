@@ -1,3 +1,13 @@
+// Anti-aliasing mode selector.
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum AntiAliasingMode {
+    // No anti-aliasing applied.
+    #[default]
+    Off,
+    // Subpixel Morphological Anti-Aliasing
+    SMAA,
+}
+
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineVoxelizationMode {
     #[default]
@@ -60,6 +70,14 @@ pub struct Settings {
     pub bloom_intensity: f32,
     pub hdr_paper_white_nits: f32,
     pub hdr_peak_nits: f32,
+    // Current anti-aliasing mode.
+    pub aa_mode: AntiAliasingMode,
+    // SMAA edge detection threshold
+    // lower values detect more edges (more aggressive AA).
+    pub smaa_threshold: f32,
+    // SMAA max search steps — how far (in texels) to search along an edge.
+    // Higher values produce better AA on long edges but cost more texture reads.
+    pub smaa_max_search_steps: u32,
 }
 
 impl Settings {
@@ -100,6 +118,9 @@ impl Settings {
             hdr_peak_nits: 1000.0,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
+            aa_mode: AntiAliasingMode::Off,
+            smaa_threshold: 0.1,
+            smaa_max_search_steps: 16,
         }
     }
 
