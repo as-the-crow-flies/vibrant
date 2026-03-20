@@ -44,6 +44,9 @@ pub struct Controller {
     output_hdr_supported: bool,
     output_hdr: bool,
     output_format: String,
+
+    // render_scale saved before entering SSAA mode, restored on exit.
+    pre_ssaa_render_scale: f32,
 }
 
 impl Controller {
@@ -62,6 +65,7 @@ impl Controller {
             output_hdr_supported: false,
             output_hdr: false,
             output_format: "Unknown".to_string(),
+            pre_ssaa_render_scale: 1.0,
         }
     }
 
@@ -296,6 +300,7 @@ impl Controller {
                         // anti-aliasing mode selector
                         ui.separator();
                         ui.label("Anti-Aliasing");
+                        let prev_aa_mode = self.settings.aa_mode;
                         ComboBox::from_label("AA Mode")
                             .selected_text(format!("{:?}", self.settings.aa_mode))
                             .show_ui(ui, |ui| {
@@ -303,6 +308,11 @@ impl Controller {
                                     &mut self.settings.aa_mode,
                                     AntiAliasingMode::Off,
                                     "Off",
+                                );
+                                ui.selectable_value(
+                                    &mut self.settings.aa_mode,
+                                    AntiAliasingMode::SSAA,
+                                    "SSAA",
                                 );
                                 ui.selectable_value(
                                     &mut self.settings.aa_mode,
@@ -315,6 +325,18 @@ impl Controller {
                                     "TAA",
                                 );
                             });
+
+                        // Save render_scale when entering SSAA, restore when leaving.
+                        if prev_aa_mode != self.settings.aa_mode {
+                            if self.settings.aa_mode == AntiAliasingMode::SSAA {
+                                self.pre_ssaa_render_scale = self.settings.render_scale;
+                                self.settings.render_scale = std::f32::consts::SQRT_2;
+                                self.settings.update_render_size();
+                            } else if prev_aa_mode == AntiAliasingMode::SSAA {
+                                self.settings.render_scale = self.pre_ssaa_render_scale;
+                                self.settings.update_render_size();
+                            }
+                        }
 
                         // SMAA tuning parameters — only shown when SMAA is active.
                         if self.settings.aa_mode == AntiAliasingMode::SMAA {
@@ -343,12 +365,35 @@ impl Controller {
                             );
                         }
 
-                        if ui
-                            .add(Slider::new(&mut self.settings.render_scale, 0.25..=2.0)
-                                .text("Render Scale"))
-                            .changed()
-                        {
-                            self.settings.update_render_size();
+                        // SSAA scale presets — only shown when SSAA is active.
+                        if self.settings.aa_mode == AntiAliasingMode::SSAA {
+                            ui.horizontal(|ui| {
+                                if ui.button("2x (√2)").clicked() {
+                                    self.settings.render_scale = std::f32::consts::SQRT_2;
+                                    self.settings.update_render_size();
+                                }
+                                if ui.button("4x (2.0)").clicked() {
+                                    self.settings.render_scale = 2.0;
+                                    self.settings.update_render_size();
+                                }
+                            });
+                            if ui
+                                .add(Slider::new(&mut self.settings.render_scale, 1.0..=2.0)
+                                    .text("SSAA Scale"))
+                                .changed()
+                            {
+                                self.settings.update_render_size();
+                            }
+                        }
+
+                        if self.settings.aa_mode != AntiAliasingMode::SSAA {
+                            if ui
+                                .add(Slider::new(&mut self.settings.render_scale, 0.25..=2.0)
+                                    .text("Render Scale"))
+                                .changed()
+                            {
+                                self.settings.update_render_size();
+                            }
                         }
 
                         ui.label(format!(

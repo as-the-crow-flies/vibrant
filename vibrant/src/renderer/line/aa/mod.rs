@@ -103,7 +103,9 @@ impl AntiAliasingPipeline {
         settings: &Settings,
     ) {
         match settings.aa_mode {
-            AntiAliasingMode::Off => self.dispatch_passthrough(cmd, environment, frame),
+            AntiAliasingMode::Off | AntiAliasingMode::SSAA => {
+                self.dispatch_passthrough(cmd, environment, frame)
+            }
             AntiAliasingMode::SMAA => self.dispatch_smaa(cmd, environment, frame),
             AntiAliasingMode::TAA => self.dispatch_taa(cmd, environment, frame),
         }

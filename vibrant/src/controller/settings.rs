@@ -4,6 +4,8 @@ pub enum AntiAliasingMode {
     // No anti-aliasing applied.
     #[default]
     Off,
+    // Super-Sample Anti-Aliasing (render at higher resolution, downsample)
+    SSAA,
     // Subpixel Morphological Anti-Aliasing
     SMAA,
     // Temporal Anti-Aliasing
