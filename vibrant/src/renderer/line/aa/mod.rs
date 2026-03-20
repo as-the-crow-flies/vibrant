@@ -2,7 +2,7 @@
 ///
 /// Sits between post-processing and display in the rendering pipeline:
 
-use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
+use wgpu::{CommandEncoder, Extent3d, Origin3d, RenderPassDescriptor, RenderPipeline, TextureAspect};
 
 use crate::{
     controller::settings::{AntiAliasingMode, Settings},
@@ -22,6 +22,12 @@ pub struct AntiAliasingPipeline {
     smaa_blend: RenderPipeline,
     // Pass 3: Neighborhood blending
     smaa_neighborhood: RenderPipeline,
+
+    // TAA pipeline
+    taa: RenderPipeline,
+    taa_history_valid: bool,
+    taa_last_width: u32,
+    taa_last_height: u32,
 }
 
 impl AntiAliasingPipeline {
@@ -61,16 +67,36 @@ impl AntiAliasingPipeline {
             &gpu.shader(include_str!("smaa_neighborhood.wgsl")),
         );
 
+        // TAA pipeline
+        let taa = gpu.quad(
+            "AA::TAA",
+            &gpu.pipeline_layout(&[
+                &Environment::layout(gpu),
+                &ColorBuffer::layout(gpu), // current frame (frame.post)
+                &ColorBuffer::layout(gpu), // history buffer (frame.taa_history)
+            ]),
+            ColorBuffer::target(),
+            &gpu.shader(include_str!("taa.wgsl")),
+        );
+
         Self {
             passthrough,
             smaa_edge,
             smaa_blend,
             smaa_neighborhood,
+            taa,
+            taa_history_valid: false,
+            taa_last_width: 0,
+            taa_last_height: 0,
         }
     }
 
+    pub fn reset_taa_history(&mut self) {
+        self.taa_history_valid = false;
+    }
+
     pub fn dispatch(
-        &self,
+        &mut self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &Frame,
@@ -79,6 +105,7 @@ impl AntiAliasingPipeline {
         match settings.aa_mode {
             AntiAliasingMode::Off => self.dispatch_passthrough(cmd, environment, frame),
             AntiAliasingMode::SMAA => self.dispatch_smaa(cmd, environment, frame),
+            AntiAliasingMode::TAA => self.dispatch_taa(cmd, environment, frame),
         }
     }
 
@@ -148,5 +175,62 @@ impl AntiAliasingPipeline {
             pass.set_bind_group(2, frame.smaa_blend().binding(), &[]);
             pass.draw(0..4, 0..1);
         }
+    }
+
+    fn dispatch_taa(
+        &mut self,
+        cmd: &mut CommandEncoder,
+        environment: &Environment,
+        frame: &Frame,
+    ) {
+        // auto-invalidate history if frame dimensions changed
+        let w = frame.aa().width();
+        let h = frame.aa().height();
+        if w != self.taa_last_width || h != self.taa_last_height {
+            self.taa_history_valid = false;
+            self.taa_last_width = w;
+            self.taa_last_height = h;
+        }
+
+        if !self.taa_history_valid {
+            // no valid history yet
+            self.dispatch_passthrough(cmd, environment, frame);
+        } else {
+            // blend current frame with history
+            let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+                label: Some("AA::TAA"),
+                color_attachments: &[Some(frame.aa().attachment_clear())],
+                ..Default::default()
+            });
+
+            pass.set_pipeline(&self.taa);
+            pass.set_bind_group(0, environment.binding(), &[]);
+            pass.set_bind_group(1, frame.post().binding(), &[]);
+            pass.set_bind_group(2, frame.taa_history().binding(), &[]);
+            pass.draw(0..4, 0..1);
+        }
+
+        // copy frame.aa → frame.taa_history for next frame's reprojection
+        cmd.copy_texture_to_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: frame.aa().texture(),
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture: frame.taa_history().texture(),
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            Extent3d {
+                width: frame.aa().width(),
+                height: frame.aa().height(),
+                depth_or_array_layers: 1,
+            },
+        );
+
+        self.taa_history_valid = true;
     }
 }

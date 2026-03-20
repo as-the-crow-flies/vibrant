@@ -6,6 +6,8 @@ pub enum AntiAliasingMode {
     Off,
     // Subpixel Morphological Anti-Aliasing
     SMAA,
+    // Temporal Anti-Aliasing
+    TAA,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -73,11 +75,13 @@ pub struct Settings {
     // Current anti-aliasing mode.
     pub aa_mode: AntiAliasingMode,
     // SMAA edge detection threshold
-    // lower values detect more edges (more aggressive AA).
     pub smaa_threshold: f32,
-    // SMAA max search steps — how far (in texels) to search along an edge.
-    // Higher values produce better AA on long edges but cost more texture reads.
+    // SMAA max search steps
     pub smaa_max_search_steps: u32,
+    // TAA weight of the current frame in the temporal blend
+    pub taa_blend_factor: f32,
+    // TAA variance clipping sigma, controls how aggressively stale history is rejected
+    pub taa_clamp_sigma: f32,
 }
 
 impl Settings {
@@ -121,6 +125,8 @@ impl Settings {
             aa_mode: AntiAliasingMode::Off,
             smaa_threshold: 0.1,
             smaa_max_search_steps: 16,
+            taa_blend_factor: 0.15,
+            taa_clamp_sigma: 1.0,
         }
     }
 

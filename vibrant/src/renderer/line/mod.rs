@@ -55,8 +55,12 @@ impl LineRenderer {
         }
     }
 
+    pub fn reset_taa_history(&mut self) {
+        self.aa.reset_taa_history();
+    }
+
     pub fn render(
-        &self,
+        &mut self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
         frame: &Frame,

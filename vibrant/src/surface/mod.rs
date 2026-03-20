@@ -41,6 +41,8 @@ pub struct Frame {
     smaa_edges: ColorBuffer,
     // SMAA blend weight buffer
     smaa_blend: ColorBuffer,
+    // TAA history buffer
+    taa_history: ColorBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -57,6 +59,7 @@ impl Frame {
         let bloom_b = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let smaa_edges = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let smaa_blend = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
+        let taa_history = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -83,6 +86,7 @@ impl Frame {
             bloom_b,
             smaa_edges,
             smaa_blend,
+            taa_history,
             occupancy,
             occlusion,
             culling,
@@ -108,6 +112,10 @@ impl Frame {
 
     pub fn smaa_blend(&self) -> &ColorBuffer {
         &self.smaa_blend
+    }
+
+    pub fn taa_history(&self) -> &ColorBuffer {
+        &self.taa_history
     }
 
     pub fn ui(&self) -> &UiBuffer {

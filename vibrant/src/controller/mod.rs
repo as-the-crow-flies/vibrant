@@ -309,6 +309,11 @@ impl Controller {
                                     AntiAliasingMode::SMAA,
                                     "SMAA",
                                 );
+                                ui.selectable_value(
+                                    &mut self.settings.aa_mode,
+                                    AntiAliasingMode::TAA,
+                                    "TAA",
+                                );
                             });
 
                         // SMAA tuning parameters — only shown when SMAA is active.
@@ -324,6 +329,18 @@ impl Controller {
                             ).changed() {
                                 self.settings.smaa_max_search_steps = steps as u32;
                             }
+                        }
+
+                        // TAA tuning parameters — only shown when TAA is active.
+                        if self.settings.aa_mode == AntiAliasingMode::TAA {
+                            ui.add(
+                                Slider::new(&mut self.settings.taa_blend_factor, 0.05..=0.30)
+                                    .text("Blend Factor")
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.taa_clamp_sigma, 0.5..=2.0)
+                                    .text("Clamp Sigma")
+                            );
                         }
 
                         if ui

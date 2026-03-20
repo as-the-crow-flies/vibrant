@@ -23,6 +23,9 @@ struct Settings {
     // SMAA tuning parameters
     smaa_threshold: f32,
     smaa_max_search_steps: u32,
+    // TAA tuning parameters
+    taa_blend_factor: f32,
+    taa_clamp_sigma: f32,
 }
 
 struct Segment {
@@ -46,7 +49,9 @@ struct Environment {
     segment: Segment,
     light: vec3<f32>,
     light_: f32,
-    settings: Settings
+    settings: Settings,
+    taa_previous_projection: mat4x4<f32>,
+    taa_jitter: vec2<f32>,
 }
 
 struct LineSettings {

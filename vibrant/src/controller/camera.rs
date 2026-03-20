@@ -1,8 +1,21 @@
 use std::f32::consts::PI;
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec2, Vec3};
 
 use super::state::ControllerState;
+
+// Halton low-discrepancy sequence for sub-pixel jitter
+fn halton(index: u32, base: u32) -> f32 {
+    let mut f = 1.0f32;
+    let mut r = 0.0f32;
+    let mut i = index;
+    while i > 0 {
+        f /= base as f32;
+        r += f * (i % base) as f32;
+        i /= base;
+    }
+    r
+}
 
 #[derive(Debug)]
 pub struct Camera {
@@ -104,5 +117,19 @@ impl Camera {
 
     pub fn far(&self) -> f32 {
         self.far
+    }
+
+    /// compute sub-pixel jitter for TAA
+    pub fn jitter(frame_index: u32) -> Vec2 {
+        let idx = frame_index % 16 + 1;
+        Vec2::new(halton(idx, 2) - 0.5, halton(idx, 3) - 0.5)
+    }
+
+    pub fn projection_jittered(&self, jitter: Vec2) -> Mat4 {
+        let mut proj = Mat4::perspective_lh(self.fov, self.aspect(), self.near, self.far);
+        // apply sub-pixel jitter as a constant NDC offset (depth-independent).
+        proj.z_axis.x += jitter.x * 2.0 / self.width as f32;
+        proj.z_axis.y += jitter.y * 2.0 / self.height as f32;
+        proj * self.view()
     }
 }

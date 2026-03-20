@@ -1,17 +1,25 @@
 use std::any::type_name;
 
 use bytemuck::bytes_of;
+use glam::{Mat4, Vec2};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType,
     BufferDescriptor, BufferUsages, ShaderStages,
 };
 
-use crate::{controller::Controller, gpu::Gpu};
+use crate::{
+    controller::{camera::Camera, settings::AntiAliasingMode, Controller},
+    gpu::Gpu,
+};
 
 pub struct Environment {
     binding: BindGroup,
     buffer: Buffer,
+    
+    // TAA
+    previous_projection: Mat4,
+    frame_index: u32,
 }
 
 impl Environment {
@@ -38,11 +46,16 @@ impl Environment {
             }],
         });
 
-        Self { binding, buffer }
+        Self {
+            binding,
+            buffer,
+            previous_projection: Mat4::IDENTITY,
+            frame_index: 0,
+        }
     }
 
     pub fn from_controller(gpu: &Gpu, controller: &Controller) -> Self {
-        let environment = Environment::new(&gpu);
+        let mut environment = Environment::new(&gpu);
         environment.update(&gpu, controller);
         return environment;
     }
@@ -51,7 +64,30 @@ impl Environment {
         &self.binding
     }
 
-    pub fn update(&self, gpu: &Gpu, controller: &Controller) {
+    pub fn update(&mut self, gpu: &Gpu, controller: &Controller) {
+        let settings = controller.settings();
+        let camera = controller.camera();
+        let is_taa = settings.aa_mode == AntiAliasingMode::TAA;
+
+        let jitter = if is_taa {
+            Camera::jitter(self.frame_index)
+        } else {
+            Vec2::ZERO
+        };
+
+        // use jittered projection for TAA
+        let projection = if is_taa {
+            camera.projection_jittered(jitter)
+        } else {
+            camera.projection()
+        };
+
+        // jitter in UV space for the shader to undo
+        let jitter_uv = jitter / Vec2::new(
+            settings.render_width as f32,
+            settings.render_height as f32,
+        );
+
         gpu.queue().write_buffer(
             &self.buffer,
             0,
@@ -63,8 +99,10 @@ impl Environment {
                 ]),
                 bytes_of(&controller.time()),
                 bytes_of(&controller.camera().transform()),
-                bytes_of(&controller.camera().projection()),
-                bytes_of(&controller.camera().projection().inverse()),
+                // bytes_of(&controller.camera().projection()),
+                // bytes_of(&controller.camera().projection().inverse()),
+                bytes_of(&projection),
+                bytes_of(&projection.inverse()),
                 bytes_of(&controller.camera().near()),
                 bytes_of(&controller.camera().far()),
                 bytes_of(&0u64),
@@ -95,9 +133,22 @@ impl Environment {
                 bytes_of(&controller.settings().bloom_intensity),
                 bytes_of(&controller.settings().smaa_threshold),
                 bytes_of(&controller.settings().smaa_max_search_steps),
+                // TAA settings (appended after SMAA fields)
+                bytes_of(&controller.settings().taa_blend_factor),
+                bytes_of(&controller.settings().taa_clamp_sigma),
+                // Padding: Settings ends at offset 356; mat4x4 needs 16-byte alignment → pad to 368
+                bytes_of(&[0u32; 3]),
+                // Previous frame's projection matrix for TAA reprojection (64 bytes)
+                bytes_of(&self.previous_projection),
+                // Current frame's jitter offset in UV space (8 bytes)
+                bytes_of(&jitter_uv),
             ]
             .concat(),
         );
+
+        // Save current projection for next frame's reprojection.
+        self.previous_projection = projection;
+        self.frame_index = self.frame_index.wrapping_add(1);
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
