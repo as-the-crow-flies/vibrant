@@ -30,6 +30,10 @@ impl LineCropPipeline {
         }
     }
 
+    pub fn update(&self, gpu: &Gpu, settings: &Settings) {
+        self.volumes.update(gpu, settings);
+    }
+
     pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,

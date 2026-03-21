@@ -22,7 +22,7 @@ use winit::dpi::PhysicalSize;
 use crate::{
     asset::Asset,
     controller::{
-        selection_volume::SelectionVolume,
+        selection_volume::{SelectionVolume, SelectionVolumeEntry},
         settings::{LineDisplayMode, LineVoxelizationMode},
     },
     file::FileStage,
@@ -264,43 +264,70 @@ impl Controller {
                                 .text("# Workgroups"),
                         );
                         ui.separator();
-                        ui.label("Selection Volume");
-                        ComboBox::from_label("Selection Volume")
-                            .selected_text(format!("{:?}", self.settings.selection_volume))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.settings.selection_volume,
-                                    SelectionVolume::None,
-                                    "None",
+                        ui.horizontal(|ui| {
+                            ui.label("Selection Volumes");
+                            if ui.button("+ Add").clicked() {
+                                self.settings
+                                    .selection_volumes
+                                    .push(SelectionVolumeEntry::default());
+                            }
+                        });
+                        ui.checkbox(
+                            &mut self.settings.selection_match_all,
+                            "Match All Conditions",
+                        );
+
+                        let mut to_remove: Option<usize> = None;
+                        for (i, vol) in
+                            self.settings.selection_volumes.iter_mut().enumerate()
+                        {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    ComboBox::from_id_salt(i)
+                                        .selected_text(format!("{:?}", vol.shape))
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut vol.shape,
+                                                SelectionVolume::None,
+                                                "None",
+                                            );
+                                            ui.selectable_value(
+                                                &mut vol.shape,
+                                                SelectionVolume::Box,
+                                                "Box",
+                                            );
+                                            ui.selectable_value(
+                                                &mut vol.shape,
+                                                SelectionVolume::Sphere,
+                                                "Sphere",
+                                            );
+                                        });
+                                    if ui.button("✕").clicked() {
+                                        to_remove = Some(i);
+                                    }
+                                });
+                                ui.add(
+                                    egui::Slider::new(&mut vol.scale, 0.0..=5.0).text("Scale"),
                                 );
-                                ui.selectable_value(
-                                    &mut self.settings.selection_volume,
-                                    SelectionVolume::Box,
-                                    "Box",
+                                ui.add(
+                                    egui::Slider::new(&mut vol.offset_x, -1.0..=1.0)
+                                        .text("Offset X"),
                                 );
-                                ui.selectable_value(
-                                    &mut self.settings.selection_volume,
-                                    SelectionVolume::Sphere,
-                                    "Sphere",
+                                ui.add(
+                                    egui::Slider::new(&mut vol.offset_y, -1.0..=1.0)
+                                        .text("Offset Y"),
                                 );
+                                ui.add(
+                                    egui::Slider::new(&mut vol.offset_z, -1.0..=1.0)
+                                        .text("Offset Z"),
+                                );
+                                ui.checkbox(&mut vol.extend_lines, "Extend Lines");
+                                ui.checkbox(&mut vol.highlight, "Highlight Volume");
                             });
-                        ui.checkbox(&mut self.settings.selection_extend_lines, "Extend Lines");
-                        ui.add(
-                            egui::Slider::new(&mut self.settings.selection_scale, 0.0..=5.0)
-                                .text("Scale"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut self.settings.selection_offset_x, -1.0..=1.0)
-                                .text("Offset X"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut self.settings.selection_offset_y, -1.0..=1.0)
-                                .text("Offset Y"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut self.settings.selection_offset_z, -1.0..=1.0)
-                                .text("Offset Z"),
-                        );
+                        }
+                        if let Some(idx) = to_remove {
+                            self.settings.selection_volumes.remove(idx);
+                        }
                         ui.separator();
                         ui.label("Post Processing");
                         ui.separator();

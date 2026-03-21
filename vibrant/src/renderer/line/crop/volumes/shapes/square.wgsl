@@ -1,5 +1,5 @@
 
-fn in_volume(
+fn in_square_volume(
     selection_scale: f32,
     selection_offset_x: f32,
     selection_offset_y: f32,
@@ -32,7 +32,7 @@ fn in_volume(
     return false;
 }
 
-fn in_volume_segment(
+fn in_square_volume_segment(
     selection_scale: f32,
     selection_offset_x: f32,
     selection_offset_y: f32,
@@ -55,3 +55,5 @@ fn in_volume_segment(
         abs(v1.x) <= half_size && abs(v1.y) <= half_size && abs(v1.z) <= half_size
     );
 }
+
+//DISPATCH-INSERT-MARKER//

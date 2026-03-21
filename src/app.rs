@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use vibrant::controller::event::{Key, MouseButton};
+use vibrant::controller::settings::Settings;
 use vibrant::file::FileStage;
 use vibrant::gpu::Gpu;
 use vibrant::Vec2;

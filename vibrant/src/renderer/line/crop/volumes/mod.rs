@@ -1,4 +1,8 @@
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::{
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferDescriptor,
+    BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ShaderStages,
+};
 
 use crate::{
     asset::line::LineBuffer,
@@ -8,30 +12,84 @@ use crate::{
 };
 
 pub struct LineSelectionPipeline {
-    box_selection: ComputePipeline,
-    sphere_selection: ComputePipeline,
+    selection_pipeline: ComputePipeline,
+    volumes_buffer: Buffer,
+    volumes_binding: BindGroup,
 }
 
 impl LineSelectionPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let layout =
-            gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false), &Environment::layout(gpu)]);
+        let volumes_layout = Self::volumes_layout(gpu);
 
-        // TODO: currently hardcoded to be two boxes, one small one customizable in the editor.
-        //       need to make this dynamic through a menu...
-        let square_source: String = include_str!("shapes/preamble.wgsl").to_string().replace(
-            "//DISPATCH-INSERT-MARKER//",
-            include_str!("shapes/square.wgsl"),
-        );
+        let layout = gpu.pipeline_layout(&[
+            &LineBuffer::layout(gpu, false),
+            &Environment::layout(gpu),
+            &volumes_layout,
+        ]);
 
-        let sphere_source: String = include_str!("shapes/preamble.wgsl").to_string().replace(
-            "//DISPATCH-INSERT-MARKER//",
-            include_str!("shapes/sphere.wgsl"),
-        );
+        let preamble_source = include_str!("shapes/preamble.wgsl")
+            .to_string()
+            .replace(
+                "//DISPATCH-INSERT-MARKER//",
+                include_str!("shapes/square.wgsl"),
+            )
+            .replace(
+                "//DISPATCH-INSERT-MARKER//",
+                include_str!("shapes/sphere.wgsl"),
+            );
+
+        let volumes_buffer = gpu.device().create_buffer(&BufferDescriptor {
+            label: Some("SelectionVolumes"),
+            // 6 x f32/u32 per entry (shape, scale, x, y, z, extend_lines), max 8 entries
+            size: 6 * 4 * 8,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let volumes_binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some("SelectionVolumes"),
+            layout: &volumes_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &volumes_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
+        });
 
         Self {
-            box_selection: gpu.compute("Box", &layout, &gpu.shader(&square_source)),
-            sphere_selection: gpu.compute("Sphere", &layout, &gpu.shader(&sphere_source)),
+            selection_pipeline: gpu.compute(
+                "Selection Pipeline",
+                &layout,
+                &gpu.shader(&preamble_source),
+            ),
+            volumes_buffer,
+            volumes_binding,
+        }
+    }
+
+    pub fn update(&self, gpu: &Gpu, settings: &Settings) {
+        let mut data: Vec<u8> = Vec::new();
+
+        for vol in &settings.selection_volumes {
+            let shape: u32 = match vol.shape {
+                SelectionVolume::None => continue,
+                SelectionVolume::Box => 0,
+                SelectionVolume::Sphere => 1,
+            };
+            data.extend_from_slice(bytemuck::bytes_of(&shape));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.scale));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.offset_x));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.offset_y));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.offset_z));
+            let extend: u32 = vol.extend_lines as u32;
+            data.extend_from_slice(bytemuck::bytes_of(&extend));
+        }
+
+        if !data.is_empty() {
+            gpu.queue().write_buffer(&self.volumes_buffer, 0, &data);
         }
     }
 
@@ -42,13 +100,16 @@ impl LineSelectionPipeline {
         environment: &Environment,
         settings: &Settings,
     ) {
-        let pipeline = match settings.selection_volume {
-            SelectionVolume::None => return,
-            SelectionVolume::Box => &self.box_selection,
-            SelectionVolume::Sphere => &self.sphere_selection,
-        };
+        let has_volumes = settings
+            .selection_volumes
+            .iter()
+            .any(|v| v.shape != SelectionVolume::None);
 
-        self.selection(cmd, line, environment, pipeline);
+        if !has_volumes {
+            return;
+        }
+
+        self.selection(cmd, line, environment, &self.selection_pipeline);
     }
 
     fn selection(
@@ -68,6 +129,24 @@ impl LineSelectionPipeline {
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, line.binding(false), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(2, &self.volumes_binding, &[]);
         pass.dispatch_workgroups(line.n_lines().div_ceil(32), 1, 1);
+    }
+
+    fn volumes_layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("SelectionVolumes"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
     }
 }

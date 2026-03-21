@@ -1,5 +1,5 @@
 
-fn in_volume(
+fn in_sphere_volume(
     selection_scale: f32,
     selection_offset_x: f32,
     selection_offset_y: f32,
@@ -44,7 +44,7 @@ fn in_volume(
     return false;
 }
 
-fn in_volume_segment(
+fn in_sphere_volume_segment(
     selection_scale: f32,
     selection_offset_x: f32,
     selection_offset_y: f32,
@@ -79,3 +79,5 @@ fn in_volume_segment(
 
     return distance2 <= radius2;
 }
+
+//DISPATCH-INSERT-MARKER//
