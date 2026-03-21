@@ -1,5 +1,5 @@
 
-fn in_square(
+fn in_volume(
     selection_scale: f32,
     selection_offset_x: f32,
     selection_offset_y: f32,
@@ -32,7 +32,7 @@ fn in_square(
     return false;
 }
 
-fn in_square_segment(
+fn in_volume_segment(
     selection_scale: f32,
     selection_offset_x: f32,
     selection_offset_y: f32,

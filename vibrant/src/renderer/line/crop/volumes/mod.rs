@@ -19,45 +19,19 @@ impl LineSelectionPipeline {
 
         // TODO: currently hardcoded to be two boxes, one small one customizable in the editor.
         //       need to make this dynamic through a menu...
-        let square_source: String = include_str!("shapes/preamble.wgsl")
-            .to_string()
-            .replace(
-                "//DISPATCH-CALL-MARKER//",
-                "
-                    let a = in_square(
-                        ENVIRONMENT.settings.selection_scale,
-                        ENVIRONMENT.settings.selection_offset_x,
-                        ENVIRONMENT.settings.selection_offset_y,
-                        ENVIRONMENT.settings.selection_offset_z,
-                        crop_length, start, offset_start
-                    );
-                    let b = in_square(
-                        0.5, 0.125, 0.125, 0.125,
-                        crop_length, start, offset_start
-                    );
+        let square_source: String = include_str!("shapes/preamble.wgsl").to_string().replace(
+            "//DISPATCH-INSERT-MARKER//",
+            include_str!("shapes/square.wgsl"),
+        );
 
-                    if (!a || !b) { return; }
-                ",
-            )
-            .replace(
-                "//DISPATCH-INSERT-MARKER//",
-                include_str!("shapes/square.wgsl"),
-            );
-        // .replace("//DISPATCH-MARKER//", include_str!("shapes/square.wgsl"));
-
-        println!("{}", square_source);
+        let sphere_source: String = include_str!("shapes/preamble.wgsl").to_string().replace(
+            "//DISPATCH-INSERT-MARKER//",
+            include_str!("shapes/sphere.wgsl"),
+        );
 
         Self {
-            box_selection: gpu.compute(
-                "Selection (Box)",
-                &layout,
-                &gpu.shader(include_str!("shapes/square.wgsl")),
-            ),
-            sphere_selection: gpu.compute(
-                "Selection (Sphere)",
-                &layout,
-                &gpu.shader(include_str!("shapes/sphere.wgsl")),
-            ),
+            box_selection: gpu.compute("Box", &layout, &gpu.shader(&square_source)),
+            sphere_selection: gpu.compute("Sphere", &layout, &gpu.shader(&sphere_source)),
         }
     }
 
