@@ -253,7 +253,7 @@ impl Controller {
                                 .text("Crop Z End"),
                         );
 
-                        ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("plane"));
+                        ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("Plane"));
 
                         ui.separator();
                         ui.checkbox(&mut self.settings.auto_rotate, "Auto-Rotate");
