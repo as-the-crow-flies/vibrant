@@ -11,6 +11,15 @@
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+struct SelectionVolumeEntry {
+    shape: u32,
+    scale: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+}
+@group(2) @binding(0) var<storage> SELECTION_VOLUMES: array<SelectionVolumeEntry>;
+
 var<workgroup> OFFSET: u32;
 
 //DISPATCH-INSERT-MARKER//
@@ -47,31 +56,27 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
     if (crop_length == 0) { return; }
 
-    let selection_scale = ENVIRONMENT.settings.selection_scale;
+    let n_volumes = arrayLength(&SELECTION_VOLUMES);
 
-    if (selection_scale <= 0.0) {
+    if (n_volumes == 0u) {
         let offset_line = atomicAdd(&LINE_LENGTH, crop_length);
-        for (var i=0u; i<crop_length; i++) {
+        for (var i = 0u; i < crop_length; i++) {
             LINE_INDEX[offset_line + i] = LINE_INDEX_RAW[start + offset_start + i];
         }
         return;
     }
 
-    //DISPATCH-CALL-MARKER//
-    if ENVIRONMENT.settings.selection_match_all {
-        let a = in_square_volume(
-            ENVIRONMENT.settings.selection_scale,
-            ENVIRONMENT.settings.selection_offset_x,
-            ENVIRONMENT.settings.selection_offset_y,
-            ENVIRONMENT.settings.selection_offset_z,
-            crop_length, start, offset_start
-        );
-        let b = in_square_volume(
-            0.5, 0.125, 0.125, 0.125,
-            crop_length, start, offset_start
-        );
-
-        if (!a || !b) { return; }
+    if ENVIRONMENT.settings.selection_match_all == TRUE {
+        for (var v = 0u; v < n_volumes; v++) {
+            let vol = SELECTION_VOLUMES[v];
+            var matches = false;
+            if vol.shape == 0u {
+                matches = in_square_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
+            } else {
+                matches = in_sphere_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
+            }
+            if !matches { return; }
+        }
     }
 
     let extend = ENVIRONMENT.settings.selection_extend_lines == TRUE;
@@ -85,19 +90,31 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         var total_length = 0u;
         for (var i = 0u; i < crop_length; i++) {
             let idx = LINE_INDEX_RAW[start + offset_start + i];
-            if (
-                //DISPATCH-PARTIAL-CALL-MARKER//
-            ) {
-                total_length++;
+            var in_vol = false;
+            for (var v = 0u; v < n_volumes; v++) {
+                let vol = SELECTION_VOLUMES[v];
+                if vol.shape == 0u {
+                    in_vol = in_vol || in_square_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
+                } else {
+                    in_vol = in_vol || in_sphere_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
+                }
             }
+            if in_vol { total_length++; }
         }
         let offset_line = atomicAdd(&LINE_LENGTH, total_length);
         var offset_index = 0u;
         for (var i = 0u; i < crop_length; i++) {
             let idx = LINE_INDEX_RAW[start + offset_start + i];
-            if (
-                //DISPATCH-PARTIAL-CALL-MARKER//
-            ) {
+            var in_vol = false;
+            for (var v = 0u; v < n_volumes; v++) {
+                let vol = SELECTION_VOLUMES[v];
+                if vol.shape == 0u {
+                    in_vol = in_vol || in_square_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
+                } else {
+                    in_vol = in_vol || in_sphere_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
+                }
+            }
+            if in_vol {
                 LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
                 offset_index++;
             }

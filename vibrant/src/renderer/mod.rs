@@ -102,6 +102,7 @@ impl Renderer {
             .handle_platform_output(&window, output.platform_output.clone());
 
         self.environment.update(gpu, &controller);
+        self.line.update(gpu, controller.settings());
 
         if let Some(line) = &self.asset.line {
             line.update_settings(gpu);

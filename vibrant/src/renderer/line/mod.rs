@@ -49,6 +49,10 @@ impl LineRenderer {
         }
     }
 
+    pub fn update(&self, gpu: &Gpu, settings: &Settings) {
+        self.crop.update(gpu, settings);
+    }
+
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,

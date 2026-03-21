@@ -1,4 +1,8 @@
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::{
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferDescriptor,
+    BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ShaderStages,
+};
 
 use crate::{
     asset::line::LineBuffer,
@@ -9,15 +13,20 @@ use crate::{
 
 pub struct LineSelectionPipeline {
     selection_pipeline: ComputePipeline,
+    volumes_buffer: Buffer,
+    volumes_binding: BindGroup,
 }
 
 impl LineSelectionPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let layout =
-            gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false), &Environment::layout(gpu)]);
+        let volumes_layout = Self::volumes_layout(gpu);
 
-        // TODO: currently hardcoded to be two boxes, one small one customizable in the editor.
-        //       need to make this dynamic through a menu...
+        let layout = gpu.pipeline_layout(&[
+            &LineBuffer::layout(gpu, false),
+            &Environment::layout(gpu),
+            &volumes_layout,
+        ]);
+
         let preamble_source = include_str!("shapes/preamble.wgsl")
             .to_string()
             .replace(
@@ -28,13 +37,27 @@ impl LineSelectionPipeline {
                 "//DISPATCH-INSERT-MARKER//",
                 include_str!("shapes/sphere.wgsl"),
             );
-        // .replace(
-        //     "//DISPATCH-PARTIAL-CALL-MARKER//",
-        //     "
-        //     in_square_volume_segment(ENVIRONMENT.settings.selection_scale, ENVIRONMENT.settings.selection_offset_x, ENVIRONMENT.settings.selection_offset_y, ENVIRONMENT.settings.selection_offset_z, idx) ||
-        //     in_square_volume_segment(0.5, 0.125, 0.125, 0.125, idx)
-        //     ",
-        // );
+
+        let volumes_buffer = gpu.device().create_buffer(&BufferDescriptor {
+            label: Some("SelectionVolumes"),
+            // 5 x f32/u32 per entry, max 8 entries
+            size: 5 * 4 * 8,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let volumes_binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some("SelectionVolumes"),
+            layout: &volumes_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &volumes_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
+        });
 
         Self {
             selection_pipeline: gpu.compute(
@@ -42,7 +65,28 @@ impl LineSelectionPipeline {
                 &layout,
                 &gpu.shader(&preamble_source),
             ),
+            volumes_buffer,
+            volumes_binding,
         }
+    }
+
+    pub fn update(&self, gpu: &Gpu, settings: &Settings) {
+        let shape: u32 = match settings.selection_volume {
+            SelectionVolume::None => return,
+            SelectionVolume::Box => 0,
+            SelectionVolume::Sphere => 1,
+        };
+
+        let data: Vec<u8> = [
+            bytemuck::bytes_of(&shape),
+            bytemuck::bytes_of(&settings.selection_scale),
+            bytemuck::bytes_of(&settings.selection_offset_x),
+            bytemuck::bytes_of(&settings.selection_offset_y),
+            bytemuck::bytes_of(&settings.selection_offset_z),
+        ]
+        .concat();
+
+        gpu.queue().write_buffer(&self.volumes_buffer, 0, &data);
     }
 
     pub fn dispatch(
@@ -77,6 +121,24 @@ impl LineSelectionPipeline {
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, line.binding(false), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(2, &self.volumes_binding, &[]);
         pass.dispatch_workgroups(line.n_lines().div_ceil(32), 1, 1);
+    }
+
+    fn volumes_layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("SelectionVolumes"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
     }
 }
