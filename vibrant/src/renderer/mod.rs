@@ -3,7 +3,7 @@ pub mod line;
 pub mod ui;
 pub mod wgsl;
 
-use std::sync::Arc;
+use std::{io, sync::Arc};
 
 use crate::{
     asset::{transform::TransformBuffer, volume::VolumeBuffer},
@@ -59,12 +59,17 @@ impl Renderer {
         self.asset.line.is_some()
     }
 
+    pub async fn read_frame(&self, gpu: &Gpu) -> io::Result<(Vec<u8>, u32, u32)> {
+        gpu.read_frame(self.surface.buffer().post().texture()).await
+    }
+
     pub fn render(
         &mut self,
         gpu: &Gpu,
         window: &Arc<Window>,
         controller: &mut Controller,
         dt: f32,
+        capture_output: bool,
     ) {
         let mut needs_transform = false;
         let needs_update = true;
@@ -122,7 +127,7 @@ impl Renderer {
             );
         }
 
-        if !FileStage::about_to_save() {
+        if !(FileStage::about_to_save() || capture_output) {
             let clear = self.asset.line.is_none();
             self.ui.render(
                 gpu,

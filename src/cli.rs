@@ -11,8 +11,20 @@ pub struct CliArgs {
     pub input: Vec<PathBuf>,
 
     /// Save a screenshot to this path and exit
-    #[arg(long)]
+    #[arg(long, conflicts_with = "video")]
     pub screenshot: Option<PathBuf>,
+
+    /// Render a video to this path and exit
+    #[arg(long, conflicts_with = "screenshot")]
+    pub video: Option<PathBuf>,
+
+    /// Video frame rate (default: 30)
+    #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(1..))]
+    pub fps: u32,
+
+    /// Video duration in seconds (default: 10)
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u32).range(1..))]
+    pub duration: u32,
 
     /// Enable auto-rotation of the camera
     #[arg(long)]
@@ -37,6 +49,13 @@ impl CliArgs {
         let mode = if let Some(ref path) = self.screenshot {
             AppMode::Screenshot {
                 output: path.clone(),
+                zoom: self.zoom,
+            }
+        } else if let Some(ref path) = self.video {
+            AppMode::Video {
+                output: path.clone(),
+                fps: self.fps,
+                duration: self.duration,
                 zoom: self.zoom,
             }
         } else {
@@ -105,5 +124,44 @@ mod tests {
             AppMode::Screenshot { zoom, .. } => assert_eq!(zoom, Some(1.5)),
             other => panic!("Expected Screenshot mode, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_cli_video_mode() {
+        let args = CliArgs::parse_from([
+            "vibrant",
+            "--video",
+            "out.mp4",
+            "--fps",
+            "60",
+            "--duration",
+            "5",
+            "--zoom",
+            "1.5",
+        ]);
+
+        let config = args.into_config();
+        match config.mode {
+            AppMode::Video {
+                output,
+                fps,
+                duration,
+                zoom,
+            } => {
+                assert_eq!(output, PathBuf::from("out.mp4"));
+                assert_eq!(fps, 60);
+                assert_eq!(duration, 5);
+                assert_eq!(zoom, Some(1.5));
+            }
+            other => panic!("Expected Video mode, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_cli_rejects_screenshot_and_video_together() {
+        let args =
+            CliArgs::try_parse_from(["vibrant", "--screenshot", "out.png", "--video", "out.mp4"]);
+
+        assert!(args.is_err());
     }
 }
