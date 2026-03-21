@@ -73,7 +73,7 @@ impl Controller {
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
-                    .button("⚙ settings")
+                    .selectable_label(self.show_left_side_panel, "⚙ settings")
                     .on_hover_text("Open settings panel")
                     .clicked()
                 {
@@ -92,11 +92,11 @@ impl Controller {
                 ui.take_available_width();
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("☰ layers").clicked() {
+                    if ui.selectable_label(self.show_right_side_panel, "☰ layers").clicked() {
                         self.show_right_side_panel = !self.show_right_side_panel
                     }
 
-                    if ui.button("◈ selection").clicked() {
+                    if ui.selectable_label(self.show_selection_panel, "◈ selection").clicked() {
                         self.show_selection_panel = !self.show_selection_panel;
                     }
 
