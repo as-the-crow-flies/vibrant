@@ -20,13 +20,13 @@ pub struct SelectionVolumeEntry {
 impl Default for SelectionVolumeEntry {
     fn default() -> Self {
         Self {
-            shape: SelectionVolume::Sphere,
+            shape: SelectionVolume::Box,
             scale: 1.0,
             offset_x: 0.0,
             offset_y: 0.0,
             offset_z: 0.0,
             negate: false,
-            highlight: false,
+            highlight: true,
         }
     }
 }
