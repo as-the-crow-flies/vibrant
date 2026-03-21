@@ -38,6 +38,7 @@ pub struct Controller {
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
+    show_selection_panel: bool,
 }
 
 impl Controller {
@@ -51,6 +52,7 @@ impl Controller {
 
             show_left_side_panel: false,
             show_right_side_panel: false,
+            show_selection_panel: false,
         }
     }
 
@@ -92,6 +94,10 @@ impl Controller {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui.button("☰ layers").clicked() {
                         self.show_right_side_panel = !self.show_right_side_panel
+                    }
+
+                    if ui.button("◈ selection").clicked() {
+                        self.show_selection_panel = !self.show_selection_panel;
                     }
 
                     if ui
@@ -264,75 +270,6 @@ impl Controller {
                                 .text("# Workgroups"),
                         );
                         ui.separator();
-                        ui.horizontal(|ui| {
-                            ui.label("Selection Volumes");
-                            if ui.button("+ Add").clicked() {
-                                self.settings
-                                    .selection_volumes
-                                    .push(SelectionVolumeEntry::default());
-                            }
-                        });
-                        ui.checkbox(
-                            &mut self.settings.selection_match_all,
-                            "Match All Conditions",
-                        );
-                        ui.checkbox(
-                            &mut self.settings.extend_lines,
-                            "Extend Lines",
-                        );
-
-                        let mut to_remove: Option<usize> = None;
-                        for (i, vol) in
-                            self.settings.selection_volumes.iter_mut().enumerate()
-                        {
-                            ui.group(|ui| {
-                                ui.horizontal(|ui| {
-                                    ComboBox::from_id_salt(i)
-                                        .selected_text(format!("{:?}", vol.shape))
-                                        .show_ui(ui, |ui| {
-                                            ui.selectable_value(
-                                                &mut vol.shape,
-                                                SelectionVolume::None,
-                                                "None",
-                                            );
-                                            ui.selectable_value(
-                                                &mut vol.shape,
-                                                SelectionVolume::Box,
-                                                "Box",
-                                            );
-                                            ui.selectable_value(
-                                                &mut vol.shape,
-                                                SelectionVolume::Sphere,
-                                                "Sphere",
-                                            );
-                                        });
-                                    if ui.button("✕").clicked() {
-                                        to_remove = Some(i);
-                                    }
-                                });
-                                ui.add(
-                                    egui::Slider::new(&mut vol.scale, 0.0..=5.0).text("Scale"),
-                                );
-                                ui.add(
-                                    egui::Slider::new(&mut vol.offset_x, -1.0..=1.0)
-                                        .text("Offset X"),
-                                );
-                                ui.add(
-                                    egui::Slider::new(&mut vol.offset_y, -1.0..=1.0)
-                                        .text("Offset Y"),
-                                );
-                                ui.add(
-                                    egui::Slider::new(&mut vol.offset_z, -1.0..=1.0)
-                                        .text("Offset Z"),
-                                );
-                                ui.checkbox(&mut vol.negate, "Negate");
-                                ui.checkbox(&mut vol.highlight, "Highlight Volume");
-                            });
-                        }
-                        if let Some(idx) = to_remove {
-                            self.settings.selection_volumes.remove(idx);
-                        }
-                        ui.separator();
                         ui.label("Post Processing");
                         ui.separator();
                         ui.add(
@@ -500,6 +437,85 @@ impl Controller {
                             }
                         });
                     });
+            });
+
+        SidePanel::right("SidePanelSelection")
+            .min_width(300.0)
+            .show_animated(ctx, self.show_selection_panel, |ui| {
+                CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    "SelectionVolumes".into(),
+                    true,
+                )
+                .show_header(ui, |ui| ui.heading("Selection Volumes"))
+                .body(|ui| {
+                    ScrollArea::new([false, true]).show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button("+ Add").clicked() {
+                                self.settings
+                                    .selection_volumes
+                                    .push(SelectionVolumeEntry::default());
+                            }
+                            ui.checkbox(
+                                &mut self.settings.selection_match_all,
+                                "Match All Conditions",
+                            );
+                            ui.checkbox(&mut self.settings.extend_lines, "Extend Lines");
+                        });
+
+                        let mut to_remove: Option<usize> = None;
+                        for (i, vol) in
+                            self.settings.selection_volumes.iter_mut().enumerate()
+                        {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    ComboBox::from_id_salt(("sel_vol", i))
+                                        .selected_text(format!("{:?}", vol.shape))
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut vol.shape,
+                                                SelectionVolume::None,
+                                                "None",
+                                            );
+                                            ui.selectable_value(
+                                                &mut vol.shape,
+                                                SelectionVolume::Box,
+                                                "Box",
+                                            );
+                                            ui.selectable_value(
+                                                &mut vol.shape,
+                                                SelectionVolume::Sphere,
+                                                "Sphere",
+                                            );
+                                        });
+                                    if ui.button("✕").clicked() {
+                                        to_remove = Some(i);
+                                    }
+                                });
+                                ui.add(
+                                    egui::Slider::new(&mut vol.scale, 0.0..=5.0).text("Scale"),
+                                );
+                                ui.add(
+                                    egui::Slider::new(&mut vol.offset_x, -1.0..=1.0)
+                                        .text("Offset X"),
+                                );
+                                ui.add(
+                                    egui::Slider::new(&mut vol.offset_y, -1.0..=1.0)
+                                        .text("Offset Y"),
+                                );
+                                ui.add(
+                                    egui::Slider::new(&mut vol.offset_z, -1.0..=1.0)
+                                        .text("Offset Z"),
+                                );
+                                ui.checkbox(&mut vol.negate, "Negate");
+                                ui.checkbox(&mut vol.highlight, "Highlight Volume");
+                            });
+                        }
+                        if let Some(idx) = to_remove {
+                            self.settings.selection_volumes.remove(idx);
+                        }
+                    });
+                });
             });
     }
 
