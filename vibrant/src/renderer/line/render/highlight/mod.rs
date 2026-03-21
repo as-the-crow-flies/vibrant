@@ -99,15 +99,6 @@ impl VolumeHighlightPipeline {
         frame: &Frame,
         settings: &Settings,
     ) {
-        let has_highlights = settings
-            .selection_volumes
-            .iter()
-            .any(|v| v.highlight && v.shape != SelectionVolume::None);
-
-        if !has_highlights {
-            return;
-        }
-
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some("VolumeHighlight"),
             color_attachments: &[Some(frame.highlight().attachment_clear())],
