@@ -42,11 +42,12 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let count = HIGHLIGHT_DATA[0];
 
     for (var i = 0u; i < count; i++) {
-        let shape = HIGHLIGHT_DATA[1u + i * 5u];
-        let scale = bitcast<f32>(HIGHLIGHT_DATA[2u + i * 5u]);
-        let x     = bitcast<f32>(HIGHLIGHT_DATA[3u + i * 5u]);
-        let y     = bitcast<f32>(HIGHLIGHT_DATA[4u + i * 5u]);
-        let z     = bitcast<f32>(HIGHLIGHT_DATA[5u + i * 5u]);
+        let shape  = HIGHLIGHT_DATA[1u + i * 6u];
+        let scale  = bitcast<f32>(HIGHLIGHT_DATA[2u + i * 6u]);
+        let x      = bitcast<f32>(HIGHLIGHT_DATA[3u + i * 6u]);
+        let y      = bitcast<f32>(HIGHLIGHT_DATA[4u + i * 6u]);
+        let z      = bitcast<f32>(HIGHLIGHT_DATA[5u + i * 6u]);
+        let negate = HIGHLIGHT_DATA[6u + i * 6u];
 
         let ce = vec3<f32>(x, y, z);
         let hs = 0.125 * scale;
@@ -59,7 +60,9 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
         }
 
         if hit {
-            return vec4<f32>(1.0, 1.0, 1.0, 0.15);
+            let color = select(vec3<f32>(1.0, 1.0, 1.0), vec3<f32>(1.0, 0.2, 0.2), negate == 1u);
+            let alpha = select(0.15, 0.1, negate == 1u);
+            return vec4<f32>(color, alpha);
         }
     }
 
