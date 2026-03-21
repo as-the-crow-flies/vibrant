@@ -322,6 +322,7 @@ impl Controller {
                                         .text("Offset Z"),
                                 );
                                 ui.checkbox(&mut vol.extend_lines, "Extend Lines");
+                                ui.checkbox(&mut vol.highlight, "Highlight Volume");
                             });
                         }
                         if let Some(idx) = to_remove {

@@ -14,6 +14,7 @@ pub struct SelectionVolumeEntry {
     pub offset_y: f32,
     pub offset_z: f32,
     pub extend_lines: bool,
+    pub highlight: bool,
 }
 
 impl Default for SelectionVolumeEntry {
@@ -25,6 +26,7 @@ impl Default for SelectionVolumeEntry {
             offset_y: 0.0,
             offset_z: 0.0,
             extend_lines: false,
+            highlight: false,
         }
     }
 }
