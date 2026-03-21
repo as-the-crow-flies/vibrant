@@ -28,6 +28,19 @@ use crate::{
     file::FileStage,
 };
 
+fn format_count(n: u32) -> String {
+    let s = n.to_string();
+    let len = s.len();
+    let mut result = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (len - i) % 3 == 0 {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result
+}
+
 #[derive(Debug)]
 pub struct Controller {
     state: ControllerState,
@@ -419,6 +432,10 @@ impl Controller {
                                             ui.toggle_value(&mut line.visible, "👁");
                                             ui.color_edit_button_srgb(&mut line.color);
                                             ui.label(&line.name);
+                                            ui.weak(format!(
+                                                "{} streamlines",
+                                                format_count(line.n_lines)
+                                            ));
                                             ui.with_layout(
                                                 egui::Layout::right_to_left(egui::Align::Center),
                                                 |ui| {

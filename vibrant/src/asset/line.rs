@@ -22,6 +22,7 @@ pub struct GlobalLineSettings {
 
 pub struct LineSettings {
     pub name: String,
+    pub n_lines: u32,
     pub selected: bool,
     pub visible: bool,
     pub color: [u8; 3],
@@ -100,6 +101,7 @@ impl LineBuffer {
             .iter()
             .map(|line| LineSettings {
                 name: line.name().to_owned(),
+                n_lines: line.lines().len() as u32,
                 color: RandomColor {
                     luminosity: Some(Luminosity::Bright),
                     ..Default::default()
