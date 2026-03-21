@@ -35,6 +35,7 @@ pub struct Frame {
     post: ColorBuffer,
     bloom: BloomBuffer,
     dof: DofBuffer,
+    highlight: ColorBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -48,6 +49,7 @@ impl Frame {
         let post = ColorBuffer::new(gpu, settings.width, settings.height);
         let bloom = BloomBuffer::new(gpu, settings.width, settings.height);
         let dof = DofBuffer::new(gpu, settings.width, settings.height);
+        let highlight = ColorBuffer::new(gpu, settings.width, settings.height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -71,6 +73,7 @@ impl Frame {
             post,
             bloom,
             dof,
+            highlight,
             occupancy,
             occlusion,
             culling,
@@ -96,6 +99,10 @@ impl Frame {
 
     pub fn dof(&self) -> &DofBuffer {
         &self.dof
+    }
+
+    pub fn highlight(&self) -> &ColorBuffer {
+        &self.highlight
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {

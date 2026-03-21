@@ -110,7 +110,7 @@ impl VolumeHighlightPipeline {
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some("VolumeHighlight"),
-            color_attachments: &[Some(frame.color().attachment())],
+            color_attachments: &[Some(frame.highlight().attachment_clear())],
             ..Default::default()
         });
 

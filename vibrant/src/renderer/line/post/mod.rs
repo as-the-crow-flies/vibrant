@@ -25,6 +25,7 @@ impl PostProcessingPipeline {
                     &Environment::layout(gpu),
                     &ColorBuffer::layout(gpu),
                     &BloomBuffer::read_layout(gpu),
+                    &ColorBuffer::layout(gpu),
                 ]),
                 &[Some(ColorBuffer::target_srgb())],
                 &gpu.shader(include_str!("post.wgsl")),
@@ -70,6 +71,7 @@ impl PostProcessingPipeline {
             pass.set_bind_group(1, frame.color().binding(), &[]);
         }
         pass.set_bind_group(2, frame.bloom().read_a(), &[]);
+        pass.set_bind_group(3, frame.highlight().binding(), &[]);
         pass.draw(0..6, 0..1);
     }
 }
