@@ -94,6 +94,7 @@ impl Environment {
                 bytes_of(&controller.settings().bloom_spread),
                 bytes_of(&controller.settings().n_selection_volumes()),
                 bytes_of(&(controller.settings().selection_match_all as u32)),
+                bytes_of(&(controller.settings().extend_lines as u32)),
                 bytes_of(&controller.settings().focal_distance),
                 bytes_of(&controller.settings().aperture),
                 bytes_of(&(controller.settings().depth_of_field as u32)),

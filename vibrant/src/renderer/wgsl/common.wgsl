@@ -23,6 +23,7 @@ struct Settings {
     bloom_spread: f32,
     n_selection_volumes: u32,
     selection_match_all: u32,
+    extend_lines: u32,
     focal_distance: f32,
     aperture: f32,
     depth_of_field: u32,
