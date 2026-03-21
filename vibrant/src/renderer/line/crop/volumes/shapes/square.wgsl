@@ -22,8 +22,8 @@ fn in_square_volume(
         let v1 = LINE_VERTEX[idx + 1].xyz - offset;
 
         if (
-            abs(v0.x) <= half_size && abs(v0.y) <= half_size && abs(v0.z) <= half_size &&
-            abs(v1.x) <= half_size && abs(v1.y) <= half_size && abs(v1.z) <= half_size
+            (abs(v0.x) <= half_size && abs(v0.y) <= half_size && abs(v0.z) <= half_size) ||
+            (abs(v1.x) <= half_size && abs(v1.y) <= half_size && abs(v1.z) <= half_size)
         ) {
             return true;
         }

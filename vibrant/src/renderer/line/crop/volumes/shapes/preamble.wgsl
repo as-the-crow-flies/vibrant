@@ -68,6 +68,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     }
 
     // Negate check: if any negate volume contains any segment of this line, discard it entirely.
+    var n_regular_volumes = 0u;
     for (var v = 0u; v < n_volumes; v++) {
         let vol = SELECTION_VOLUMES[v];
         if vol.negate == TRUE {
@@ -78,7 +79,18 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
                 in_negate = in_sphere_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
             }
             if in_negate { return; }
+        } else {
+            n_regular_volumes++;
         }
+    }
+
+    // No regular (non-negate) volumes — line survived negate checks, output it in full.
+    if n_regular_volumes == 0u {
+        let offset_line = atomicAdd(&LINE_LENGTH, crop_length);
+        for (var i = 0u; i < crop_length; i++) {
+            LINE_INDEX[offset_line + i] = LINE_INDEX_RAW[start + offset_start + i];
+        }
+        return;
     }
 
     if ENVIRONMENT.settings.selection_match_all == TRUE {
