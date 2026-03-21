@@ -28,6 +28,7 @@ pub struct LineSettings {
     pub color_visible: bool,
     pub crop_start: f32,
     pub crop_end: f32,
+    pub removed: bool,
 }
 
 #[repr(C)]
@@ -44,7 +45,7 @@ impl LineSettings {
         let [r, g, b] = self.color;
 
         LineSettingsBuffer {
-            visible: self.visible as u32,
+            visible: (self.visible && !self.removed) as u32,
             color: [r, g, b, if self.color_visible { 255 } else { 0 }],
             crop_start: self.crop_start,
             crop_end: self.crop_end,
@@ -122,6 +123,7 @@ impl LineBuffer {
                 color_visible: false,
                 crop_start: 0.0,
                 crop_end: 1.0,
+                removed: false,
             })
             .collect();
 

@@ -410,12 +410,23 @@ impl Controller {
                                 .body(|_| {});
 
                                 for line in lines.settings() {
+                                    if line.removed {
+                                        continue;
+                                    }
                                     let id = ui.make_persistent_id(&line.name);
                                     CollapsingState::load_with_default_open(ui.ctx(), id, false)
                                         .show_header(ui, |ui| {
                                             ui.toggle_value(&mut line.visible, "👁");
                                             ui.color_edit_button_srgb(&mut line.color);
                                             ui.label(&line.name);
+                                            ui.with_layout(
+                                                egui::Layout::right_to_left(egui::Align::Center),
+                                                |ui| {
+                                                    if ui.small_button("✕").clicked() {
+                                                        line.removed = true;
+                                                    }
+                                                },
+                                            );
                                         })
                                         .body(|ui| {
                                             ui.add(
@@ -427,6 +438,10 @@ impl Controller {
                                                     .text("Crop End"),
                                             );
                                         });
+                                }
+
+                                if lines.settings().iter().all(|s| s.removed) {
+                                    asset.line = None;
                                 }
                             }
                         });
