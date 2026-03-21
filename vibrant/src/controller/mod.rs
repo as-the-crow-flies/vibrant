@@ -276,6 +276,10 @@ impl Controller {
                             &mut self.settings.selection_match_all,
                             "Match All Conditions",
                         );
+                        ui.checkbox(
+                            &mut self.settings.extend_lines,
+                            "Extend Lines",
+                        );
 
                         let mut to_remove: Option<usize> = None;
                         for (i, vol) in
@@ -321,7 +325,7 @@ impl Controller {
                                     egui::Slider::new(&mut vol.offset_z, -1.0..=1.0)
                                         .text("Offset Z"),
                                 );
-                                ui.checkbox(&mut vol.extend_lines, "Extend Lines");
+                                ui.checkbox(&mut vol.negate, "Negate");
                                 ui.checkbox(&mut vol.highlight, "Highlight Volume");
                             });
                         }

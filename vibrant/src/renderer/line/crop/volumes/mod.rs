@@ -40,7 +40,7 @@ impl LineSelectionPipeline {
 
         let volumes_buffer = gpu.device().create_buffer(&BufferDescriptor {
             label: Some("SelectionVolumes"),
-            // 6 x f32/u32 per entry (shape, scale, x, y, z, extend_lines), max 8 entries
+            // 6 x f32/u32 per entry (shape, scale, x, y, z, negate), max 8 entries
             size: 6 * 4 * 8,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -84,8 +84,8 @@ impl LineSelectionPipeline {
             data.extend_from_slice(bytemuck::bytes_of(&vol.offset_x));
             data.extend_from_slice(bytemuck::bytes_of(&vol.offset_y));
             data.extend_from_slice(bytemuck::bytes_of(&vol.offset_z));
-            let extend: u32 = vol.extend_lines as u32;
-            data.extend_from_slice(bytemuck::bytes_of(&extend));
+            let negate: u32 = vol.negate as u32;
+            data.extend_from_slice(bytemuck::bytes_of(&negate));
         }
 
         if !data.is_empty() {
