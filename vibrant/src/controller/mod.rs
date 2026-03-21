@@ -115,196 +115,6 @@ impl Controller {
             ctx,
             self.show_left_side_panel,
             |ui| {
-                egui::TopBottomPanel::top("top_panel")
-                    .frame(Frame {
-                        outer_margin: Margin {
-                            left: 5,
-                            right: 5,
-                            top: 5,
-                            bottom: 10,
-                        },
-                        inner_margin: Margin::ZERO,
-                        ..Default::default()
-                    })
-                    .show_inside(ui, |ui| {
-                        ui.heading("Rendering");
-                        ui.separator();
-
-                        ComboBox::from_label("Display Mode")
-                            .selected_text(format!("{:?}", self.settings.display))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.settings.display,
-                                    LineDisplayMode::Geometry,
-                                    "Geometry",
-                                );
-                                ui.selectable_value(
-                                    &mut self.settings.display,
-                                    LineDisplayMode::Volume,
-                                    "Volume",
-                                );
-                            });
-
-                        ComboBox::from_label("Voxelization Mode")
-                            .selected_text(format!("{:?}", self.settings.voxelization))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.settings.voxelization,
-                                    LineVoxelizationMode::Tube,
-                                    "Tube",
-                                );
-                                ui.selectable_value(
-                                    &mut self.settings.voxelization,
-                                    LineVoxelizationMode::Box,
-                                    "Box",
-                                );
-                                ui.selectable_value(
-                                    &mut self.settings.voxelization,
-                                    LineVoxelizationMode::Line,
-                                    "Line",
-                                );
-                            });
-
-                        ComboBox::from_label("Voxel Resolution")
-                            .selected_text(format!("{:?}", self.settings.volume))
-                            .show_ui(ui, |ui| {
-                                for power in 5u32..10 {
-                                    ui.selectable_value(
-                                        &mut self.settings.volume,
-                                        2u32.pow(power),
-                                        format!("{}", 2u32.pow(power)),
-                                    );
-                                }
-                            });
-
-                        ui.separator();
-                        ui.label("Appearance");
-                        ui.separator();
-
-                        ui.add(Slider::new(&mut self.camera.fov, 0.1..=3.0).text("Field of View"));
-                        ui.add(
-                            Slider::new(&mut self.settings.radius, 0.01..=1.0)
-                                .text("Streamline Radius"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.lighting, 0.0..=1.0).text("Lighting"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.direct_light, 0.0..=3.0)
-                                .text("Ambient/Shadow"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.tangent_color, 0.0..=2.0)
-                                .text("Tangent Color"),
-                        );
-                        ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
-                        ui.add(
-                            Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_start, 0.0..=1.0)
-                                .text("Crop Start"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_end, 0.0..=1.0).text("Crop End"),
-                        );
-
-                        if ui
-                            .add(
-                                Slider::new(&mut self.settings.crop_middle, 0.0..=0.5)
-                                    .text("Crop Middle"),
-                            )
-                            .changed()
-                        {
-                            self.settings.crop_start = 0.5 - self.settings().crop_middle;
-                            self.settings.crop_end = 0.5 + self.settings().crop_middle;
-                        }
-
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_x_start, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop X Start"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_x_end, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop X End"),
-                        );
-
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_y_start, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Y Start"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_y_end, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Y End"),
-                        );
-
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_z_start, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Z Start"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_z_end, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Z End"),
-                        );
-
-                        ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("Plane"));
-
-                        ui.separator();
-                        ui.checkbox(&mut self.settings.auto_rotate, "Auto-Rotate");
-                        if self.settings.auto_rotate {
-                            ui.add(
-                                Slider::new(&mut self.settings.auto_rotate_speed, 1.0..=360.0)
-                                    .text("Rotation Speed (°/s)"),
-                            );
-                        }
-
-                        ui.separator();
-                        ui.add(
-                            Slider::new(&mut self.settings.workgroups, 1..=128)
-                                .text("# Workgroups"),
-                        );
-                        ui.separator();
-                        ui.label("Post Processing");
-                        ui.separator();
-                        ui.add(
-                            Slider::new(&mut self.settings.blur_kernel_size, 1..=32)
-                                .text("Blur Kernel Size"),
-                        );
-                        ui.checkbox(&mut self.settings.bloom, "Bloom");
-                        ui.add_enabled(
-                            self.settings.bloom,
-                            Slider::new(&mut self.settings.bloom_threshold, 0.0..=1.0)
-                                .text("Bloom Threshold"),
-                        );
-                        ui.add_enabled(
-                            self.settings.bloom,
-                            Slider::new(&mut self.settings.bloom_intensity, 0.0..=3.0)
-                                .text("Bloom Intensity"),
-                        );
-                        ui.add_enabled(
-                            self.settings.bloom,
-                            Slider::new(&mut self.settings.bloom_spread, 1.0..=5.0)
-                                .text("Bloom Spread"),
-                        );
-                        ui.separator();
-                        ui.checkbox(&mut self.settings.depth_of_field, "Depth of Field");
-                        ui.add_enabled(
-                            self.settings.depth_of_field,
-                            Slider::new(&mut self.settings.focal_distance, 0.01..=3.0)
-                                .text("Focal Distance"),
-                        );
-                        ui.add_enabled(
-                            self.settings.depth_of_field,
-                            Slider::new(&mut self.settings.aperture, 0.01..=5.0).text("Aperture"),
-                        );
-                    });
-
                 egui::TopBottomPanel::bottom("bottom_panel")
                     .frame(Frame {
                         outer_margin: Margin {
@@ -345,6 +155,205 @@ impl Controller {
                                 ui.end_row();
                             });
                     });
+
+                egui::CentralPanel::default()
+                    .frame(Frame {
+                        outer_margin: Margin {
+                            left: 5,
+                            right: 5,
+                            top: 5,
+                            bottom: 10,
+                        },
+                        inner_margin: Margin::ZERO,
+                        ..Default::default()
+                    })
+                    .show_inside(ui, |ui| {
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            ui.heading("Rendering");
+                            ui.separator();
+
+                            ComboBox::from_label("Display Mode")
+                                .selected_text(format!("{:?}", self.settings.display))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.settings.display,
+                                        LineDisplayMode::Geometry,
+                                        "Geometry",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.settings.display,
+                                        LineDisplayMode::Volume,
+                                        "Volume",
+                                    );
+                                });
+
+                            ComboBox::from_label("Voxelization Mode")
+                                .selected_text(format!("{:?}", self.settings.voxelization))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.settings.voxelization,
+                                        LineVoxelizationMode::Tube,
+                                        "Tube",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.settings.voxelization,
+                                        LineVoxelizationMode::Box,
+                                        "Box",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.settings.voxelization,
+                                        LineVoxelizationMode::Line,
+                                        "Line",
+                                    );
+                                });
+
+                            ComboBox::from_label("Voxel Resolution")
+                                .selected_text(format!("{:?}", self.settings.volume))
+                                .show_ui(ui, |ui| {
+                                    for power in 5u32..10 {
+                                        ui.selectable_value(
+                                            &mut self.settings.volume,
+                                            2u32.pow(power),
+                                            format!("{}", 2u32.pow(power)),
+                                        );
+                                    }
+                                });
+
+                            ui.separator();
+                            ui.label("Appearance");
+                            ui.separator();
+
+                            ui.add(
+                                Slider::new(&mut self.camera.fov, 0.1..=3.0).text("Field of View"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.radius, 0.01..=1.0)
+                                    .text("Streamline Radius"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.lighting, 0.0..=1.0)
+                                    .text("Lighting"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.direct_light, 0.0..=3.0)
+                                    .text("Ambient/Shadow"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.tangent_color, 0.0..=2.0)
+                                    .text("Tangent Color"),
+                            );
+                            ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
+                            ui.add(
+                                Slider::new(&mut self.settings.smoothing, 0.0..=1.0)
+                                    .text("Smoothing"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_start, 0.0..=1.0)
+                                    .text("Crop Start"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_end, 0.0..=1.0)
+                                    .text("Crop End"),
+                            );
+
+                            if ui
+                                .add(
+                                    Slider::new(&mut self.settings.crop_middle, 0.0..=0.5)
+                                        .text("Crop Middle"),
+                                )
+                                .changed()
+                            {
+                                self.settings.crop_start = 0.5 - self.settings().crop_middle;
+                                self.settings.crop_end = 0.5 + self.settings().crop_middle;
+                            }
+
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_x_start, -0.5..=0.5)
+                                    .step_by(1.0 / self.settings.volume as f64)
+                                    .text("Crop X Start"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_x_end, -0.5..=0.5)
+                                    .step_by(1.0 / self.settings.volume as f64)
+                                    .text("Crop X End"),
+                            );
+
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_y_start, -0.5..=0.5)
+                                    .step_by(1.0 / self.settings.volume as f64)
+                                    .text("Crop Y Start"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_y_end, -0.5..=0.5)
+                                    .step_by(1.0 / self.settings.volume as f64)
+                                    .text("Crop Y End"),
+                            );
+
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_z_start, -0.5..=0.5)
+                                    .step_by(1.0 / self.settings.volume as f64)
+                                    .text("Crop Z Start"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.crop_z_end, -0.5..=0.5)
+                                    .step_by(1.0 / self.settings.volume as f64)
+                                    .text("Crop Z End"),
+                            );
+
+                            ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("Plane"));
+
+                            ui.separator();
+                            ui.checkbox(&mut self.settings.auto_rotate, "Auto-Rotate");
+                            if self.settings.auto_rotate {
+                                ui.add(
+                                    Slider::new(&mut self.settings.auto_rotate_speed, 1.0..=360.0)
+                                        .text("Rotation Speed (°/s)"),
+                                );
+                            }
+
+                            ui.separator();
+                            ui.add(
+                                Slider::new(&mut self.settings.workgroups, 1..=128)
+                                    .text("# Workgroups"),
+                            );
+                            ui.separator();
+                            ui.label("Post Processing");
+                            ui.separator();
+                            ui.add(
+                                Slider::new(&mut self.settings.blur_kernel_size, 1..=32)
+                                    .text("Blur Kernel Size"),
+                            );
+                            ui.checkbox(&mut self.settings.bloom, "Bloom");
+                            ui.add_enabled(
+                                self.settings.bloom,
+                                Slider::new(&mut self.settings.bloom_threshold, 0.0..=1.0)
+                                    .text("Bloom Threshold"),
+                            );
+                            ui.add_enabled(
+                                self.settings.bloom,
+                                Slider::new(&mut self.settings.bloom_intensity, 0.0..=3.0)
+                                    .text("Bloom Intensity"),
+                            );
+                            ui.add_enabled(
+                                self.settings.bloom,
+                                Slider::new(&mut self.settings.bloom_spread, 1.0..=5.0)
+                                    .text("Bloom Spread"),
+                            );
+                            ui.separator();
+                            ui.checkbox(&mut self.settings.depth_of_field, "Depth of Field");
+                            ui.add_enabled(
+                                self.settings.depth_of_field,
+                                Slider::new(&mut self.settings.focal_distance, 0.01..=3.0)
+                                    .text("Focal Distance"),
+                            );
+                            ui.add_enabled(
+                                self.settings.depth_of_field,
+                                Slider::new(&mut self.settings.aperture, 0.01..=5.0)
+                                    .text("Aperture"),
+                            );
+                        });
+                    });
+
             },
         );
 
