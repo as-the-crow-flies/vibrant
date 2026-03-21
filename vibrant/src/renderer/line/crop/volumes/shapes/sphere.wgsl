@@ -1,73 +1,22 @@
-@group(0) @binding(0) var<storage, read_write> LINE_INDEX: array<u32>;
-@group(0) @binding(1) var<storage, read_write> LINE_VERTEX: array<vec4<f32>>;
-@group(0) @binding(2) var<storage, read_write> LINE_LENGTH: atomic<u32>;
 
-@group(0) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
-@group(0) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
-
-@group(0) @binding(6) var<storage> LINE_INDEX_RAW: array<u32>;
-@group(0) @binding(7) var<storage> LINE_VERTEX_RAW: array<vec4<f32>>;
-@group(0) @binding(8) var<storage> LINE_OFFSET_RAW: array<u32>;
-
-@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
-
-var<workgroup> OFFSET: u32;
-
-@compute
-@workgroup_size(32)
-fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
-    let n_lines = arrayLength(&LINE_OFFSET_RAW);
-    let index = global_invocation_id.x;
-
-    if (index >= n_lines - 1) { return; }
-
-    let start = LINE_OFFSET_RAW[index];
-    let end = LINE_OFFSET_RAW[index + 1];
-
-    let settings = LINE_SETTINGS[LINE_MATERIAL[LINE_INDEX_RAW[start]]];
-
-    let visible = settings.visible == TRUE;
-
-    if (!visible) { return; }
-
-    let length = end - start;
-
-    let start_index = LINE_INDEX_RAW[start];
-    let t = ENVIRONMENT.time;
-
-    let crop_start = max(ENVIRONMENT.settings.crop_start, settings.crop_start);
-    let crop_end = min(ENVIRONMENT.settings.crop_end, settings.crop_end);
-
-    let offset_start = u32(crop_start * f32(length));
-    let offset_end = u32(crop_end * f32(length));
-
-    let crop_length = min(offset_end - offset_start, length);
-
-    if (crop_length == 0) { return; }
-
-    let selection_scale = ENVIRONMENT.settings.selection_scale;
-
-    if (selection_scale <= 0.0) {
-        let offset_line = atomicAdd(&LINE_LENGTH, crop_length);
-        for (var i=0u; i<crop_length; i++) {
-            LINE_INDEX[offset_line + i] = LINE_INDEX_RAW[start + offset_start + i];
-        }
-        return;
-    }
-
+fn in_volume(
+    selection_scale: f32,
+    selection_offset_x: f32,
+    selection_offset_y: f32,
+    selection_offset_z: f32,
+    crop_length: u32,
+    start: u32,
+    offset_start: u32
+) -> bool {
     let radius = 0.125 * selection_scale;
     let radius2 = radius * radius;
 
     let center = vec3<f32>(
-        ENVIRONMENT.settings.selection_offset_x,
-        ENVIRONMENT.settings.selection_offset_y,
-        ENVIRONMENT.settings.selection_offset_z
+        selection_offset_x,
+        selection_offset_y,
+        selection_offset_z
     );
 
-    let extend = ENVIRONMENT.settings.selection_extend_lines == TRUE;
-
-    var intersects = false;
-    var total_length = 0u;
     for (var i=0u; i<crop_length; i++) {
         let index = LINE_INDEX_RAW[start + offset_start + i];
         let v0 = LINE_VERTEX[index].xyz;
@@ -88,46 +37,45 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         }
 
         if (distance2 <= radius2) {
-            intersects = true;
-            total_length++;
+            return true;
+            // total_length++;
         }
     }
+    return false;
+}
 
-    if (extend) {
-        if (!intersects) { return; }
-        let offset_line = atomicAdd(&LINE_LENGTH, crop_length);
+fn in_volume_segment(
+    selection_scale: f32,
+    selection_offset_x: f32,
+    selection_offset_y: f32,
+    selection_offset_z: f32,
+    idx: u32
+) -> bool {
+    let radius = 0.125 * selection_scale;
+    let radius2 = radius * radius;
 
-        for (var i=0u; i<crop_length; i++) {
-            LINE_INDEX[offset_line + i] = LINE_INDEX_RAW[start + offset_start + i];
-        }
+    let center = vec3<f32>(
+        selection_offset_x,
+        selection_offset_y,
+        selection_offset_z
+    );
+
+    let v0 = LINE_VERTEX[idx].xyz;
+    let v1 = LINE_VERTEX[idx + 1].xyz;
+
+    let delta = v1 - v0;
+    let delta2 = dot(delta, delta);
+
+    var distance2 = 0.0;
+    if (delta2 <= 0.0) {
+        let distance = center - v0;
+        distance2 = dot(distance, distance);
     } else {
-        let offset_line = atomicAdd(&LINE_LENGTH, total_length);
-
-        var offset_index = 0u;
-
-        for (var i=0u; i<crop_length; i++) {
-            let index = LINE_INDEX_RAW[start + offset_start + i];
-            let v0 = LINE_VERTEX[index].xyz;
-            let v1 = LINE_VERTEX[index + 1].xyz;
-
-            let delta = v1 - v0;
-            let delta2 = dot(delta, delta);
-
-            var distance2 = 0.0;
-            if (delta2 <= 0.0) {
-                let distance = center - v0;
-                distance2 = dot(distance, distance);
-            } else {
-                let u = clamp(dot(center - v0, delta) / delta2, 0.0, 1.0);
-                let closest = v0 + delta * u;
-                let distance = center - closest;
-                distance2 = dot(distance, distance);
-            }
-
-            if (distance2 <= radius2) {
-                LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
-                offset_index++;
-            }
-        }
+        let u = clamp(dot(center - v0, delta) / delta2, 0.0, 1.0);
+        let closest = v0 + delta * u;
+        let distance = center - closest;
+        distance2 = dot(distance, distance);
     }
+
+    return distance2 <= radius2;
 }
