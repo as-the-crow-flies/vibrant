@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crate::{
     asset::{transform::TransformBuffer, volume::VolumeBuffer},
+    controller::settings::Settings,
     file::bounds::Bounds,
     renderer::line::LineRenderer,
 };

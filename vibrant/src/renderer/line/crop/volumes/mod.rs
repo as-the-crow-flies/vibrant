@@ -8,8 +8,7 @@ use crate::{
 };
 
 pub struct LineSelectionPipeline {
-    box_selection: ComputePipeline,
-    sphere_selection: ComputePipeline,
+    selection_pipeline: ComputePipeline,
 }
 
 impl LineSelectionPipeline {
@@ -19,19 +18,30 @@ impl LineSelectionPipeline {
 
         // TODO: currently hardcoded to be two boxes, one small one customizable in the editor.
         //       need to make this dynamic through a menu...
-        let square_source: String = include_str!("shapes/preamble.wgsl").to_string().replace(
-            "//DISPATCH-INSERT-MARKER//",
-            include_str!("shapes/square.wgsl"),
-        );
-
-        let sphere_source: String = include_str!("shapes/preamble.wgsl").to_string().replace(
-            "//DISPATCH-INSERT-MARKER//",
-            include_str!("shapes/sphere.wgsl"),
-        );
+        let preamble_source = include_str!("shapes/preamble.wgsl")
+            .to_string()
+            .replace(
+                "//DISPATCH-INSERT-MARKER//",
+                include_str!("shapes/square.wgsl"),
+            )
+            .replace(
+                "//DISPATCH-INSERT-MARKER//",
+                include_str!("shapes/sphere.wgsl"),
+            );
+        // .replace(
+        //     "//DISPATCH-PARTIAL-CALL-MARKER//",
+        //     "
+        //     in_square_volume_segment(ENVIRONMENT.settings.selection_scale, ENVIRONMENT.settings.selection_offset_x, ENVIRONMENT.settings.selection_offset_y, ENVIRONMENT.settings.selection_offset_z, idx) ||
+        //     in_square_volume_segment(0.5, 0.125, 0.125, 0.125, idx)
+        //     ",
+        // );
 
         Self {
-            box_selection: gpu.compute("Box", &layout, &gpu.shader(&square_source)),
-            sphere_selection: gpu.compute("Sphere", &layout, &gpu.shader(&sphere_source)),
+            selection_pipeline: gpu.compute(
+                "Selection Pipeline",
+                &layout,
+                &gpu.shader(&preamble_source),
+            ),
         }
     }
 
@@ -42,10 +52,9 @@ impl LineSelectionPipeline {
         environment: &Environment,
         settings: &Settings,
     ) {
-        let pipeline = match settings.selection_volume {
+        let pipeline: &ComputePipeline = match settings.selection_volume {
             SelectionVolume::None => return,
-            SelectionVolume::Box => &self.box_selection,
-            SelectionVolume::Sphere => &self.sphere_selection,
+            _ => &self.selection_pipeline,
         };
 
         self.selection(cmd, line, environment, pipeline);

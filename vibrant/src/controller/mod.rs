@@ -284,6 +284,10 @@ impl Controller {
                                     "Sphere",
                                 );
                             });
+                        ui.checkbox(
+                            &mut self.settings.selection_match_all,
+                            "Match All Conditions",
+                        );
                         ui.checkbox(&mut self.settings.selection_extend_lines, "Extend Lines");
                         ui.add(
                             egui::Slider::new(&mut self.settings.selection_scale, 0.0..=5.0)

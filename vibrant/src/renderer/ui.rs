@@ -4,6 +4,7 @@ use egui_wgpu::RendererOptions;
 use wgpu::{CommandEncoder, RenderPassDescriptor};
 
 use crate::{
+    controller::settings::Settings,
     gpu::Gpu,
     surface::{color::ColorBuffer, Frame},
 };

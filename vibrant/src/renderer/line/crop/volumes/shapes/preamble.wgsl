@@ -57,21 +57,22 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         return;
     }
 
-    //DISPATCH-CALL-MARKER// START
-    let a = in_volume(
-        ENVIRONMENT.settings.selection_scale,
-        ENVIRONMENT.settings.selection_offset_x,
-        ENVIRONMENT.settings.selection_offset_y,
-        ENVIRONMENT.settings.selection_offset_z,
-        crop_length, start, offset_start
-    );
-    let b = in_volume(
-        0.5, 0.125, 0.125, 0.125,
-        crop_length, start, offset_start
-    );
+    //DISPATCH-CALL-MARKER//
+    if ENVIRONMENT.settings.selection_match_all {
+        let a = in_square_volume(
+            ENVIRONMENT.settings.selection_scale,
+            ENVIRONMENT.settings.selection_offset_x,
+            ENVIRONMENT.settings.selection_offset_y,
+            ENVIRONMENT.settings.selection_offset_z,
+            crop_length, start, offset_start
+        );
+        let b = in_square_volume(
+            0.5, 0.125, 0.125, 0.125,
+            crop_length, start, offset_start
+        );
 
-    if (!a || !b) { return; }
-    //DISPATCH-CALL-MARKER// END
+        if (!a || !b) { return; }
+    }
 
     let extend = ENVIRONMENT.settings.selection_extend_lines == TRUE;
 
@@ -85,8 +86,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         for (var i = 0u; i < crop_length; i++) {
             let idx = LINE_INDEX_RAW[start + offset_start + i];
             if (
-                in_volume_segment(ENVIRONMENT.settings.selection_scale, ENVIRONMENT.settings.selection_offset_x, ENVIRONMENT.settings.selection_offset_y, ENVIRONMENT.settings.selection_offset_z, idx) ||
-                in_volume_segment(0.5, 0.125, 0.125, 0.125, idx)
+                //DISPATCH-PARTIAL-CALL-MARKER//
             ) {
                 total_length++;
             }
@@ -96,8 +96,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         for (var i = 0u; i < crop_length; i++) {
             let idx = LINE_INDEX_RAW[start + offset_start + i];
             if (
-                in_volume_segment(ENVIRONMENT.settings.selection_scale, ENVIRONMENT.settings.selection_offset_x, ENVIRONMENT.settings.selection_offset_y, ENVIRONMENT.settings.selection_offset_z, idx) ||
-                in_volume_segment(0.5, 0.125, 0.125, 0.125, idx)
+                //DISPATCH-PARTIAL-CALL-MARKER//
             ) {
                 LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
                 offset_index++;
