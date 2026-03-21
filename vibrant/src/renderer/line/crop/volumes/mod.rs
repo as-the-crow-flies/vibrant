@@ -40,8 +40,8 @@ impl LineSelectionPipeline {
 
         let volumes_buffer = gpu.device().create_buffer(&BufferDescriptor {
             label: Some("SelectionVolumes"),
-            // 5 x f32/u32 per entry, max 8 entries
-            size: 5 * 4 * 8,
+            // 6 x f32/u32 per entry (shape, scale, x, y, z, extend_lines), max 8 entries
+            size: 6 * 4 * 8,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -71,22 +71,26 @@ impl LineSelectionPipeline {
     }
 
     pub fn update(&self, gpu: &Gpu, settings: &Settings) {
-        let shape: u32 = match settings.selection_volume {
-            SelectionVolume::None => return,
-            SelectionVolume::Box => 0,
-            SelectionVolume::Sphere => 1,
-        };
+        let mut data: Vec<u8> = Vec::new();
 
-        let data: Vec<u8> = [
-            bytemuck::bytes_of(&shape),
-            bytemuck::bytes_of(&settings.selection_scale),
-            bytemuck::bytes_of(&settings.selection_offset_x),
-            bytemuck::bytes_of(&settings.selection_offset_y),
-            bytemuck::bytes_of(&settings.selection_offset_z),
-        ]
-        .concat();
+        for vol in &settings.selection_volumes {
+            let shape: u32 = match vol.shape {
+                SelectionVolume::None => continue,
+                SelectionVolume::Box => 0,
+                SelectionVolume::Sphere => 1,
+            };
+            data.extend_from_slice(bytemuck::bytes_of(&shape));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.scale));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.offset_x));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.offset_y));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.offset_z));
+            let extend: u32 = vol.extend_lines as u32;
+            data.extend_from_slice(bytemuck::bytes_of(&extend));
+        }
 
-        gpu.queue().write_buffer(&self.volumes_buffer, 0, &data);
+        if !data.is_empty() {
+            gpu.queue().write_buffer(&self.volumes_buffer, 0, &data);
+        }
     }
 
     pub fn dispatch(
@@ -96,12 +100,16 @@ impl LineSelectionPipeline {
         environment: &Environment,
         settings: &Settings,
     ) {
-        let pipeline: &ComputePipeline = match settings.selection_volume {
-            SelectionVolume::None => return,
-            _ => &self.selection_pipeline,
-        };
+        let has_volumes = settings
+            .selection_volumes
+            .iter()
+            .any(|v| v.shape != SelectionVolume::None);
 
-        self.selection(cmd, line, environment, pipeline);
+        if !has_volumes {
+            return;
+        }
+
+        self.selection(cmd, line, environment, &self.selection_pipeline);
     }
 
     fn selection(
