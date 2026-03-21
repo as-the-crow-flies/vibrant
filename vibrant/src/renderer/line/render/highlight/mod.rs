@@ -92,13 +92,7 @@ impl VolumeHighlightPipeline {
         gpu.queue().write_buffer(&self.highlight_buffer, 0, &data);
     }
 
-    pub fn render(
-        &self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        frame: &Frame,
-        settings: &Settings,
-    ) {
+    pub fn render(&self, cmd: &mut CommandEncoder, environment: &Environment, frame: &Frame) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some("VolumeHighlight"),
             color_attachments: &[Some(frame.highlight().attachment_clear())],

@@ -123,12 +123,14 @@ impl Renderer {
         }
 
         if !FileStage::about_to_save() {
+            let clear = self.asset.line.is_none();
             self.ui.render(
                 gpu,
                 &mut cmd,
                 surface.buffer(),
                 self.egui.egui_ctx(),
                 output,
+                clear,
             );
         }
 
