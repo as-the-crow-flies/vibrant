@@ -35,6 +35,7 @@ impl UiRenderer {
         frame: &Frame,
         ctx: &egui::Context,
         output: egui::FullOutput,
+        clear: bool,
     ) {
         let (device, queue) = (gpu.device(), gpu.queue());
 
@@ -54,7 +55,11 @@ impl UiRenderer {
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
                 label: Some(type_name::<Self>()),
-                color_attachments: &[Some(frame.post().attachment())],
+                color_attachments: &[Some(if clear {
+                    frame.post().attachment_clear()
+                } else {
+                    frame.post().attachment()
+                })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
