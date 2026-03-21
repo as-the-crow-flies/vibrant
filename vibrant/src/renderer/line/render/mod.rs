@@ -49,6 +49,6 @@ impl LineRenderPipeline {
             LineDisplayMode::Geometry => self.ray.render(cmd, frame, environment, settings, line),
             LineDisplayMode::Volume => self.volume.render(cmd, frame, environment),
         }
-        self.highlight.render(cmd, environment, frame, settings);
+        self.highlight.render(cmd, environment, frame);
     }
 }
