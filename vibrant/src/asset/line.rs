@@ -20,7 +20,7 @@ pub struct GlobalLineSettings {
     pub color_visible: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LineSettings {
     pub name: String,
     pub selected: bool,
@@ -308,6 +308,14 @@ impl LineBuffer {
 
     pub fn settings(&mut self) -> &mut [LineSettings] {
         &mut self.settings
+    }
+
+    pub fn set_settings(&mut self, settings: Vec<LineSettings>) {
+        self.settings = settings;
+    }
+
+    pub fn clear_settings(&mut self) {
+        self.settings.clear();
     }
 
     pub fn bounds(&self) -> &Bounds {

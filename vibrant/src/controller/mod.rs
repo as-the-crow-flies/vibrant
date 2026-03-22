@@ -80,6 +80,34 @@ impl Controller {
         }
     }
 
+        println!("Updating line assets");
+
+        let mut new_line_settings = Vec::new();
+
+        let Some(line_buffer) = asset.line.as_mut() else {
+            return;
+        };
+
+        for layer in &self.layers {
+            match layer {
+                Layer::Line(name) => {
+                    if let Some(line) = line_buffer
+                        .settings()
+                        .iter_mut()
+                        .find(|line| line.name == *name) {
+                        new_line_settings.push(line.clone());
+                    }
+                },
+                Layer::Group(group_lines) => {
+
+                }
+            }
+        }
+
+        line_buffer.clear_settings();
+        line_buffer.set_settings(new_line_settings.clone());
+    }
+
     pub fn event(&mut self, event: Event) {
         self.state = self.state.update(event);
 
@@ -399,7 +427,7 @@ impl Controller {
                                 })
                                 .body(|_| {});
 
-                                self.tractography_layers(ui, lines);
+                                self.tractography_layers(ui, asset);
                             }
                         });
                     });
@@ -446,14 +474,14 @@ impl Controller {
         Instant::now().duration_since(self.time).as_secs_f32()
     }
 
-    pub fn tractography_layers (&mut self, ui: &mut Ui, lines: &mut crate::asset::line::LineBuffer) {
+    pub fn tractography_layers (&mut self, ui: &mut Ui, asset: &mut Asset) {
         let mut from = None;
         let mut to = None;
 
         for (index, layer) in self.layers.iter_mut().enumerate() {
             match layer {
                 Layer::Line(name) => {
-                    let line = lines.settings().iter_mut().find(|line| line.name == *name).unwrap();
+                    let line = asset.line.as_mut().unwrap().settings().iter_mut().find(|line| line.name == *name).unwrap();
                     let id = ui.make_persistent_id(&line.name);
                     CollapsingState::load_with_default_open(ui.ctx(), id, false)
                         .show_header(ui, |ui| {
@@ -510,6 +538,8 @@ impl Controller {
 
                 self.layers = layers;
             }
+
+            Controller::update_line_assets(self, asset);
         }
     }
 
