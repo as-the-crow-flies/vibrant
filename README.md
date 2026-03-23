@@ -112,3 +112,47 @@ Notes:
 - Video mode runs with a hidden window and exits after writing all frames once assets are loaded.
 - The current encoder uses `ffmpeg` with `libx264`, so `.mp4` is the most practical output format to use in examples.
 - If inputs are missing or fail to load, export may never complete because the renderer waits for assets.
+
+## User Interface
+
+In interactive mode, the application exposes the following UI actions:
+
+1. Settings - Opens the settings side panel
+2. Open - Imports `.tck` and `.obj` line files
+3. Screenshot - Captures a screenshot
+
+## Settings
+
+### Render Mode
+
+- RayTracing - Our voxel ray tracing method
+- RayTracingQuantized - Kanzler et al.
+- RasterizationOrderCorrecting - Groß and Gumhold
+- Rasterization - Baseline rasterization
+
+### Display Mode
+
+- Geometry - Render tube geometry
+- Volume - Render occupancy volume
+
+### Voxelization Mode
+
+- Tube - Our conservative voxelization method
+- Box - Axis-aligned bounding box voxelization
+- Line - DDA voxelization
+
+### Resolutions
+
+- Volume - Resolution of occupancy volume and A-buffer
+
+### Appearance
+
+- Streamline Radius - Line radius relative to voxel size
+- Lighting - How much lighting to apply
+- Ambient/Shadow - Contribution of ambient occlusion versus direct shadows
+- Tangent Color - Contribution of tangent coloring
+- Alpha - Line alpha for all lines
+- Smoothing - Clamping value for phone-wire anti-aliasing
+- Culling Slices - Number of slices for culling in RasterizationOrderCorrecting
+- Workgroups - How many work groups to launch (set equal to the number of workgroups in your GPU for optimal performance)
+- Enable Culling - Turn culling on/off
