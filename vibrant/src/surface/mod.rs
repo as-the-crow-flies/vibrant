@@ -23,7 +23,7 @@ use wgpu::{
 
 use crate::{
     asset::texture::{MipTexture3D, R32Float, R32Uint},
-    controller::settings::Settings,
+    controller::settings::{AntiAliasingMode, Settings},
     surface::culling::CullingBuffer,
 };
 
@@ -174,6 +174,10 @@ pub struct Surface {
     display_hdr: RenderPipeline,
     display_sdr: RenderPipeline,
     buffer: Frame,
+    // cached frame when Adaptive AA is enabled
+    // when camera switch from still to motion, AA switch from SSAA to TAA/SMAA
+    // use frame_cache to prevent stutter
+    frame_cache: Option<Frame>,
 }
 
 impl Surface {
@@ -258,6 +262,7 @@ impl Surface {
             display_hdr,
             display_sdr,
             buffer: Frame::new(gpu, &Settings::new()),
+            frame_cache: None,
         }
     }
 
@@ -268,10 +273,41 @@ impl Surface {
             && settings.render_height == self.buffer.color().height()
             && settings.volume == self.buffer.occupancy().resolution()
         {
+            // dimensions unchanged, free the cache when not in Adaptive mode
+            if settings.aa_mode != AntiAliasingMode::Adaptive {
+                self.frame_cache = None;
+            }
             return self;
         }
 
-        self.buffer = Frame::new(gpu, &settings);
+        // check if the cached frame matches the requested dimensions
+        // this happens during Adaptive AA switching between SSAA and TAA/SMAA
+        let cache_hit = self.frame_cache.as_ref().is_some_and(|cached| {
+            settings.render_width == cached.color().width()
+                && settings.render_height == cached.color().height()
+                && settings.width == cached.ui().width()
+                && settings.height == cached.ui().height()
+                && settings.volume == cached.occupancy().resolution()
+        });
+
+        if cache_hit {
+            // swap current ↔ cached: instant, no GPU allocation.
+            let cached = self.frame_cache.take().unwrap();
+            let old = std::mem::replace(&mut self.buffer, cached);
+            if settings.aa_mode == AntiAliasingMode::Adaptive {
+                self.frame_cache = Some(old);
+            }
+        } else if settings.aa_mode == AntiAliasingMode::Adaptive {
+            // cache miss but in Adaptive mode
+            // save the current frame before allocating a new one
+            let old = std::mem::replace(&mut self.buffer, Frame::new(gpu, settings));
+            self.frame_cache = Some(old);
+        } else {
+            // not in Adaptive mode — just reallocate, no caching operation
+            self.buffer = Frame::new(gpu, settings);
+            self.frame_cache = None;
+        }
+
         self.surface
             .configure(gpu.device(), &Self::config(settings.width, settings.height, self.format));
 
