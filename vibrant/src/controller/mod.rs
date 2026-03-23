@@ -19,7 +19,8 @@ use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    asset::{Asset, line},
+    asset::{Asset, line },
+    asset::line::LineSettings,
     controller::{
         segment::Segment,
         settings::{LineDisplayMode, LineVoxelizationMode},
@@ -30,14 +31,14 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum Layer {
     Line(String),
-    Group(Vec<String>)
+    Group(Vec<String>, LineSettings)
 }
 
 impl Layer {
     fn contains_name(&self, name: &str) -> bool {
         match self {
             Layer::Line(line_name) => line_name == name,
-            Layer::Group(names) => names.contains(&name.to_string()),
+            Layer::Group(names, _) => names.contains(&name.to_string()),
         }
     }
 }
@@ -80,6 +81,7 @@ impl Controller {
         }
     }
 
+    pub fn update_line_assets (&mut self, asset: &mut Asset) {
         println!("Updating line assets");
 
         let mut new_line_settings = Vec::new();
@@ -98,7 +100,7 @@ impl Controller {
                         new_line_settings.push(line.clone());
                     }
                 },
-                Layer::Group(group_lines) => {
+                Layer::Group(group_lines, _) => {
 
                 }
             }
@@ -509,15 +511,33 @@ impl Controller {
                                 Slider::new(&mut line.crop_end, 0.0..=1.0)
                                     .text("Crop End"),
                             );
+
                             if ui.add(
                                 Button::new("Create Group")
                             ).clicked() {
-                                let new_layer = Layer::Group(vec![line.name.clone()]);
+                                let new_layer = Layer::Group(vec![line.name.clone()], line.clone());
                                 *layer = new_layer;
                             };
                         });
                 },
-                Layer::Group(group_lines) => {
+                Layer::Group(group_lines, group_settings) => {
+                    //Code here
+                    let id = ui.make_persistent_id(format!("Group{}", index));
+                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                        .show_header(ui, |ui| {
+                            ui.label(format!("Group {}", index));
+
+                        })
+                        .body(|ui| {
+                            ui.add(
+                                Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
+                                    .text("Crop Start"),
+                            );
+                            ui.add(
+                                Slider::new(&mut group_settings.crop_end, 0.0..=1.0)
+                                    .text("Crop End"),
+                            );
+                        });
                 },
             }
         }
@@ -559,7 +579,7 @@ impl Controller {
             self.layers
                 .iter()
                 .filter_map(|layer| {
-                    if let Layer::Group(lines) = layer {
+                    if let Layer::Group(lines, _) = layer {
                         Some(lines)
                     } else {
                         None
@@ -574,14 +594,14 @@ impl Controller {
         println!("Removing line {} from layers", name);
         println!("Number of layers: {}", layers.len());
         for layer in &mut layers {
-            if let Layer::Group(group_lines) = layer {
+            if let Layer::Group(group_lines, _) = layer {
                 group_lines.retain(|line_name| line_name != name);
             }
         }
 
         layers.retain(|layer| match layer {
             Layer::Line(line_name) => line_name != name,
-            Layer::Group(group_lines) => !group_lines.is_empty(),
+            Layer::Group(group_lines, _) => !group_lines.is_empty(),
         });
 
         println!("Number of layers: {}", layers.len());
@@ -593,7 +613,7 @@ impl Controller {
         if group_index == 0 {
             layers.insert(line_index, Layer::Line(name.to_string()));
         } else {
-            if let Some(Layer::Group(group_lines)) = layers.get_mut(group_index - 1) {
+            if let Some(Layer::Group(group_lines, _)) = layers.get_mut(group_index - 1) {
                 group_lines.insert(line_index, name.to_string());
             }
         }
