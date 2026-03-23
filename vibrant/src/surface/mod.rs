@@ -291,7 +291,19 @@ impl Surface {
             ]),
         );
 
-        // Re-detect supported formats
+        let wants_hdr = prefer_hdr_output && self.hdr_supported;
+        let desired_format = if wants_hdr {
+            self.hdr_format.unwrap_or(self.sdr_format)
+        } else {
+            self.sdr_format
+        };
+
+        if self.hdr_output == wants_hdr && self.format == desired_format {
+            return;
+        }
+
+        // Re-detect supported formats only when the HDR preference is actually
+        // changing, not every frame
         let caps = self.surface.get_capabilities(gpu.adapter());
         let (sdr_format, hdr_format) = Self::detect_formats(&caps);
         self.sdr_format = sdr_format;
