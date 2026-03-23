@@ -529,14 +529,23 @@ impl Controller {
 
                         })
                         .body(|ui| {
-                            ui.add(
-                                Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
+                            let response1 = ui.add(
+                        Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
                                     .text("Crop Start"),
                             );
-                            ui.add(
+                            let response2 = ui.add(
                                 Slider::new(&mut group_settings.crop_end, 0.0..=1.0)
                                     .text("Crop End"),
                             );
+
+                            if response1.changed() || response2.changed() {
+                                for line_name in group_lines.iter() {
+                                    if let Some(line) = asset.line.as_mut().unwrap().settings().iter_mut().find(|line| line.name == *line_name) {
+                                        line.crop_start = group_settings.crop_start;
+                                        line.crop_end = group_settings.crop_end;
+                                    }
+                                }
+                            }
                         });
                 },
             }
