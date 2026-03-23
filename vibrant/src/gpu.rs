@@ -233,6 +233,12 @@ impl Gpu {
     }
 
     pub async fn save(&self, path: PathBuf, texture: &Texture) -> io::Result<()> {
+        let (buffer, width, height) = self.read_frame(texture).await?;
+
+        Self::write_png(path, width, height, &buffer)
+    }
+
+    pub async fn read_frame(&self, texture: &Texture) -> io::Result<(Vec<u8>, u32, u32)> {
         if texture.format() != TextureFormat::Bgra8Unorm {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -301,6 +307,10 @@ impl Gpu {
         drop(mapped);
         result.unmap();
 
+        Ok((buffer, width, height))
+    }
+
+    fn write_png(path: PathBuf, width: u32, height: u32, buffer: &[u8]) -> io::Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }

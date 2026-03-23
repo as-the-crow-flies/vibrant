@@ -3,6 +3,8 @@ use pollster::FutureExt;
 
 pub mod app;
 pub mod cli;
+#[cfg(not(target_arch = "wasm32"))]
+mod video;
 
 fn main() {
     env_logger::builder()

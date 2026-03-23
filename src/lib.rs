@@ -1,4 +1,6 @@
 pub mod app;
+#[cfg(not(target_arch = "wasm32"))]
+mod video;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
