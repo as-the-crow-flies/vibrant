@@ -67,7 +67,7 @@ impl Environment {
     pub fn update(&mut self, gpu: &Gpu, controller: &Controller) {
         let settings = controller.settings();
         let camera = controller.camera();
-        let is_taa = settings.aa_mode == AntiAliasingMode::TAA;
+        let is_taa = settings.effective_aa_mode == AntiAliasingMode::TAA;
 
         let jitter = if is_taa {
             Camera::jitter(self.frame_index)

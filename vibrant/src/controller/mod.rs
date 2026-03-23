@@ -97,6 +97,7 @@ impl Controller {
 
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
         self.camera.tick();
+        self.resolve_adaptive_aa();
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -330,18 +331,41 @@ impl Controller {
                                     AntiAliasingMode::TAA,
                                     "TAA",
                                 );
+                                ui.selectable_value(
+                                    &mut self.settings.aa_mode,
+                                    AntiAliasingMode::Adaptive,
+                                    "Adaptive",
+                                );
                             });
 
-                        // Save render_scale when entering SSAA, restore when leaving.
+                        // Save render_scale when entering SSAA/Adaptive, restore when leaving
                         if prev_aa_mode != self.settings.aa_mode {
-                            if self.settings.aa_mode == AntiAliasingMode::SSAA {
+                            let enters_scaled = matches!(
+                                self.settings.aa_mode,
+                                AntiAliasingMode::SSAA | AntiAliasingMode::Adaptive
+                            );
+                            let leaves_scaled = matches!(
+                                prev_aa_mode,
+                                AntiAliasingMode::SSAA | AntiAliasingMode::Adaptive
+                            );
+                            if enters_scaled && !leaves_scaled {
                                 self.pre_ssaa_render_scale = self.settings.render_scale;
-                                self.settings.render_scale = std::f32::consts::SQRT_2;
-                                self.settings.update_render_size();
-                            } else if prev_aa_mode == AntiAliasingMode::SSAA {
+                                if self.settings.aa_mode == AntiAliasingMode::SSAA {
+                                    self.settings.render_scale = std::f32::consts::SQRT_2;
+                                    self.settings.update_render_size();
+                                }
+                            } else if leaves_scaled && !enters_scaled {
                                 self.settings.render_scale = self.pre_ssaa_render_scale;
                                 self.settings.update_render_size();
                             }
+                        }
+
+                        // show current AA strategy when Adaptive is active
+                        if self.settings.aa_mode == AntiAliasingMode::Adaptive {
+                            ui.label(format!(
+                                "Current AA Strategy: {:?}",
+                                self.settings.effective_aa_mode
+                            ));
                         }
 
                         // SMAA tuning parameters — only shown when SMAA is active.
@@ -392,7 +416,7 @@ impl Controller {
                             }
                         }
 
-                        if self.settings.aa_mode != AntiAliasingMode::SSAA {
+                        if !matches!(self.settings.aa_mode, AntiAliasingMode::SSAA | AntiAliasingMode::Adaptive) {
                             if ui
                                 .add(Slider::new(&mut self.settings.render_scale, 0.25..=2.0)
                                     .text("Render Scale"))
@@ -576,6 +600,35 @@ impl Controller {
                         });
                     });
             });
+    }
+
+    fn resolve_adaptive_aa(&mut self) {
+        use camera::MotionLevel;
+
+        if self.settings.aa_mode == AntiAliasingMode::Adaptive {
+            let target = match self.camera.motion_level() {
+                MotionLevel::Fast => AntiAliasingMode::SMAA,
+                MotionLevel::Slow => AntiAliasingMode::TAA,
+                MotionLevel::Still => AntiAliasingMode::SSAA,
+            };
+
+            // update render_scale when the effective mode changes.
+            if target != self.settings.effective_aa_mode {
+                let new_scale = if target == AntiAliasingMode::SSAA {
+                    2.0
+                } else {
+                    self.pre_ssaa_render_scale
+                };
+                if (self.settings.render_scale - new_scale).abs() > 0.001 {
+                    self.settings.render_scale = new_scale;
+                    self.settings.update_render_size();
+                }
+            }
+
+            self.settings.effective_aa_mode = target;
+        } else {
+            self.settings.effective_aa_mode = self.settings.aa_mode;
+        }
     }
 
     pub fn camera(&self) -> &Camera {

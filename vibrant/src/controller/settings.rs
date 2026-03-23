@@ -10,6 +10,8 @@ pub enum AntiAliasingMode {
     SMAA,
     // Temporal Anti-Aliasing
     TAA,
+    // Adaptive: auto-switch based on camera motion (Fast→SMAA, Slow→TAA, Still→SSAA)
+    Adaptive,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -84,6 +86,8 @@ pub struct Settings {
     pub taa_blend_factor: f32,
     // TAA variance clipping sigma, controls how aggressively stale history is rejected
     pub taa_clamp_sigma: f32,
+    // resolved AA mode
+    pub effective_aa_mode: AntiAliasingMode,
 }
 
 impl Settings {
@@ -129,6 +133,7 @@ impl Settings {
             smaa_max_search_steps: 16,
             taa_blend_factor: 0.15,
             taa_clamp_sigma: 1.0,
+            effective_aa_mode: AntiAliasingMode::Off,
         }
     }
 
