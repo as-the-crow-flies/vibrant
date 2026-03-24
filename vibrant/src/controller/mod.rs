@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    Align, Button, Color32, ComboBox, Frame, Layout, Margin, ScrollArea, Sense, SidePanel, Slider, Ui, collapsing_header::CollapsingState, debug_text::print
+    Align, Button, Color32, ComboBox, Frame, Label, Layout, Margin, ScrollArea, Sense, SidePanel, Slider, Ui, collapsing_header::CollapsingState, debug_text::print
 };
 use event::Event;
 use itertools::Itertools;
@@ -525,10 +525,15 @@ impl Controller {
                     let id = ui.make_persistent_id(format!("Group{}", index));
                     CollapsingState::load_with_default_open(ui.ctx(), id, false)
                         .show_header(ui, |ui| {
+                            ui.toggle_value(&mut group_settings.visible, "👁");
+                            ui.color_edit_button_srgb(&mut group_settings.color);
                             ui.label(format!("Group {}", index));
-
                         })
                         .body(|ui| {
+                            for line_name in group_lines.iter() {
+                                ui.label(line_name);
+                            }
+
                             let response1 = ui.add(
                         Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
                                     .text("Crop Start"),
