@@ -102,7 +102,14 @@ impl Controller {
                     }
                 },
                 Layer::Group(group_lines, _) => {
-
+                    for line_name in group_lines {
+                        if let Some(line) = line_buffer
+                            .settings()
+                            .iter_mut()
+                            .find(|line| line.name == *line_name) {
+                            new_line_settings.push(line.clone());
+                        }
+                    }
                 }
             }
         }
@@ -532,6 +539,8 @@ impl Controller {
                             ui.toggle_value(&mut group_settings.visible, "👁");
                             ui.color_edit_button_srgb(&mut group_settings.color);
                             ui.label(format!("Group {}", index));
+
+                            //drop_zone(ui, id, Location { group_index: group_index, layer_index: index, group_item_index: 0 }, &mut from, &mut to);
                         })
                         .body(|ui| {
                             for (group_item_index, line_name) in group_lines.iter().enumerate() {
@@ -551,6 +560,8 @@ impl Controller {
 
                             if response1.changed() || response2.changed() {
                                 for line_name in group_lines.iter() {
+                                    println!("Updating crop settings for line {} in group {}", line_name, index);
+                                    
                                     if let Some(line) = asset.line.as_mut().unwrap().settings().iter_mut().find(|line| line.name == *line_name) {
                                         line.crop_start = group_settings.crop_start;
                                         line.crop_end = group_settings.crop_end;
@@ -574,7 +585,7 @@ impl Controller {
                 let mut layers = self.layers.clone();
 
                 layers = self.remove_line_from_layers_by_name(layers, &name);
-                layers = self.insert_line_into_layers_by_name_and_indexes(layers, &name, to.group_index, to.layer_index);
+                layers = self.insert_line_into_layers_by_name_and_indexes(layers, &name, to);
 
                 self.layers = layers;
             }
@@ -615,13 +626,17 @@ impl Controller {
         layers
     }
 
-    fn insert_line_into_layers_by_name_and_indexes (&self, mut layers: Vec<Layer>, name: &str, group_index: usize, line_index: usize) -> Vec<Layer> {
-        println!("Inserting line {} into layers at group index {} and line index {}", name, group_index, line_index);
-        if group_index == 0 {
-            layers.insert(line_index, Layer::Line(name.to_string()));
-        } else {
-            if let Some(Layer::Group(group_lines, _)) = layers.get_mut(group_index - 1) {
-                group_lines.insert(line_index, name.to_string());
+    fn insert_line_into_layers_by_name_and_indexes (&self, mut layers: Vec<Layer>, name: &str, location: Location) -> Vec<Layer> {
+        println!("Inserting line {} into layers at group index {} and line index {}", name, location.group_index, location.layer_index);
+
+        let layer = &mut layers[location.layer_index];
+        match layer {
+            Layer::Line(_) => {
+                layers.insert(location.layer_index, Layer::Line(name.to_string()));
+            },
+            Layer::Group(group_lines, group_settings) => {
+                println!("Inserting line {} into group at index {}", name, location.group_index);
+                group_lines.insert(location.group_item_index, name.to_string());
             }
         }
 
@@ -640,7 +655,7 @@ fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool
 fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut Option<Location>, to: &mut Option<Location>) {
     let frame = Frame::default().inner_margin(4.0);
     let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
-        let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.layer_index));
+        let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.layer_index, item_location.group_item_index));
 
         let row_idx = item_location.layer_index;
 
