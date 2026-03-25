@@ -45,8 +45,9 @@ impl Layer {
 
 #[derive(Debug, Copy, Clone)]
 pub struct Location {
-    group_index: usize,
-    line_index: usize,
+    layer_index: usize,
+    group_index: usize, //remove later
+    group_item_index: usize
 }
 
 #[derive(Debug)]
@@ -480,6 +481,8 @@ impl Controller {
         let mut from = None;
         let mut to = None;
 
+        let mut group_index = 0;
+
         for (index, layer) in self.layers.iter_mut().enumerate() {
             match layer {
                 Layer::Line(name) => {
@@ -500,7 +503,7 @@ impl Controller {
                                 println!("stopped dragging line {}\n", line.name);
                             }
 
-                            drop_zone(ui, id, Location { group_index: 0, line_index: index }, &mut from, &mut to);
+                            drop_zone(ui, id, Location { group_index: 0, layer_index: index,group_item_index: 0 }, &mut from, &mut to);
                         })
                         .body(|ui| {
                             ui.add(
@@ -521,7 +524,8 @@ impl Controller {
                         });
                 },
                 Layer::Group(group_lines, group_settings) => {
-                    //Code here
+                    group_index += 1;
+
                     let id = ui.make_persistent_id(format!("Group{}", index));
                     CollapsingState::load_with_default_open(ui.ctx(), id, false)
                         .show_header(ui, |ui| {
@@ -530,8 +534,10 @@ impl Controller {
                             ui.label(format!("Group {}", index));
                         })
                         .body(|ui| {
-                            for line_name in group_lines.iter() {
+                            for (group_item_index, line_name) in group_lines.iter().enumerate() {
+                                let line_in_group_id = ui.make_persistent_id(format!("Group{}Group_Item{}", group_index, group_item_index));
                                 ui.label(line_name);
+                                drop_zone(ui, id, Location { group_index: group_index, layer_index: index, group_item_index: group_item_index }, &mut from, &mut to);
                             }
 
                             let response1 = ui.add(
@@ -557,10 +563,10 @@ impl Controller {
         }
 
         if let (Some(from), Some(mut to)) = (from, to) {
-            println!("Move line from group {} line {} to group {} line {}", from.group_index, from.line_index, to.group_index, to.line_index);
+            println!("Move line from group {} line {} to group {} line {}", from.group_index, from.layer_index, to.group_index, to.layer_index);
 
-            let from_layer = self.get_line_by_indexes(from.group_index, from.line_index);
-            let to_layer = self.get_line_by_indexes(to.group_index, to.line_index);
+            let from_layer = self.get_line_by_indexes(from);
+            let to_layer = self.get_line_by_indexes(to);
             println!("from_layer: {:?}", from_layer);
             println!("to_layer: {:?}", to_layer);
 
@@ -568,7 +574,7 @@ impl Controller {
                 let mut layers = self.layers.clone();
 
                 layers = self.remove_line_from_layers_by_name(layers, &name);
-                layers = self.insert_line_into_layers_by_name_and_indexes(layers, &name, to.group_index, to.line_index);
+                layers = self.insert_line_into_layers_by_name_and_indexes(layers, &name, to.group_index, to.layer_index);
 
                 self.layers = layers;
             }
@@ -577,31 +583,18 @@ impl Controller {
         }
     }
 
-    fn get_line_by_indexes (&self, group_index: usize, line_index: usize) -> Option<&String> {
-        if group_index == 0 {
-            self.layers
-                .iter()
-                .filter_map(|layer| {
-                    if let Layer::Line(s) = layer {
-                        Some(s)
-                    } else {
-                        None
-                    }
-                })
-                .nth(line_index)
-        } else {
-            self.layers
-                .iter()
-                .filter_map(|layer| {
-                    if let Layer::Group(lines, _) = layer {
-                        Some(lines)
-                    } else {
-                        None
-                    }
-                })
-                .nth(group_index - 1)
-                .and_then(|group| group.get(line_index))
+    fn get_line_by_indexes (&self, location: Location) -> Option<String> {
+        let layer = &self.layers[location.layer_index];
+
+        match layer {
+            Layer::Line(line_name) => return Some(line_name.clone()),
+            Layer::Group(names, _) => {
+                let name = names[location.group_item_index].clone();
+                return Some(name)
+            } ,
+            _ => return None
         }
+
     }
 
     fn remove_line_from_layers_by_name (&self, mut layers: Vec<Layer>, name: &str) -> Vec<Layer> {
@@ -647,9 +640,9 @@ fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool
 fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut Option<Location>, to: &mut Option<Location>) {
     let frame = Frame::default().inner_margin(4.0);
     let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
-        let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.line_index));
+        let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.layer_index));
 
-        let row_idx = item_location.line_index;
+        let row_idx = item_location.layer_index;
 
         let response = ui
             .dnd_drag_source(item_id, item_location.clone(), |ui| {
@@ -666,14 +659,14 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut
 
             let rect = response.rect;
 
-            let line_index = item_location.line_index;
+            let line_index = item_location.layer_index;
             let group_index = item_location.group_index;
 
             //https://github.com/emilk/egui/blob/main/crates/egui_demo_lib/src/demo/drag_and_drop.rs
             // Preview insertion:
             let stroke = egui::Stroke::new(1.0, Color32::WHITE);
             let insert_row_idx = 
-            if hovered_payload.group_index == group_index && hovered_payload.line_index == line_index {
+            if hovered_payload.group_index == group_index && hovered_payload.layer_index == line_index {
                 // We are dragged onto ourselves
                 ui.painter().hline(rect.x_range(), rect.center().y, stroke);
                 row_idx
@@ -693,7 +686,7 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut
                 *from = Some((*dragged_payload).clone());
                 *to = Some(item_location);
 
-                println!("Move line from group {} line {} to group {} line {}", dragged_payload.group_index, dragged_payload.line_index, group_index, insert_row_idx);
+                println!("Move line from group {} line {} to group {} line {}", dragged_payload.group_index, dragged_payload.layer_index, group_index, insert_row_idx);
                 println!("from: {:?}", from.as_ref().unwrap());
                 println!("to: {:?}", to.as_ref().unwrap());
             }
