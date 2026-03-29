@@ -88,6 +88,10 @@ pub struct Settings {
     pub taa_clamp_sigma: f32,
     // resolved AA mode
     pub effective_aa_mode: AntiAliasingMode,
+    pub recording:  bool,
+    pub record_path: &'static str,
+    pub recording_delay: u32,
+    pub recording_fps: u32,
 }
 
 impl Settings {
@@ -126,8 +130,12 @@ impl Settings {
             bloom_intensity: 3.0,
             hdr_paper_white_nits: 200.0,
             hdr_peak_nits: 1000.0,
+            recording: false,
+            record_path: "/Users/user/Desktop/TUe/Visual Computing Project/vibrant/recordings/recording.mp4",
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
+            recording_delay: 0,
+            recording_fps: 30,
             aa_mode: AntiAliasingMode::Off,
             smaa_threshold: 0.1,
             smaa_max_search_steps: 16,

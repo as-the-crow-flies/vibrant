@@ -22,6 +22,8 @@ struct App {
     controller: Controller,
     focused: bool,
     fps: Fps<8>,
+    recorder: Option<vibrant::renderer::record::Recorder>,
+    recording_count: u32,
 }
 
 impl App {
@@ -33,6 +35,8 @@ impl App {
             controller: Controller::new(),
             focused: true,
             fps: Fps::new(),
+            recorder: None,
+            recording_count: 0,
         }
     }
 
@@ -54,8 +58,57 @@ impl App {
             WindowEvent::Resized(size) => self.controller.resize(size),
             WindowEvent::RedrawRequested => {
                 self.fps.tick();
+                let dt = if self.recorder.is_some() {
+                    1.0 / self.controller.settings().recording_fps as f32
+                } else {
+                    self.fps.seconds()
+                };
 
-                renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
+                // Advance animation
+                self.controller.tick(dt);
+
+                renderer.render(
+                    &self.gpu,
+                    window,
+                    &mut self.controller,
+                    dt,
+                    &mut self.recorder,
+                );
+
+                // Auto-stop recording when animation finishes
+                if self.controller.animation_just_finished {
+                    self.controller.settings_mut().recording = false;
+                }
+
+                // Start recording
+                if self.controller.settings().recording && self.recorder.is_none() {
+                    if self.controller.settings_mut().recording_delay > 0 {
+                        self.controller.settings_mut().recording_delay -= 1;
+                    } else {
+                        self.recording_count += 1;
+                        let actual_fps = (1.0 / dt).round() as u32;
+                        let actual_fps = actual_fps.clamp(1, 120); // safety clamp
+                        let path = format!("/Users/user/Desktop/TUe/Visual Computing Project/vibrant/recordings/recording_{}.mp4", self.recording_count);
+                        println!("Starting recorder at {}fps", actual_fps);
+
+                        self.recorder = Some(vibrant::renderer::record::Recorder::new(
+                            self.controller.settings().width,
+                            self.controller.settings().height,
+                            self.controller.settings().recording_fps,
+                            &path,
+                        ));
+                        println!("Recorder started.");
+                    }
+                }
+
+                // Stop recording
+                if !self.controller.settings().recording {
+                    if let Some(rec) = self.recorder.take() {
+                        println!("Stopping recorder...");
+                        rec.finish();
+                        println!("Recording saved.");
+                    }
+                }
 
                 self.request_redraw();
             }

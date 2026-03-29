@@ -128,6 +128,63 @@ impl ColorBuffer {
         }
     }
 
+    pub fn read_pixels(&self, gpu: &crate::gpu::Gpu) -> Vec<u8> {
+        let width = self.texture.width();
+        let height = self.texture.height();
+        let bytes_per_row = ((width * 4 + 255) / 256) * 256;
+        let buffer_size = (bytes_per_row * height) as u64;
+
+        let staging = gpu.device().create_buffer(&wgpu::BufferDescriptor {
+            label: Some("ColorBuffer::ReadPixels"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        // Use a separate encoder just for the copy
+        let mut copy_cmd = gpu.cmd();
+        copy_cmd.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &staging,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        gpu.submit(copy_cmd);
+        gpu.wait();
+
+        let slice = staging.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        gpu.wait();
+
+        let data = slice.get_mapped_range();
+
+        // Strip 256-byte row padding
+        let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+        for row in 0..height {
+            let start = (row * bytes_per_row) as usize;
+            let end = start + (width * 4) as usize;
+            pixels.extend_from_slice(&data[start..end]);
+        }
+
+        pixels
+    }
+
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {

@@ -1,3 +1,4 @@
+pub mod animation;
 pub mod camera;
 pub mod event;
 pub mod light;
@@ -5,6 +6,7 @@ pub mod segment;
 pub mod settings;
 pub mod state;
 
+use animation::Animation;
 use std::time::Instant;
 
 use camera::Camera;
@@ -36,17 +38,15 @@ pub struct Controller {
     segment: Segment,
     settings: Settings,
     time: Instant,
-
     show_left_side_panel: bool,
     show_right_side_panel: bool,
-
     prefer_hdr_output: bool,
     output_hdr_supported: bool,
     output_hdr: bool,
     output_format: String,
-
-    // render_scale saved before entering SSAA mode, restored on exit.
-    pre_ssaa_render_scale: f32,
+    pre_ssaa_render_scale: f32, // render_scale saved before entering SSAA mode, restored on exit
+    pub animation: Option<Animation>,
+    pub animation_just_finished: bool,
 }
 
 impl Controller {
@@ -58,9 +58,10 @@ impl Controller {
             segment: Segment::new(),
             settings: Settings::new(),
             time: Instant::now(),
-
             show_left_side_panel: false,
             show_right_side_panel: false,
+            animation: None,
+            animation_just_finished: false,
             prefer_hdr_output: false,
             output_hdr_supported: false,
             output_hdr: false,
@@ -117,6 +118,19 @@ impl Controller {
                     FileStage::save();
                 }
 
+                let record_label = if self.settings.recording {
+                    "⏹ stop recording"
+                } else {
+                    "⏺ record"
+                };
+                if ui
+                    .button(record_label)
+                    .on_hover_text("Record video to recording.mp4")
+                    .clicked()
+                {
+                    self.settings.recording = !self.settings.recording;
+                }
+
                 ui.take_available_width();
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -139,7 +153,8 @@ impl Controller {
             ctx,
             self.show_left_side_panel,
             |ui| {
-                egui::TopBottomPanel::top("top_panel")
+                // Bottom panel MUST be added first so egui reserves its space
+                egui::TopBottomPanel::bottom("bottom_panel")
                     .frame(Frame {
                         outer_margin: Margin {
                             left: 5,
@@ -151,6 +166,40 @@ impl Controller {
                         ..Default::default()
                     })
                     .show_inside(ui, |ui| {
+                        ui.heading("Controls");
+                        ui.separator();
+
+                        egui::Grid::new("my_grid")
+                            .min_col_width(100.0)
+                            .striped(true)
+                            .show(ui, |ui| {
+                                ui.label("Rotate Camera");
+                                ui.label("Left Mouse Button");
+                                ui.end_row();
+
+                                ui.label("Pan Camera");
+                                ui.label("Right Mouse Button");
+                                ui.end_row();
+
+                                ui.label("Zoom Camera");
+                                ui.label("Mouse Wheel");
+                                ui.end_row();
+
+                                ui.label("Reset Camera");
+                                ui.label("Backspace");
+                                ui.end_row();
+
+                                ui.label("Rotate Light");
+                                ui.label("Shift + Left Mouse Button");
+                                ui.end_row();
+                            });
+                    });
+
+                // ScrollArea fills all remaining space above the bottom panel
+                ScrollArea::new([false, true])
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add_space(5.0);
                         ui.heading("Rendering");
                         ui.separator();
 
@@ -254,7 +303,6 @@ impl Controller {
                                 .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop X End"),
                         );
-
                         ui.add(
                             Slider::new(&mut self.settings.crop_y_start, -0.5..=0.5)
                                 .step_by(1.0 / self.settings.volume as f64)
@@ -265,7 +313,6 @@ impl Controller {
                                 .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop Y End"),
                         );
-
                         ui.add(
                             Slider::new(&mut self.settings.crop_z_start, -0.5..=0.5)
                                 .step_by(1.0 / self.settings.volume as f64)
@@ -276,15 +323,16 @@ impl Controller {
                                 .step_by(1.0 / self.settings.volume as f64)
                                 .text("Crop Z End"),
                         );
-
                         ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("plane"));
-
                         ui.add(
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
                         );
 
-                        // Bloom settings
+                        ui.separator();
+                        ui.label("Bloom");
+                        ui.separator();
+
                         ui.checkbox(&mut self.settings.bloom_enabled, "Enable Bloom");
                         ui.add(
                             Slider::new(&mut self.settings.bloom_threshold, 0.0..=2.0)
@@ -296,12 +344,13 @@ impl Controller {
                         );
                         ui.add(
                             Slider::new(&mut self.settings.bloom_intensity, 0.0..=5.0)
-                                .text("Bloom Intensity")
+                                .text("Bloom Intensity"),
                         );
 
-                        // anti-aliasing mode selector
                         ui.separator();
                         ui.label("Anti-Aliasing");
+                        ui.separator();
+
                         ui.label(format!(
                             "Camera: {} (v={:.6})",
                             self.camera.motion_level(),
@@ -338,7 +387,6 @@ impl Controller {
                                 );
                             });
 
-                        // Save render_scale when entering SSAA/Adaptive, restore when leaving
                         if prev_aa_mode != self.settings.aa_mode {
                             let enters_scaled = matches!(
                                 self.settings.aa_mode,
@@ -360,7 +408,6 @@ impl Controller {
                             }
                         }
 
-                        // show current AA strategy when Adaptive is active
                         if self.settings.aa_mode == AntiAliasingMode::Adaptive {
                             ui.label(format!(
                                 "Current AA Strategy: {:?}",
@@ -368,34 +415,31 @@ impl Controller {
                             ));
                         }
 
-                        // SMAA tuning parameters — only shown when SMAA is active.
                         if self.settings.aa_mode == AntiAliasingMode::SMAA {
                             ui.add(
                                 Slider::new(&mut self.settings.smaa_threshold, 0.05..=0.20)
-                                    .text("Edge Threshold")
+                                    .text("Edge Threshold"),
                             );
                             let mut steps = self.settings.smaa_max_search_steps as i32;
-                            if ui.add(
-                                Slider::new(&mut steps, 4..=32)
-                                    .text("Max Search Steps")
-                            ).changed() {
+                            if ui
+                                .add(Slider::new(&mut steps, 4..=32).text("Max Search Steps"))
+                                .changed()
+                            {
                                 self.settings.smaa_max_search_steps = steps as u32;
                             }
                         }
 
-                        // TAA tuning parameters — only shown when TAA is active.
                         if self.settings.aa_mode == AntiAliasingMode::TAA {
                             ui.add(
                                 Slider::new(&mut self.settings.taa_blend_factor, 0.05..=0.30)
-                                    .text("Blend Factor")
+                                    .text("Blend Factor"),
                             );
                             ui.add(
                                 Slider::new(&mut self.settings.taa_clamp_sigma, 0.5..=2.0)
-                                    .text("Clamp Sigma")
+                                    .text("Clamp Sigma"),
                             );
                         }
 
-                        // SSAA scale presets — only shown when SSAA is active.
                         if self.settings.aa_mode == AntiAliasingMode::SSAA {
                             ui.horizontal(|ui| {
                                 if ui.button("2x (√2)").clicked() {
@@ -408,18 +452,25 @@ impl Controller {
                                 }
                             });
                             if ui
-                                .add(Slider::new(&mut self.settings.render_scale, 1.0..=2.0)
-                                    .text("SSAA Scale"))
+                                .add(
+                                    Slider::new(&mut self.settings.render_scale, 1.0..=2.0)
+                                        .text("SSAA Scale"),
+                                )
                                 .changed()
                             {
                                 self.settings.update_render_size();
                             }
                         }
 
-                        if !matches!(self.settings.aa_mode, AntiAliasingMode::SSAA | AntiAliasingMode::Adaptive) {
+                        if !matches!(
+                            self.settings.aa_mode,
+                            AntiAliasingMode::SSAA | AntiAliasingMode::Adaptive
+                        ) {
                             if ui
-                                .add(Slider::new(&mut self.settings.render_scale, 0.25..=2.0)
-                                    .text("Render Scale"))
+                                .add(
+                                    Slider::new(&mut self.settings.render_scale, 0.25..=2.0)
+                                        .text("Render Scale"),
+                                )
                                 .changed()
                             {
                                 self.settings.update_render_size();
@@ -430,7 +481,6 @@ impl Controller {
                             "3D Render Resolution: {} x {}",
                             self.settings.render_width, self.settings.render_height
                         ));
-
 
                         ui.separator();
                         ui.heading("HDR Output");
@@ -456,7 +506,6 @@ impl Controller {
                         ));
                         ui.label(format!("Format: {}", self.output_format));
 
-                        // Key HDR mapping controls for SDR UI placement on HDR displays.
                         ui.add(
                             Slider::new(&mut self.settings.hdr_paper_white_nits, 80.0..=400.0)
                                 .text("Paper White (nits)"),
@@ -465,47 +514,112 @@ impl Controller {
                             Slider::new(&mut self.settings.hdr_peak_nits, 400.0..=2000.0)
                                 .text("Peak Brightness (nits)"),
                         );
-                    });
 
-                egui::TopBottomPanel::bottom("bottom_panel")
-                    .frame(Frame {
-                        outer_margin: Margin {
-                            left: 5,
-                            right: 5,
-                            top: 5,
-                            bottom: 10,
-                        },
-                        inner_margin: Margin::ZERO,
-                        ..Default::default()
-                    })
-                    .show_inside(ui, |ui| {
-                        ui.heading("Controls");
+                        ui.separator();
+                        ui.label("Animation");
                         ui.separator();
 
-                        egui::Grid::new("my_grid")
-                            .min_col_width(100.0)
-                            .striped(true)
-                            .show(ui, |ui| {
-                                ui.label("Rotate Camera");
-                                ui.label("Left Mouse Button");
-                                ui.end_row();
+                        // Framerate options
+                        ui.horizontal(|ui| {
+                            ui.label("Recording FPS:");
+                            ComboBox::from_id_salt("recording_fps")
+                                .selected_text(format!("{} fps", self.settings.recording_fps))
+                                .show_ui(ui, |ui| {
+                                    for fps in [25u32, 30, 60, 120, 240] {
+                                        ui.selectable_value(
+                                            &mut self.settings.recording_fps,
+                                            fps,
+                                            format!("{} fps", fps),
+                                        );
+                                    }
+                                });
+                        });
 
-                                ui.label("Pan Camera");
-                                ui.label("Right Mouse Button");
-                                ui.end_row();
+                        ui.separator();
 
-                                ui.label("Zoom Camera");
-                                ui.label("Mouse Wheel");
-                                ui.end_row();
+                        // Animation sequences
+                        ui.horizontal(|ui| {
+                            if ui.button("▶ Orbit 360°").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation = Some(animation::orbit_360(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                            if ui.button("▶ Axial Sweep").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation = Some(animation::axial_sweep(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.button("▶ Zoom Regions").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation =
+                                    Some(animation::zoom_to_regions(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                            if ui.button("▶ Cinematic").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation = Some(animation::cinematic(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.button("▶ Hemisphere Split").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation =
+                                    Some(animation::hemisphere_split(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                            if ui.button("▶ Top-Down Dive").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation =
+                                    Some(animation::top_down_dive(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.button("▶ Pendulum").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation = Some(animation::pendulum(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                            if ui.button("▶ Spiral Zoom").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation = Some(animation::spiral_zoom(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.button("▶ Figure Eight").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation =
+                                    Some(animation::figure_eight(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                            if ui.button("▶ Slow Reveal").clicked() {
+                                self.show_left_side_panel = false;
+                                self.animation = Some(animation::slow_reveal(self.camera.distance));
+                                self.settings.recording = true;
+                                self.settings.recording_delay = 5;
+                            }
+                        });
 
-                                ui.label("Reset Camera");
-                                ui.label("Backspace");
-                                ui.end_row();
-
-                                ui.label("Rotate Light");
-                                ui.label("Shift + Left Mouse Button");
-                                ui.end_row();
-                            });
+                        if self.animation.is_some() {
+                            if ui.button("⏹ Stop Animation").clicked() {
+                                self.show_left_side_panel = true;
+                                self.animation = None;
+                                self.settings.recording = false;
+                            }
+                        }
                     });
             },
         );
@@ -542,7 +656,6 @@ impl Controller {
                                         ternary_checkbox(ui, lines.settings_global().visible, "👁")
                                     {
                                         lines.settings_global().visible = Some(visible);
-
                                         for line in lines.settings() {
                                             line.visible = visible;
                                         }
@@ -554,7 +667,6 @@ impl Controller {
                                         "   🎨   ",
                                     ) {
                                         lines.settings_global().color_visible = color_visible;
-
                                         for line in lines.settings() {
                                             line.color_visible = color_visible
                                         }
@@ -647,6 +759,10 @@ impl Controller {
         &self.settings
     }
 
+    pub fn settings_mut(&mut self) -> &mut Settings {
+        &mut self.settings
+    }
+
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         self.settings.width = size.width;
         self.settings.height = size.height;
@@ -655,6 +771,23 @@ impl Controller {
 
     pub fn time(&self) -> f32 {
         Instant::now().duration_since(self.time).as_secs_f32()
+    }
+
+    pub fn tick(&mut self, dt: f32) {
+        self.animation_just_finished = false;
+
+        if let Some(anim) = &mut self.animation {
+            if let Some((yaw, pitch, distance)) = anim.update(dt) {
+                self.camera.yaw = yaw;
+                self.camera.pitch = pitch;
+                self.camera.distance = distance;
+            }
+
+            if anim.finished() {
+                self.animation_just_finished = true;
+                self.animation = None;
+            }
+        }
     }
 }
 

@@ -2,8 +2,10 @@ pub mod environment;
 pub mod line;
 pub mod ui;
 pub mod wgsl;
+pub mod record;
 
 use std::sync::Arc;
+use crate::renderer::record::Recorder;
 
 use crate::{
     asset::{transform::TransformBuffer, volume::VolumeBuffer},
@@ -61,6 +63,7 @@ impl Renderer {
         window: &Arc<Window>,
         controller: &mut Controller,
         dt: f32,
+        recorder: &mut Option<Recorder>,
     ) {
         let mut needs_transform = false;
         let needs_update = true;
@@ -139,7 +142,7 @@ impl Renderer {
             );
         }
 
-        surface.present(gpu, cmd);
+        surface.present(gpu, cmd, recorder);
 
         FileStage::on_save(|path| {
             gpu.save(path, surface.buffer().color().texture())
