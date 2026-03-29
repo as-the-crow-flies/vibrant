@@ -522,14 +522,35 @@ impl Controller {
                                                     SelectionVolume::Sphere,
                                                     "Sphere",
                                                 );
+                                                ui.selectable_value(
+                                                    &mut vol.shape,
+                                                    SelectionVolume::Rectangle,
+                                                    "Rectangle",
+                                                );
                                             });
                                         if ui.button("✕").clicked() {
                                             to_remove = Some(i);
                                         }
                                     });
-                                    ui.add(
-                                        egui::Slider::new(&mut vol.scale, 0.0..=5.0).text("Scale"),
-                                    );
+                                    if vol.shape != SelectionVolume::Rectangle {
+                                        ui.add(
+                                            egui::Slider::new(&mut vol.scale, 0.0..=5.0)
+                                                .text("Scale"),
+                                        );
+                                    } else {
+                                        ui.add(
+                                            egui::Slider::new(&mut vol.size_x, 0.0..=1.0)
+                                                .text("Size X"),
+                                        );
+                                        ui.add(
+                                            egui::Slider::new(&mut vol.size_y, 0.0..=1.0)
+                                                .text("Size Y"),
+                                        );
+                                        ui.add(
+                                            egui::Slider::new(&mut vol.size_z, 0.0..=1.0)
+                                                .text("Size Z"),
+                                        );
+                                    }
                                     ui.add(
                                         egui::Slider::new(&mut vol.offset_x, -1.0..=1.0)
                                             .text("Offset X"),

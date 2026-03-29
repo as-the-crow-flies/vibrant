@@ -18,6 +18,9 @@ struct SelectionVolumeEntry {
     y: f32,
     z: f32,
     negate: u32,
+    size_x: f32,
+    size_y: f32,
+    size_z: f32,
 }
 @group(2) @binding(0) var<storage> SELECTION_VOLUMES: array<SelectionVolumeEntry>;
 
@@ -75,6 +78,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             var in_negate = false;
             if vol.shape == 0u {
                 in_negate = in_square_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
+            } else if vol.shape == 2u {
+                in_negate = in_rectangle_volume(vol.x, vol.y, vol.z, vol.size_x, vol.size_y, vol.size_z, crop_length, start, offset_start);
             } else {
                 in_negate = in_sphere_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
             }
@@ -100,6 +105,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             var matches = false;
             if vol.shape == 0u {
                 matches = in_square_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
+            } else if vol.shape == 2u {
+                matches = in_rectangle_volume(vol.x, vol.y, vol.z, vol.size_x, vol.size_y, vol.size_z, crop_length, start, offset_start);
             } else {
                 matches = in_sphere_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
             }
@@ -115,6 +122,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             if vol.negate == TRUE { continue; }
             if vol.shape == 0u {
                 line_in_vol = line_in_vol || in_square_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
+            } else if vol.shape == 2u {
+                line_in_vol = line_in_vol || in_rectangle_volume(vol.x, vol.y, vol.z, vol.size_x, vol.size_y, vol.size_z, crop_length, start, offset_start);
             } else {
                 line_in_vol = line_in_vol || in_sphere_volume(vol.scale, vol.x, vol.y, vol.z, crop_length, start, offset_start);
             }
@@ -139,6 +148,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             if vol.negate == TRUE { continue; }
             if vol.shape == 0u {
                 in_vol = in_vol || in_square_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
+            } else if vol.shape == 2u {
+                in_vol = in_vol || in_rectangle_volume_segment(vol.x, vol.y, vol.z, vol.size_x, vol.size_y, vol.size_z, idx);
             } else {
                 in_vol = in_vol || in_sphere_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
             }
@@ -155,6 +166,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             if vol.negate == TRUE { continue; }
             if vol.shape == 0u {
                 in_vol = in_vol || in_square_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
+            } else if vol.shape == 2u {
+                in_vol = in_vol || in_rectangle_volume_segment(vol.x, vol.y, vol.z, vol.size_x, vol.size_y, vol.size_z, idx);
             } else {
                 in_vol = in_vol || in_sphere_volume_segment(vol.scale, vol.x, vol.y, vol.z, idx);
             }
