@@ -41,7 +41,7 @@ pub struct Camera {
     height: u32,
     pub yaw: f32,
     pub pitch: f32,
-    distance: f32,
+    pub distance: f32,
     pan: Vec3,
     pub fov: f32,
     near: f32,

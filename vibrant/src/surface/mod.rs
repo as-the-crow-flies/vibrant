@@ -4,6 +4,7 @@ pub mod occlusion;
 pub mod occupancy;
 pub mod ui;
 
+use crate::renderer::record::Recorder;
 use std::any::type_name;
 
 use bytemuck::bytes_of;
@@ -178,6 +179,7 @@ pub struct Surface {
     // when camera switch from still to motion, AA switch from SSAA to TAA/SMAA
     // use frame_cache to prevent stutter
     frame_cache: Option<Frame>,
+    capture_pipeline: RenderPipeline,
 }
 
 impl Surface {
@@ -242,6 +244,17 @@ impl Surface {
             &gpu.shader(include_str!("display_sdr.wgsl")),
         );
 
+        let capture_pipeline = gpu.quad(
+            "Surface::Capture",
+            &gpu.pipeline_layout(&[&ColorBuffer::layout(gpu), &UiBuffer::layout(gpu)]),
+            ColorTargetState {
+                format: TextureFormat::Bgra8Unorm,
+                blend: Some(BlendState::REPLACE),
+                write_mask: ColorWrites::all(),
+            },
+            &gpu.shader(include_str!("display_sdr.wgsl")),
+        );
+
         surface.configure(gpu.device(), &Self::config(1, 1, format));
 
         info!(
@@ -263,6 +276,7 @@ impl Surface {
             display_sdr,
             buffer: Frame::new(gpu, &Settings::new()),
             frame_cache: None,
+            capture_pipeline,
         }
     }
 
@@ -308,8 +322,14 @@ impl Surface {
             self.frame_cache = None;
         }
 
-        self.surface
-            .configure(gpu.device(), &Self::config(settings.width, settings.height, self.format));
+        // Note: the incoming branch had a simpler version of the resize logic here
+        // (unconditional Frame::new + configure), which was superseded by the Adaptive AA
+        // frame-cache implementation above. The configure call below is retained from that
+        // version with its formatting, the cache logic is not.
+        self.surface.configure(
+            gpu.device(),
+            &Self::config(settings.width, settings.height, self.format),
+        );
 
         self
     }
@@ -386,8 +406,10 @@ impl Surface {
             &gpu.shader(include_str!("display_sdr.wgsl")),
         );
 
-        self.surface
-            .configure(gpu.device(), &Self::config(settings.width, settings.height, self.format));
+        self.surface.configure(
+            gpu.device(),
+            &Self::config(settings.width, settings.height, self.format),
+        );
 
         info!(
             "Output mode updated: hdr_output={}, format={:?}",
@@ -395,10 +417,13 @@ impl Surface {
         );
     }
 
-    pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
-        if let Some(surface) = self.surface.get_current_texture().ok() {
-            let view = surface.texture.create_view(&TextureViewDescriptor::default());
+    pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder, recorder: &mut Option<Recorder>) {
+        if let Some(surface_tex) = self.surface.get_current_texture().ok() {
+            let view = surface_tex
+                .texture
+                .create_view(&TextureViewDescriptor::default());
 
+            // Normal display pass — unchanged
             {
                 let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
                     label: Some("Surface::Present"),
@@ -419,7 +444,6 @@ impl Surface {
                 } else {
                     pass.set_pipeline(&self.display_sdr);
                 }
-
                 pass.set_bind_group(0, self.buffer.aa().binding(), &[]);
                 pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
                 if self.hdr_output {
@@ -428,11 +452,70 @@ impl Surface {
                 pass.draw(0..4, 0..1);
             }
 
+            // Capture pass — only when recording
+            if let Some(rec) = recorder.as_mut() {
+                // Lazily create capture texture at current size
+                let cap_w = self.buffer.ui().width();
+                let cap_h = self.buffer.ui().height();
+
+                let capture_tex = gpu.device().create_texture(&wgpu::TextureDescriptor {
+                    label: Some("Surface::Capture"),
+                    size: wgpu::Extent3d {
+                        width: cap_w,
+                        height: cap_h,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Bgra8Unorm, // 4 bytes/px, no conversion
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
+                });
+
+                let capture_view = capture_tex.create_view(&TextureViewDescriptor::default());
+
+                // Render tone-mapped SDR output into capture texture
+                {
+                    let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+                        label: Some("Surface::Capture"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &capture_view,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        ..Default::default()
+                    });
+
+                    // Always use SDR pipeline for capture — consistent colors
+                    pass.set_pipeline(&self.capture_pipeline);
+                    pass.set_bind_group(0, self.buffer.post().binding(), &[]);
+                    pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
+                    pass.draw(0..4, 0..1);
+                }
+
+                gpu.submit(cmd);
+                surface_tex.present();
+
+                // Read pixels from Bgra8Unorm — no conversion needed
+                let pixels = Self::read_capture(gpu, &capture_tex, cap_w, cap_h);
+                rec.write_frame(&pixels);
+
+                if !gpu.wait() {
+                    warn!("Could not poll GPU");
+                }
+                return;
+            }
+
             gpu.submit(cmd);
-            surface.present();
+            surface_tex.present();
 
             if !gpu.wait() {
-                warn!("Could not poll GPU")
+                warn!("Could not poll GPU");
             }
         } else {
             warn!("Could not obtain surface texture");
@@ -489,6 +572,57 @@ impl Surface {
                     count: None,
                 }],
             })
+    }
+
+    fn read_capture(gpu: &Gpu, texture: &wgpu::Texture, width: u32, height: u32) -> Vec<u8> {
+        // Bgra8Unorm = 4 bytes per pixel
+        let bytes_per_row = ((width * 4 + 255) / 256) * 256;
+        let buffer_size = (bytes_per_row * height) as u64;
+    
+        let staging = gpu.device().create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Surface::Capture::Staging"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+    
+        let mut cmd = gpu.cmd();
+        cmd.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &staging,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+        );
+    
+        gpu.submit(cmd);
+        gpu.wait();
+    
+        let slice = staging.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        gpu.wait();
+    
+        let data = slice.get_mapped_range();
+    
+        // Strip row padding — already Bgra8, no conversion needed
+        let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+        for row in 0..height {
+            let start = (row * bytes_per_row) as usize;
+            let end = start + (width * 4) as usize;
+            pixels.extend_from_slice(&data[start..end]);
+        }
+    
+        pixels
     }
 
     pub fn buffer(&self) -> &Frame {
