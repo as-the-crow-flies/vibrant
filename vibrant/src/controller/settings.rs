@@ -92,6 +92,14 @@ pub struct Settings {
     pub record_path: &'static str,
     pub recording_delay: u32,
     pub recording_fps: u32,
+    // Foveated rendering
+    pub foveated: bool,
+    pub foveated_focus_radius: f32,
+    pub foveated_peripheral_scale: f32,
+    pub foveated_focus_scale: f32,
+    pub foveated_blend_width: f32,
+    pub foveated_mouse_x: f32,
+    pub foveated_mouse_y: f32,
 }
 
 impl Settings {
@@ -142,11 +150,44 @@ impl Settings {
             taa_blend_factor: 0.15,
             taa_clamp_sigma: 1.0,
             effective_aa_mode: AntiAliasingMode::Off,
+            foveated: false,
+            foveated_focus_radius: 0.15,
+            foveated_peripheral_scale: 0.5,
+            foveated_focus_scale: 1.5,
+            foveated_blend_width: 0.05,
+            foveated_mouse_x: 0.0,
+            foveated_mouse_y: 0.0,
         }
     }
 
     pub fn update_render_size(&mut self) {
         self.render_width = (self.width as f32 * self.render_scale).round().max(1.0) as u32;
         self.render_height = (self.height as f32 * self.render_scale).round().max(1.0) as u32;
+    }
+
+    pub fn peripheral_width(&self) -> u32 {
+        (self.render_width as f32 * self.foveated_peripheral_scale)
+            .round()
+            .max(1.0) as u32
+    }
+
+    pub fn peripheral_height(&self) -> u32 {
+        (self.render_height as f32 * self.foveated_peripheral_scale)
+            .round()
+            .max(1.0) as u32
+    }
+
+    /// Focus texture width — derived from screen coverage × scale factor.
+    /// NDC radius r covers r × render_width pixels on screen.
+    pub fn focus_width(&self) -> u32 {
+        (self.foveated_focus_radius * self.render_width as f32 * self.foveated_focus_scale)
+            .round()
+            .max(1.0) as u32
+    }
+
+    pub fn focus_height(&self) -> u32 {
+        (self.foveated_focus_radius * self.render_height as f32 * self.foveated_focus_scale)
+            .round()
+            .max(1.0) as u32
     }
 }

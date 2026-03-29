@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
+use wgpu::{BindGroup, CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
     gpu::Gpu,
@@ -32,6 +32,25 @@ impl VolumeLineRenderPipeline {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, frame.binding(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
+        pass.draw(0..4, 0..1);
+    }
+
+    pub fn render_to(
+        &self,
+        cmd: &mut CommandEncoder,
+        target: &ColorBuffer,
+        frame: &Frame,
+        env_binding: &BindGroup,
+    ) {
+        let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+            color_attachments: &[Some(target.attachment_clear())],
+            label: Some("Volume::Focus"),
+            ..Default::default()
+        });
+
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, frame.binding(), &[]);
+        pass.set_bind_group(1, env_binding, &[]);
         pass.draw(0..4, 0..1);
     }
 }

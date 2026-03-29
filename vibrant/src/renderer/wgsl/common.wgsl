@@ -52,6 +52,9 @@ struct Environment {
     settings: Settings,
     taa_previous_projection: mat4x4<f32>,
     taa_jitter: vec2<f32>,
+    foveated_mouse: vec2<f32>,
+    foveated_focus_radius: f32,
+    foveated_blend_width: f32,
 }
 
 struct LineSettings {

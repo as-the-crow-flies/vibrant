@@ -99,6 +99,12 @@ impl Controller {
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
         self.camera.tick();
         self.resolve_adaptive_aa();
+
+        if self.settings.foveated {
+            let mouse = self.mouse_ndc();
+            self.settings.foveated_mouse_x = mouse.x;
+            self.settings.foveated_mouse_y = mouse.y;
+        }
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -515,6 +521,60 @@ impl Controller {
                                 .text("Peak Brightness (nits)"),
                         );
 
+                        // Foveated rendering
+                        ui.separator();
+                        ui.heading("Foveated Rendering");
+
+                        if ui
+                            .checkbox(&mut self.settings.foveated, "Enable Foveated")
+                            .changed()
+                        {
+                            self.settings.update_render_size();
+                        }
+
+                        if self.settings.foveated {
+                            if ui
+                                .add(
+                                    Slider::new(
+                                        &mut self.settings.foveated_peripheral_scale,
+                                        0.25..=0.75,
+                                    )
+                                    .text("Peripheral Scale"),
+                                )
+                                .changed()
+                            {
+                                self.settings.update_render_size();
+                            }
+                            ui.add(
+                                Slider::new(&mut self.settings.foveated_focus_radius, 0.05..=0.5)
+                                    .text("Focus Radius"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.foveated_focus_scale, 0.5..=4.0)
+                                    .text("Focus Scale"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.foveated_blend_width, 0.01..=0.15)
+                                    .text("Blend Width"),
+                            );
+
+                            ui.label(format!(
+                                "Focus: ({:.2}, {:.2})",
+                                self.settings.foveated_mouse_x,
+                                self.settings.foveated_mouse_y
+                            ));
+                            ui.label(format!(
+                                "Peripheral: {} x {}",
+                                self.settings.peripheral_width(),
+                                self.settings.peripheral_height()
+                            ));
+                            ui.label(format!(
+                                "Focus: {} x {}",
+                                self.settings.focus_width(),
+                                self.settings.focus_height()
+                            ));
+                        }
+
                         ui.separator();
                         ui.label("Animation");
                         ui.separator();
@@ -741,6 +801,12 @@ impl Controller {
         } else {
             self.settings.effective_aa_mode = self.settings.aa_mode;
         }
+    }
+
+    pub fn mouse_ndc(&self) -> glam::Vec2 {
+        let mx = self.state.position.x / self.settings.width as f32 * 2.0 - 1.0;
+        let my = -(self.state.position.y / self.settings.height as f32 * 2.0 - 1.0);
+        glam::Vec2::new(mx.clamp(-1.0, 1.0), my.clamp(-1.0, 1.0))
     }
 
     pub fn camera(&self) -> &Camera {

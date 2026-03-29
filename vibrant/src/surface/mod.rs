@@ -48,6 +48,9 @@ pub struct Frame {
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
     binding: BindGroup,
+    // Foveated rendering buffers
+    foveated_peripheral: Option<ColorBuffer>,
+    foveated_focus: Option<ColorBuffer>,
 }
 
 impl Frame {
@@ -61,6 +64,25 @@ impl Frame {
         let smaa_edges = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let smaa_blend = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let taa_history = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
+
+        let foveated_peripheral = if settings.foveated {
+            Some(ColorBuffer::new(
+                gpu,
+                settings.peripheral_width(),
+                settings.peripheral_height(),
+            ))
+        } else {
+            None
+        };
+        let foveated_focus = if settings.foveated {
+            Some(ColorBuffer::new(
+                gpu,
+                settings.focus_width(),
+                settings.focus_height(),
+            ))
+        } else {
+            None
+        };
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -92,6 +114,8 @@ impl Frame {
             occlusion,
             culling,
             binding,
+            foveated_focus,
+            foveated_peripheral,
         }
     }
 
@@ -141,6 +165,14 @@ impl Frame {
 
     pub fn culling(&self) -> &CullingBuffer {
         &self.culling
+    }
+
+    pub fn foveated_focus(&self) -> Option<&ColorBuffer> {
+        self.foveated_focus.as_ref()
+    }
+
+    pub fn foveated_peripheral(&self) -> Option<&ColorBuffer> {
+        self.foveated_peripheral.as_ref()
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -281,11 +313,23 @@ impl Surface {
     }
 
     pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
+        let foveated_matches = match (&self.buffer.foveated_focus, &self.buffer.foveated_peripheral, settings.foveated) {
+            (Some(focus), Some(peripheral), true) => {
+                focus.width() == settings.focus_width()
+                    && focus.height() == settings.focus_height()
+                    && peripheral.width() == settings.peripheral_width()
+                    && peripheral.height() == settings.peripheral_height()
+            }
+            (None, None, false) => true,
+            _ => false,
+        };
+
         if settings.width == self.buffer.ui().width()
             && settings.height == self.buffer.ui().height()
             && settings.render_width == self.buffer.color().width()
             && settings.render_height == self.buffer.color().height()
             && settings.volume == self.buffer.occupancy().resolution()
+            && foveated_matches
         {
             // dimensions unchanged, free the cache when not in Adaptive mode
             if settings.aa_mode != AntiAliasingMode::Adaptive {
@@ -322,10 +366,6 @@ impl Surface {
             self.frame_cache = None;
         }
 
-        // Note: the incoming branch had a simpler version of the resize logic here
-        // (unconditional Frame::new + configure), which was superseded by the Adaptive AA
-        // frame-cache implementation above. The configure call below is retained from that
-        // version with its formatting, the cache logic is not.
         self.surface.configure(
             gpu.device(),
             &Self::config(settings.width, settings.height, self.format),

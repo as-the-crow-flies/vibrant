@@ -1,7 +1,7 @@
 pub mod raytracing;
 pub mod volume;
 
-use wgpu::CommandEncoder;
+use wgpu::{BindGroup, CommandEncoder};
 
 use crate::{
     asset::line::LineBuffer,
@@ -13,7 +13,7 @@ use crate::{
             raytracing::RayTracingLineRenderPipeline, volume::VolumeLineRenderPipeline,
         },
     },
-    surface::Frame,
+    surface::{color::ColorBuffer, Frame},
 };
 
 pub struct LineRenderPipeline {
@@ -40,6 +40,25 @@ impl LineRenderPipeline {
         match settings.display {
             LineDisplayMode::Geometry => self.ray.render(cmd, frame, environment, settings, line),
             LineDisplayMode::Volume => self.volume.render(cmd, frame, environment),
+        }
+    }
+
+    pub fn dispatch_to_target(
+        &self,
+        cmd: &mut CommandEncoder,
+        env_binding: &BindGroup,
+        frame: &Frame,
+        target: &ColorBuffer,
+        line: &LineBuffer,
+        settings: &Settings,
+    ) {
+        match settings.display {
+            LineDisplayMode::Geometry => {
+                self.ray.render_to(cmd, target, frame, env_binding, settings, line)
+            }
+            LineDisplayMode::Volume => {
+                self.volume.render_to(cmd, target, frame, env_binding)
+            }
         }
     }
 }
