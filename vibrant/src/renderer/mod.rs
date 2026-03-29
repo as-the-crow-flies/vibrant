@@ -1,5 +1,6 @@
 pub mod environment;
 pub mod line;
+pub mod profiler;
 pub mod ui;
 pub mod wgsl;
 pub mod record;
@@ -143,6 +144,11 @@ impl Renderer {
         }
 
         surface.present(gpu, cmd, recorder);
+
+        if controller.gpu_profile_open {
+            self.line.collect_profile(gpu);
+            controller.set_gpu_profile(self.line.profile_results());
+        }
 
         FileStage::on_save(|path| {
             gpu.save(path, surface.buffer().color().texture())

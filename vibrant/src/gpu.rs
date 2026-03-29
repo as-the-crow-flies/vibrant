@@ -49,8 +49,15 @@ impl Gpu {
                         .max_storage_buffers_per_shader_stage,
                     ..Default::default()
                 },
-                required_features: Features::FLOAT32_FILTERABLE
-                    | Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                required_features: {
+                    // timestamp query features for per-pass GPU timing.
+                    let mut f = Features::FLOAT32_FILTERABLE | Features::ADDRESS_MODE_CLAMP_TO_BORDER;
+                    let ts_features = Features::TIMESTAMP_QUERY | Features::TIMESTAMP_QUERY_INSIDE_ENCODERS;
+                    if adapter.features().contains(ts_features) {
+                        f |= ts_features;
+                    }
+                    f
+                },
                 ..Default::default()
             })
             .await

@@ -19,10 +19,16 @@ use crate::{
     asset::{line::LineBuffer, transform::TransformBuffer},
     controller::settings::Settings,
     gpu::Gpu,
-    renderer::line::{
-        crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
-        populate::LinePopulatePipeline, post::PostProcessingPipeline,
-        render::LineRenderPipeline, transform::LineTransformPipeline,
+    renderer::{
+        line::{
+            crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
+            populate::LinePopulatePipeline, post::PostProcessingPipeline,
+            render::LineRenderPipeline, transform::LineTransformPipeline,
+        },
+        profiler::{
+            GpuProfiler, PASS_AA, PASS_CROP, PASS_CULL, PASS_OCCLUSION, PASS_OCCUPANCY,
+            PASS_POPULATE, PASS_POST, PASS_RENDER, PASS_TRANSFORM,
+        },
     },
     surface::Frame,
 };
@@ -42,6 +48,8 @@ pub struct LineRenderer {
     aa: AntiAliasingPipeline,
     // Foveated rendering composite pass
     foveated: FoveatedCompositePipeline,
+    // Per-pass GPU timestamp profiler.
+    profiler: GpuProfiler,
 }
 
 impl LineRenderer {
@@ -57,6 +65,7 @@ impl LineRenderer {
             post: PostProcessingPipeline::new(gpu),
             aa: AntiAliasingPipeline::new(gpu),
             foveated: FoveatedCompositePipeline::new(gpu),
+            profiler: GpuProfiler::new(gpu),
         }
     }
 
@@ -75,22 +84,35 @@ impl LineRenderer {
         needs_transform: bool,
         _needs_update: bool,
     ) {
+        self.profiler.begin(cmd, PASS_TRANSFORM);
         if needs_transform {
             self.transform.dispatch(cmd, line, transform, environment);
         }
+        self.profiler.end(cmd, PASS_TRANSFORM);
 
+        self.profiler.begin(cmd, PASS_CROP);
         self.crop.dispatch(cmd, line, environment);
+        self.profiler.end(cmd, PASS_CROP);
 
+        self.profiler.begin(cmd, PASS_OCCUPANCY);
         self.occupancy
             .dispatch(cmd, frame, environment, settings, line);
+        self.profiler.end(cmd, PASS_OCCUPANCY);
 
+        self.profiler.begin(cmd, PASS_CULL);
         self.cull.dispatch(cmd, frame, environment);
+        self.profiler.end(cmd, PASS_CULL);
 
+        self.profiler.begin(cmd, PASS_OCCLUSION);
         self.occlusion.dispatch(cmd, frame, environment);
+        self.profiler.end(cmd, PASS_OCCLUSION);
 
+        self.profiler.begin(cmd, PASS_POPULATE);
         self.populate
             .dispatch(cmd, frame, environment, settings, line);
+        self.profiler.end(cmd, PASS_POPULATE);
 
+        self.profiler.begin(cmd, PASS_RENDER);
         if settings.foveated {
             // Pass 1: peripheral (low-res) → frame.foveated_peripheral
             if let Some(peripheral_buf) = frame.foveated_peripheral() {
@@ -122,9 +144,33 @@ impl LineRenderer {
             self.render
                 .dispatch(cmd, environment, frame, line, settings);
         }
+        self.profiler.end(cmd, PASS_RENDER);
 
+        self.profiler.begin(cmd, PASS_POST);
         self.post.dispatch(cmd, environment, frame, settings);
+        self.profiler.end(cmd, PASS_POST);
 
+        self.profiler.begin(cmd, PASS_AA);
         self.aa.dispatch(cmd, environment, frame, settings);
+        self.profiler.end(cmd, PASS_AA);
+
+        self.profiler.resolve(cmd);
+    }
+
+    pub fn collect_profile(&mut self, gpu: &Gpu) {
+        self.profiler.collect(gpu);
+    }
+
+    pub fn profile_results(&self) -> Vec<(&str, f32)> {
+        self.profiler
+            .labels()
+            .iter()
+            .zip(self.profiler.results.iter())
+            .map(|(label, ms)| (*label, *ms))
+            .collect()
+    }
+
+    pub fn profiler_enabled(&self) -> bool {
+        self.profiler.enabled()
     }
 }

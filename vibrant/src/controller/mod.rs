@@ -47,6 +47,10 @@ pub struct Controller {
     pre_ssaa_render_scale: f32, // render_scale saved before entering SSAA mode, restored on exit
     pub animation: Option<Animation>,
     pub animation_just_finished: bool,
+    // last-frame GPU pass timings set by the renderer each frame.
+    gpu_profile: Vec<(String, f32)>,
+    // whether the GPU timings panel is currently open in the UI.
+    pub gpu_profile_open: bool,
 }
 
 impl Controller {
@@ -67,6 +71,8 @@ impl Controller {
             output_hdr: false,
             output_format: "Unknown".to_string(),
             pre_ssaa_render_scale: 1.0,
+            gpu_profile: Vec::new(),
+            gpu_profile_open: false,
         }
     }
 
@@ -87,6 +93,14 @@ impl Controller {
 
     pub fn prefer_hdr_output(&self) -> bool {
         self.prefer_hdr_output
+    }
+
+    // update GPU rendering time
+    pub fn set_gpu_profile(&mut self, results: Vec<(&str, f32)>) {
+        self.gpu_profile = results
+            .into_iter()
+            .map(|(label, ms)| (label.to_string(), ms))
+            .collect();
     }
 
     pub fn event(&mut self, event: Event) {
@@ -487,6 +501,29 @@ impl Controller {
                             "3D Render Resolution: {} x {}",
                             self.settings.render_width, self.settings.render_height
                         ));
+
+                        // GPU pass timings panel
+                        {
+                            let id = ui.make_persistent_id("gpu_pass_timings");
+                            self.gpu_profile_open = CollapsingState::load(ui.ctx(), id)
+                                .map(|s| s.is_open())
+                                .unwrap_or(false);
+
+                            ui.separator();
+                            CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                                .show_header(ui, |ui| {
+                                    ui.label("GPU Pass Timings");
+                                })
+                                .body(|ui| {
+                                    let total: f32 =
+                                        self.gpu_profile.iter().map(|(_, ms)| ms).sum();
+                                    for (label, ms) in &self.gpu_profile {
+                                        ui.label(format!("{:<12} {:>6.2} ms", label, ms));
+                                    }
+                                    ui.separator();
+                                    ui.label(format!("{:<12} {:>6.2} ms", "total", total));
+                                });
+                        }
 
                         ui.separator();
                         ui.heading("HDR Output");
