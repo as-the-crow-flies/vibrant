@@ -33,6 +33,15 @@ fn box_hit(ro: vec3<f32>, rd: vec3<f32>, ce: vec3<f32>, hs: f32) -> bool {
     return tmax >= 0.0 && tmin <= tmax;
 }
 
+fn rectangle_hit(ro: vec3<f32>, rd: vec3<f32>, ce: vec3<f32>, hs: vec3<f32>) -> bool {
+    let inv = 1.0 / rd;
+    let t1 = (ce - hs - ro) * inv;
+    let t2 = (ce + hs - ro) * inv;
+    let tmin = max(max(min(t1.x, t2.x), min(t1.y, t2.y)), min(t1.z, t2.z));
+    let tmax = min(min(max(t1.x, t2.x), max(t1.y, t2.y)), max(t1.z, t2.z));
+    return tmax >= 0.0 && tmin <= tmax;
+}
+
 @fragment
 fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = vec2<f32>(1.0, -1.0) * (pixel.xy / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0);
@@ -42,12 +51,15 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let count = HIGHLIGHT_DATA[0];
 
     for (var i = 0u; i < count; i++) {
-        let shape  = HIGHLIGHT_DATA[1u + i * 6u];
-        let scale  = bitcast<f32>(HIGHLIGHT_DATA[2u + i * 6u]);
-        let x      = bitcast<f32>(HIGHLIGHT_DATA[3u + i * 6u]);
-        let y      = bitcast<f32>(HIGHLIGHT_DATA[4u + i * 6u]);
-        let z      = bitcast<f32>(HIGHLIGHT_DATA[5u + i * 6u]);
-        let negate = HIGHLIGHT_DATA[6u + i * 6u];
+        let shape  = HIGHLIGHT_DATA[1u + i * 9u];
+        let scale  = bitcast<f32>(HIGHLIGHT_DATA[2u + i * 9u]);
+        let x      = bitcast<f32>(HIGHLIGHT_DATA[3u + i * 9u]);
+        let y      = bitcast<f32>(HIGHLIGHT_DATA[4u + i * 9u]);
+        let z      = bitcast<f32>(HIGHLIGHT_DATA[5u + i * 9u]);
+        let negate = HIGHLIGHT_DATA[6u + i * 9u];
+        let size_x = bitcast<f32>(HIGHLIGHT_DATA[7u + i * 9u]);
+        let size_y = bitcast<f32>(HIGHLIGHT_DATA[8u + i * 9u]);
+        let size_z = bitcast<f32>(HIGHLIGHT_DATA[9u + i * 9u]);
 
         let ce = vec3<f32>(x, y, z);
         let hs = 0.125 * scale;
@@ -55,6 +67,8 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
         var hit = false;
         if shape == 0u {
             hit = box_hit(ro, rd, ce, hs);
+        } else if shape == 2u {
+            hit = rectangle_hit(ro, rd, ce, vec3<f32>(size_x, size_y, size_z));
         } else {
             hit = sphere_hit(ro, rd, ce, hs);
         }

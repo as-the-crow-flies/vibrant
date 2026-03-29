@@ -35,10 +35,10 @@ impl VolumeHighlightPipeline {
             &gpu.shader(include_str!("highlight.wgsl")),
         );
 
-        // 1 u32 (count) + 8 entries * 6 u32s each (shape, scale, x, y, z, negate) = 49 u32s = 196 bytes
+        // 1 u32 (count) + 8 entries * 9 u32s each (shape, scale, x, y, z, negate, size_x, size_y, size_z) = 73 u32s = 292 bytes
         let highlight_buffer = gpu.device().create_buffer(&BufferDescriptor {
             label: Some("HighlightVolumes"),
-            size: 256,
+            size: 320,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -78,6 +78,7 @@ impl VolumeHighlightPipeline {
             let shape: u32 = match vol.shape {
                 SelectionVolume::Box => 0,
                 SelectionVolume::Sphere => 1,
+                SelectionVolume::Rectangle => 2,
                 SelectionVolume::None => continue,
             };
             data.extend_from_slice(bytemuck::bytes_of(&shape));
@@ -87,6 +88,9 @@ impl VolumeHighlightPipeline {
             data.extend_from_slice(bytemuck::bytes_of(&vol.offset_z));
             let negate: u32 = vol.negate as u32;
             data.extend_from_slice(bytemuck::bytes_of(&negate));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.size_x));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.size_y));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.size_z));
         }
 
         gpu.queue().write_buffer(&self.highlight_buffer, 0, &data);

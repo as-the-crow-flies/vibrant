@@ -36,12 +36,16 @@ impl LineSelectionPipeline {
             .replace(
                 "//DISPATCH-INSERT-MARKER//",
                 include_str!("shapes/sphere.wgsl"),
+            )
+            .replace(
+                "//DISPATCH-INSERT-MARKER//",
+                include_str!("shapes/rectangle.wgsl"),
             );
 
         let volumes_buffer = gpu.device().create_buffer(&BufferDescriptor {
             label: Some("SelectionVolumes"),
-            // 6 x f32/u32 per entry (shape, scale, x, y, z, negate), max 8 entries
-            size: 6 * 4 * 8,
+            // 9 x f32/u32 per entry (shape, scale, x, y, z, negate, size_x, size_y, size_z), max 8 entries
+            size: 9 * 4 * 8,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -78,6 +82,7 @@ impl LineSelectionPipeline {
                 SelectionVolume::None => continue,
                 SelectionVolume::Box => 0,
                 SelectionVolume::Sphere => 1,
+                SelectionVolume::Rectangle => 2,
             };
             data.extend_from_slice(bytemuck::bytes_of(&shape));
             data.extend_from_slice(bytemuck::bytes_of(&vol.scale));
@@ -86,6 +91,9 @@ impl LineSelectionPipeline {
             data.extend_from_slice(bytemuck::bytes_of(&vol.offset_z));
             let negate: u32 = vol.negate as u32;
             data.extend_from_slice(bytemuck::bytes_of(&negate));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.size_x));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.size_y));
+            data.extend_from_slice(bytemuck::bytes_of(&vol.size_z));
         }
 
         if !data.is_empty() {

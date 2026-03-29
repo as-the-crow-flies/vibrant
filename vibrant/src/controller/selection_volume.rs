@@ -4,6 +4,7 @@ pub enum SelectionVolume {
     None,
     Box,
     Sphere,
+    Rectangle,
 }
 
 #[derive(Debug, Clone)]
@@ -15,6 +16,9 @@ pub struct SelectionVolumeEntry {
     pub offset_z: f32,
     pub negate: bool,
     pub highlight: bool,
+    pub size_x: f32,
+    pub size_y: f32,
+    pub size_z: f32,
 }
 
 impl Default for SelectionVolumeEntry {
@@ -27,6 +31,9 @@ impl Default for SelectionVolumeEntry {
             offset_z: 0.0,
             negate: false,
             highlight: true,
+            size_x: 0.125,
+            size_y: 0.125,
+            size_z: 0.125,
         }
     }
 }
