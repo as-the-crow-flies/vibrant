@@ -9,8 +9,8 @@ use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    collapsing_header::CollapsingState, Align, ComboBox, Frame, Layout, Margin, ScrollArea,
-    SidePanel, Slider, Ui,
+    collapsing_header::CollapsingState, debug_text::print, Align, Button, Color32, ComboBox, Frame,
+    Label, Layout, Margin, ScrollArea, Sense, SidePanel, Slider, Ui,
 };
 use event::Event;
 use itertools::Itertools;
@@ -20,7 +20,8 @@ use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    asset::Asset,
+    asset::line::LineSettings,
+    asset::{line, Asset},
     controller::{
         selection_volume::{SelectionVolume, SelectionVolumeEntry},
         settings::{LineDisplayMode, LineVoxelizationMode},
@@ -28,6 +29,27 @@ use crate::{
     file::FileStage,
 };
 
+#[derive(Debug, Clone)]
+pub enum Layer {
+    Line(String),
+    Group(Vec<String>, LineSettings),
+}
+
+impl Layer {
+    fn contains_name(&self, name: &str) -> bool {
+        match self {
+            Layer::Line(line_name) => line_name == name,
+            Layer::Group(names, _) => names.contains(&name.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Location {
+    layer_index: usize,
+    group_index: usize,
+    group_item_index: usize,
+}
 fn format_count(n: u32) -> String {
     let s = n.to_string();
     let len = s.len();
@@ -51,6 +73,8 @@ pub struct Controller {
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
+
+    layers: Vec<Layer>,
     show_selection_panel: bool,
 }
 
@@ -65,8 +89,46 @@ impl Controller {
 
             show_left_side_panel: false,
             show_right_side_panel: false,
+
+            layers: Vec::new(),
             show_selection_panel: false,
         }
+    }
+
+    pub fn update_line_assets(&mut self, asset: &mut Asset) {
+        let mut new_line_settings = Vec::new();
+
+        let Some(line_buffer) = asset.line.as_mut() else {
+            return;
+        };
+
+        for layer in &self.layers {
+            match layer {
+                Layer::Line(name) => {
+                    if let Some(line) = line_buffer
+                        .settings()
+                        .iter_mut()
+                        .find(|line| line.name == *name)
+                    {
+                        new_line_settings.push(line.clone());
+                    }
+                }
+                Layer::Group(group_lines, _) => {
+                    for line_name in group_lines {
+                        if let Some(line) = line_buffer
+                            .settings()
+                            .iter_mut()
+                            .find(|line| line.name == *line_name)
+                        {
+                            new_line_settings.push(line.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        line_buffer.clear_settings();
+        line_buffer.set_settings(new_line_settings.clone());
     }
 
     pub fn event(&mut self, event: Event) {
@@ -76,11 +138,24 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, dt: f32) {
+    pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
+        if let Some(lines) = &mut asset.line {
+            for line in lines.settings() {
+                if !self
+                    .layers
+                    .iter()
+                    .any(|layer| layer.contains_name(&line.name))
+                {
+                    let layer = Layer::Line(line.name.clone());
+                    self.layers.push(layer);
+                }
+            }
+        }
+
         // Auto-rotate camera
         if self.settings.auto_rotate {
             let speed_rad = self.settings.auto_rotate_speed.to_radians();
-            self.camera.yaw += speed_rad * dt;
+            self.camera.yaw += speed_rad * _dt;
         }
 
         egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
@@ -105,11 +180,17 @@ impl Controller {
                 ui.take_available_width();
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.selectable_label(self.show_right_side_panel, "☰ layers").clicked() {
+                    if ui
+                        .selectable_label(self.show_right_side_panel, "☰ layers")
+                        .clicked()
+                    {
                         self.show_right_side_panel = !self.show_right_side_panel
                     }
 
-                    if ui.selectable_label(self.show_selection_panel, "◈ selection").clicked() {
+                    if ui
+                        .selectable_label(self.show_selection_panel, "◈ selection")
+                        .clicked()
+                    {
                         self.show_selection_panel = !self.show_selection_panel;
                     }
 
@@ -366,7 +447,6 @@ impl Controller {
                             );
                         });
                     });
-
             },
         );
 
@@ -422,44 +502,7 @@ impl Controller {
                                 })
                                 .body(|_| {});
 
-                                for line in lines.settings() {
-                                    if line.removed {
-                                        continue;
-                                    }
-                                    let id = ui.make_persistent_id(&line.name);
-                                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                                        .show_header(ui, |ui| {
-                                            ui.toggle_value(&mut line.visible, "👁");
-                                            ui.color_edit_button_srgb(&mut line.color);
-                                            ui.label(&line.name);
-                                            ui.weak(format!(
-                                                "{} streamlines",
-                                                format_count(line.n_lines)
-                                            ));
-                                            ui.with_layout(
-                                                egui::Layout::right_to_left(egui::Align::Center),
-                                                |ui| {
-                                                    if ui.small_button("✕").clicked() {
-                                                        line.removed = true;
-                                                    }
-                                                },
-                                            );
-                                        })
-                                        .body(|ui| {
-                                            ui.add(
-                                                Slider::new(&mut line.crop_start, 0.0..=1.0)
-                                                    .text("Crop Start"),
-                                            );
-                                            ui.add(
-                                                Slider::new(&mut line.crop_end, 0.0..=1.0)
-                                                    .text("Crop End"),
-                                            );
-                                        });
-                                }
-
-                                if lines.settings().iter().all(|s| s.removed) {
-                                    asset.line = None;
-                                }
+                                self.tractography_layers(ui, asset);
                             }
                         });
                     });
@@ -603,6 +646,194 @@ impl Controller {
     pub fn time(&self) -> f32 {
         Instant::now().duration_since(self.time).as_secs_f32()
     }
+
+    pub fn tractography_layers(&mut self, ui: &mut Ui, asset: &mut Asset) {
+        let mut from = None;
+        let mut to = None;
+
+        let mut group_index = 0;
+
+        for (index, layer) in self.layers.iter_mut().enumerate() {
+            match layer {
+                Layer::Line(name) => {
+                    let line = asset
+                        .line
+                        .as_mut()
+                        .unwrap()
+                        .settings()
+                        .iter_mut()
+                        .find(|line| line.name == *name)
+                        .unwrap();
+                    let id = ui.make_persistent_id(&line.name);
+                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                        .show_header(ui, |ui| {
+                            ui.toggle_value(&mut line.visible, "👁");
+                            ui.color_edit_button_srgb(&mut line.color);
+
+                            drop_zone(
+                                ui,
+                                &line.name,
+                                id,
+                                Location {
+                                    group_index: 0,
+                                    layer_index: index,
+                                    group_item_index: 0,
+                                },
+                                &mut from,
+                                &mut to,
+                            );
+                        })
+                        .body(|ui| {
+                            ui.add(Slider::new(&mut line.crop_start, 0.0..=1.0).text("Crop Start"));
+                            ui.add(Slider::new(&mut line.crop_end, 0.0..=1.0).text("Crop End"));
+
+                            if ui.add(Button::new("Create Group")).clicked() {
+                                let new_layer = Layer::Group(vec![line.name.clone()], line.clone());
+                                *layer = new_layer;
+                            };
+                        });
+                }
+                Layer::Group(group_lines, group_settings) => {
+                    group_index += 1;
+
+                    let id = ui.make_persistent_id(format!("Group{}", index));
+                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                        .show_header(ui, |ui| {
+                            ui.toggle_value(&mut group_settings.visible, "👁");
+                            ui.color_edit_button_srgb(&mut group_settings.color);
+                            ui.label(format!("Group {}", index));
+                        })
+                        .body(|ui| {
+                            for (group_item_index, line_name) in group_lines.iter().enumerate() {
+                                let line_in_group_id = ui.make_persistent_id(format!(
+                                    "Group{}Group_Item{}",
+                                    group_index, group_item_index
+                                ));
+                                drop_zone(
+                                    ui,
+                                    line_name,
+                                    id,
+                                    Location {
+                                        group_index: group_index,
+                                        layer_index: index,
+                                        group_item_index: group_item_index,
+                                    },
+                                    &mut from,
+                                    &mut to,
+                                );
+                            }
+
+                            let crop_start_response = ui.add(
+                                Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
+                                    .text("Crop Start"),
+                            );
+                            let crop_end_response = ui.add(
+                                Slider::new(&mut group_settings.crop_end, 0.0..=1.0)
+                                    .text("Crop End"),
+                            );
+
+                            if crop_start_response.changed() || crop_end_response.changed() {
+                                for line_name in group_lines.iter() {
+                                    if let Some(line) = asset
+                                        .line
+                                        .as_mut()
+                                        .unwrap()
+                                        .settings()
+                                        .iter_mut()
+                                        .find(|line| line.name == *line_name)
+                                    {
+                                        line.crop_start = group_settings.crop_start;
+                                        line.crop_end = group_settings.crop_end;
+                                    }
+                                }
+                            }
+                        });
+                }
+            }
+        }
+
+        if let (Some(from), Some(mut to)) = (from, to) {
+            let from_layer = self.get_line_by_indexes(from);
+            let to_layer = self.get_line_by_indexes(to);
+
+            if let Some(name) = from_layer {
+                let mut layers = self.layers.clone();
+
+                layers = self.remove_line_from_layers_by_location(layers, from);
+
+                if to.group_index != 0 {
+                    if from.layer_index < to.layer_index {
+                        to.layer_index -= 1;
+                    } else if from.layer_index == to.layer_index
+                        && from.group_item_index < to.group_item_index
+                    {
+                        to.group_item_index -= 1;
+                    }
+                }
+
+                layers = self.insert_line_into_layers_by_name_and_indexes(layers, &name, to);
+
+                self.layers = layers;
+            }
+
+            Controller::update_line_assets(self, asset);
+        }
+    }
+
+    fn get_line_by_indexes(&self, location: Location) -> Option<String> {
+        let layer = &self.layers[location.layer_index];
+
+        match layer {
+            Layer::Line(line_name) => return Some(line_name.clone()),
+            Layer::Group(names, _) => {
+                let name = names[location.group_item_index].clone();
+                return Some(name);
+            }
+            _ => return None,
+        }
+    }
+
+    fn remove_line_from_layers_by_location(
+        &self,
+        mut layers: Vec<Layer>,
+        location: Location,
+    ) -> Vec<Layer> {
+        let layer = &mut layers[location.layer_index];
+        match layer {
+            Layer::Line(line_name) => {
+                layers.remove(location.layer_index);
+            }
+            Layer::Group(group_lines, _) => {
+                let line_name = group_lines.remove(location.group_item_index);
+            }
+        }
+
+        layers
+    }
+
+    fn insert_line_into_layers_by_name_and_indexes(
+        &self,
+        mut layers: Vec<Layer>,
+        name: &str,
+        location: Location,
+    ) -> Vec<Layer> {
+        if layers.len() == location.layer_index {
+            layers.push(Layer::Line(name.to_string()));
+            return layers;
+        }
+
+        let layer = &mut layers[location.layer_index];
+        match layer {
+            Layer::Line(_) => {
+                layers.insert(location.layer_index, Layer::Line(name.to_string()));
+            }
+            Layer::Group(group_lines, group_settings) => {
+                group_lines.insert(location.group_item_index, name.to_string());
+            }
+        }
+
+        layers
+    }
 }
 
 fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool> {
@@ -611,4 +842,71 @@ fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool
     ui.toggle_value(&mut checked, text)
         .clicked()
         .then_some(checked)
+}
+
+fn drop_zone(
+    ui: &mut Ui,
+    item_name: &String,
+    item_id: egui::Id,
+    item_location: Location,
+    from: &mut Option<Location>,
+    to: &mut Option<Location>,
+) {
+    let frame = Frame::default().inner_margin(4.0);
+    let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
+        let item_id = egui::Id::new((
+            "drag_and_drop",
+            item_location.group_index,
+            item_location.layer_index,
+            item_location.group_item_index,
+        ));
+
+        let row_idx = item_location.layer_index;
+
+        let response = ui
+            .dnd_drag_source(item_id, item_location.clone(), |ui| {
+                ui.label(item_name);
+            })
+            .response;
+
+        // Detect drops onto this item:
+        if let (Some(pointer), Some(hovered_payload)) = (
+            ui.input(|i| i.pointer.interact_pos()),
+            response.dnd_hover_payload::<Location>(),
+        ) {
+            let rect = response.rect;
+
+            let line_index = item_location.layer_index;
+            let group_index = item_location.group_index;
+
+            //https://github.com/emilk/egui/blob/main/crates/egui_demo_lib/src/demo/drag_and_drop.rs
+            // Preview insertion:
+            let stroke = egui::Stroke::new(1.0, Color32::WHITE);
+            let insert_row_idx = if hovered_payload.group_index == group_index
+                && hovered_payload.layer_index == line_index
+            {
+                // We are dragged onto ourselves
+                ui.painter().hline(rect.x_range(), rect.center().y, stroke);
+                row_idx
+            } else if pointer.y < rect.center().y {
+                // Above us
+                ui.painter().hline(rect.x_range(), rect.top(), stroke);
+
+                if row_idx > 0 {
+                    row_idx - 1
+                } else {
+                    row_idx
+                }
+            } else {
+                // Below us
+                ui.painter().hline(rect.x_range(), rect.bottom(), stroke);
+                row_idx + 1
+            };
+
+            if let Some(dragged_payload) = response.dnd_release_payload::<Location>() {
+                *from = Some((*dragged_payload).clone());
+                *to = Some(item_location);
+            }
+        }
+    });
 }
