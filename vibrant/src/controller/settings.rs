@@ -39,6 +39,13 @@ pub enum LineDisplayMode {
     Volume,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RecordingMode {
+    #[default]
+    Performance,
+    Quality,
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Settings {
     pub width: u32,
@@ -92,7 +99,7 @@ pub struct Settings {
     pub record_path: &'static str,
     pub recording_delay: u32,
     pub recording_fps: u32,
-    // Foveated rendering
+    pub recording_mode: RecordingMode,
     pub foveated: bool,
     pub foveated_focus_radius: f32,
     pub foveated_peripheral_scale: f32,
@@ -150,6 +157,7 @@ impl Settings {
             taa_blend_factor: 0.15,
             taa_clamp_sigma: 1.0,
             effective_aa_mode: AntiAliasingMode::Off,
+            recording_mode: RecordingMode::Performance,
             foveated: false,
             foveated_focus_radius: 0.15,
             foveated_peripheral_scale: 0.5,

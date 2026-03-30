@@ -10,7 +10,7 @@ pub mod render;
 pub mod transform;
 
 use occupancy::LineOccupancyPipeline;
-use wgpu::CommandEncoder;
+use wgpu::{CommandEncoder, TextureFormat};
 
 use aa::AntiAliasingPipeline;
 use foveated::FoveatedCompositePipeline;
@@ -30,6 +30,7 @@ use crate::{
             PASS_POPULATE, PASS_POST, PASS_RENDER, PASS_TRANSFORM,
         },
     },
+    surface::color::ColorBuffer,
     surface::Frame,
 };
 
@@ -54,6 +55,10 @@ pub struct LineRenderer {
 
 impl LineRenderer {
     pub fn new(gpu: &Gpu) -> Self {
+        Self::new_with_format(gpu, ColorBuffer::FORMAT)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, format: TextureFormat) -> Self {
         Self {
             transform: LineTransformPipeline::new(gpu),
             crop: LineCropPipeline::new(gpu),
@@ -61,9 +66,9 @@ impl LineRenderer {
             occlusion: LineOcclusionPipeline::new(gpu),
             cull: LineCullPipeline::new(gpu),
             populate: LinePopulatePipeline::new(gpu),
-            render: LineRenderPipeline::new(gpu),
-            post: PostProcessingPipeline::new(gpu),
-            aa: AntiAliasingPipeline::new(gpu),
+            render: LineRenderPipeline::new_with_format(gpu, format),
+            post: PostProcessingPipeline::new_with_format(gpu, format),
+            aa: AntiAliasingPipeline::new_with_format(gpu, format),
             foveated: FoveatedCompositePipeline::new(gpu),
             profiler: GpuProfiler::new(gpu),
         }

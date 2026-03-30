@@ -1,12 +1,14 @@
 pub mod environment;
 pub mod line;
 pub mod profiler;
+pub mod record;
 pub mod ui;
 pub mod wgsl;
-pub mod record;
 
-use std::sync::Arc;
+use wgpu::TextureFormat;
+use crate::surface::color::ColorBuffer;
 use crate::renderer::record::Recorder;
+use std::sync::Arc;
 
 use crate::{
     asset::{transform::TransformBuffer, volume::VolumeBuffer},
@@ -32,6 +34,7 @@ pub struct Renderer {
     ui: UiRenderer,
     environment: Environment,
     asset: Asset,
+    current_color_format: TextureFormat,
 }
 
 impl Renderer {
@@ -51,6 +54,7 @@ impl Renderer {
 
             environment: Environment::new(gpu),
             asset: Asset::default(),
+            current_color_format: ColorBuffer::FORMAT,
         }
     }
 
@@ -98,11 +102,8 @@ impl Renderer {
         self.egui
             .handle_platform_output(&window, output.platform_output.clone());
 
-        self.surface.update_output_mode(
-            gpu,
-            controller.settings(),
-            controller.prefer_hdr_output(),
-        );
+        self.surface
+            .update_output_mode(gpu, controller.settings(), controller.prefer_hdr_output());
 
         let surface = self.surface.maybe_resize(gpu, &controller.settings());
 
@@ -113,6 +114,12 @@ impl Renderer {
         );
 
         self.environment.update(gpu, &controller);
+
+        let color_format = surface.buffer().color().texture().format();
+        if color_format != self.current_color_format {
+            self.line = LineRenderer::new_with_format(gpu, color_format);
+            self.current_color_format = color_format;
+        }
 
         if let Some(line) = &self.asset.line {
             line.update_settings(gpu);
@@ -143,7 +150,7 @@ impl Renderer {
             );
         }
 
-        surface.present(gpu, cmd, recorder);
+        surface.present(gpu, cmd, recorder, controller.settings().recording_mode);
 
         if controller.gpu_profile_open {
             self.line.collect_profile(gpu);

@@ -25,7 +25,7 @@ use crate::{
     asset::Asset,
     controller::{
         segment::Segment,
-        settings::{AntiAliasingMode, LineDisplayMode, LineVoxelizationMode},
+        settings::{AntiAliasingMode, LineDisplayMode, LineVoxelizationMode, RecordingMode},
     },
     file::FileStage,
 };
@@ -630,6 +630,27 @@ impl Controller {
                                         );
                                     }
                                 });
+                        });
+
+                        // Recording mode toggle buttons
+                        ui.horizontal(|ui| {
+                            let perf_selected =
+                                self.settings.recording_mode == RecordingMode::Performance;
+                            let qual_selected =
+                                self.settings.recording_mode == RecordingMode::Quality;
+
+                            if ui
+                                .add(egui::Button::new("⚡ Performance").selected(perf_selected))
+                                .clicked()
+                            {
+                                self.settings.recording_mode = RecordingMode::Performance;
+                            }
+                            if ui
+                                .add(egui::Button::new("✨ Quality").selected(qual_selected))
+                                .clicked()
+                            {
+                                self.settings.recording_mode = RecordingMode::Quality;
+                            }
                         });
 
                         ui.separator();

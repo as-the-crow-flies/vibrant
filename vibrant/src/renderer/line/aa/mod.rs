@@ -1,8 +1,10 @@
 /// Anti-aliasing pipeline module.
 ///
 /// Sits between post-processing and display in the rendering pipeline:
-
-use wgpu::{CommandEncoder, Extent3d, Origin3d, RenderPassDescriptor, RenderPipeline, TextureAspect};
+use wgpu::{
+    CommandEncoder, Extent3d, Origin3d, RenderPassDescriptor, RenderPipeline, TextureAspect,
+    TextureFormat,
+};
 
 use crate::{
     controller::settings::{AntiAliasingMode, Settings},
@@ -32,50 +34,50 @@ pub struct AntiAliasingPipeline {
 
 impl AntiAliasingPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        Self::new_with_format(gpu, ColorBuffer::FORMAT)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, format: TextureFormat) -> Self {
         let passthrough = gpu.quad(
             "AA::Passthrough",
             &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-            ColorBuffer::target(),
+            ColorBuffer::target_with_format(format),
             &gpu.shader(include_str!("passthrough.wgsl")),
         );
 
-        // SMAA Pass 1
         let smaa_edge = gpu.quad(
             "AA::SMAA::EdgeDetection",
             &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-            ColorBuffer::target(),
+            ColorBuffer::target_with_format(format),
             &gpu.shader(include_str!("smaa_edge.wgsl")),
         );
 
-        // SMAA Pass 2
         let smaa_blend = gpu.quad(
             "AA::SMAA::BlendWeight",
             &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-            ColorBuffer::target(),
+            ColorBuffer::target_with_format(format),
             &gpu.shader(include_str!("smaa_blend.wgsl")),
         );
 
-        // SMAA Pass 3
         let smaa_neighborhood = gpu.quad(
             "AA::SMAA::NeighborhoodBlend",
             &gpu.pipeline_layout(&[
                 &Environment::layout(gpu),
-                &ColorBuffer::layout(gpu), 
-                &ColorBuffer::layout(gpu), 
+                &ColorBuffer::layout(gpu),
+                &ColorBuffer::layout(gpu),
             ]),
-            ColorBuffer::target(),
+            ColorBuffer::target_with_format(format),
             &gpu.shader(include_str!("smaa_neighborhood.wgsl")),
         );
 
-        // TAA pipeline
         let taa = gpu.quad(
             "AA::TAA",
             &gpu.pipeline_layout(&[
                 &Environment::layout(gpu),
-                &ColorBuffer::layout(gpu), // current frame (frame.post)
-                &ColorBuffer::layout(gpu), // history buffer (frame.taa_history)
+                &ColorBuffer::layout(gpu),
+                &ColorBuffer::layout(gpu),
             ]),
-            ColorBuffer::target(),
+            ColorBuffer::target_with_format(format),
             &gpu.shader(include_str!("taa.wgsl")),
         );
 
@@ -131,12 +133,7 @@ impl AntiAliasingPipeline {
         pass.draw(0..4, 0..1);
     }
 
-    fn dispatch_smaa(
-        &self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        frame: &Frame,
-    ) {
+    fn dispatch_smaa(&self, cmd: &mut CommandEncoder, environment: &Environment, frame: &Frame) {
         // Pass 1
         {
             let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -181,12 +178,7 @@ impl AntiAliasingPipeline {
         }
     }
 
-    fn dispatch_taa(
-        &mut self,
-        cmd: &mut CommandEncoder,
-        environment: &Environment,
-        frame: &Frame,
-    ) {
+    fn dispatch_taa(&mut self, cmd: &mut CommandEncoder, environment: &Environment, frame: &Frame) {
         // auto-invalidate history if frame dimensions changed
         let w = frame.aa().width();
         let h = frame.aa().height();

@@ -19,7 +19,7 @@ impl Recorder {
                 "-f",
                 "rawvideo",
                 "-pixel_format",
-                "bgra",
+                "rgba",
                 "-video_size",
                 &format!("{}x{}", width, height),
                 "-framerate",
