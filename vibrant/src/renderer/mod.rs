@@ -121,7 +121,7 @@ impl Renderer {
             self.current_color_format = color_format;
         }
 
-        if let Some(line) = &self.asset.line {
+        if let Some(line) = &mut self.asset.line {
             line.update_settings(gpu);
         }
 

@@ -7,6 +7,7 @@ pub mod ui;
 use crate::controller::settings::RecordingMode;
 use crate::renderer::record::Recorder;
 use std::any::type_name;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use bytemuck::bytes_of;
 use color::ColorBuffer;
@@ -31,7 +32,12 @@ use crate::{
 
 use super::gpu::Gpu;
 
+static FRAME_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
 pub struct Frame {
+    // unique id for each Frame allocation, 
+    // changes when frame constructed (resize, foveated toogle, etc.)
+    id: u64,
     color: ColorBuffer,
     post: ColorBuffer,
     aa: ColorBuffer,
@@ -105,6 +111,7 @@ impl Frame {
         });
 
         Self {
+            id: FRAME_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
             color,
             post,
             aa,
@@ -170,6 +177,7 @@ impl Frame {
         });
 
         Self {
+            id: FRAME_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
             color,
             post,
             aa,
@@ -186,6 +194,10 @@ impl Frame {
             foveated_focus,
             foveated_peripheral,
         }
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     pub fn color(&self) -> &ColorBuffer {

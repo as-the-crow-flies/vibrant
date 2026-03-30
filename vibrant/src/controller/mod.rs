@@ -348,6 +348,8 @@ impl Controller {
                             Slider::new(&mut self.settings.workgroups, 1..=128)
                                 .text("# Workgroups"),
                         );
+                        ui.checkbox(&mut self.settings.populate_cache, "Cache Spatial Index")
+                            .on_hover_text("Skip populate rebuild when only the camera has moved.\nDisable to force a full rebuild every frame.");
 
                         ui.separator();
                         ui.label("Bloom");

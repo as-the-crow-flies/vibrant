@@ -31,26 +31,19 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
         offset = workgroupUniformLoad(&WORKGROUP_OFFSET);
 
-        var i = 0u;
+        // Voxelize every segment unconditionally.  The CULLING filter previously
+        // skipped occluded segments to save INDEX space, but that made the index
+        // camera-dependent.  Removing it lets the index be cached across frames
+        // whenever only the camera changes.
+        for (var i = 0u; i < CHUNK_SIZE; i++) {
+            let index_index = offset + i * WORKGROUP_SIZE + local;
 
-        while (i < CHUNK_SIZE) {
-            var index = 0u;
-            var v0 = Vertex();
-            var v1 = Vertex();
+            if (index_index >= n_indices) { continue; }
 
-            while (i < CHUNK_SIZE) {
-                let index_index = offset + i * WORKGROUP_SIZE + local;
-                i++;
+            let index = LINE_INDEX[index_index];
 
-                if (index_index >= n_indices) { continue; }
-
-                index = LINE_INDEX[index_index];
-
-                v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
-                v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
-
-                if (culling(v0.xyz, v1.xyz) > 0.0) { break; }
-            }
+            let v0 = unpack_vertex_scale(LINE_VERTEX[index + 0], scale);
+            let v1 = unpack_vertex_scale(LINE_VERTEX[index + 1], scale);
 
             voxelize(index, v0, v1, radius);
         }
@@ -58,31 +51,10 @@ fn main(@builtin(local_invocation_index) local: u32) {
 }
 
 fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length: f32) {
-    let should_write = textureLoad(CULLING, voxel, 0).x > 0.5;
-
-    if (should_write) {
-        let idx = block_index(vec3<u32>(voxel), textureDimensions(CULLING));
-        INDEX[atomicAdd(&OFFSET[idx], 1u)] = index;
-    }
+    let idx = block_index(vec3<u32>(voxel), textureDimensions(CULLING));
+    INDEX[atomicAdd(&OFFSET[idx], 1u)] = index;
 }
 
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     visit_voxel_line(voxel, index, v0, v1, 0.0);
-}
-
-fn culling(v0: vec3<f32>, v1: vec3<f32>) -> f32 {
-    let v_min = vec3<u32>(min(v0, v1) - ENVIRONMENT.settings.radius);
-    let v_max = vec3<u32>(max(v0, v1) + ENVIRONMENT.settings.radius);
-
-    let level = 32 - minimum3(countLeadingZeros(v_min ^ v_max));
-
-    return select(
-        1.0,
-        textureLoad(CULLING, v_min >> vec3<u32>(level), i32(level)).x,
-        level < textureNumLevels(CULLING)
-    );
-}
-
-fn minimum3(v: vec3<u32>) -> u32 {
-    return min(min(v.x, v.y), v.z);
 }

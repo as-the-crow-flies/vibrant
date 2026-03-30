@@ -100,6 +100,12 @@ pub struct Settings {
     pub recording_delay: u32,
     pub recording_fps: u32,
     pub recording_mode: RecordingMode,
+
+    // set to true to cache the spatial index (OFFSET/INDEX) across frames
+    // and only rebuild when voxelization parameters change
+    // set to false to force a full populate rebuild every frame
+    pub populate_cache: bool,
+    // foveated rendering parameters
     pub foveated: bool,
     pub foveated_focus_radius: f32,
     pub foveated_peripheral_scale: f32,
@@ -158,6 +164,7 @@ impl Settings {
             taa_clamp_sigma: 1.0,
             effective_aa_mode: AntiAliasingMode::Off,
             recording_mode: RecordingMode::Performance,
+            populate_cache: false,
             foveated: false,
             foveated_focus_radius: 0.15,
             foveated_peripheral_scale: 0.5,
