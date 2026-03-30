@@ -500,15 +500,6 @@ impl Controller {
                             ui.toggle_value(&mut line.visible, "👁");
                             ui.color_edit_button_srgb(&mut line.color);
                             ui.label(&line.name);
-                            let response = ui.label("⠿");
-
-                            if response.drag_started() {
-                                println!("started dragging line {}\n", line.name);
-                            }
-
-                            if response.drag_stopped() {
-                                println!("stopped dragging line {}\n", line.name);
-                            }
 
                             drop_zone(ui, id, Location { group_index: 0, layer_index: index,group_item_index: 0 }, &mut from, &mut to);
                         })
