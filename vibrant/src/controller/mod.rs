@@ -47,7 +47,7 @@ impl Layer {
 #[derive(Debug, Copy, Clone)]
 pub struct Location {
     layer_index: usize,
-    group_index: usize, //remove later
+    group_index: usize,
     group_item_index: usize,
 }
 fn format_count(n: u32) -> String {
@@ -702,8 +702,6 @@ impl Controller {
                             ui.toggle_value(&mut group_settings.visible, "👁");
                             ui.color_edit_button_srgb(&mut group_settings.color);
                             ui.label(format!("Group {}", index));
-
-                            //drop_zone(ui, id, Location { group_index: group_index, layer_index: index, group_item_index: 0 }, &mut from, &mut to);
                         })
                         .body(|ui| {
                             for (group_item_index, line_name) in group_lines.iter().enumerate() {
@@ -725,16 +723,16 @@ impl Controller {
                                 );
                             }
 
-                            let response1 = ui.add(
+                            let crop_start_response = ui.add(
                                 Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
                                     .text("Crop Start"),
                             );
-                            let response2 = ui.add(
+                            let crop_end_response = ui.add(
                                 Slider::new(&mut group_settings.crop_end, 0.0..=1.0)
                                     .text("Crop End"),
                             );
 
-                            if response1.changed() || response2.changed() {
+                            if crop_start_response.changed() || crop_end_response.changed() {
                                 for line_name in group_lines.iter() {
                                     if let Some(line) = asset
                                         .line
