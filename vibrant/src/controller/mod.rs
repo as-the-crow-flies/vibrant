@@ -9,7 +9,8 @@ use std::time::Instant;
 
 use camera::Camera;
 use egui::{
-    Align, Button, Color32, ComboBox, Frame, Label, Layout, Margin, ScrollArea, Sense, SidePanel, Slider, Ui, collapsing_header::CollapsingState, debug_text::print
+    collapsing_header::CollapsingState, debug_text::print, Align, Button, Color32, ComboBox, Frame,
+    Label, Layout, Margin, ScrollArea, Sense, SidePanel, Slider, Ui,
 };
 use event::Event;
 use itertools::Itertools;
@@ -19,8 +20,8 @@ use state::ControllerState;
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    asset::{Asset, line },
     asset::line::LineSettings,
+    asset::{line, Asset},
     controller::{
         selection_volume::{SelectionVolume, SelectionVolumeEntry},
         settings::{LineDisplayMode, LineVoxelizationMode},
@@ -31,7 +32,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum Layer {
     Line(String),
-    Group(Vec<String>, LineSettings)
+    Group(Vec<String>, LineSettings),
 }
 
 impl Layer {
@@ -47,7 +48,7 @@ impl Layer {
 pub struct Location {
     layer_index: usize,
     group_index: usize, //remove later
-    group_item_index: usize
+    group_item_index: usize,
 }
 fn format_count(n: u32) -> String {
     let s = n.to_string();
@@ -94,7 +95,7 @@ impl Controller {
         }
     }
 
-    pub fn update_line_assets (&mut self, asset: &mut Asset) {
+    pub fn update_line_assets(&mut self, asset: &mut Asset) {
         let mut new_line_settings = Vec::new();
 
         let Some(line_buffer) = asset.line.as_mut() else {
@@ -107,16 +108,18 @@ impl Controller {
                     if let Some(line) = line_buffer
                         .settings()
                         .iter_mut()
-                        .find(|line| line.name == *name) {
+                        .find(|line| line.name == *name)
+                    {
                         new_line_settings.push(line.clone());
                     }
-                },
+                }
                 Layer::Group(group_lines, _) => {
                     for line_name in group_lines {
                         if let Some(line) = line_buffer
                             .settings()
                             .iter_mut()
-                            .find(|line| line.name == *line_name) {
+                            .find(|line| line.name == *line_name)
+                        {
                             new_line_settings.push(line.clone());
                         }
                     }
@@ -138,13 +141,17 @@ impl Controller {
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
         if let Some(lines) = &mut asset.line {
             for line in lines.settings() {
-                if !self.layers.iter().any(|layer| layer.contains_name(&line.name)) {
+                if !self
+                    .layers
+                    .iter()
+                    .any(|layer| layer.contains_name(&line.name))
+                {
                     let layer = Layer::Line(line.name.clone());
                     self.layers.push(layer);
                 }
             }
         }
-        
+
         // Auto-rotate camera
         if self.settings.auto_rotate {
             let speed_rad = self.settings.auto_rotate_speed.to_radians();
@@ -173,11 +180,17 @@ impl Controller {
                 ui.take_available_width();
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.selectable_label(self.show_right_side_panel, "☰ layers").clicked() {
+                    if ui
+                        .selectable_label(self.show_right_side_panel, "☰ layers")
+                        .clicked()
+                    {
                         self.show_right_side_panel = !self.show_right_side_panel
                     }
 
-                    if ui.selectable_label(self.show_selection_panel, "◈ selection").clicked() {
+                    if ui
+                        .selectable_label(self.show_selection_panel, "◈ selection")
+                        .clicked()
+                    {
                         self.show_selection_panel = !self.show_selection_panel;
                     }
 
@@ -434,7 +447,6 @@ impl Controller {
                             );
                         });
                     });
-
             },
         );
 
@@ -635,7 +647,7 @@ impl Controller {
         Instant::now().duration_since(self.time).as_secs_f32()
     }
 
-    pub fn tractography_layers (&mut self, ui: &mut Ui, asset: &mut Asset) {
+    pub fn tractography_layers(&mut self, ui: &mut Ui, asset: &mut Asset) {
         let mut from = None;
         let mut to = None;
 
@@ -644,33 +656,43 @@ impl Controller {
         for (index, layer) in self.layers.iter_mut().enumerate() {
             match layer {
                 Layer::Line(name) => {
-                    let line = asset.line.as_mut().unwrap().settings().iter_mut().find(|line| line.name == *name).unwrap();
+                    let line = asset
+                        .line
+                        .as_mut()
+                        .unwrap()
+                        .settings()
+                        .iter_mut()
+                        .find(|line| line.name == *name)
+                        .unwrap();
                     let id = ui.make_persistent_id(&line.name);
                     CollapsingState::load_with_default_open(ui.ctx(), id, false)
                         .show_header(ui, |ui| {
                             ui.toggle_value(&mut line.visible, "👁");
                             ui.color_edit_button_srgb(&mut line.color);
 
-                            drop_zone(ui, &line.name, id, Location { group_index: 0, layer_index: index,group_item_index: 0 }, &mut from, &mut to);
+                            drop_zone(
+                                ui,
+                                &line.name,
+                                id,
+                                Location {
+                                    group_index: 0,
+                                    layer_index: index,
+                                    group_item_index: 0,
+                                },
+                                &mut from,
+                                &mut to,
+                            );
                         })
                         .body(|ui| {
-                            ui.add(
-                                Slider::new(&mut line.crop_start, 0.0..=1.0)
-                                    .text("Crop Start"),
-                            );
-                            ui.add(
-                                Slider::new(&mut line.crop_end, 0.0..=1.0)
-                                    .text("Crop End"),
-                            );
+                            ui.add(Slider::new(&mut line.crop_start, 0.0..=1.0).text("Crop Start"));
+                            ui.add(Slider::new(&mut line.crop_end, 0.0..=1.0).text("Crop End"));
 
-                            if ui.add(
-                                Button::new("Create Group")
-                            ).clicked() {
+                            if ui.add(Button::new("Create Group")).clicked() {
                                 let new_layer = Layer::Group(vec![line.name.clone()], line.clone());
                                 *layer = new_layer;
                             };
                         });
-                },
+                }
                 Layer::Group(group_lines, group_settings) => {
                     group_index += 1;
 
@@ -685,12 +707,26 @@ impl Controller {
                         })
                         .body(|ui| {
                             for (group_item_index, line_name) in group_lines.iter().enumerate() {
-                                let line_in_group_id = ui.make_persistent_id(format!("Group{}Group_Item{}", group_index, group_item_index));
-                                drop_zone(ui, line_name, id, Location { group_index: group_index, layer_index: index, group_item_index: group_item_index }, &mut from, &mut to);
+                                let line_in_group_id = ui.make_persistent_id(format!(
+                                    "Group{}Group_Item{}",
+                                    group_index, group_item_index
+                                ));
+                                drop_zone(
+                                    ui,
+                                    line_name,
+                                    id,
+                                    Location {
+                                        group_index: group_index,
+                                        layer_index: index,
+                                        group_item_index: group_item_index,
+                                    },
+                                    &mut from,
+                                    &mut to,
+                                );
                             }
 
                             let response1 = ui.add(
-                        Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
+                                Slider::new(&mut group_settings.crop_start, 0.0..=1.0)
                                     .text("Crop Start"),
                             );
                             let response2 = ui.add(
@@ -700,14 +736,21 @@ impl Controller {
 
                             if response1.changed() || response2.changed() {
                                 for line_name in group_lines.iter() {
-                                    if let Some(line) = asset.line.as_mut().unwrap().settings().iter_mut().find(|line| line.name == *line_name) {
+                                    if let Some(line) = asset
+                                        .line
+                                        .as_mut()
+                                        .unwrap()
+                                        .settings()
+                                        .iter_mut()
+                                        .find(|line| line.name == *line_name)
+                                    {
                                         line.crop_start = group_settings.crop_start;
                                         line.crop_end = group_settings.crop_end;
                                     }
                                 }
                             }
                         });
-                },
+                }
             }
         }
 
@@ -720,10 +763,12 @@ impl Controller {
 
                 layers = self.remove_line_from_layers_by_location(layers, from);
 
-                if to.group_index != 0 {                  
+                if to.group_index != 0 {
                     if from.layer_index < to.layer_index {
                         to.layer_index -= 1;
-                    } else if from.layer_index == to.layer_index && from.group_item_index < to.group_item_index {
+                    } else if from.layer_index == to.layer_index
+                        && from.group_item_index < to.group_item_index
+                    {
                         to.group_item_index -= 1;
                     }
                 }
@@ -737,26 +782,29 @@ impl Controller {
         }
     }
 
-    fn get_line_by_indexes (&self, location: Location) -> Option<String> {
+    fn get_line_by_indexes(&self, location: Location) -> Option<String> {
         let layer = &self.layers[location.layer_index];
 
         match layer {
             Layer::Line(line_name) => return Some(line_name.clone()),
             Layer::Group(names, _) => {
                 let name = names[location.group_item_index].clone();
-                return Some(name)
-            } ,
-            _ => return None
+                return Some(name);
+            }
+            _ => return None,
         }
-
     }
 
-    fn remove_line_from_layers_by_location (&self, mut layers: Vec<Layer>, location: Location) -> Vec<Layer> {
+    fn remove_line_from_layers_by_location(
+        &self,
+        mut layers: Vec<Layer>,
+        location: Location,
+    ) -> Vec<Layer> {
         let layer = &mut layers[location.layer_index];
         match layer {
             Layer::Line(line_name) => {
                 layers.remove(location.layer_index);
-            },
+            }
             Layer::Group(group_lines, _) => {
                 let line_name = group_lines.remove(location.group_item_index);
             }
@@ -764,8 +812,13 @@ impl Controller {
 
         layers
     }
-      
-    fn insert_line_into_layers_by_name_and_indexes (&self, mut layers: Vec<Layer>, name: &str, location: Location) -> Vec<Layer> {
+
+    fn insert_line_into_layers_by_name_and_indexes(
+        &self,
+        mut layers: Vec<Layer>,
+        name: &str,
+        location: Location,
+    ) -> Vec<Layer> {
         if layers.len() == location.layer_index {
             layers.push(Layer::Line(name.to_string()));
             return layers;
@@ -775,7 +828,7 @@ impl Controller {
         match layer {
             Layer::Line(_) => {
                 layers.insert(location.layer_index, Layer::Line(name.to_string()));
-            },
+            }
             Layer::Group(group_lines, group_settings) => {
                 group_lines.insert(location.group_item_index, name.to_string());
             }
@@ -793,10 +846,22 @@ fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool
         .then_some(checked)
 }
 
-fn drop_zone(ui: &mut Ui, item_name: &String, item_id: egui::Id, item_location: Location, from: &mut Option<Location>, to: &mut Option<Location>) {
+fn drop_zone(
+    ui: &mut Ui,
+    item_name: &String,
+    item_id: egui::Id,
+    item_location: Location,
+    from: &mut Option<Location>,
+    to: &mut Option<Location>,
+) {
     let frame = Frame::default().inner_margin(4.0);
     let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
-        let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.layer_index, item_location.group_item_index));
+        let item_id = egui::Id::new((
+            "drag_and_drop",
+            item_location.group_index,
+            item_location.layer_index,
+            item_location.group_item_index,
+        ));
 
         let row_idx = item_location.layer_index;
 
@@ -805,10 +870,10 @@ fn drop_zone(ui: &mut Ui, item_name: &String, item_id: egui::Id, item_location: 
                 ui.label(item_name);
             })
             .response;
-        
+
         // Detect drops onto this item:
         if let (Some(pointer), Some(hovered_payload)) = (
-            ui.input(|i| i.pointer.interact_pos()), 
+            ui.input(|i| i.pointer.interact_pos()),
             response.dnd_hover_payload::<Location>(),
         ) {
             let rect = response.rect;
@@ -819,15 +884,16 @@ fn drop_zone(ui: &mut Ui, item_name: &String, item_id: egui::Id, item_location: 
             //https://github.com/emilk/egui/blob/main/crates/egui_demo_lib/src/demo/drag_and_drop.rs
             // Preview insertion:
             let stroke = egui::Stroke::new(1.0, Color32::WHITE);
-            let insert_row_idx = 
-            if hovered_payload.group_index == group_index && hovered_payload.layer_index == line_index {
+            let insert_row_idx = if hovered_payload.group_index == group_index
+                && hovered_payload.layer_index == line_index
+            {
                 // We are dragged onto ourselves
                 ui.painter().hline(rect.x_range(), rect.center().y, stroke);
                 row_idx
             } else if pointer.y < rect.center().y {
                 // Above us
                 ui.painter().hline(rect.x_range(), rect.top(), stroke);
-                
+
                 if row_idx > 0 {
                     row_idx - 1
                 } else {
