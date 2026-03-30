@@ -5,6 +5,7 @@ use vibrant::Vec2;
 use web_time::Instant;
 
 use vibrant::controller::{event::Event, Controller};
+use vibrant::controller::settings::{AntiAliasingMode, RecordingMode};
 use vibrant::renderer::Renderer;
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -24,6 +25,7 @@ struct App {
     fps: Fps<8>,
     recorder: Option<vibrant::renderer::record::Recorder>,
     recording_count: u32,
+    pre_recording_aa_mode: Option<AntiAliasingMode>,
 }
 
 impl App {
@@ -37,6 +39,7 @@ impl App {
             fps: Fps::new(),
             recorder: None,
             recording_count: 0,
+            pre_recording_aa_mode: None,
         }
     }
 
@@ -85,6 +88,18 @@ impl App {
                     if self.controller.settings_mut().recording_delay > 0 {
                         self.controller.settings_mut().recording_delay -= 1;
                     } else {
+                        match self.controller.settings().recording_mode {
+                            RecordingMode::Performance => {
+                                self.pre_recording_aa_mode =
+                                    Some(self.controller.settings().aa_mode);
+                                self.controller.settings_mut().aa_mode = AntiAliasingMode::Off;
+                            }
+                            RecordingMode::Quality => {
+                                self.pre_recording_aa_mode =
+                                    Some(self.controller.settings().aa_mode);
+                                self.controller.settings_mut().aa_mode = AntiAliasingMode::SMAA;
+                            }
+                        }
                         self.recording_count += 1;
                         let actual_fps = (1.0 / dt).round() as u32;
                         let actual_fps = actual_fps.clamp(1, 120); // safety clamp
@@ -107,6 +122,10 @@ impl App {
                         println!("Stopping recorder...");
                         rec.finish();
                         println!("Recording saved.");
+                        // Restore AA mode after recording stops
+                        if let Some(aa_mode) = self.pre_recording_aa_mode.take() {
+                            self.controller.settings_mut().aa_mode = aa_mode;
+                        }
                     }
                 }
 

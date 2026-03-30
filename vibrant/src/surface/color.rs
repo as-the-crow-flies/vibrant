@@ -2,8 +2,8 @@ use std::any::type_name;
 
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
-    Color, ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color,
+    ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
     RenderPassColorAttachment, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp,
     Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
     TextureView, TextureViewDescriptor, TextureViewDimension,
@@ -19,8 +19,17 @@ pub struct ColorBuffer {
 
 impl ColorBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    pub const FORMAT_SDR: TextureFormat = TextureFormat::Bgra8Unorm;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
+        Self::new_with_format(gpu, width, height, Self::FORMAT)
+    }
+
+    pub fn new_sdr(gpu: &Gpu, width: u32, height: u32) -> Self {
+        Self::new_with_format(gpu, width, height, Self::FORMAT_SDR)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, width: u32, height: u32, format: TextureFormat) -> Self {
         let label = Some(type_name::<Self>());
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
@@ -33,17 +42,17 @@ impl ColorBuffer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: Self::FORMAT,
+            format,
             usage: TextureUsages::RENDER_ATTACHMENT
                 | TextureUsages::TEXTURE_BINDING
                 | TextureUsages::COPY_SRC
                 | TextureUsages::COPY_DST,
-            view_formats: &[Self::FORMAT],
+            view_formats: &[],
         });
 
         let view = texture.create_view(&TextureViewDescriptor {
             label,
-            format: Some(Self::FORMAT),
+            format: Some(format),
             ..Default::default()
         });
 
@@ -99,6 +108,14 @@ impl ColorBuffer {
     pub fn target() -> ColorTargetState {
         ColorTargetState {
             format: Self::FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        }
+    }
+
+    pub fn target_with_format(format: TextureFormat) -> ColorTargetState {
+        ColorTargetState {
+            format,
             blend: None,
             write_mask: ColorWrites::all(),
         }

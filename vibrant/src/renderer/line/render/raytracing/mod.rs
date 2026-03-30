@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
+use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline, TextureFormat};
 
 use crate::{
     asset::line::LineBuffer,
@@ -17,6 +17,10 @@ pub struct RayTracingLineRenderPipeline {
 
 impl RayTracingLineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        Self::new_with_format(gpu, ColorBuffer::FORMAT)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, format: TextureFormat) -> Self {
         Self {
             opaque: gpu.quad(
                 type_name::<Self>(),
@@ -26,7 +30,7 @@ impl RayTracingLineRenderPipeline {
                     &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format), // now uses the parameter
                 &gpu.shader(&(TRACE.to_string() + include_str!("opaque.wgsl"))),
             ),
             transparent: gpu.quad(
@@ -37,7 +41,7 @@ impl RayTracingLineRenderPipeline {
                     &LineBuffer::layout(gpu, true),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format), // now uses the parameter
                 &gpu.shader(&(TRACE.to_string() + include_str!("transparent.wgsl"))),
             ),
         }

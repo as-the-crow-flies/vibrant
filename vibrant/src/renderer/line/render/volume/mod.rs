@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
+use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline, TextureFormat};
 
 use crate::{
     gpu::Gpu,
@@ -12,11 +12,15 @@ pub struct VolumeLineRenderPipeline {
 
 impl VolumeLineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        Self::new_with_format(gpu, ColorBuffer::FORMAT)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, format: TextureFormat) -> Self {
         Self {
             pipeline: gpu.quad(
                 "Volume",
                 &gpu.pipeline_layout(&[&Frame::layout(gpu), &Environment::layout(gpu)]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format),
                 &gpu.shader(include_str!("volume.wgsl")),
             ),
         }

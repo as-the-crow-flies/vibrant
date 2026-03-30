@@ -4,6 +4,7 @@ pub mod occlusion;
 pub mod occupancy;
 pub mod ui;
 
+use crate::controller::settings::RecordingMode;
 use crate::renderer::record::Recorder;
 use std::any::type_name;
 
@@ -33,16 +34,12 @@ use super::gpu::Gpu;
 pub struct Frame {
     color: ColorBuffer,
     post: ColorBuffer,
-    // anti-aliasing output buffer
     aa: ColorBuffer,
     ui: UiBuffer,
     bloom_a: ColorBuffer,
     bloom_b: ColorBuffer,
-    // SMAA edge detection buffer
     smaa_edges: ColorBuffer,
-    // SMAA blend weight buffer
     smaa_blend: ColorBuffer,
-    // TAA history buffer
     taa_history: ColorBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
@@ -52,6 +49,57 @@ pub struct Frame {
 
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
+        match settings.recording_mode {
+            RecordingMode::Performance => Self::new_performance(gpu, settings),
+            RecordingMode::Quality => Self::new_quality(gpu, settings),
+        }
+    }
+
+    fn new_performance(gpu: &Gpu, settings: &Settings) -> Self {
+        let color = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+        let post = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+        let aa = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+        let ui = UiBuffer::new(gpu, settings.width, settings.height);
+        let bloom_a = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+        let bloom_b = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+        let smaa_edges = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+        let smaa_blend = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+        let taa_history = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
+
+        let occupancy = OccupancyBuffer::new(gpu, settings.volume);
+        let occlusion = OcclusionBuffer::new(gpu, settings.volume);
+        let culling = CullingBuffer::new(gpu, settings.volume);
+
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some(type_name::<Self>()),
+            layout: &Self::layout(gpu),
+            entries: &[
+                occupancy.pyramid().binding_entries(0),
+                occupancy.count().binding_entries(2),
+                occlusion.ambient().binding_entries(4),
+                occlusion.directional().binding_entries(6),
+            ]
+            .concat(),
+        });
+
+        Self {
+            color,
+            post,
+            aa,
+            ui,
+            bloom_a,
+            bloom_b,
+            smaa_edges,
+            smaa_blend,
+            taa_history,
+            occupancy,
+            occlusion,
+            culling,
+            binding,
+        }
+    }
+
+    fn new_quality(gpu: &Gpu, settings: &Settings) -> Self {
         let color = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let post = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
         let aa = ColorBuffer::new(gpu, settings.render_width, settings.render_height);
@@ -98,51 +146,39 @@ impl Frame {
     pub fn color(&self) -> &ColorBuffer {
         &self.color
     }
-
     pub fn post(&self) -> &ColorBuffer {
         &self.post
     }
-
     pub fn aa(&self) -> &ColorBuffer {
         &self.aa
     }
-
     pub fn smaa_edges(&self) -> &ColorBuffer {
         &self.smaa_edges
     }
-
     pub fn smaa_blend(&self) -> &ColorBuffer {
         &self.smaa_blend
     }
-
     pub fn taa_history(&self) -> &ColorBuffer {
         &self.taa_history
     }
-
     pub fn ui(&self) -> &UiBuffer {
         &self.ui
     }
-
     pub fn bloom_a(&self) -> &ColorBuffer {
         &self.bloom_a
     }
-
     pub fn bloom_b(&self) -> &ColorBuffer {
         &self.bloom_b
     }
-
     pub fn occupancy(&self) -> &OccupancyBuffer {
         &self.occupancy
     }
-
     pub fn occlusion(&self) -> &OcclusionBuffer {
         &self.occlusion
     }
-
     pub fn culling(&self) -> &CullingBuffer {
         &self.culling
     }
-
     pub fn binding(&self) -> &BindGroup {
         &self.binding
     }
@@ -152,10 +188,10 @@ impl Frame {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    MipTexture3D::<R32Float>::layout_entries(0), // Occupancy - Density
-                    MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
-                    MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
-                    MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
+                    MipTexture3D::<R32Float>::layout_entries(0),
+                    MipTexture3D::<R32Uint>::layout_entries(2),
+                    MipTexture3D::<R32Float>::layout_entries(4),
+                    MipTexture3D::<R32Float>::layout_entries(6),
                 ]
                 .concat(),
             })
@@ -174,8 +210,8 @@ pub struct Surface {
     hdr_params_binding: BindGroup,
     display_hdr: RenderPipeline,
     display_sdr: RenderPipeline,
-    buffer: Frame,
     capture_pipeline: RenderPipeline,
+    buffer: Frame,
 }
 
 impl Surface {
@@ -244,7 +280,7 @@ impl Surface {
             "Surface::Capture",
             &gpu.pipeline_layout(&[&ColorBuffer::layout(gpu), &UiBuffer::layout(gpu)]),
             ColorTargetState {
-                format: TextureFormat::Bgra8Unorm,
+                format: TextureFormat::Rgba8UnormSrgb,
                 blend: Some(BlendState::REPLACE),
                 write_mask: ColorWrites::all(),
             },
@@ -270,8 +306,8 @@ impl Surface {
             hdr_params_binding,
             display_hdr,
             display_sdr,
-            buffer: Frame::new(gpu, &Settings::new()),
             capture_pipeline,
+            buffer: Frame::new(gpu, &Settings::new()),
         }
     }
 
@@ -285,7 +321,7 @@ impl Surface {
             return self;
         }
 
-        self.buffer = Frame::new(gpu, &settings);
+        self.buffer = Frame::new(gpu, settings);
         self.surface.configure(
             gpu.device(),
             &Self::config(settings.width, settings.height, self.format),
@@ -295,19 +331,17 @@ impl Surface {
     }
 
     pub fn update_output_mode(&mut self, gpu: &Gpu, settings: &Settings, prefer_hdr_output: bool) {
-        // Keep HDR display parameters in a dedicated uniform for final present pass.
         gpu.queue().write_buffer(
             &self.hdr_params_buffer,
             0,
             bytes_of(&[
                 settings.hdr_paper_white_nits,
                 settings.hdr_peak_nits,
-                0.0,
-                0.0,
+                0.0f32,
+                0.0f32,
             ]),
         );
 
-        // Re-detect supported formats
         let caps = self.surface.get_capabilities(gpu.adapter());
         let (sdr_format, hdr_format) = Self::detect_formats(&caps);
         self.sdr_format = sdr_format;
@@ -365,13 +399,19 @@ impl Surface {
         );
     }
 
-    pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder, recorder: &mut Option<Recorder>) {
+    pub fn present(
+        &self,
+        gpu: &Gpu,
+        mut cmd: CommandEncoder,
+        recorder: &mut Option<Recorder>,
+        recording_mode: RecordingMode,
+    ) {
         if let Some(surface_tex) = self.surface.get_current_texture().ok() {
             let view = surface_tex
                 .texture
                 .create_view(&TextureViewDescriptor::default());
 
-            // Normal display pass — unchanged
+            // Normal display pass
             {
                 let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
                     label: Some("Surface::Present"),
@@ -402,56 +442,144 @@ impl Surface {
 
             // Capture pass — only when recording
             if let Some(rec) = recorder.as_mut() {
-                // Lazily create capture texture at current size
                 let cap_w = self.buffer.ui().width();
                 let cap_h = self.buffer.ui().height();
 
-                let capture_tex = gpu.device().create_texture(&wgpu::TextureDescriptor {
-                    label: Some("Surface::Capture"),
-                    size: wgpu::Extent3d {
-                        width: cap_w,
-                        height: cap_h,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Bgra8Unorm, // 4 bytes/px, no conversion
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-                    view_formats: &[],
-                });
+                match recording_mode {
+                    RecordingMode::Performance => {
+                        // Performance: run through capture pipeline (applies Reinhard, same as display)
+                        // then read from Bgra8Unorm — matches what's on screen
+                        let cap_w = self.buffer.ui().width();
+                        let cap_h = self.buffer.ui().height();
 
-                let capture_view = capture_tex.create_view(&TextureViewDescriptor::default());
-
-                // Render tone-mapped SDR output into capture texture
-                {
-                    let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-                        label: Some("Surface::Capture"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &capture_view,
-                            depth_slice: None,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                                store: wgpu::StoreOp::Store,
+                        let capture_tex = gpu.device().create_texture(&wgpu::TextureDescriptor {
+                            label: Some("Surface::Capture"),
+                            size: wgpu::Extent3d {
+                                width: cap_w,
+                                height: cap_h,
+                                depth_or_array_layers: 1,
                             },
-                        })],
-                        ..Default::default()
-                    });
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                | wgpu::TextureUsages::COPY_SRC,
+                            view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+                        });
 
-                    // Always use SDR pipeline for capture — consistent colors
-                    pass.set_pipeline(&self.capture_pipeline);
-                    pass.set_bind_group(0, self.buffer.post().binding(), &[]);
-                    pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
-                    pass.draw(0..4, 0..1);
+                        let capture_view =
+                            capture_tex.create_view(&TextureViewDescriptor::default());
+
+                        {
+                            let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+                                label: Some("Surface::Capture::Performance"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &capture_view,
+                                    depth_slice: None,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                ..Default::default()
+                            });
+
+                            // Use capture_pipeline (display_sdr.wgsl) — applies Reinhard, matches screen
+                            pass.set_pipeline(&self.capture_pipeline);
+                            pass.set_bind_group(0, self.buffer.post().binding(), &[]); // post for performance
+                            pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
+                            pass.draw(0..4, 0..1);
+                        }
+
+                        let staging =
+                            Self::read_capture_raw(gpu, &mut cmd, &capture_tex, cap_w, cap_h, 4);
+
+                        gpu.submit(cmd);
+                        surface_tex.present();
+                        gpu.wait();
+
+                        staging.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+                        gpu.wait();
+
+                        let data = staging.slice(..).get_mapped_range();
+                        let bytes_per_row = ((cap_w * 4 + 255) / 256) * 256;
+                        let mut pixels = Vec::with_capacity((cap_w * cap_h * 4) as usize);
+                        for row in 0..cap_h {
+                            let start = (row * bytes_per_row) as usize;
+                            let end = start + (cap_w * 4) as usize;
+                            pixels.extend_from_slice(&data[start..end]);
+                        }
+                        drop(data);
+                        rec.write_frame(&pixels);
+                    }
+
+                    RecordingMode::Quality => {
+                        // Quality: render aa buffer through capture pipeline
+                        // into Bgra8Unorm — GPU applies tone mapping
+                        let capture_tex = gpu.device().create_texture(&wgpu::TextureDescriptor {
+                            label: Some("Surface::Capture"),
+                            size: wgpu::Extent3d {
+                                width: cap_w,
+                                height: cap_h,
+                                depth_or_array_layers: 1,
+                            },
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                | wgpu::TextureUsages::COPY_SRC,
+                            view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+                        });
+
+                        let capture_view =
+                            capture_tex.create_view(&TextureViewDescriptor::default());
+
+                        {
+                            let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+                                label: Some("Surface::Capture"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &capture_view,
+                                    depth_slice: None,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                ..Default::default()
+                            });
+
+                            pass.set_pipeline(&self.capture_pipeline);
+                            pass.set_bind_group(0, self.buffer.aa().binding(), &[]);
+                            pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
+                            pass.draw(0..4, 0..1);
+                        }
+
+                        let staging =
+                            Self::read_capture_raw(gpu, &mut cmd, &capture_tex, cap_w, cap_h, 4);
+
+                        gpu.submit(cmd);
+                        surface_tex.present();
+                        gpu.wait();
+
+                        staging.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+                        gpu.wait();
+
+                        let data = staging.slice(..).get_mapped_range();
+                        let bytes_per_row = ((cap_w * 4 + 255) / 256) * 256;
+                        let mut pixels = Vec::with_capacity((cap_w * cap_h * 4) as usize);
+                        for row in 0..cap_h {
+                            let start = (row * bytes_per_row) as usize;
+                            let end = start + (cap_w * 4) as usize;
+                            pixels.extend_from_slice(&data[start..end]);
+                        }
+                        drop(data);
+                        rec.write_frame(&pixels);
+                    }
                 }
-
-                gpu.submit(cmd);
-                surface_tex.present();
-
-                // Read pixels from Bgra8Unorm — no conversion needed
-                let pixels = Self::read_capture(gpu, &capture_tex, cap_w, cap_h);
-                rec.write_frame(&pixels);
 
                 if !gpu.wait() {
                     warn!("Could not poll GPU");
@@ -468,6 +596,48 @@ impl Surface {
         } else {
             warn!("Could not obtain surface texture");
         }
+    }
+
+    fn read_capture_raw(
+        gpu: &Gpu,
+        cmd: &mut CommandEncoder,
+        texture: &wgpu::Texture,
+        width: u32,
+        height: u32,
+        bytes_per_pixel: u32,
+    ) -> wgpu::Buffer {
+        let bytes_per_row = ((width * bytes_per_pixel + 255) / 256) * 256;
+
+        let staging = gpu.device().create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Surface::Capture::Staging"),
+            size: (bytes_per_row * height) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        cmd.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &staging,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        staging
     }
 
     fn config(width: u32, height: u32, format: TextureFormat) -> SurfaceConfiguration {
@@ -522,69 +692,15 @@ impl Surface {
             })
     }
 
-    fn read_capture(gpu: &Gpu, texture: &wgpu::Texture, width: u32, height: u32) -> Vec<u8> {
-        // Bgra8Unorm = 4 bytes per pixel
-        let bytes_per_row = ((width * 4 + 255) / 256) * 256;
-        let buffer_size = (bytes_per_row * height) as u64;
-    
-        let staging = gpu.device().create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Surface::Capture::Staging"),
-            size: buffer_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-    
-        let mut cmd = gpu.cmd();
-        cmd.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &staging,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(bytes_per_row),
-                    rows_per_image: Some(height),
-                },
-            },
-            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
-        );
-    
-        gpu.submit(cmd);
-        gpu.wait();
-    
-        let slice = staging.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
-        gpu.wait();
-    
-        let data = slice.get_mapped_range();
-    
-        // Strip row padding — already Bgra8, no conversion needed
-        let mut pixels = Vec::with_capacity((width * height * 4) as usize);
-        for row in 0..height {
-            let start = (row * bytes_per_row) as usize;
-            let end = start + (width * 4) as usize;
-            pixels.extend_from_slice(&data[start..end]);
-        }
-    
-        pixels
-    }
-
     pub fn buffer(&self) -> &Frame {
         &self.buffer
     }
-
     pub fn hdr_output(&self) -> bool {
         self.hdr_output
     }
-
     pub fn hdr_supported(&self) -> bool {
         self.hdr_supported
     }
-
     pub fn format(&self) -> TextureFormat {
         self.format
     }

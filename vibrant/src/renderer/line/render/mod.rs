@@ -1,7 +1,7 @@
 pub mod raytracing;
 pub mod volume;
 
-use wgpu::CommandEncoder;
+use wgpu::{CommandEncoder, TextureFormat};
 
 use crate::{
     asset::line::LineBuffer,
@@ -14,6 +14,7 @@ use crate::{
         },
     },
     surface::Frame,
+    surface::color::ColorBuffer,
 };
 
 pub struct LineRenderPipeline {
@@ -23,9 +24,13 @@ pub struct LineRenderPipeline {
 
 impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        Self::new_with_format(gpu, ColorBuffer::FORMAT)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, format: TextureFormat) -> Self {
         Self {
-            ray: RayTracingLineRenderPipeline::new(gpu),
-            volume: VolumeLineRenderPipeline::new(gpu),
+            ray: RayTracingLineRenderPipeline::new_with_format(gpu, format),
+            volume: VolumeLineRenderPipeline::new_with_format(gpu, format),
         }
     }
 

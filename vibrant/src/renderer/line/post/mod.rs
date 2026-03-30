@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
+use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline, TextureFormat};
 
 use crate::{
     controller::settings::Settings,
@@ -17,29 +17,33 @@ pub struct PostProcessingPipeline {
 
 impl PostProcessingPipeline {
     pub fn new(gpu: &Gpu) -> PostProcessingPipeline {
+        Self::new_with_format(gpu, ColorBuffer::FORMAT)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, format: TextureFormat) -> PostProcessingPipeline {
         PostProcessingPipeline {
             passthrough: gpu.quad(
                 "Post::Passthrough",
                 &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format),
                 &gpu.shader(include_str!("post.wgsl")),
             ),
             bright: gpu.quad(
                 "Post::Bloom::Bright",
                 &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format),
                 &gpu.shader(include_str!("bright.wgsl")),
             ),
             blur_x: gpu.quad(
                 "Post::Bloom::BlurX",
                 &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format),
                 &gpu.shader(include_str!("blur_x.wgsl")),
             ),
             blur_y: gpu.quad(
                 "Post::Bloom::BlurY",
                 &gpu.pipeline_layout(&[&Environment::layout(gpu), &ColorBuffer::layout(gpu)]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format),
                 &gpu.shader(include_str!("blur_y.wgsl")),
             ),
             composite: gpu.quad(
@@ -49,7 +53,7 @@ impl PostProcessingPipeline {
                     &ColorBuffer::layout(gpu),
                     &ColorBuffer::layout(gpu),
                 ]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format),
                 &gpu.shader(include_str!("composite.wgsl")),
             ),
         }
