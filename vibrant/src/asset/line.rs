@@ -31,7 +31,7 @@ pub struct LineSettings {
 }
 
 #[repr(C)]
-#[derive(Pod, Zeroable, Clone, Copy, PartialEq)]
+#[derive(Pod, Zeroable, Clone, Copy)]
 pub struct LineSettingsBuffer {
     visible: u32,
     color: [u8; 4],
@@ -73,10 +73,6 @@ pub struct LineBuffer {
     binding_write: BindGroup,
 
     n_lines: u32,
-
-    // help to decide when to rebuild spatical index
-    pub settings_generation: u64,
-    prev_settings_snapshot: Vec<LineSettingsBuffer>,
 }
 
 impl LineBuffer {
@@ -281,9 +277,6 @@ impl LineBuffer {
             entries: &entries,
         });
 
-        let initial_settings_snapshot: Vec<LineSettingsBuffer> =
-            settings.iter().map(|s| s.to_buffer()).collect();
-
         Self {
             global_settings,
             settings,
@@ -305,9 +298,6 @@ impl LineBuffer {
             binding_write,
 
             n_lines,
-
-            settings_generation: 0,
-            prev_settings_snapshot: initial_settings_snapshot,
         }
     }
 
@@ -339,19 +329,17 @@ impl LineBuffer {
         cmd.clear_buffer(&self.length, 0, None);
     }
 
-    pub fn update_settings(&mut self, gpu: &Gpu) {
-        let new_snapshot: Vec<LineSettingsBuffer> =
-            self.settings.iter().map(|s| s.to_buffer()).collect();
-
-        if new_snapshot != self.prev_settings_snapshot {
-            self.settings_generation += 1;
-            self.prev_settings_snapshot = new_snapshot.clone();
-        }
+    pub fn update_settings(&self, gpu: &Gpu) {
+        let settings_buffer: Vec<LineSettingsBuffer> = self
+            .settings
+            .iter()
+            .map(|setting| setting.to_buffer())
+            .collect();
 
         gpu.queue().write_buffer(
             &self.settings_buffer,
             0,
-            bytemuck::cast_slice(&new_snapshot),
+            bytemuck::cast_slice(&settings_buffer),
         );
     }
 
