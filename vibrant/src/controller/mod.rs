@@ -83,8 +83,6 @@ impl Controller {
     }
 
     pub fn update_line_assets (&mut self, asset: &mut Asset) {
-        println!("Updating line assets");
-
         let mut new_line_settings = Vec::new();
 
         let Some(line_buffer) = asset.line.as_mut() else {
@@ -130,7 +128,6 @@ impl Controller {
             for line in lines.settings() {
                 if !self.layers.iter().any(|layer| layer.contains_name(&line.name)) {
                     let layer = Layer::Line(line.name.clone());
-                    println!("Adding layer for line {}", line.name);
                     self.layers.push(layer);
                 }
             }
@@ -549,8 +546,6 @@ impl Controller {
 
                             if response1.changed() || response2.changed() {
                                 for line_name in group_lines.iter() {
-                                    println!("Updating crop settings for line {} in group {}", line_name, index);
-                                    
                                     if let Some(line) = asset.line.as_mut().unwrap().settings().iter_mut().find(|line| line.name == *line_name) {
                                         line.crop_start = group_settings.crop_start;
                                         line.crop_end = group_settings.crop_end;
@@ -563,12 +558,8 @@ impl Controller {
         }
 
         if let (Some(from), Some(mut to)) = (from, to) {
-            println!("Move line from group {} line {} to group {} line {}", from.group_index, from.layer_index, to.group_index, to.layer_index);
-
             let from_layer = self.get_line_by_indexes(from);
             let to_layer = self.get_line_by_indexes(to);
-            println!("from_layer: {:?}", from_layer);
-            println!("to_layer: {:?}", to_layer);
 
             if let Some(name) = from_layer {
                 let mut layers = self.layers.clone();
@@ -607,8 +598,6 @@ impl Controller {
     }
 
     fn remove_line_from_layers_by_location (&self, mut layers: Vec<Layer>, location: Location) -> Vec<Layer> {
-        println!("Removing line from layers at group index {} and line index {}", location.group_index, location.layer_index);
-
         let layer = &mut layers[location.layer_index];
         match layer {
             Layer::Line(line_name) => {
@@ -668,8 +657,6 @@ fn drop_zone(ui: &mut Ui, item_name: &String, item_id: egui::Id, item_location: 
             ui.input(|i| i.pointer.interact_pos()), 
             response.dnd_hover_payload::<Location>(),
         ) {
-            println!("Drop detected");
-
             let rect = response.rect;
 
             let line_index = item_location.layer_index;
@@ -699,14 +686,8 @@ fn drop_zone(ui: &mut Ui, item_name: &String, item_id: egui::Id, item_location: 
             };
 
             if let Some(dragged_payload) = response.dnd_release_payload::<Location>() {
-                println!("Drop released");
-
                 *from = Some((*dragged_payload).clone());
                 *to = Some(item_location);
-
-                println!("Move line from group {} line {} to group {} line {}", dragged_payload.group_index, dragged_payload.layer_index, group_index, insert_row_idx);
-                println!("from: {:?}", from.as_ref().unwrap());
-                println!("to: {:?}", to.as_ref().unwrap());
             }
         }
     });
