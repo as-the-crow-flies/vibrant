@@ -499,9 +499,8 @@ impl Controller {
                         .show_header(ui, |ui| {
                             ui.toggle_value(&mut line.visible, "👁");
                             ui.color_edit_button_srgb(&mut line.color);
-                            ui.label(&line.name);
 
-                            drop_zone(ui, id, Location { group_index: 0, layer_index: index,group_item_index: 0 }, &mut from, &mut to);
+                            drop_zone(ui, &line.name, id, Location { group_index: 0, layer_index: index,group_item_index: 0 }, &mut from, &mut to);
                         })
                         .body(|ui| {
                             ui.add(
@@ -536,8 +535,7 @@ impl Controller {
                         .body(|ui| {
                             for (group_item_index, line_name) in group_lines.iter().enumerate() {
                                 let line_in_group_id = ui.make_persistent_id(format!("Group{}Group_Item{}", group_index, group_item_index));
-                                ui.label(line_name);
-                                drop_zone(ui, id, Location { group_index: group_index, layer_index: index, group_item_index: group_item_index }, &mut from, &mut to);
+                                drop_zone(ui, line_name, id, Location { group_index: group_index, layer_index: index, group_item_index: group_item_index }, &mut from, &mut to);
                             }
 
                             let response1 = ui.add(
@@ -652,7 +650,7 @@ fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool
         .then_some(checked)
 }
 
-fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut Option<Location>, to: &mut Option<Location>) {
+fn drop_zone(ui: &mut Ui, item_name: &String, item_id: egui::Id, item_location: Location, from: &mut Option<Location>, to: &mut Option<Location>) {
     let frame = Frame::default().inner_margin(4.0);
     let (_, dropped_payload) = ui.dnd_drop_zone::<Location, ()>(frame, |ui| {
         let item_id = egui::Id::new(("drag_and_drop", item_location.group_index, item_location.layer_index, item_location.group_item_index));
@@ -661,7 +659,7 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut
 
         let response = ui
             .dnd_drag_source(item_id, item_location.clone(), |ui| {
-                ui.label(format!("id: {:?}", item_id));
+                ui.label(item_name);
             })
             .response;
         
