@@ -1,4 +1,5 @@
 pub mod bloom;
+pub mod depth_of_field;
 
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
@@ -11,6 +12,7 @@ use crate::{
 
 pub struct PostProcessingPipeline {
     bloom: bloom::BloomRenderPipeline,
+    depth_of_field: depth_of_field::DepthOfFieldRenderPipeline,
     pipeline: RenderPipeline,
 }
 
@@ -23,11 +25,13 @@ impl PostProcessingPipeline {
                     &Environment::layout(gpu),
                     &ColorBuffer::layout(gpu),
                     &BloomBuffer::read_layout(gpu),
+                    &ColorBuffer::layout(gpu),
                 ]),
-                ColorBuffer::target_srgb(),
+                &[Some(ColorBuffer::target_srgb())],
                 &gpu.shader(include_str!("post.wgsl")),
             ),
             bloom: bloom::BloomRenderPipeline::new(gpu),
+            depth_of_field: depth_of_field::DepthOfFieldRenderPipeline::new(gpu),
         }
     }
 
@@ -41,19 +45,33 @@ impl PostProcessingPipeline {
         if settings.bloom {
             self.bloom.dispatch(cmd, environment, frame);
         }
-        self.composite(cmd, &frame, environment);
+        if settings.depth_of_field {
+            self.depth_of_field.dispatch(cmd, environment, frame);
+        }
+        self.composite(cmd, &frame, environment, settings);
     }
 
-    fn composite(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
+    fn composite(
+        &self,
+        cmd: &mut CommandEncoder,
+        frame: &Frame,
+        environment: &Environment,
+        settings: &Settings,
+    ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.post().attachment_srgb())],
+            color_attachments: &[Some(frame.post().attachment_srgb_clear())],
             ..Default::default()
         });
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, environment.binding(), &[]);
-        pass.set_bind_group(1, frame.color().binding(), &[]);
+        if settings.depth_of_field {
+            pass.set_bind_group(1, frame.dof().read_a(), &[]);
+        } else {
+            pass.set_bind_group(1, frame.color().binding(), &[]);
+        }
         pass.set_bind_group(2, frame.bloom().read_a(), &[]);
+        pass.set_bind_group(3, frame.highlight().binding(), &[]);
         pass.draw(0..6, 0..1);
     }
 }

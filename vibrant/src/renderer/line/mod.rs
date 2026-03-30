@@ -49,6 +49,11 @@ impl LineRenderer {
         }
     }
 
+    pub fn update(&self, gpu: &Gpu, settings: &Settings) {
+        self.crop.update(gpu, settings);
+        self.render.update(gpu, settings);
+    }
+
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
@@ -64,7 +69,7 @@ impl LineRenderer {
             self.transform.dispatch(cmd, line, transform, environment);
         }
 
-        self.crop.dispatch(cmd, line, environment);
+        self.crop.dispatch(cmd, line, environment, settings);
 
         self.occupancy
             .dispatch(cmd, frame, environment, settings, line);

@@ -1,3 +1,5 @@
+use crate::controller::selection_volume::SelectionVolumeEntry;
+
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineVoxelizationMode {
     #[default]
@@ -23,7 +25,7 @@ pub enum LineDisplayMode {
     Volume,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct Settings {
     pub width: u32,
     pub height: u32,
@@ -51,10 +53,19 @@ pub struct Settings {
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
     pub plane: f32,
+    pub auto_rotate: bool,
+    pub auto_rotate_speed: f32,
     pub bloom: bool,
     pub bloom_threshold: f32,
     pub bloom_intensity: f32,
     pub bloom_spread: f32,
+    pub selection_volumes: Vec<SelectionVolumeEntry>,
+    pub selection_match_all: bool,
+    pub extend_lines: bool,
+    pub focal_distance: f32,
+    pub aperture: f32,
+    pub depth_of_field: bool,
+    pub blur_kernel_size: u32,
 }
 
 impl Settings {
@@ -86,10 +97,27 @@ impl Settings {
             plane: 0.33,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
+            auto_rotate: false,
+            auto_rotate_speed: 10.0,
             bloom: true,
             bloom_threshold: 0.25,
             bloom_intensity: 1.0,
             bloom_spread: 2.5,
+            selection_volumes: Vec::new(),
+            selection_match_all: false,
+            extend_lines: false,
+            depth_of_field: true,
+            focal_distance: 1.0,
+            aperture: 1.0,
+            blur_kernel_size: 16,
         }
+    }
+
+    pub fn n_selection_volumes(&self) -> u32 {
+        use crate::controller::selection_volume::SelectionVolume;
+        self.selection_volumes
+            .iter()
+            .filter(|v| v.shape != SelectionVolume::None)
+            .count() as u32
     }
 }

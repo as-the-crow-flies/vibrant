@@ -1,9 +1,15 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
-use crate::{asset::line::LineBuffer, gpu::Gpu, renderer::environment::Environment};
+use crate::{
+    asset::line::LineBuffer, controller::settings::Settings, gpu::Gpu,
+    renderer::environment::Environment,
+};
+
+pub mod volumes;
 
 pub struct LineCropPipeline {
     crop: ComputePipeline,
+    volumes: volumes::LineSelectionPipeline,
     adjacency: ComputePipeline,
 }
 
@@ -15,6 +21,7 @@ impl LineCropPipeline {
                 &gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false), &Environment::layout(gpu)]),
                 &gpu.shader(include_str!("crop.wgsl")),
             ),
+            volumes: volumes::LineSelectionPipeline::new(gpu),
             adjacency: gpu.compute(
                 "Adjacency",
                 &gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false)]),
@@ -23,8 +30,19 @@ impl LineCropPipeline {
         }
     }
 
-    pub fn dispatch(&self, cmd: &mut CommandEncoder, line: &LineBuffer, environment: &Environment) {
+    pub fn update(&self, gpu: &Gpu, settings: &Settings) {
+        self.volumes.update(gpu, settings);
+    }
+
+    pub fn dispatch(
+        &self,
+        cmd: &mut CommandEncoder,
+        line: &LineBuffer,
+        environment: &Environment,
+        settings: &Settings,
+    ) {
         self.crop(cmd, line, environment);
+        self.volumes.dispatch(cmd, line, environment, settings);
         self.adjacency(cmd, line);
     }
 

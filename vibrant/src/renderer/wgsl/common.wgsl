@@ -21,11 +21,13 @@ struct Settings {
     bloom_threshold: f32,
     bloom_intensity: f32,
     bloom_spread: f32,
-}
-
-struct Segment {
-    position: vec3<f32>,
-    radius: f32
+    n_selection_volumes: u32,
+    selection_match_all: u32,
+    extend_lines: u32,
+    focal_distance: f32,
+    aperture: f32,
+    depth_of_field: u32,
+    blur_kernel_size: u32,
 }
 
 struct Camera {
@@ -41,7 +43,6 @@ struct Environment {
     volume: u32,
     time: f32,
     camera: Camera,
-    segment: Segment,
     light: vec3<f32>,
     light_: f32,
     settings: Settings

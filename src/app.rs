@@ -1,5 +1,10 @@
+use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::video::VideoEncoder;
+use pollster::FutureExt;
 use vibrant::controller::event::{Key, MouseButton};
+use vibrant::file::FileStage;
 use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
@@ -15,6 +20,43 @@ use winit::{
     window::{self, WindowId},
 };
 
+/// The mode the application should run in.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AppMode {
+    /// Normal interactive GUI mode
+    Interactive,
+    /// Render a single frame, save as PNG, then exit
+    Screenshot { output: PathBuf, zoom: Option<f32> },
+    Video {
+        output: PathBuf,
+        fps: u32,
+        duration: u32,
+        zoom: Option<f32>,
+    },
+}
+
+/// Configuration passed from CLI (or defaults for WASM).
+#[derive(Debug, Clone)]
+pub struct AppConfig {
+    pub input: Vec<PathBuf>,
+    pub mode: AppMode,
+    pub auto_rotate: bool,
+    pub rotate_speed: f32,
+    pub disable_visual_effects: bool,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            input: Vec::new(),
+            mode: AppMode::Interactive,
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        }
+    }
+}
+
 struct App {
     gpu: Gpu,
     window: Option<Arc<window::Window>>,
@@ -22,10 +64,25 @@ struct App {
     controller: Controller,
     focused: bool,
     fps: Fps<8>,
+    config: AppConfig,
+    frames_rendered: u32,
+    screenshot_triggered: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    video_encoder: Option<VideoEncoder>,
+    #[cfg(not(target_arch = "wasm32"))]
+    video_frames_written: u32,
+    #[cfg(not(target_arch = "wasm32"))]
+    video_total_frames: u32,
 }
 
 impl App {
-    fn new(gpu: Gpu) -> Self {
+    fn new(gpu: Gpu, config: AppConfig) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        let video_total_frames = match &config.mode {
+            AppMode::Video { fps, duration, .. } => fps.saturating_mul(*duration),
+            _ => 0,
+        };
+
         Self {
             gpu,
             window: None,
@@ -33,6 +90,15 @@ impl App {
             controller: Controller::new(),
             focused: true,
             fps: Fps::new(),
+            config,
+            frames_rendered: 0,
+            screenshot_triggered: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            video_encoder: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            video_frames_written: 0,
+            #[cfg(not(target_arch = "wasm32"))]
+            video_total_frames,
         }
     }
 
@@ -55,7 +121,97 @@ impl App {
             WindowEvent::RedrawRequested => {
                 self.fps.tick();
 
-                renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
+                #[cfg(not(target_arch = "wasm32"))]
+                let dt = match &self.config.mode {
+                    AppMode::Video { fps, .. } => 1.0 / *fps as f32,
+                    _ => self.fps.seconds(),
+                };
+                #[cfg(target_arch = "wasm32")]
+                let dt = self.fps.seconds();
+
+                #[cfg(not(target_arch = "wasm32"))]
+                let capture_output = matches!(self.config.mode, AppMode::Video { .. });
+                #[cfg(target_arch = "wasm32")]
+                let capture_output = false;
+
+                renderer.render(&self.gpu, window, &mut self.controller, dt, capture_output);
+
+                self.frames_rendered += 1;
+
+                // Screenshot mode: wait for assets to load and a few frames for GPU
+                // pipeline warmup, then trigger a save and exit.
+                if let AppMode::Screenshot { ref output, .. } = self.config.mode {
+                    if renderer.has_assets()
+                        && self.frames_rendered >= 3
+                        && !self.screenshot_triggered
+                    {
+                        self.screenshot_triggered = true;
+                        FileStage::save_path(output.clone());
+                        // Need one more frame to execute the save in render()
+                        self.request_redraw();
+                        return;
+                    }
+                    if self.screenshot_triggered && self.frames_rendered >= 4 {
+                        log::info!("Screenshot saved, exiting.");
+                        event_loop.exit();
+                        return;
+                    }
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if let AppMode::Video { ref output, .. } = self.config.mode {
+                    if renderer.has_assets() && self.frames_rendered >= 3 {
+                        let (frame, width, height) = match renderer.read_frame(&self.gpu).block_on() {
+                            Ok(frame) => frame,
+                            Err(error) => {
+                                log::error!("Failed to read video frame: {error}");
+                                event_loop.exit();
+                                return;
+                            }
+                        };
+
+                        if self.video_encoder.is_none() {
+                            match VideoEncoder::new(output, width, height, self.video_fps()) {
+                                Ok(encoder) => self.video_encoder = Some(encoder),
+                                Err(error) => {
+                                    log::error!("Failed to start video encoder: {error}");
+                                    event_loop.exit();
+                                    return;
+                                }
+                            }
+                        }
+
+                        if let Some(encoder) = self.video_encoder.as_mut() {
+                            if let Err(error) = encoder.write_frame(&frame) {
+                                log::error!("Failed to write video frame: {error}");
+                                let _ = self.video_encoder.take().map(VideoEncoder::finish);
+                                event_loop.exit();
+                                return;
+                            }
+                        }
+
+                        self.video_frames_written += 1;
+                        eprint!(
+                            "\rRendering frame {}/{}...",
+                            self.video_frames_written, self.video_total_frames
+                        );
+
+                        if self.video_frames_written >= self.video_total_frames {
+                            if let Some(encoder) = self.video_encoder.take() {
+                                if let Err(error) = encoder.finish() {
+                                    log::error!("Failed to finalize video: {error}");
+                                    event_loop.exit();
+                                    return;
+                                }
+                            }
+
+                            eprintln!("\rRendering frame {0}/{0}... done.", self.video_total_frames);
+                            log::info!("Video saved, exiting.");
+                            event_loop.exit();
+                            return;
+                        }
+                    }
+                }
 
                 self.request_redraw();
             }
@@ -76,12 +232,52 @@ impl App {
     fn request_redraw(&self) {
         self.window().request_redraw();
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn video_fps(&self) -> u32 {
+        match self.config.mode {
+            AppMode::Video { fps, .. } => fps,
+            _ => 30,
+        }
+    }
+}
+
+fn apply_cli_settings(config: &AppConfig, controller: &mut Controller) {
+    if config.auto_rotate {
+        controller.settings_mut().auto_rotate = true;
+        controller.settings_mut().auto_rotate_speed = config.rotate_speed;
+    }
+
+    if let AppMode::Screenshot {
+        zoom: Some(distance),
+        ..
+    } = config.mode
+    {
+        controller.set_camera_distance(distance);
+    }
+
+    if let AppMode::Video {
+        zoom: Some(distance),
+        ..
+    } = config.mode
+    {
+        controller.set_camera_distance(distance);
+    }
+
+    if config.disable_visual_effects {
+        controller.settings_mut().bloom = false;
+    }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let mut attributes = window::Window::default_attributes();
         attributes = attributes.with_title("VIBRANT").with_maximized(true);
+
+        // Hide the window for non-interactive CLI modes (screenshot, video)
+        if self.config.mode != AppMode::Interactive {
+            attributes = attributes.with_visible(false);
+        }
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -108,6 +304,17 @@ impl ApplicationHandler for App {
 
         self.window = Some(window);
         self.renderer = Some(renderer);
+
+        // Apply CLI settings
+        apply_cli_settings(&self.config, &mut self.controller);
+
+        // Load input files specified via CLI
+        #[cfg(not(target_arch = "wasm32"))]
+        for path in &self.config.input {
+            if let Err(e) = FileStage::load_path(path.clone()) {
+                log::error!("Failed to load {:?}: {}", path, e);
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
@@ -210,9 +417,9 @@ fn keycode(code: KeyCode) -> Option<Key> {
     }
 }
 
-pub async fn run() {
+pub async fn run(config: AppConfig) {
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App::new(Gpu::new().await);
+    let mut app = App::new(Gpu::new().await, config);
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -253,5 +460,130 @@ impl<const N: usize> Fps<N> {
             .sum();
 
         total / N as f32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vibrant::controller::Controller;
+
+    #[test]
+    fn test_app_config_default() {
+        let config = AppConfig::default();
+        assert!(config.input.is_empty());
+        assert_eq!(config.mode, AppMode::Interactive);
+        assert!(!config.auto_rotate);
+        assert_eq!(config.rotate_speed, 10.0);
+        assert!(!config.disable_visual_effects);
+    }
+
+    #[test]
+    fn test_screenshot_zoom_is_stored_in_mode() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Screenshot {
+                output: PathBuf::from("out.png"),
+                zoom: Some(0.5),
+            },
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+
+        match config.mode {
+            AppMode::Screenshot { output, zoom } => {
+                assert_eq!(output, PathBuf::from("out.png"));
+                assert_eq!(zoom, Some(0.5));
+            }
+            other => panic!("Expected Screenshot mode, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_screenshot_zoom_applies_to_controller() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Screenshot {
+                output: PathBuf::from("out.png"),
+                zoom: Some(0.5),
+            },
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+        let mut controller = Controller::new();
+
+        apply_cli_settings(&config, &mut controller);
+
+        assert_eq!(controller.camera().view().w_axis.z, 0.5);
+    }
+
+    #[test]
+    fn test_video_zoom_is_stored_in_mode() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Video {
+                output: PathBuf::from("out.mp4"),
+                fps: 30,
+                duration: 5,
+                zoom: Some(0.5),
+            },
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+
+        match config.mode {
+            AppMode::Video {
+                output,
+                fps,
+                duration,
+                zoom,
+            } => {
+                assert_eq!(output, PathBuf::from("out.mp4"));
+                assert_eq!(fps, 30);
+                assert_eq!(duration, 5);
+                assert_eq!(zoom, Some(0.5));
+            }
+            other => panic!("Expected Video mode, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_video_zoom_applies_to_controller() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Video {
+                output: PathBuf::from("out.mp4"),
+                fps: 30,
+                duration: 5,
+                zoom: Some(0.5),
+            },
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+        let mut controller = Controller::new();
+
+        apply_cli_settings(&config, &mut controller);
+
+        assert_eq!(controller.camera().view().w_axis.z, 0.5);
+    }
+
+    #[test]
+    fn test_interactive_mode_does_not_apply_zoom() {
+        let config = AppConfig {
+            input: Vec::new(),
+            mode: AppMode::Interactive,
+            auto_rotate: false,
+            rotate_speed: 10.0,
+            disable_visual_effects: false,
+        };
+        let mut controller = Controller::new();
+
+        apply_cli_settings(&config, &mut controller);
+
+        assert_eq!(controller.camera().view().w_axis.z, 0.75);
     }
 }

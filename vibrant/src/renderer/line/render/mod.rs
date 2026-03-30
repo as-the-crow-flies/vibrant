@@ -1,3 +1,4 @@
+pub mod highlight;
 pub mod raytracing;
 pub mod volume;
 
@@ -10,7 +11,8 @@ use crate::{
     renderer::{
         environment::Environment,
         line::render::{
-            raytracing::RayTracingLineRenderPipeline, volume::VolumeLineRenderPipeline,
+            highlight::VolumeHighlightPipeline, raytracing::RayTracingLineRenderPipeline,
+            volume::VolumeLineRenderPipeline,
         },
     },
     surface::Frame,
@@ -19,6 +21,7 @@ use crate::{
 pub struct LineRenderPipeline {
     ray: RayTracingLineRenderPipeline,
     volume: VolumeLineRenderPipeline,
+    highlight: VolumeHighlightPipeline,
 }
 
 impl LineRenderPipeline {
@@ -26,7 +29,12 @@ impl LineRenderPipeline {
         Self {
             ray: RayTracingLineRenderPipeline::new(gpu),
             volume: VolumeLineRenderPipeline::new(gpu),
+            highlight: VolumeHighlightPipeline::new(gpu),
         }
+    }
+
+    pub fn update(&self, gpu: &Gpu, settings: &Settings) {
+        self.highlight.update(gpu, settings);
     }
 
     pub fn dispatch(
@@ -41,5 +49,6 @@ impl LineRenderPipeline {
             LineDisplayMode::Geometry => self.ray.render(cmd, frame, environment, settings, line),
             LineDisplayMode::Volume => self.volume.render(cmd, frame, environment),
         }
+        self.highlight.render(cmd, environment, frame);
     }
 }

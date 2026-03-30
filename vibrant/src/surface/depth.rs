@@ -2,8 +2,8 @@ use std::any::type_name;
 
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BlendComponent,
-    BlendState, Color, ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color,
+    ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
     RenderPassColorAttachment, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp,
     Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
     TextureView, TextureViewDescriptor, TextureViewDimension,
@@ -11,16 +11,14 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
-pub struct ColorBuffer {
+pub struct DepthBuffer {
     texture: Texture,
     view: TextureView,
-    view_srgb: TextureView,
     binding: BindGroup,
 }
 
-impl ColorBuffer {
-    pub const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
-    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+impl DepthBuffer {
+    pub const FORMAT: TextureFormat = TextureFormat::R32Float;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());
@@ -36,11 +34,8 @@ impl ColorBuffer {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: Self::FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT
-                | TextureUsages::TEXTURE_BINDING
-                | TextureUsages::COPY_SRC
-                | TextureUsages::COPY_DST,
-            view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[Self::FORMAT],
         });
 
         let view = texture.create_view(&TextureViewDescriptor {
@@ -49,20 +44,12 @@ impl ColorBuffer {
             ..Default::default()
         });
 
-        let view_srgb = texture.create_view(&TextureViewDescriptor {
-            label,
-            format: Some(Self::FORMAT_SRGB),
-            ..Default::default()
-        });
-
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
             address_mode_u: AddressMode::ClampToEdge,
             address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
 
@@ -84,25 +71,8 @@ impl ColorBuffer {
         Self {
             texture,
             view,
-            view_srgb,
             binding,
         }
-    }
-
-    pub fn width(&self) -> u32 {
-        self.texture.width()
-    }
-
-    pub fn height(&self) -> u32 {
-        self.texture.height()
-    }
-
-    pub fn texture(&self) -> &Texture {
-        &self.texture
-    }
-
-    pub fn view(&self) -> &TextureView {
-        &self.view
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -117,60 +87,18 @@ impl ColorBuffer {
         }
     }
 
-    pub fn target_srgb() -> ColorTargetState {
-        ColorTargetState {
-            format: Self::FORMAT_SRGB,
-            blend: Some(BlendState {
-                color: BlendComponent::REPLACE,
-                alpha: BlendComponent::OVER,
-            }),
-            write_mask: ColorWrites::all(),
-        }
-    }
-
-    pub fn attachment<'a>(&'a self) -> RenderPassColorAttachment<'a> {
-        RenderPassColorAttachment {
-            view: &self.view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Load,
-                store: StoreOp::Store,
-            },
-        }
-    }
-
     pub fn attachment_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view,
             depth_slice: None,
             resolve_target: None,
             ops: Operations {
-                load: LoadOp::Clear(Color::TRANSPARENT),
-                store: StoreOp::Store,
-            },
-        }
-    }
-
-    pub fn attachment_srgb<'a>(&'a self) -> RenderPassColorAttachment<'a> {
-        RenderPassColorAttachment {
-            view: &self.view_srgb,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Load,
-                store: StoreOp::Store,
-            },
-        }
-    }
-
-    pub fn attachment_srgb_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
-        RenderPassColorAttachment {
-            view: &self.view_srgb,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Clear(Color::TRANSPARENT),
+                load: LoadOp::Clear(Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0, // alpha set to 1.0 by convention
+                }),
                 store: StoreOp::Store,
             },
         }
@@ -202,7 +130,7 @@ impl ColorBuffer {
     }
 }
 
-impl Drop for ColorBuffer {
+impl Drop for DepthBuffer {
     fn drop(&mut self) {
         self.texture.destroy();
     }

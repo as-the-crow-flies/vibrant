@@ -3,6 +3,8 @@
 @group(1) @binding(1) var COLOR_SAMPLER: sampler;
 @group(2) @binding(0) var BLOOM: texture_2d<f32>;
 @group(2) @binding(1) var BLOOM_SAMPLER: sampler;
+@group(3) @binding(0) var HIGHLIGHT: texture_2d<f32>;
+@group(3) @binding(1) var HIGHLIGHT_SAMPLER: sampler;
 
 @vertex
 fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
@@ -20,10 +22,12 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
 
     let color = textureSample(COLOR, COLOR_SAMPLER, uv);
 
+    var result = color;
     if (ENVIRONMENT.settings.bloom != 0u) {
         let bloom = textureSample(BLOOM, BLOOM_SAMPLER, uv);
-        return vec4<f32>(color.rgb + bloom.rgb * ENVIRONMENT.settings.bloom_intensity, color.a);
+        result = vec4<f32>(color.rgb + bloom.rgb * ENVIRONMENT.settings.bloom_intensity, color.a);
     }
 
-    return color;
+    let highlight = textureSample(HIGHLIGHT, HIGHLIGHT_SAMPLER, uv);
+    return vec4<f32>(highlight.rgb + result.rgb * (1.0 - highlight.a), result.a);
 }
