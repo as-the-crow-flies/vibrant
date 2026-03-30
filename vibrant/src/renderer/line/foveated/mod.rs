@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
+use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline, TextureFormat};
 
 use crate::{
     gpu::Gpu,
@@ -12,6 +12,10 @@ pub struct FoveatedCompositePipeline {
 
 impl FoveatedCompositePipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        Self::new_with_format(gpu, ColorBuffer::FORMAT)
+    }
+
+    pub fn new_with_format(gpu: &Gpu, format: TextureFormat) -> Self {
         Self {
             pipeline: gpu.quad(
                 "Foveated::Composite",
@@ -20,7 +24,7 @@ impl FoveatedCompositePipeline {
                     &ColorBuffer::layout(gpu),
                     &ColorBuffer::layout(gpu),
                 ]),
-                ColorBuffer::target(),
+                ColorBuffer::target_with_format(format),
                 &gpu.shader(include_str!("composite.wgsl")),
             ),
         }

@@ -69,6 +69,25 @@ impl Frame {
         let smaa_blend = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
         let taa_history = ColorBuffer::new_sdr(gpu, settings.render_width, settings.render_height);
 
+        let foveated_peripheral = if settings.foveated {
+            Some(ColorBuffer::new_sdr(
+                gpu,
+                settings.peripheral_width(),
+                settings.peripheral_height(),
+            ))
+        } else {
+            None
+        };
+        let foveated_focus = if settings.foveated {
+            Some(ColorBuffer::new_sdr(
+                gpu,
+                settings.focus_width(),
+                settings.focus_height(),
+            ))
+        } else {
+            None
+        };
+
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
         let culling = CullingBuffer::new(gpu, settings.volume);
@@ -99,8 +118,8 @@ impl Frame {
             occlusion,
             culling,
             binding,
-            foveated_peripheral: None,
-            foveated_focus: None,
+            foveated_peripheral,
+            foveated_focus,
         }
     }
 

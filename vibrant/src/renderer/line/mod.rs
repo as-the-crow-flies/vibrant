@@ -69,7 +69,7 @@ impl LineRenderer {
             render: LineRenderPipeline::new_with_format(gpu, format),
             post: PostProcessingPipeline::new_with_format(gpu, format),
             aa: AntiAliasingPipeline::new_with_format(gpu, format),
-            foveated: FoveatedCompositePipeline::new(gpu),
+            foveated: FoveatedCompositePipeline::new_with_format(gpu, format),
             profiler: GpuProfiler::new(gpu),
         }
     }
