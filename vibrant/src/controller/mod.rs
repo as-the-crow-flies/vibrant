@@ -584,7 +584,16 @@ impl Controller {
             if let Some(name) = from_layer {
                 let mut layers = self.layers.clone();
 
-                layers = self.remove_line_from_layers_by_name(layers, &name);
+                layers = self.remove_line_from_layers_by_location(layers, from);
+
+                if to.group_index != 0 {                  
+                    if from.layer_index < to.layer_index {
+                        to.layer_index -= 1;
+                    } else if from.layer_index == to.layer_index && from.group_item_index < to.group_item_index {
+                        to.group_item_index -= 1;
+                    }
+                }
+
                 layers = self.insert_line_into_layers_by_name_and_indexes(layers, &name, to);
 
                 self.layers = layers;
@@ -608,26 +617,27 @@ impl Controller {
 
     }
 
-    fn remove_line_from_layers_by_name (&self, mut layers: Vec<Layer>, name: &str) -> Vec<Layer> {
-        println!("Removing line {} from layers", name);
-        println!("Number of layers: {}", layers.len());
-        for layer in &mut layers {
-            if let Layer::Group(group_lines, _) = layer {
-                group_lines.retain(|line_name| line_name != name);
+    fn remove_line_from_layers_by_location (&self, mut layers: Vec<Layer>, location: Location) -> Vec<Layer> {
+        println!("Removing line from layers at group index {} and line index {}", location.group_index, location.layer_index);
+
+        let layer = &mut layers[location.layer_index];
+        match layer {
+            Layer::Line(line_name) => {
+                layers.remove(location.layer_index);
+            },
+            Layer::Group(group_lines, _) => {
+                let line_name = group_lines.remove(location.group_item_index);
             }
         }
 
-        layers.retain(|layer| match layer {
-            Layer::Line(line_name) => line_name != name,
-            Layer::Group(group_lines, _) => !group_lines.is_empty(),
-        });
-
-        println!("Number of layers: {}", layers.len());
         layers
     }
-
+      
     fn insert_line_into_layers_by_name_and_indexes (&self, mut layers: Vec<Layer>, name: &str, location: Location) -> Vec<Layer> {
-        println!("Inserting line {} into layers at group index {} and line index {}", name, location.group_index, location.layer_index);
+        if layers.len() == location.layer_index {
+            layers.push(Layer::Line(name.to_string()));
+            return layers;
+        }
 
         let layer = &mut layers[location.layer_index];
         match layer {
@@ -635,7 +645,6 @@ impl Controller {
                 layers.insert(location.layer_index, Layer::Line(name.to_string()));
             },
             Layer::Group(group_lines, group_settings) => {
-                println!("Inserting line {} into group at index {}", name, location.group_index);
                 group_lines.insert(location.group_item_index, name.to_string());
             }
         }
@@ -688,7 +697,12 @@ fn drop_zone(ui: &mut Ui, item_id: egui::Id, item_location: Location, from: &mut
             } else if pointer.y < rect.center().y {
                 // Above us
                 ui.painter().hline(rect.x_range(), rect.top(), stroke);
-                row_idx
+                
+                if row_idx > 0 {
+                    row_idx - 1
+                } else {
+                    row_idx
+                }
             } else {
                 // Below us
                 ui.painter().hline(rect.x_range(), rect.bottom(), stroke);
