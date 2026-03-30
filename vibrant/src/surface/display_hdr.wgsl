@@ -9,7 +9,6 @@ struct HdrParams {
     _pad0: f32,
     _pad1: f32,
 }
-
 @group(2) @binding(0) var<uniform> HDR: HdrParams;
 
 @vertex
@@ -17,8 +16,7 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
     return vec4<f32>(
         select(-1.0, 1.0, bool(index & 1)),
         select(-1.0, 1.0, bool(index & 2)),
-        0.0,
-        1.0,
+        0.0, 1.0,
     );
 }
 
@@ -39,10 +37,7 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let dim = vec2<f32>(textureDimensions(UI));
     let uv = pixel.xy / dim;
 
-    // Sample scene in linear working space.
     let scene = textureSample(COLOR, COLOR_SAMPLER, uv);
-
-    // egui output is premultiplied-alpha; blend with "over" in linear space.
     let ui = textureSample(UI, UI_SAMPLER, uv);
     let alpha = clamp(ui.a, 0.0, 1.0);
 
@@ -60,5 +55,7 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let ui_hdr = min(ui.rgb * paper, vec3<f32>(peak));
     let composed = scene_hdr * (1.0 - alpha) + ui_hdr;
 
+    // No normalization — output raw HDR values
+    // These will be above 1.0 for bright areas
     return vec4<f32>(composed, 1.0);
 }
