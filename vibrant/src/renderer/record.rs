@@ -48,52 +48,6 @@ impl Recorder {
         Self { process, stdin }
     }
 
-    pub fn new_hdr(width: u32, height: u32, fps: u32, output_path: &str) -> Self {
-        // Replace .mp4 extension with .mov for ProRes which handles HDR better
-        let mut process = Command::new("ffmpeg")
-            .args([
-                "-y",
-                "-f",
-                "rawvideo",
-                "-pixel_format",
-                "rgba64le", // 16-bit RGBA little-endian
-                "-video_size",
-                &format!("{}x{}", width, height),
-                "-framerate",
-                &fps.to_string(),
-                "-i",
-                "pipe:0",
-                // HDR10 metadata
-                "-c:v",
-                "libx265", // HEVC required for HDR10
-                "-pix_fmt",
-                "yuv420p10le", // 10-bit per channel
-                "-color_primaries",
-                "bt2020",
-                "-color_trc",
-                "smpte2084", // PQ curve (HDR10)
-                "-colorspace",
-                "bt2020nc",
-                "-tag:v",
-                "hvc1", // required for Apple/QuickTime compatibility
-                "-crf",
-                "18",
-                output_path,
-            ])
-            .stdin(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("Failed to start FFmpeg — make sure it is installed with libx265 support");
-
-        let stdin = process.stdin.take().unwrap();
-        println!(
-            "HDR recorder spawned: {}x{} @ {}fps -> {}",
-            width, height, fps, output_path
-        );
-
-        Self { process, stdin }
-    }
-
     pub fn write_frame(&mut self, pixels: &[u8]) {
         if let Err(e) = self.stdin.write_all(pixels) {
             eprintln!("Failed to write frame to FFmpeg: {}", e);
