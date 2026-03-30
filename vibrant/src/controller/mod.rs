@@ -354,18 +354,20 @@ impl Controller {
                         ui.separator();
 
                         ui.checkbox(&mut self.settings.bloom_enabled, "Enable Bloom");
-                        ui.add(
-                            Slider::new(&mut self.settings.bloom_threshold, 0.0..=2.0)
-                                .text("Bloom Threshold"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.bloom_soft_knee, 0.0..=1.0)
-                                .text("Bloom Soft Knee"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.bloom_intensity, 0.0..=5.0)
-                                .text("Bloom Intensity"),
-                        );
+                        if self.settings.bloom_enabled {
+                            ui.add(
+                                Slider::new(&mut self.settings.bloom_threshold, 0.0..=2.0)
+                                    .text("Bloom Threshold"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.bloom_soft_knee, 0.0..=1.0)
+                                    .text("Bloom Soft Knee"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.bloom_intensity, 0.0..=5.0)
+                                    .text("Bloom Intensity"),
+                            );
+                        }
 
                         ui.separator();
                         ui.label("Anti-Aliasing");
@@ -543,20 +545,18 @@ impl Controller {
                             "Current: {}",
                             if self.output_hdr { "HDR" } else { "SDR" }
                         ));
-                        ui.label(format!(
-                            "Requested: {}",
-                            if self.prefer_hdr_output { "HDR" } else { "SDR" }
-                        ));
                         ui.label(format!("Format: {}", self.output_format));
 
-                        ui.add(
-                            Slider::new(&mut self.settings.hdr_paper_white_nits, 80.0..=400.0)
-                                .text("Paper White (nits)"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.hdr_peak_nits, 400.0..=2000.0)
-                                .text("Peak Brightness (nits)"),
-                        );
+                        if self.prefer_hdr_output {
+                            ui.add(
+                                Slider::new(&mut self.settings.hdr_paper_white_nits, 80.0..=1000.0)
+                                    .text("Paper White (nits)"),
+                            );
+                            ui.add(
+                                Slider::new(&mut self.settings.hdr_peak_nits, 400.0..=4000.0)
+                                    .text("Peak Brightness (nits)"),
+                            );
+                        }
 
                         // Foveated rendering
                         ui.separator();

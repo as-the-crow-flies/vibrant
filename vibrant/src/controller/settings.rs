@@ -132,7 +132,7 @@ impl Settings {
             crop_z_end: 1.0,
             workgroups: 64,
             plane: 0.33,
-            bloom_enabled: true,
+            bloom_enabled: false,
             bloom_threshold: 0.5,
             bloom_soft_knee: 1.0,
             bloom_intensity: 3.0,
