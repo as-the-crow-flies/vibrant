@@ -19,6 +19,9 @@ pub enum Animation {
     Cinematic(CinematicAnimation),
     SpiralZoom(SpiralZoomAnimation),
     FigureEight(FigureEightAnimation),
+    TopDownDive(TopDownDiveAnimation),
+    Pendulum(PendulumAnimation),
+    SlowReveal(SlowRevealAnimation),
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +64,33 @@ pub struct SpiralZoomAnimation {
 
 #[derive(Debug)]
 pub struct FigureEightAnimation {
+    pub start_distance: f32,
+    pub elapsed: f32,
+    pub duration: f32,
+    pub playing: bool,
+    pub finished: bool,
+}
+
+#[derive(Debug)]
+pub struct TopDownDiveAnimation {
+    pub start_distance: f32,
+    pub elapsed: f32,
+    pub duration: f32,
+    pub playing: bool,
+    pub finished: bool,
+}
+
+#[derive(Debug)]
+pub struct PendulumAnimation {
+    pub start_distance: f32,
+    pub elapsed: f32,
+    pub duration: f32,
+    pub playing: bool,
+    pub finished: bool,
+}
+
+#[derive(Debug)]
+pub struct SlowRevealAnimation {
     pub start_distance: f32,
     pub elapsed: f32,
     pub duration: f32,
@@ -140,6 +170,9 @@ impl Animation {
             Animation::Cinematic(c) => c.update(dt),
             Animation::SpiralZoom(s) => s.update(dt),
             Animation::FigureEight(f) => f.update(dt),
+            Animation::TopDownDive(t) => t.update(dt),
+            Animation::Pendulum(p) => p.update(dt),
+            Animation::SlowReveal(s) => s.update(dt),
         }
     }
 
@@ -150,6 +183,9 @@ impl Animation {
             Animation::Cinematic(c) => c.finished,
             Animation::SpiralZoom(s) => s.finished,
             Animation::FigureEight(f) => f.finished,
+            Animation::TopDownDive(t) => t.finished,
+            Animation::Pendulum(p) => p.finished,
+            Animation::SlowReveal(s) => s.finished,
         }
     }
 }
@@ -241,7 +277,7 @@ impl CinematicAnimation {
 impl SpiralZoomAnimation {
     pub fn new(start_distance: f32) -> Self {
         Self {
-            start_distance,
+            start_distance: start_distance * 1.5,
             elapsed: 0.0,
             duration: 12.0,
             playing: false,
@@ -269,8 +305,8 @@ impl SpiralZoomAnimation {
         // Pitch slowly rises during spiral
         let pitch = 0.1 + t * 0.3;
 
-        // Zoom in for first half, back out for second half — smooth using sine
-        let zoom_t = (t * PI).sin(); // 0 → 1 → 0 over full duration
+        // Zoom in for first half, back out for second half
+        let zoom_t = (t * PI).sin(); // 0 -> 1 -> 0 over full duration
         let distance = self.start_distance * (1.0 - zoom_t * 0.65);
 
         if self.elapsed >= self.duration {
@@ -326,6 +362,146 @@ impl FigureEightAnimation {
     }
 }
 
+impl TopDownDiveAnimation {
+    pub fn new(start_distance: f32) -> Self {
+        Self {
+            start_distance,
+            elapsed: 0.0,
+            duration: 16.0,
+            playing: false,
+            finished: false,
+        }
+    }
+
+    pub fn start(&mut self) {
+        self.elapsed = 0.0;
+        self.playing = true;
+        self.finished = false;
+    }
+
+    pub fn update(&mut self, dt: f32) -> Option<(f32, f32, f32)> {
+        if !self.playing || self.finished {
+            return None;
+        }
+
+        self.elapsed += dt;
+        let t = (self.elapsed / self.duration).clamp(0.0, 1.0);
+
+        // Yaw: slow drift forward during descent
+        let yaw = t * 1.2;
+
+        // Pitch: starts at top (PI/2), smoothly descends to eye level
+        // Hold at top for first 15%, then descend
+        let pitch = if t < 0.15 {
+            PI / 2.0
+        } else {
+            let t2 = (t - 0.15) / 0.85;
+            let t2_ease = ease_in_out(t2);
+            lerp(PI / 2.0, PI / 6.0, t2_ease)
+        };
+
+        // Distance: zooms in slightly during descent
+        let zoom = 1.0 - (t * PI).sin() * 0.3;
+        let distance = self.start_distance * zoom;
+
+        if self.elapsed >= self.duration {
+            self.playing = false;
+            self.finished = true;
+        }
+
+        Some((yaw, pitch, distance.clamp(0.1, 5.0)))
+    }
+}
+
+impl PendulumAnimation {
+    pub fn new(start_distance: f32) -> Self {
+        Self {
+            start_distance,
+            elapsed: 0.0,
+            duration: 12.0,
+            playing: false,
+            finished: false,
+        }
+    }
+
+    pub fn start(&mut self) {
+        self.elapsed = 0.0;
+        self.playing = true;
+        self.finished = false;
+    }
+
+    pub fn update(&mut self, dt: f32) -> Option<(f32, f32, f32)> {
+        if !self.playing || self.finished {
+            return None;
+        }
+
+        self.elapsed += dt;
+        let t = (self.elapsed / self.duration).clamp(0.0, 1.0);
+
+        // Pendulum swing — 2 full swings left/right with decay
+        let decay = 1.0 - t * 0.5; // amplitude reduces over time
+        let yaw = (t * PI * 4.0).sin() * 0.4 * decay + t * PI * 0.5; // slow forward drift
+
+        // Pitch: gentle wave
+        let pitch = 0.15 + (t * PI * 2.0).sin() * 0.08;
+
+        let distance = self.start_distance;
+
+        if self.elapsed >= self.duration {
+            self.playing = false;
+            self.finished = true;
+        }
+
+        Some((yaw, pitch, distance))
+    }
+}
+
+impl SlowRevealAnimation {
+    pub fn new(start_distance: f32) -> Self {
+        Self {
+            start_distance,
+            elapsed: 0.0,
+            duration: 14.0,
+            playing: false,
+            finished: false,
+        }
+    }
+
+    pub fn start(&mut self) {
+        self.elapsed = 0.0;
+        self.playing = true;
+        self.finished = false;
+    }
+
+    pub fn update(&mut self, dt: f32) -> Option<(f32, f32, f32)> {
+        if !self.playing || self.finished {
+            return None;
+        }
+
+        self.elapsed += dt;
+        let t = (self.elapsed / self.duration).clamp(0.0, 1.0);
+
+        // Yaw: starts facing away (PI), rotates to front (2*PI) smoothly
+        // Hold at end for last 20%
+        let t_yaw = if t < 0.8 { ease_in_out(t / 0.8) } else { 1.0 };
+        let yaw = lerp(PI, PI * 2.0, t_yaw);
+
+        // Pitch: starts slightly negative, rises to slight positive
+        let pitch = lerp(-0.1, 0.15, ease_in_out(t));
+
+        // Distance: starts far (2.5x), closes in to normal distance
+        let t_dist = ease_in_out((t * 1.2).min(1.0));
+        let distance = lerp(self.start_distance * 2.5, self.start_distance, t_dist);
+
+        if self.elapsed >= self.duration {
+            self.playing = false;
+            self.finished = true;
+        }
+
+        Some((yaw, pitch, distance.clamp(0.1, 5.0)))
+    }
+}
+
 // ----------------------------------
 //          HELPER METHODS
 // ----------------------------------
@@ -345,10 +521,10 @@ fn ease_in_out(t: f32) -> f32 {
 pub fn orbit_360(distance: f32) -> Animation {
     // Full slow orbit around the brain
     let mut orbit = OrbitAnimation::new(
-        0.15,           // pitch — slight tilt down to see the top
-        distance,       // distance
-        2.0 * PI / 8.0, // speed — one full rotation in 8 seconds
-        8.0,            // duration — 8 seconds total
+        0.15,            // pitch — slight tilt down to see the top
+        distance * 1.25, // distance
+        2.0 * PI / 8.0,  // speed — one full rotation in 8 seconds
+        8.0,             // duration — 8 seconds total
     );
     orbit.start();
     Animation::Orbit(orbit)
@@ -529,80 +705,15 @@ pub fn hemisphere_split(distance: f32) -> Animation {
 }
 
 pub fn top_down_dive(distance: f32) -> Animation {
-    let mut seq = AnimationSequence::new(vec![
-        Keyframe {
-            yaw: 0.0,
-            pitch: PI / 2.0,
-            distance,
-            duration: 0.01,
-        }, // start top
-        Keyframe {
-            yaw: 0.0,
-            pitch: PI / 2.0,
-            distance,
-            duration: 2.0,
-        }, // hold top
-        Keyframe {
-            yaw: 0.3,
-            pitch: PI / 3.0,
-            distance: distance * 0.85,
-            duration: 3.0,
-        }, // begin descent
-        Keyframe {
-            yaw: 0.6,
-            pitch: PI / 5.0,
-            distance: distance * 0.75,
-            duration: 3.0,
-        }, // mid descent
-        Keyframe {
-            yaw: 0.9,
-            pitch: PI / 8.0,
-            distance: distance * 0.7,
-            duration: 3.0,
-        }, // near eye level
-        Keyframe {
-            yaw: 1.2,
-            pitch: 0.05,
-            distance,
-            duration: 3.0,
-        }, // eye level
-        Keyframe {
-            yaw: PI / 4.0,
-            pitch: PI / 6.0,
-            distance,
-            duration: 2.0,
-        }, // settle 3/4
-    ]);
-    seq.start();
-    Animation::Sequence(seq)
+    let mut anim = TopDownDiveAnimation::new(distance);
+    anim.start();
+    Animation::TopDownDive(anim)
 }
 
 pub fn pendulum(distance: f32) -> Animation {
-    // Rocks left and right while drifting forward
-    let steps = 40;
-    let duration = 12.0;
-    let dt = duration / steps as f32;
-    let mut keyframes = vec![Keyframe {
-        yaw: -0.4,
-        pitch: 0.15,
-        distance,
-        duration: 0.01,
-    }];
-    for i in 0..=steps {
-        let t = i as f32 / steps as f32;
-        let yaw = (t * PI * 4.0).sin() * 0.4  // pendulum swing
-            + t * PI * 0.5; // slow forward drift
-        let pitch = 0.15 + (t * PI * 2.0).sin() * 0.08; // gentle pitch wave
-        keyframes.push(Keyframe {
-            yaw,
-            pitch,
-            distance,
-            duration: dt,
-        });
-    }
-    let mut seq = AnimationSequence::new(keyframes);
-    seq.start();
-    Animation::Sequence(seq)
+    let mut anim = PendulumAnimation::new(distance);
+    anim.start();
+    Animation::Pendulum(anim)
 }
 
 pub fn spiral_zoom(distance: f32) -> Animation {
@@ -618,44 +729,7 @@ pub fn figure_eight(distance: f32) -> Animation {
 }
 
 pub fn slow_reveal(distance: f32) -> Animation {
-    let mut seq = AnimationSequence::new(vec![
-        Keyframe {
-            yaw: PI,
-            pitch: -0.1,
-            distance: distance * 2.5,
-            duration: 0.01,
-        }, // start — far, facing away
-        Keyframe {
-            yaw: PI * 1.3,
-            pitch: 0.0,
-            distance: distance * 1.8,
-            duration: 3.0,
-        }, // begin turn
-        Keyframe {
-            yaw: PI * 1.6,
-            pitch: 0.05,
-            distance: distance * 1.3,
-            duration: 3.0,
-        }, // mid turn, closing in
-        Keyframe {
-            yaw: PI * 1.9,
-            pitch: 0.1,
-            distance: distance * 1.0,
-            duration: 3.0,
-        }, // nearly front
-        Keyframe {
-            yaw: PI * 2.0,
-            pitch: 0.15,
-            distance,
-            duration: 2.0,
-        }, // full front, settled
-        Keyframe {
-            yaw: PI * 2.0,
-            pitch: 0.15,
-            distance,
-            duration: 3.0,
-        }, // hold
-    ]);
-    seq.start();
-    Animation::Sequence(seq)
+    let mut anim = SlowRevealAnimation::new(distance);
+    anim.start();
+    Animation::SlowReveal(anim)
 }

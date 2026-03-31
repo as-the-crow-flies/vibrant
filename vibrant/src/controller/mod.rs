@@ -99,55 +99,57 @@ impl Controller {
     pub fn ui(&mut self, ctx: &egui::Context, asset: &mut Asset, _dt: f32) {
         self.camera.tick();
         self.resolve_adaptive_aa();
-        egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if ui
-                    .button("⚙ settings")
-                    .on_hover_text("Open settings panel")
-                    .clicked()
-                {
-                    self.show_left_side_panel = !self.show_left_side_panel;
-                }
-
-                #[cfg(not(target_arch = "wasm32"))]
-                if ui
-                    .button("📷 screenshot")
-                    .on_hover_text("Take screenshot with transparent background")
-                    .clicked()
-                {
-                    FileStage::save();
-                }
-
-                let record_label = if self.settings.recording {
-                    "⏹ stop recording"
-                } else {
-                    "⏺ record"
-                };
-                if ui
-                    .button(record_label)
-                    .on_hover_text("Record video to recording.mp4")
-                    .clicked()
-                {
-                    self.settings.recording = !self.settings.recording;
-                }
-
-                ui.take_available_width();
-
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("☰ layers").clicked() {
-                        self.show_right_side_panel = !self.show_right_side_panel
-                    }
-
+        if !self.settings.recording {
+            egui::TopBottomPanel::top("TopBottomPanel").show(ctx, |ui| {
+                ui.horizontal(|ui| {
                     if ui
-                        .button("📂 open")
-                        .on_hover_text("Open .tck/.obj files")
+                        .button("⚙ settings")
+                        .on_hover_text("Open settings panel")
                         .clicked()
                     {
-                        FileStage::load();
+                        self.show_left_side_panel = !self.show_left_side_panel;
                     }
+
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui
+                        .button("📷 screenshot")
+                        .on_hover_text("Take screenshot with transparent background")
+                        .clicked()
+                    {
+                        FileStage::save();
+                    }
+
+                    let record_label = if self.settings.recording {
+                        "⏹ stop recording"
+                    } else {
+                        "⏺ record"
+                    };
+                    if ui
+                        .button(record_label)
+                        .on_hover_text("Record video to recording.mp4")
+                        .clicked()
+                    {
+                        self.settings.recording = !self.settings.recording;
+                    }
+
+                    ui.take_available_width();
+
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui.button("☰ layers").clicked() {
+                            self.show_right_side_panel = !self.show_right_side_panel
+                        }
+
+                        if ui
+                            .button("📂 open")
+                            .on_hover_text("Open .tck/.obj files")
+                            .clicked()
+                        {
+                            FileStage::load();
+                        }
+                    });
                 });
             });
-        });
+        }
 
         egui::SidePanel::left("SidePanelLeft").show_animated(
             ctx,

@@ -210,7 +210,8 @@ pub struct Surface {
     hdr_params_binding: BindGroup,
     display_hdr: RenderPipeline,
     display_sdr: RenderPipeline,
-    capture_pipeline: RenderPipeline,
+    capture_pipeline_sdr: RenderPipeline,
+    capture_pipeline_hdr: RenderPipeline,
     buffer: Frame,
 }
 
@@ -276,7 +277,7 @@ impl Surface {
             &gpu.shader(include_str!("display_sdr.wgsl")),
         );
 
-        let capture_pipeline = gpu.quad(
+        let capture_pipeline_sdr = gpu.quad(
             "Surface::Capture",
             &gpu.pipeline_layout(&[&ColorBuffer::layout(gpu), &UiBuffer::layout(gpu)]),
             ColorTargetState {
@@ -286,6 +287,22 @@ impl Surface {
             },
             &gpu.shader(include_str!("display_sdr.wgsl")),
         );
+
+        let capture_pipeline_hdr = gpu.quad(
+            "Surface::Capture::HDR",
+            &gpu.pipeline_layout(&[
+                &ColorBuffer::layout(gpu),
+                &UiBuffer::layout(gpu),
+                &hdr_params_layout,
+            ]),
+            ColorTargetState {
+                format: TextureFormat::Rgba16Float,
+                blend: Some(BlendState::REPLACE),
+                write_mask: ColorWrites::all(),
+            },
+            &gpu.shader(include_str!("display_hdr_capture.wgsl")),
+        );
+        println!("capture_pipeline_hdr created with display_hdr_capture.wgsl");
 
         surface.configure(gpu.device(), &Self::config(1, 1, format));
 
@@ -306,7 +323,8 @@ impl Surface {
             hdr_params_binding,
             display_hdr,
             display_sdr,
-            capture_pipeline,
+            capture_pipeline_sdr,
+            capture_pipeline_hdr,
             buffer: Frame::new(gpu, &Settings::new()),
         }
     }
@@ -487,7 +505,7 @@ impl Surface {
                             });
 
                             // Use capture_pipeline (display_sdr.wgsl) — applies Reinhard, matches screen
-                            pass.set_pipeline(&self.capture_pipeline);
+                            pass.set_pipeline(&self.capture_pipeline_sdr);
                             pass.set_bind_group(0, self.buffer.post().binding(), &[]); // post for performance
                             pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
                             pass.draw(0..4, 0..1);
@@ -516,30 +534,22 @@ impl Surface {
                     }
 
                     RecordingMode::Quality => {
-                        // Quality: render aa buffer through capture pipeline
-                        // into Bgra8Unorm — GPU applies tone mapping
                         let capture_tex = gpu.device().create_texture(&wgpu::TextureDescriptor {
-                            label: Some("Surface::Capture"),
-                            size: wgpu::Extent3d {
-                                width: cap_w,
-                                height: cap_h,
-                                depth_or_array_layers: 1,
-                            },
+                            label: Some("Surface::Capture::HDR"),
+                            size: wgpu::Extent3d { width: cap_w, height: cap_h, depth_or_array_layers: 1 },
                             mip_level_count: 1,
                             sample_count: 1,
                             dimension: wgpu::TextureDimension::D2,
-                            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                                | wgpu::TextureUsages::COPY_SRC,
-                            view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+                            format: wgpu::TextureFormat::Rgba16Float,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                            view_formats: &[],
                         });
-
-                        let capture_view =
-                            capture_tex.create_view(&TextureViewDescriptor::default());
-
+                    
+                        let capture_view = capture_tex.create_view(&TextureViewDescriptor::default());
+                    
                         {
                             let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-                                label: Some("Surface::Capture"),
+                                label: Some("Surface::Capture::HDR"),
                                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                     view: &capture_view,
                                     depth_slice: None,
@@ -551,30 +561,47 @@ impl Surface {
                                 })],
                                 ..Default::default()
                             });
-
-                            pass.set_pipeline(&self.capture_pipeline);
+                    
+                            pass.set_pipeline(&self.capture_pipeline_hdr);
                             pass.set_bind_group(0, self.buffer.aa().binding(), &[]);
                             pass.set_bind_group(1, self.buffer.ui().binding(), &[]);
+                            pass.set_bind_group(2, &self.hdr_params_binding, &[]);
                             pass.draw(0..4, 0..1);
                         }
-
-                        let staging =
-                            Self::read_capture_raw(gpu, &mut cmd, &capture_tex, cap_w, cap_h, 4);
-
+                    
+                        let staging = Self::read_capture_raw(gpu, &mut cmd, &capture_tex, cap_w, cap_h, 8);
+                    
                         gpu.submit(cmd);
                         surface_tex.present();
                         gpu.wait();
-
+                    
                         staging.slice(..).map_async(wgpu::MapMode::Read, |_| {});
                         gpu.wait();
-
+                    
                         let data = staging.slice(..).get_mapped_range();
-                        let bytes_per_row = ((cap_w * 4 + 255) / 256) * 256;
-                        let mut pixels = Vec::with_capacity((cap_w * cap_h * 4) as usize);
+                        let bytes_per_row = ((cap_w * 8 + 255) / 256) * 256;
+                        let mut pixels = Vec::with_capacity((cap_w * cap_h * 8) as usize);
+                    
                         for row in 0..cap_h {
-                            let start = (row * bytes_per_row) as usize;
-                            let end = start + (cap_w * 4) as usize;
-                            pixels.extend_from_slice(&data[start..end]);
+                            let row_start = (row * bytes_per_row) as usize;
+                            for col in 0..cap_w {
+                                let px = row_start + (col * 8) as usize;
+                                let r = f16_to_f32(u16::from_le_bytes([data[px],     data[px + 1]]));
+                                let g = f16_to_f32(u16::from_le_bytes([data[px + 2], data[px + 3]]));
+                                let b = f16_to_f32(u16::from_le_bytes([data[px + 4], data[px + 5]]));
+                                let a = f16_to_f32(u16::from_le_bytes([data[px + 6], data[px + 7]]));
+                    
+                                // PQ encoded — 0-1 range, direct mapping to u16
+                                let r16 = ((r.max(0.0).min(1.0)) * 65535.0) as u16;
+                                let g16 = ((g.max(0.0).min(1.0)) * 65535.0) as u16;
+                                let b16 = ((b.max(0.0).min(1.0)) * 65535.0) as u16;
+                                let a16 = ((a.max(0.0).min(1.0)) * 65535.0) as u16;
+                    
+                                pixels.extend_from_slice(&r16.to_le_bytes());
+                                pixels.extend_from_slice(&g16.to_le_bytes());
+                                pixels.extend_from_slice(&b16.to_le_bytes());
+                                pixels.extend_from_slice(&a16.to_le_bytes());
+                            }
                         }
                         drop(data);
                         rec.write_frame(&pixels);
@@ -642,7 +669,7 @@ impl Surface {
 
     fn config(width: u32, height: u32, format: TextureFormat) -> SurfaceConfiguration {
         SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
             format,
             width,
             height,
@@ -703,5 +730,23 @@ impl Surface {
     }
     pub fn format(&self) -> TextureFormat {
         self.format
+    }
+}
+
+fn f16_to_f32(bits: u16) -> f32 {
+    let exp = ((bits >> 10) & 0x1f) as i32;
+    let mant = (bits & 0x3ff) as u32;
+    let sign = if bits >> 15 == 1 { -1.0f32 } else { 1.0f32 };
+
+    sign * if exp == 0 {
+        mant as f32 * 2.0f32.powi(-24)
+    } else if exp == 31 {
+        if mant == 0 {
+            f32::INFINITY
+        } else {
+            f32::NAN
+        }
+    } else {
+        (mant as f32 / 1024.0 + 1.0) * 2.0f32.powi(exp - 15)
     }
 }
