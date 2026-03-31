@@ -284,6 +284,9 @@ pub struct Surface {
     // when camera switch from still to motion, AA switch from SSAA to TAA/SMAA
     // use frame_cache to prevent stutter
     frame_cache: Option<Frame>,
+    // last configured surface dimensions, used to reconfigure after surface loss
+    configured_width: u32,
+    configured_height: u32,
 }
 
 impl Surface {
@@ -398,6 +401,8 @@ impl Surface {
             capture_pipeline_hdr,
             buffer: Frame::new(gpu, &Settings::new()),
             frame_cache: None,
+            configured_width: 1,
+            configured_height: 1,
         }
     }
 
@@ -455,6 +460,8 @@ impl Surface {
             self.frame_cache = None;
         }
 
+        self.configured_width = settings.width;
+        self.configured_height = settings.height;
         self.surface.configure(
             gpu.device(),
             &Self::config(settings.width, settings.height, self.format),
@@ -534,6 +541,8 @@ impl Surface {
             &gpu.shader(include_str!("display_sdr.wgsl")),
         );
 
+        self.configured_width = settings.width;
+        self.configured_height = settings.height;
         self.surface.configure(
             gpu.device(),
             &Self::config(settings.width, settings.height, self.format),
@@ -546,16 +555,30 @@ impl Surface {
     }
 
     pub fn present(
-        &self,
+        &mut self,
         gpu: &Gpu,
         mut cmd: CommandEncoder,
         recorder: &mut Option<Recorder>,
         recording_mode: RecordingMode,
     ) {
-        if let Some(surface_tex) = self.surface.get_current_texture().ok() {
-            let view = surface_tex
-                .texture
-                .create_view(&TextureViewDescriptor::default());
+        let surface_tex = match self.surface.get_current_texture() {
+            Ok(tex) => tex,
+            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                warn!("Surface lost/outdated after file dialog, reconfiguring...");
+                self.surface.configure(
+                    gpu.device(),
+                    &Self::config(self.configured_width, self.configured_height, self.format),
+                );
+                return;
+            }
+            Err(e) => {
+                warn!("Could not obtain surface texture: {:?}", e);
+                return;
+            }
+        };
+        let view = surface_tex
+            .texture
+            .create_view(&TextureViewDescriptor::default());
 
             // Normal display pass
             {
@@ -748,9 +771,6 @@ impl Surface {
             if !gpu.wait() {
                 warn!("Could not poll GPU");
             }
-        } else {
-            warn!("Could not obtain surface texture");
-        }
     }
 
     fn read_capture_raw(

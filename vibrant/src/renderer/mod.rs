@@ -105,17 +105,17 @@ impl Renderer {
         self.surface
             .update_output_mode(gpu, controller.settings(), controller.prefer_hdr_output());
 
-        let surface = self.surface.maybe_resize(gpu, &controller.settings());
+        self.surface.maybe_resize(gpu, &controller.settings());
 
         controller.set_output_mode(
-            surface.hdr_output(),
-            format!("{:?}", surface.format()),
-            surface.hdr_supported(),
+            self.surface.hdr_output(),
+            format!("{:?}", self.surface.format()),
+            self.surface.hdr_supported(),
         );
 
         self.environment.update(gpu, &controller);
 
-        let color_format = surface.buffer().color().texture().format();
+        let color_format = self.surface.buffer().color().texture().format();
         if color_format != self.current_color_format {
             self.line = LineRenderer::new_with_format(gpu, color_format);
             self.current_color_format = color_format;
@@ -131,7 +131,7 @@ impl Renderer {
             self.line.render(
                 &mut cmd,
                 &self.environment,
-                surface.buffer(),
+                self.surface.buffer(),
                 line,
                 transform,
                 controller.settings(),
@@ -144,13 +144,13 @@ impl Renderer {
             self.ui.render(
                 gpu,
                 &mut cmd,
-                surface.buffer(),
+                self.surface.buffer(),
                 self.egui.egui_ctx(),
                 output,
             );
         }
 
-        surface.present(gpu, cmd, recorder, controller.settings().recording_mode);
+        self.surface.present(gpu, cmd, recorder, controller.settings().recording_mode);
 
         if controller.gpu_profile_open {
             self.line.collect_profile(gpu);
@@ -158,7 +158,7 @@ impl Renderer {
         }
 
         FileStage::on_save(|path| {
-            gpu.save(path, surface.buffer().color().texture())
+            gpu.save(path, self.surface.buffer().color().texture())
                 .block_on()
         });
     }
