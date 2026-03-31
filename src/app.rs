@@ -3,9 +3,10 @@ use vibrant::controller::event::{Key, MouseButton};
 use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
+use std::{fs, path::Path};
 
-use vibrant::controller::{event::Event, Controller};
 use vibrant::controller::settings::{AntiAliasingMode, RecordingMode};
+use vibrant::controller::{event::Event, Controller};
 use vibrant::renderer::Renderer;
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -88,36 +89,59 @@ impl App {
                     if self.controller.settings_mut().recording_delay > 0 {
                         self.controller.settings_mut().recording_delay -= 1;
                     } else {
+                        self.recording_count += 1;
+        //                 let path = format!(
+        //     "/Users/user/Desktop/TUe/Visual Computing Project/vibrant/recordings/recording_{}.mp4",
+        //     self.recording_count
+        // );
+                        let recordings_dir = Path::new("recordings");
+                        if let Err(err) = fs::create_dir_all(recordings_dir) {
+                            eprintln!("Failed to create recordings directory: {err}");
+                        }
+                        let path = recordings_dir
+                            .join(format!("recording_{}.mp4", self.recording_count))
+                            .to_string_lossy()
+                            .into_owned();
+
                         match self.controller.settings().recording_mode {
                             RecordingMode::Performance => {
                                 self.pre_recording_aa_mode =
                                     Some(self.controller.settings().aa_mode);
                                 self.controller.settings_mut().aa_mode = AntiAliasingMode::Off;
+                                println!(
+                                    "Starting Performance recorder at {}fps",
+                                    self.controller.settings().recording_fps
+                                );
+                                self.recorder = Some(vibrant::renderer::record::Recorder::new(
+                                    self.controller.settings().width,
+                                    self.controller.settings().height,
+                                    self.controller.settings().recording_fps,
+                                    &path,
+                                ));
                             }
                             RecordingMode::Quality => {
                                 self.pre_recording_aa_mode =
                                     Some(self.controller.settings().aa_mode);
                                 self.controller.settings_mut().aa_mode = AntiAliasingMode::SMAA;
+                                let hdr_path = path.replace(".mp4", ".mov");
+                                println!(
+                                    "Starting Quality HDR recorder at {}fps",
+                                    self.controller.settings().recording_fps
+                                );
+                                self.recorder = Some(vibrant::renderer::record::Recorder::new_hdr(
+                                    self.controller.settings().width,
+                                    self.controller.settings().height,
+                                    self.controller.settings().recording_fps,
+                                    &hdr_path,
+                                ));
                             }
                         }
-                        self.recording_count += 1;
-                        let actual_fps = (1.0 / dt).round() as u32;
-                        let actual_fps = actual_fps.clamp(1, 120); // safety clamp
-                        let path = format!("/Users/user/Desktop/TUe/Visual Computing Project/vibrant/recordings/recording_{}.mp4", self.recording_count);
-                        println!("Starting recorder at {}fps", actual_fps);
-
-                        self.recorder = Some(vibrant::renderer::record::Recorder::new(
-                            self.controller.settings().width,
-                            self.controller.settings().height,
-                            self.controller.settings().recording_fps,
-                            &path,
-                        ));
                         println!("Recorder started.");
                     }
                 }
 
                 // Stop recording
-                if !self.controller.settings().recording {
+                if !self.controller.settings().recording && self.recorder.is_some() {
                     if let Some(rec) = self.recorder.take() {
                         println!("Stopping recorder...");
                         rec.finish();
