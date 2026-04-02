@@ -152,7 +152,7 @@ impl Settings {
             hdr_paper_white_nits: 200.0,
             hdr_peak_nits: 1000.0,
             recording: false,
-            record_path: "/Users/user/Desktop/TUe/Visual Computing Project/vibrant/recordings/recording.mp4",
+            record_path: "recording.mp4",
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
             recording_delay: 0,
