@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use crate::{
     asset::{
-        hdri::HdriBuffer, radiance::RadianceVolume, segmentation::VolumeSegmenationBuffer,
-        transform::TransformBuffer, volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
+        hdri::HdriBuffer, radiance::RadianceVolume, transform::TransformBuffer,
+        volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
     },
     file::bounds::Bounds,
     renderer::{anatomy::AnatomyRenderer, line::LineRenderer},
@@ -86,17 +86,9 @@ impl Renderer {
         });
 
         FileStage::on_volumes(|volumes| {
-            self.asset.segmentations.extend(
+            self.asset.volumes.extend(
                 volumes
                     .iter()
-                    .filter(|volume| volume.ty().is_integer())
-                    .map(|volume| VolumeSegmenationBuffer::new(gpu, volume)),
-            );
-
-            self.asset.volume_fractions.extend(
-                volumes
-                    .iter()
-                    .filter(|volume| volume.ty().is_float())
                     .map(|volume| VolumeFractionBuffer::new(gpu, volume)),
             );
 
@@ -140,10 +132,7 @@ impl Renderer {
         if let Some(hdri) = &self.asset.hdri {
             hdri.update_settings(gpu);
         }
-        for volume in &self.asset.segmentations {
-            volume.update_settings(gpu);
-        }
-        for volume in &self.asset.volume_fractions {
+        for volume in &self.asset.volumes {
             volume.update_settings(gpu);
         }
 

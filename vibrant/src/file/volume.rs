@@ -11,10 +11,8 @@ use crate::file::File;
 pub enum VolumeType {
     Uint8,
     Uint16,
-    Uint32,
     Int8,
     Int16,
-    Int32,
     Float32,
 }
 
@@ -31,12 +29,10 @@ impl VolumeType {
 impl Into<TextureFormat> for VolumeType {
     fn into(self) -> TextureFormat {
         match self {
-            VolumeType::Uint8 => TextureFormat::R8Uint,
-            VolumeType::Uint16 => TextureFormat::R16Uint,
-            VolumeType::Uint32 => TextureFormat::R32Uint,
-            VolumeType::Int8 => TextureFormat::R8Sint,
-            VolumeType::Int16 => TextureFormat::R16Sint,
-            VolumeType::Int32 => TextureFormat::R32Sint,
+            VolumeType::Uint8 => TextureFormat::R8Unorm,
+            VolumeType::Uint16 => TextureFormat::R16Unorm,
+            VolumeType::Int8 => TextureFormat::R8Snorm,
+            VolumeType::Int16 => TextureFormat::R16Snorm,
             VolumeType::Float32 => TextureFormat::R32Float,
         }
     }
@@ -44,11 +40,7 @@ impl Into<TextureFormat> for VolumeType {
 
 impl Into<TextureSampleType> for VolumeType {
     fn into(self) -> TextureSampleType {
-        match self {
-            VolumeType::Uint8 | VolumeType::Uint16 | VolumeType::Uint32 => TextureSampleType::Uint,
-            VolumeType::Int8 | VolumeType::Int16 | VolumeType::Int32 => TextureSampleType::Sint,
-            VolumeType::Float32 => TextureSampleType::Float { filterable: true },
-        }
+        TextureSampleType::Float { filterable: true }
     }
 }
 
@@ -92,12 +84,10 @@ impl VolumeFile {
         let ty = match obj.header().data_type().expect("Invalid Nifti data type") {
             NiftiType::Uint8 => VolumeType::Uint8,
             NiftiType::Uint16 => VolumeType::Uint16,
-            NiftiType::Uint32 => VolumeType::Uint32,
             NiftiType::Int8 => VolumeType::Int8,
             NiftiType::Int16 => VolumeType::Int16,
-            NiftiType::Int32 => VolumeType::Int32,
             NiftiType::Float32 => VolumeType::Float32,
-            _ => panic!("Unsupported Nifti data type"),
+            ty => panic!("Unsupported Nifti data type: {:?}", ty),
         };
 
         let dim = obj

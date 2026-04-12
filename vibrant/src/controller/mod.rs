@@ -20,8 +20,8 @@ use state::ControllerState;
 use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
+use crate::controller::widgets::crop::CropWidget;
 use crate::controller::widgets::hdri::HdriWidget;
-use crate::controller::widgets::segmentation::SegmentationsWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
 use crate::{
     asset::Asset,
@@ -43,7 +43,7 @@ pub struct Controller {
 
     hdri_widget: HdriWidget,
     volumes_widget: VolumesWidget,
-    segmentations_widget: SegmentationsWidget,
+    crop_widget: CropWidget,
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
@@ -61,7 +61,7 @@ impl Controller {
 
             hdri_widget: HdriWidget::new(),
             volumes_widget: VolumesWidget::new(),
-            segmentations_widget: SegmentationsWidget::new(),
+            crop_widget: CropWidget::new(),
 
             show_left_side_panel: false,
             show_right_side_panel: true,
@@ -72,12 +72,12 @@ impl Controller {
         &self.hdri_widget
     }
 
-    pub fn volumes(&self) -> &VolumesWidget {
-        &self.volumes_widget
+    pub fn crop(&self) -> &CropWidget {
+        &self.crop_widget
     }
 
-    pub fn segmentations(&self) -> &SegmentationsWidget {
-        &self.segmentations_widget
+    pub fn volumes(&self) -> &VolumesWidget {
+        &self.volumes_widget
     }
 
     pub fn event(&mut self, event: Event) {
@@ -238,39 +238,6 @@ impl Controller {
                             self.settings.crop_end = 0.5 + self.settings().crop_middle;
                         }
 
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_x_start, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop X Start"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_x_end, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop X End"),
-                        );
-
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_y_start, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Y Start"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_y_end, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Y End"),
-                        );
-
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_z_start, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Z Start"),
-                        );
-                        ui.add(
-                            Slider::new(&mut self.settings.crop_z_end, -0.5..=0.5)
-                                .step_by(1.0 / self.settings.volume as f64)
-                                .text("Crop Z End"),
-                        );
-
                         ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("plane"));
 
                         ui.add(
@@ -401,8 +368,9 @@ impl Controller {
                     self.hdri_widget.show(ui, hdri);
                 }
 
-                self.volumes_widget.show(ui, &mut asset.volume_fractions);
-                self.segmentations_widget.show(ui, &mut asset.segmentations);
+                self.crop_widget.show(ui, &mut self.settings);
+
+                self.volumes_widget.show(ui, &mut asset.volumes);
             });
     }
 
