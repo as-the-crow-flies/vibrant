@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use crate::{
     asset::{
-        hdri::HdriBuffer, radiance::RadianceVolume, transform::TransformBuffer,
-        volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
+        hdri::HdriBuffer, radiance::RadianceVolume, volume::PhysicalVolume,
+        volume_fraction::VolumeFractionBuffer,
     },
-    file::bounds::Bounds,
+    controller::settings::ViewMode,
     renderer::{anatomy::AnatomyRenderer, line::LineRenderer},
 };
 use environment::Environment;
@@ -71,18 +71,17 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
-        let mut needs_transform = false;
+        let needs_transform = true;
         let needs_update = true;
 
         FileStage::on_lines(|lines| {
-            self.asset.line = Some(LineBuffer::new(gpu, &lines));
+            let line = LineBuffer::new(gpu, &lines);
 
-            let bounds: Vec<Bounds> = lines.iter().map(|line| line.bounds()).copied().collect();
-            let bounds = Bounds::from_bounds(&bounds);
+            if let Some(volume) = self.asset.volumes.last() {
+                line.set_transform(gpu, &volume.transform());
+            }
 
-            self.asset.transform = Some(TransformBuffer::new(gpu, bounds.transform().inverse()));
-
-            needs_transform = true;
+            self.asset.line = Some(line);
         });
 
         FileStage::on_volumes(|volumes| {
@@ -93,7 +92,9 @@ impl Renderer {
             );
 
             if let Some(volume) = volumes.last() {
-                self.asset.transform = Some(TransformBuffer::new(gpu, volume.transform()));
+                if let Some(line) = &self.asset.line {
+                    line.set_transform(gpu, &volume.transform());
+                }
 
                 if self.asset.physical_volume.is_none() {
                     self.asset.physical_volume =
@@ -138,25 +139,27 @@ impl Renderer {
 
         let mut cmd = gpu.cmd();
 
-        self.anatomy.render(
-            &mut cmd,
-            controller,
-            &self.environment,
-            surface.frame(),
-            &self.asset,
-        );
-
-        if let (Some(line), Some(transform)) = (&self.asset.line, &self.asset.transform) {
-            self.line.render(
+        match controller.settings().view {
+            ViewMode::Volume => self.anatomy.render(
                 &mut cmd,
+                controller,
                 &self.environment,
                 surface.frame(),
-                line,
-                transform,
-                controller.settings(),
-                needs_transform,
-                needs_update,
-            );
+                &self.asset,
+            ),
+            ViewMode::Tractography => {
+                if let Some(line) = &self.asset.line {
+                    self.line.render(
+                        &mut cmd,
+                        &self.environment,
+                        surface.frame(),
+                        line,
+                        controller.settings(),
+                        needs_transform,
+                        needs_update,
+                    );
+                }
+            }
         }
 
         if !FileStage::about_to_save() {

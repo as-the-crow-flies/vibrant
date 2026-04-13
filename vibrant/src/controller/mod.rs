@@ -20,6 +20,7 @@ use state::ControllerState;
 use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
+use crate::controller::settings::ViewMode;
 use crate::controller::widgets::crop::CropWidget;
 use crate::controller::widgets::hdri::HdriWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
@@ -156,6 +157,22 @@ impl Controller {
                                     &mut self.settings.display,
                                     LineDisplayMode::Volume,
                                     "Volume",
+                                );
+                            });
+
+                        ComboBox::from_label("View Mode")
+                            .selected_text(format!("{:?}", self.settings.view))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.settings.view,
+                                    ViewMode::Volume,
+                                    "Volume",
+                                );
+
+                                ui.selectable_value(
+                                    &mut self.settings.view,
+                                    ViewMode::Tractography,
+                                    "Tractography",
                                 );
                             });
 

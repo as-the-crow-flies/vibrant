@@ -23,6 +23,13 @@ pub enum LineDisplayMode {
     Volume,
 }
 
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ViewMode {
+    #[default]
+    Volume,
+    Tractography,
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Settings {
     pub width: u32,
@@ -51,6 +58,7 @@ pub struct Settings {
     pub crop_z_end: f32,
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
+    pub view: ViewMode,
     pub plane: f32,
 }
 
@@ -84,6 +92,7 @@ impl Settings {
             plane: 0.33,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
+            view: ViewMode::Volume,
         }
     }
 }

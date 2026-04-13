@@ -11,7 +11,7 @@ use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::{line::LineBuffer, transform::TransformBuffer},
+    asset::line::LineBuffer,
     controller::settings::Settings,
     gpu::Gpu,
     renderer::line::{
@@ -55,13 +55,12 @@ impl LineRenderer {
         environment: &Environment,
         frame: &Frame,
         line: &LineBuffer,
-        transform: &TransformBuffer,
         settings: &Settings,
         needs_transform: bool,
         _needs_update: bool,
     ) {
         if needs_transform {
-            self.transform.dispatch(cmd, line, transform, environment);
+            self.transform.dispatch(cmd, line, environment);
         }
 
         self.crop.dispatch(cmd, line, environment);

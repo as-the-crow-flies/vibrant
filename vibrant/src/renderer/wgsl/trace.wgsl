@@ -34,7 +34,7 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let near = unproject(vec3<f32>(uv.xy, 0.0));
     let far = unproject(vec3<f32>(uv.xy, 1.0));
 
-    let origin = near + 0.5; // 0-1 Space
+    let origin = near;
     let direction = normalize(far - near);
 
     let result = raymarch(origin, direction);
@@ -134,7 +134,7 @@ fn minimum(v: vec3<f32>) -> f32 {
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
-    let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
+    let t = TRANSFORM_VIEW * ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
     return t.xyz / t.w;
 }
 

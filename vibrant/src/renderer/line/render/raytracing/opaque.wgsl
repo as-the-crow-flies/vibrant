@@ -2,6 +2,8 @@
 @group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
 @group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
 @group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
+@group(2) @binding(9) var<uniform> TRANSFORM: mat4x4<f32>;
+@group(2) @binding(10) var<uniform> TRANSFORM_VIEW: mat4x4<f32>;
 
 @group(3) @binding(0) var<storage> OFFSET: array<u32>;
 @group(3) @binding(2) var<storage> INDEX: array<u32>;

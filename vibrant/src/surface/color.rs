@@ -2,8 +2,8 @@ use std::any::type_name;
 
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BlendComponent,
-    BlendState, Color, ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color,
+    ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
     RenderPassColorAttachment, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp,
     Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
     TextureView, TextureViewDescriptor, TextureViewDimension,
@@ -115,10 +115,7 @@ impl ColorBuffer {
     pub fn target_srgb() -> ColorTargetState {
         ColorTargetState {
             format: Self::FORMAT_SRGB,
-            blend: Some(BlendState {
-                color: BlendComponent::REPLACE,
-                alpha: BlendComponent::OVER,
-            }),
+            blend: None,
             write_mask: ColorWrites::all(),
         }
     }

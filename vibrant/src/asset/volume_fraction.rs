@@ -1,6 +1,7 @@
 use std::any::type_name;
 
 use bytemuck::{bytes_of, Pod, Zeroable};
+use glam::Mat4;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     wgt::TextureDataOrder,
@@ -38,7 +39,9 @@ pub struct VolumeFractionSettingsBuffer {
 
 pub struct VolumeFractionBuffer {
     texture: Texture,
-    transform: Buffer,
+
+    transform: Mat4,
+    transform_buffer: Buffer,
 
     settings: VolumeFractionSettings,
     settings_buffer: Buffer,
@@ -87,9 +90,11 @@ impl VolumeFractionBuffer {
             border_color: None,
         });
 
-        let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let transform = file.transform();
+
+        let transform_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytes_of(&file.transform()),
+            contents: bytes_of(&transform),
             usage: BufferUsages::UNIFORM,
         });
 
@@ -122,7 +127,7 @@ impl VolumeFractionBuffer {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: transform.as_entire_binding(),
+                    resource: transform_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 3,
@@ -134,6 +139,7 @@ impl VolumeFractionBuffer {
         Self {
             texture,
             transform,
+            transform_buffer,
             settings,
             settings_buffer,
             binding,
@@ -146,6 +152,10 @@ impl VolumeFractionBuffer {
 
     pub fn binding(&self) -> &BindGroup {
         &self.binding
+    }
+
+    pub fn transform(&self) -> Mat4 {
+        self.transform
     }
 
     pub fn settings_mut(&mut self) -> &mut VolumeFractionSettings {
@@ -215,6 +225,6 @@ impl VolumeFractionBuffer {
 impl Drop for VolumeFractionBuffer {
     fn drop(&mut self) {
         self.texture.destroy();
-        self.transform.destroy();
+        self.transform_buffer.destroy();
     }
 }

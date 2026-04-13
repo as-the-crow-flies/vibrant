@@ -77,9 +77,7 @@ impl VolumeFile {
         .transpose()
         .inverse();
 
-        let rotation = Mat4::from_rotation_x(PI / 2.0);
-
-        let transform = voxel_to_texture * mm_to_voxel * rotation;
+        let transform = voxel_to_texture * mm_to_voxel;
 
         let ty = match obj.header().data_type().expect("Invalid Nifti data type") {
             NiftiType::Uint8 => VolumeType::Uint8,

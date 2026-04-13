@@ -23,7 +23,7 @@ impl Camera {
             width: 1,
             height: 1,
             yaw: 0.0,
-            pitch: 0.0,
+            pitch: -0.5 * PI,
             distance: 300.0,
             pan: Vec3::ZERO,
             fov: PI / 3.0,
@@ -73,7 +73,7 @@ impl Camera {
     }
 
     pub fn rotation(&self) -> Quat {
-        Quat::from_rotation_x(self.pitch) * Quat::from_rotation_y(self.yaw)
+        Quat::from_rotation_x(self.pitch) * Quat::from_rotation_z(self.yaw)
     }
 
     pub fn view(&self) -> Mat4 {
@@ -91,7 +91,7 @@ impl Camera {
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
         self.yaw += yaw;
-        self.pitch = (self.pitch + pitch).clamp(-PI / 2.0, PI / 2.0)
+        self.pitch = (self.pitch + pitch).clamp(-PI, 0.0)
     }
 
     pub fn pan(&mut self, x: f32, y: f32) {

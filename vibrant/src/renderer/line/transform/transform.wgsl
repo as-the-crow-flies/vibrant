@@ -6,10 +6,9 @@
 @group(0) @binding(6) var<storage> LINE_INDEX_RAW: array<u32>;
 @group(0) @binding(7) var<storage> LINE_VERTEX_RAW: array<vec4<f32>>;
 @group(0) @binding(8) var<storage> LINE_OFFSET_RAW: array<u32>;
+@group(0) @binding(9) var<uniform> TRANSFORM: mat4x4<f32>;
 
-@group(1) @binding(0) var<uniform> TRANSFORM: mat4x4<f32>;
-
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 const WORKGROUP_SIZE: u32 = 256;
 const CHUNK_SIZE: u32 = 32;
@@ -39,11 +38,10 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
             let vertex = LINE_VERTEX_RAW[index];
 
-            let transformed_vertex = (TRANSFORM * vec4<f32>(vertex.xyz, 1.0)).xzy;
-            let animated_vertex = transformed_vertex + 0.02 * sin(20.0 * transformed_vertex.xyz + t);
+            let transformed_vertex = TRANSFORM * vec4<f32>(vertex.xyz, 1.0);
 
             LINE_VERTEX[index] = vec4<f32>(
-                transformed_vertex,
+                transformed_vertex.xyz - 0.5,
                 pack_clip_alpha(vec4<f32>(0.0, 0.0, 0.0, vertex.a))
             );
         }

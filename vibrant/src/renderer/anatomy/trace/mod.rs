@@ -22,7 +22,7 @@ impl AnatomyTracePipeline {
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
                 ]),
-                ColorBuffer::target(),
+                ColorBuffer::target_srgb(),
                 &gpu.shader(include_str!("trace.wgsl")),
             ),
         }
@@ -38,7 +38,7 @@ impl AnatomyTracePipeline {
         radiance: &RadianceVolume,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.post().attachment_clear())],
+            color_attachments: &[Some(frame.post().attachment_srgb())],
             ..Default::default()
         });
 

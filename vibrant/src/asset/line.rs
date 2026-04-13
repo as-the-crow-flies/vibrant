@@ -1,7 +1,7 @@
 use std::any::type_name;
 
 use bytemuck::{Pod, Zeroable};
-use glam::Vec4;
+use glam::{Mat4, Vec3, Vec4};
 use itertools::Itertools;
 use random_color::{options::Luminosity, RandomColor};
 use wgpu::{
@@ -68,6 +68,9 @@ pub struct LineBuffer {
     raw_indices: Buffer,
     raw_vertices: Buffer,
     raw_offsets: Buffer,
+
+    transform: Buffer,
+    transform_view: Buffer,
 
     binding_read: BindGroup,
     binding_write: BindGroup,
@@ -212,6 +215,18 @@ impl LineBuffer {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
+        let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::bytes_of(&bounds.transform().inverse()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let transform_view = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::bytes_of(&(Mat4::from_scale(Vec3::ONE * 0.01))),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&settings_buffer),
@@ -255,6 +270,14 @@ impl LineBuffer {
                 binding: 8,
                 resource: raw_offsets.as_entire_binding(),
             },
+            BindGroupEntry {
+                binding: 9,
+                resource: transform.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 10,
+                resource: transform_view.as_entire_binding(),
+            },
         ];
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -281,6 +304,9 @@ impl LineBuffer {
             offset,
 
             materials,
+
+            transform,
+            transform_view,
 
             raw_indices,
             raw_vertices,
@@ -333,6 +359,14 @@ impl LineBuffer {
             0,
             bytemuck::cast_slice(&settings_buffer),
         );
+    }
+
+    pub fn set_transform(&self, gpu: &Gpu, transform: &Mat4) {
+        gpu.queue()
+            .write_buffer(&self.transform, 0, bytemuck::bytes_of(transform));
+
+        gpu.queue()
+            .write_buffer(&self.transform_view, 0, bytemuck::bytes_of(transform));
     }
 
     pub fn layout(gpu: &Gpu, read_only: bool) -> BindGroupLayout {
@@ -440,6 +474,28 @@ impl LineBuffer {
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Transform
+                    BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Transform View
+                    BindGroupLayoutEntry {
+                        binding: 10,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
