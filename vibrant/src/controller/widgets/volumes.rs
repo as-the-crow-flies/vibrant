@@ -3,7 +3,7 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use egui::{collapsing_header::CollapsingState, ScrollArea, Ui};
+use egui::{collapsing_header::CollapsingState, Ui};
 
 use crate::asset::volume_fraction::VolumeFractionBuffer;
 
@@ -42,36 +42,34 @@ impl VolumesWidget {
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), self.changed)
             .show_header(ui, |ui| ui.heading("Volumes"))
             .body(|ui| {
-                ScrollArea::new([false, true]).show(ui, |ui| {
-                    for (index, volume) in volumes.iter_mut().enumerate() {
-                        CollapsingState::load_with_default_open(
-                            ui.ctx(),
-                            volume.settings_mut().name.to_string().into(),
-                            self.changed,
-                        )
-                        .show_header(ui, |ui| {
-                            if ui.button("🗑").clicked() {
-                                index_to_remove = Some(index);
-                                self.changed = true;
-                            }
+                for (index, volume) in volumes.iter_mut().enumerate() {
+                    CollapsingState::load_with_default_open(
+                        ui.ctx(),
+                        volume.settings_mut().name.to_string().into(),
+                        self.changed,
+                    )
+                    .show_header(ui, |ui| {
+                        if ui.button("🗑").clicked() {
+                            index_to_remove = Some(index);
+                            self.changed = true;
+                        }
 
-                            self.changed |= ui
-                                .checkbox(&mut volume.settings_mut().visible, "")
-                                .changed();
+                        self.changed |= ui
+                            .checkbox(&mut volume.settings_mut().visible, "")
+                            .changed();
 
-                            self.changed |= ui
-                                .color_edit_button_rgb(&mut volume.settings_mut().absorption)
-                                .changed();
+                        self.changed |= ui
+                            .color_edit_button_rgb(&mut volume.settings_mut().absorption)
+                            .changed();
 
-                            self.changed |= ui
-                                .color_edit_button_rgb(&mut volume.settings_mut().scattering)
-                                .changed();
+                        self.changed |= ui
+                            .color_edit_button_rgb(&mut volume.settings_mut().scattering)
+                            .changed();
 
-                            ui.text_edit_singleline(&mut volume.settings_mut().name);
-                        })
-                        .body(|_| {});
-                    }
-                })
+                        ui.text_edit_singleline(&mut volume.settings_mut().name);
+                    })
+                    .body(|_| {});
+                }
             });
 
         if let Some(index) = index_to_remove {

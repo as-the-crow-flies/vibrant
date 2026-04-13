@@ -1,6 +1,7 @@
 use std::any::type_name;
 
 use bytemuck::{Pod, Zeroable};
+use float_derive::FloatHash;
 use glam::{Mat4, Vec3, Vec4};
 use itertools::Itertools;
 use random_color::{options::Luminosity, RandomColor};
@@ -20,6 +21,7 @@ pub struct GlobalLineSettings {
     pub color_visible: bool,
 }
 
+#[derive(Debug, FloatHash)]
 pub struct LineSettings {
     pub name: String,
     pub selected: bool,

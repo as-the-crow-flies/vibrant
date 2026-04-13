@@ -64,7 +64,7 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
 
     let phase_function = 1.0 / (4.0 * PI);
 
-    var step = ENVIRONMENT.settings.radius;
+    var step = 1.0;
 
     let direction_norm = normalize(direction);
 

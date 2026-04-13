@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, io::Cursor};
+use std::io::Cursor;
 
 use flate2::read::GzDecoder;
 use glam::{Mat4, UVec3, Vec3};

@@ -11,7 +11,6 @@ use crate::{
         hdri::HdriBuffer, radiance::RadianceVolume, volume::PhysicalVolume,
         volume_fraction::VolumeFractionBuffer,
     },
-    controller::settings::ViewMode,
     renderer::{anatomy::AnatomyRenderer, line::LineRenderer},
 };
 use environment::Environment;
@@ -71,9 +70,6 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
-        let needs_transform = true;
-        let needs_update = true;
-
         FileStage::on_lines(|lines| {
             let line = LineBuffer::new(gpu, &lines);
 
@@ -139,28 +135,23 @@ impl Renderer {
 
         let mut cmd = gpu.cmd();
 
-        match controller.settings().view {
-            ViewMode::Volume => self.anatomy.render(
+        self.anatomy.render(
+            &mut cmd,
+            controller,
+            &self.environment,
+            surface.frame(),
+            &self.asset,
+        );
+
+        if let Some(line) = &self.asset.line {
+            self.line.render(
                 &mut cmd,
                 controller,
                 &self.environment,
                 surface.frame(),
-                &self.asset,
-            ),
-            ViewMode::Tractography => {
-                if let Some(line) = &self.asset.line {
-                    self.line.render(
-                        &mut cmd,
-                        &self.environment,
-                        surface.frame(),
-                        line,
-                        controller.settings(),
-                        needs_transform,
-                        needs_update,
-                    );
-                }
-            }
-        }
+                line,
+            );
+        };
 
         if !FileStage::about_to_save() {
             self.ui

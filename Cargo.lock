@@ -275,7 +275,7 @@ checksum = "f9abbd1bc6865053c427f7198e6af43bfdedc55ab791faed4fbd361d789575ff"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -835,6 +835,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "float-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d6ed06d686d9ed1812ba93abacf117de71c476f91fe206404f869bcedbfd4e5"
+dependencies = [
+ "float-derive-macros",
+ "num-traits",
+ "ordered-float 3.9.2",
+]
+
+[[package]]
+name = "float-derive-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd0614fbf3fca73de9ae982581505f0283452312a010a6fcbbf7cfc336d7ba64"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -864,7 +886,7 @@ checksum = "1a5c6c585bc94aaf2c7b51dd4c2ba22680844aba4c687be581871a6f518c5742"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -929,7 +951,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -1182,7 +1204,7 @@ checksum = "03343451ff899767262ec32146f6d559dd759fdadf42ff0e227c7c48f72594b4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -1490,7 +1512,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -1530,7 +1552,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -1817,6 +1839,15 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
+version = "3.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1e1c390732d15f1d48471625cd92d154e66db2c56645e29a9cd26f4699f72dc"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "ordered-float"
 version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bb71e1b3fa6ca1c61f383464aaf2bb0e2f8e772a1f01d486832464de363b951"
@@ -1895,7 +1926,7 @@ checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -2334,7 +2365,7 @@ checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -2439,6 +2470,17 @@ checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 
 [[package]]
 name = "syn"
+version = "1.0.109"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
 version = "2.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4307e30089d6fd6aff212f2da3a1f9e32f3223b1f010fb09b7c95f90f3ca1e8"
@@ -2483,7 +2525,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -2494,7 +2536,7 @@ checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -2620,6 +2662,7 @@ dependencies = [
  "egui-winit",
  "exr",
  "flate2",
+ "float-derive",
  "futures",
  "getrandom",
  "glam",
@@ -2701,7 +2744,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
  "wasm-bindgen-shared",
 ]
 
@@ -2736,7 +2779,7 @@ checksum = "8ae87ea40c9f689fc23f209965b6fb8a99ad69aeeb0231408be24920604395de"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -2999,7 +3042,7 @@ dependencies = [
  "ndk-sys",
  "objc",
  "once_cell",
- "ordered-float",
+ "ordered-float 4.6.0",
  "parking_lot",
  "portable-atomic",
  "portable-atomic-util",
@@ -3092,7 +3135,7 @@ checksum = "2bbd5b46c938e506ecbce286b6628a02171d56153ba733b6c741fc627ec9579b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -3103,7 +3146,7 @@ checksum = "053c4c462dc91d3b1504c6fe5a726dd15e216ba718e84a0e46a88fbe5ded3515"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]
@@ -3568,7 +3611,7 @@ checksum = "f65c489a7071a749c849713807783f70672b28094011623e200cb86dcb835953"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.103",
 ]
 
 [[package]]

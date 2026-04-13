@@ -12,7 +12,7 @@ use wgpu::CommandEncoder;
 
 use crate::{
     asset::line::LineBuffer,
-    controller::settings::Settings,
+    controller::Controller,
     gpu::Gpu,
     renderer::line::{
         crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
@@ -52,31 +52,29 @@ impl LineRenderer {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
+        controller: &Controller,
         environment: &Environment,
         frame: &Frame,
         line: &LineBuffer,
-        settings: &Settings,
-        needs_transform: bool,
-        _needs_update: bool,
     ) {
-        if needs_transform {
+        if controller.tractography().changed() | controller.crop().changed() {
             self.transform.dispatch(cmd, line, environment);
+
+            self.crop.dispatch(cmd, line, environment);
+
+            self.occupancy
+                .dispatch(cmd, frame, environment, controller.settings(), line);
+
+            self.cull.dispatch(cmd, frame, environment);
+
+            self.occlusion.dispatch(cmd, frame, environment);
+
+            self.populate
+                .dispatch(cmd, frame, environment, controller.settings(), line);
         }
 
-        self.crop.dispatch(cmd, line, environment);
-
-        self.occupancy
-            .dispatch(cmd, frame, environment, settings, line);
-
-        self.cull.dispatch(cmd, frame, environment);
-
-        self.occlusion.dispatch(cmd, frame, environment);
-
-        self.populate
-            .dispatch(cmd, frame, environment, settings, line);
-
         self.render
-            .dispatch(cmd, environment, frame, line, settings);
+            .dispatch(cmd, environment, frame, line, controller.settings());
 
         self.post.dispatch(cmd, environment, frame);
     }

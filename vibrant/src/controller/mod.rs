@@ -8,30 +8,19 @@ pub mod widgets;
 
 use camera::Camera;
 use egui::ComboBox;
-use egui::{
-    collapsing_header::CollapsingState, Align, Frame, Layout, Margin, ScrollArea, SidePanel,
-    Slider, Ui,
-};
+use egui::{Align, Frame, Layout, Margin, ScrollArea, SidePanel, Slider, Ui};
 use event::Event;
-use itertools::Itertools;
 use light::Light;
 use settings::Settings;
 use state::ControllerState;
 use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
-use crate::controller::settings::ViewMode;
 use crate::controller::widgets::crop::CropWidget;
 use crate::controller::widgets::hdri::HdriWidget;
+use crate::controller::widgets::tractography::TractographyWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
-use crate::{
-    asset::Asset,
-    controller::{
-        segment::Segment,
-        settings::{LineDisplayMode, LineVoxelizationMode},
-    },
-    file::FileStage,
-};
+use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
 
 #[derive(Debug)]
 pub struct Controller {
@@ -42,9 +31,10 @@ pub struct Controller {
     settings: Settings,
     time: Instant,
 
-    hdri_widget: HdriWidget,
     volumes_widget: VolumesWidget,
+    tractography_widget: TractographyWidget,
     crop_widget: CropWidget,
+    hdri_widget: HdriWidget,
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
@@ -60,9 +50,10 @@ impl Controller {
             settings: Settings::new(),
             time: Instant::now(),
 
-            hdri_widget: HdriWidget::new(),
             volumes_widget: VolumesWidget::new(),
+            tractography_widget: TractographyWidget::new(),
             crop_widget: CropWidget::new(),
+            hdri_widget: HdriWidget::new(),
 
             show_left_side_panel: false,
             show_right_side_panel: true,
@@ -75,6 +66,10 @@ impl Controller {
 
     pub fn crop(&self) -> &CropWidget {
         &self.crop_widget
+    }
+
+    pub fn tractography(&self) -> &TractographyWidget {
+        &self.tractography_widget
     }
 
     pub fn volumes(&self) -> &VolumesWidget {
@@ -144,57 +139,6 @@ impl Controller {
                     .show_inside(ui, |ui| {
                         ui.heading("Rendering");
                         ui.separator();
-
-                        ComboBox::from_label("Display Mode")
-                            .selected_text(format!("{:?}", self.settings.display))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.settings.display,
-                                    LineDisplayMode::Geometry,
-                                    "Geometry",
-                                );
-                                ui.selectable_value(
-                                    &mut self.settings.display,
-                                    LineDisplayMode::Volume,
-                                    "Volume",
-                                );
-                            });
-
-                        ComboBox::from_label("View Mode")
-                            .selected_text(format!("{:?}", self.settings.view))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.settings.view,
-                                    ViewMode::Volume,
-                                    "Volume",
-                                );
-
-                                ui.selectable_value(
-                                    &mut self.settings.view,
-                                    ViewMode::Tractography,
-                                    "Tractography",
-                                );
-                            });
-
-                        ComboBox::from_label("Voxelization Mode")
-                            .selected_text(format!("{:?}", self.settings.voxelization))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.settings.voxelization,
-                                    LineVoxelizationMode::Tube,
-                                    "Tube",
-                                );
-                                ui.selectable_value(
-                                    &mut self.settings.voxelization,
-                                    LineVoxelizationMode::Box,
-                                    "Box",
-                                );
-                                ui.selectable_value(
-                                    &mut self.settings.voxelization,
-                                    LineVoxelizationMode::Line,
-                                    "Line",
-                                );
-                            });
 
                         ComboBox::from_label("Voxel Resolution")
                             .selected_text(format!("{:?}", self.settings.volume))
@@ -309,85 +253,19 @@ impl Controller {
         SidePanel::right("SidePanelRight")
             .min_width(300.0)
             .show_animated(ctx, self.show_right_side_panel, |ui| {
-                CollapsingState::load_with_default_open(ui.ctx(), "Tractography".into(), false)
-                    .show_header(ui, |ui| ui.heading("Tractography"))
-                    .body(|ui| {
-                        ScrollArea::new([false, true]).show(ui, |ui| {
-                            if let Some(lines) = &mut asset.line {
-                                lines.settings_global().selected = lines
-                                    .settings()
-                                    .iter()
-                                    .map(|settings| settings.selected)
-                                    .all_equal_value()
-                                    .ok();
+                ScrollArea::new([false, true]).show(ui, |ui| {
+                    self.volumes_widget.show(ui, &mut asset.volumes);
 
-                                lines.settings_global().visible = lines
-                                    .settings()
-                                    .iter()
-                                    .map(|settings| settings.visible)
-                                    .all_equal_value()
-                                    .ok();
+                    if let Some(lines) = &mut asset.line {
+                        self.tractography_widget.show(ui, lines);
+                    }
 
-                                CollapsingState::load_with_default_open(
-                                    ui.ctx(),
-                                    "Line".into(),
-                                    false,
-                                )
-                                .show_header(ui, |ui| {
-                                    if let Some(visible) =
-                                        ternary_checkbox(ui, lines.settings_global().visible, "👁")
-                                    {
-                                        lines.settings_global().visible = Some(visible);
+                    self.crop_widget.show(ui, &mut self.settings);
 
-                                        for line in lines.settings() {
-                                            line.visible = visible;
-                                        }
-                                    }
-
-                                    if let Some(color_visible) = ternary_checkbox(
-                                        ui,
-                                        Some(lines.settings_global().color_visible),
-                                        "   🎨   ",
-                                    ) {
-                                        lines.settings_global().color_visible = color_visible;
-
-                                        for line in lines.settings() {
-                                            line.color_visible = color_visible
-                                        }
-                                    }
-                                })
-                                .body(|_| {});
-
-                                for line in lines.settings() {
-                                    let id = ui.make_persistent_id(&line.name);
-                                    CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                                        .show_header(ui, |ui| {
-                                            ui.toggle_value(&mut line.visible, "👁");
-                                            ui.color_edit_button_srgb(&mut line.color);
-                                            ui.label(&line.name);
-                                        })
-                                        .body(|ui| {
-                                            ui.add(
-                                                Slider::new(&mut line.crop_start, 0.0..=1.0)
-                                                    .text("Crop Start"),
-                                            );
-                                            ui.add(
-                                                Slider::new(&mut line.crop_end, 0.0..=1.0)
-                                                    .text("Crop End"),
-                                            );
-                                        });
-                                }
-                            }
-                        });
-                    });
-
-                if let Some(hdri) = &mut asset.hdri {
-                    self.hdri_widget.show(ui, hdri);
-                }
-
-                self.crop_widget.show(ui, &mut self.settings);
-
-                self.volumes_widget.show(ui, &mut asset.volumes);
+                    if let Some(hdri) = &mut asset.hdri {
+                        self.hdri_widget.show(ui, hdri);
+                    }
+                });
             });
     }
 
