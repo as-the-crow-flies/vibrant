@@ -16,6 +16,8 @@ pub struct VolumeFractionSettings {
     pub visible: bool,
     pub absorption: [f32; 3],
     pub scattering: [f32; 3],
+    pub offset: f32,
+    pub scale: f32,
 }
 
 impl VolumeFractionSettings {
@@ -24,8 +26,10 @@ impl VolumeFractionSettings {
         let [sr, sg, sb] = self.scattering;
 
         VolumeFractionSettingsBuffer {
-            absorption: [ar, ag, ab, 0.0],
-            scattering: [sr, sg, sb, 0.0],
+            absorption: [ar, ag, ab],
+            scattering: [sr, sg, sb],
+            offset: self.offset,
+            scale: self.scale,
         }
     }
 }
@@ -33,8 +37,10 @@ impl VolumeFractionSettings {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct VolumeFractionSettingsBuffer {
-    absorption: [f32; 4],
-    scattering: [f32; 4],
+    absorption: [f32; 3],
+    offset: f32,
+    scattering: [f32; 3],
+    scale: f32,
 }
 
 pub struct VolumeFractionBuffer {
@@ -103,6 +109,8 @@ impl VolumeFractionBuffer {
             visible: true,
             absorption: [0.2; 3],
             scattering: [0.2; 3],
+            offset: 0.0,
+            scale: 1.0,
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {

@@ -254,13 +254,13 @@ impl Controller {
             .min_width(300.0)
             .show_animated(ctx, self.show_right_side_panel, |ui| {
                 ScrollArea::new([false, true]).show(ui, |ui| {
+                    self.crop_widget.show(ui, &mut self.settings);
+
                     self.volumes_widget.show(ui, &mut asset.volumes);
 
                     if let Some(lines) = &mut asset.line {
                         self.tractography_widget.show(ui, lines);
                     }
-
-                    self.crop_widget.show(ui, &mut self.settings);
 
                     if let Some(hdri) = &mut asset.hdri {
                         self.hdri_widget.show(ui, hdri);

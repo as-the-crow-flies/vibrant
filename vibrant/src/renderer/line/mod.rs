@@ -57,6 +57,10 @@ impl LineRenderer {
         frame: &Frame,
         line: &LineBuffer,
     ) {
+        if !controller.tractography().visible() {
+            return;
+        }
+
         if controller.tractography().changed() | controller.crop().changed() {
             self.transform.dispatch(cmd, line, environment);
 

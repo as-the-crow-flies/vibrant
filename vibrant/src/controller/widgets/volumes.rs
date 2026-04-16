@@ -3,7 +3,7 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use egui::{collapsing_header::CollapsingState, Ui};
+use egui::{collapsing_header::CollapsingState, Slider, Ui};
 
 use crate::asset::volume_fraction::VolumeFractionBuffer;
 
@@ -46,7 +46,7 @@ impl VolumesWidget {
                     CollapsingState::load_with_default_open(
                         ui.ctx(),
                         volume.settings_mut().name.to_string().into(),
-                        self.changed,
+                        false,
                     )
                     .show_header(ui, |ui| {
                         if ui.button("🗑").clicked() {
@@ -68,7 +68,21 @@ impl VolumesWidget {
 
                         ui.text_edit_singleline(&mut volume.settings_mut().name);
                     })
-                    .body(|_| {});
+                    .body(|ui| {
+                        self.changed |= ui
+                            .add(
+                                Slider::new(&mut volume.settings_mut().offset, -255.0..=255.0)
+                                    .text("Offset"),
+                            )
+                            .changed();
+
+                        self.changed |= ui
+                            .add(
+                                Slider::new(&mut volume.settings_mut().scale, 0.0..=1.0)
+                                    .text("Scale"),
+                            )
+                            .changed();
+                    });
                 }
             });
 

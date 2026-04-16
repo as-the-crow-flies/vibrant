@@ -9,11 +9,13 @@ use crate::{asset::line::LineBuffer, controller::ternary_checkbox};
 pub struct TractographyWidget {
     hash: u64,
     changed: bool,
+    visible: bool,
 }
 
 impl TractographyWidget {
     pub fn new() -> Self {
         Self {
+            visible: true,
             changed: false,
             hash: 0,
         }
@@ -32,7 +34,10 @@ impl TractographyWidget {
         self.hash = hash;
 
         CollapsingState::load_with_default_open(ui.ctx(), "Tractography".into(), false)
-            .show_header(ui, |ui| ui.heading("Tractography"))
+            .show_header(ui, |ui| {
+                ui.checkbox(&mut self.visible, "");
+                ui.heading("Tractography");
+            })
             .body(|ui| {
                 lines.settings_global().selected = lines
                     .settings()
@@ -88,6 +93,10 @@ impl TractographyWidget {
                         });
                 }
             });
+    }
+
+    pub fn visible(&self) -> bool {
+        self.visible
     }
 
     pub fn changed(&self) -> bool {
