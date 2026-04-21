@@ -2,7 +2,6 @@ use std::any::type_name;
 
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
-    FilterMode,
 };
 
 use crate::{
@@ -23,7 +22,6 @@ impl OcclusionBuffer {
             resolution,
             resolution,
             resolution,
-            FilterMode::Linear,
             AddressMode::ClampToEdge,
         );
         let directional = MipTexture3D::<R32Float>::new(
@@ -31,7 +29,6 @@ impl OcclusionBuffer {
             resolution,
             resolution,
             resolution,
-            FilterMode::Linear,
             AddressMode::ClampToEdge,
         );
 

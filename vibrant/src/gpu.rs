@@ -44,9 +44,11 @@ impl Gpu {
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                     max_storage_buffers_per_shader_stage: limits
                         .max_storage_buffers_per_shader_stage,
+                    max_sampled_textures_per_shader_stage: 20,
                     ..Default::default()
                 },
                 required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | Features::TEXTURE_FORMAT_16BIT_NORM
                     | Features::FLOAT32_FILTERABLE,
                 ..Default::default()
             })
@@ -130,7 +132,7 @@ impl Gpu {
                 }),
                 multisample: Default::default(),
                 depth_stencil: None,
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             })
     }
@@ -139,8 +141,8 @@ impl Gpu {
         self.device()
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: layouts,
-                push_constant_ranges: &[],
+                bind_group_layouts: &layouts.iter().map(|&layout| Some(layout)).collect_vec(),
+                immediate_size: 0,
             })
     }
 

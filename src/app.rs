@@ -40,7 +40,7 @@ impl App {
         let window = self.window.as_ref().expect("Window");
         let renderer = self.renderer.as_mut().expect("Renderer");
 
-        let consumed_by_egui = renderer.egui().on_window_event(window, &event).consumed;
+        let consumed = renderer.egui().on_window_event(window, &event).consumed;
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -63,7 +63,7 @@ impl App {
         }
 
         if let Some(vibrant_event) = vibrant_event(event) {
-            if !consumed_by_egui {
+            if self.controller.hovered() | !consumed {
                 self.controller.event(vibrant_event);
             }
         }

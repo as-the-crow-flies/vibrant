@@ -26,6 +26,7 @@ random_color = "1.1.0"
 exr = "1.74"
 half = { version = "2.7", features = ["bytemuck"] }
 float-derive = "0.1.0"
+egui_double_slider = "1.1.0"
 
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"

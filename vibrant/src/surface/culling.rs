@@ -1,11 +1,11 @@
 use std::{any::type_name, ops::Mul};
 
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoder, Extent3d, FilterMode, ShaderStages,
-    StorageTextureAccess, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
+    BufferBinding, BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoder, Extent3d,
+    ShaderStages, StorageTextureAccess, Texture, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::{
@@ -53,8 +53,7 @@ impl CullingBuffer {
             resolution,
             resolution,
             resolution,
-            FilterMode::Linear,
-            wgpu::AddressMode::ClampToEdge,
+            AddressMode::ClampToEdge,
         );
 
         let entries = &[

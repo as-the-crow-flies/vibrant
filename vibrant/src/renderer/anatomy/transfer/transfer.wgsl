@@ -1,8 +1,10 @@
 struct Material {
-    absorption: vec3<f32>,
-    offset: f32,
-    scattering: vec3<f32>,
-    scale: f32
+    absorption: vec4<f32>,
+    scattering: vec4<f32>,
+    data_min: f32,
+    data_max: f32,
+    user_min: f32,
+    user_max: f32
 };
 
 @group(0) @binding(0) var FRACTION: texture_3d<f32>;
@@ -37,9 +39,12 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         any(voxel >= textureDimensions(ABSORPTION)))
         { return; }
 
-    let fraction = (textureLoad(FRACTION, voxel, 0).x + MATERIAL.offset) * MATERIAL.scale;
-    let absorption = vec4<f32>(fraction * MATERIAL.absorption, 0.0);
-    let scattering = vec4<f32>(fraction * MATERIAL.scattering, 0.0);
+    var fraction = textureLoad(FRACTION, voxel, 0).x;
+        fraction = (fraction - MATERIAL.data_min) / (MATERIAL.data_max - MATERIAL.data_min);
+        fraction = (fraction - MATERIAL.user_min) / (MATERIAL.user_max - MATERIAL.user_min);
+
+    let absorption = fraction * MATERIAL.absorption;
+    let scattering = fraction * MATERIAL.scattering;
 
     textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + absorption);
     textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + scattering);

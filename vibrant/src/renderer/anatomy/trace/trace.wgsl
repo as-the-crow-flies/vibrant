@@ -115,7 +115,7 @@ fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {
 
     for (var face=0u; face<6u; face++) {
         let sample = uv * vec3<f32>(1.0, 1.0, 0.1666666666666) +
-            vec3<f32>(face) * vec3<f32>(0.0, 0.0, 0.1666666667);
+            vec3<f32>(f32(face)) * vec3<f32>(0.0, 0.0, 0.1666666667);
 
         diffuse += tex(RADIANCE_0, sample).rgb;
     }

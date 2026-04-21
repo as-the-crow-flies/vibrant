@@ -26,7 +26,7 @@ impl Camera {
             pitch: -0.5 * PI,
             distance: 300.0,
             pan: Vec3::ZERO,
-            fov: PI / 3.0,
+            fov: 0.8,
             near: 1.0,
             far: 10000.0,
         }

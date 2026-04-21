@@ -117,7 +117,7 @@ impl Renderer {
         let output = self
             .egui
             .egui_ctx()
-            .run(input, |ctx| controller.ui(ctx, &mut self.asset, dt));
+            .run_ui(input, |ui| controller.ui(ui, &mut self.asset, dt));
         self.egui
             .handle_platform_output(&window, output.platform_output.clone());
 

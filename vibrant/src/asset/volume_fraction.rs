@@ -16,8 +16,10 @@ pub struct VolumeFractionSettings {
     pub visible: bool,
     pub absorption: [f32; 3],
     pub scattering: [f32; 3],
-    pub offset: f32,
-    pub scale: f32,
+    pub data_min: f32,
+    pub data_max: f32,
+    pub user_min: f32,
+    pub user_max: f32,
 }
 
 impl VolumeFractionSettings {
@@ -26,10 +28,12 @@ impl VolumeFractionSettings {
         let [sr, sg, sb] = self.scattering;
 
         VolumeFractionSettingsBuffer {
-            absorption: [ar, ag, ab],
-            scattering: [sr, sg, sb],
-            offset: self.offset,
-            scale: self.scale,
+            absorption: [ar, ag, ab, 0.0],
+            scattering: [sr, sg, sb, 0.0],
+            data_min: self.data_min,
+            data_max: self.data_max,
+            user_min: self.user_min,
+            user_max: self.user_max,
         }
     }
 }
@@ -37,10 +41,12 @@ impl VolumeFractionSettings {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct VolumeFractionSettingsBuffer {
-    absorption: [f32; 3],
-    offset: f32,
-    scattering: [f32; 3],
-    scale: f32,
+    absorption: [f32; 4],
+    scattering: [f32; 4],
+    pub data_min: f32,
+    pub data_max: f32,
+    pub user_min: f32,
+    pub user_max: f32,
 }
 
 pub struct VolumeFractionBuffer {
@@ -88,7 +94,7 @@ impl VolumeFractionBuffer {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
             lod_min_clamp: 0.0,
             lod_max_clamp: 0.0,
             compare: None,
@@ -109,8 +115,10 @@ impl VolumeFractionBuffer {
             visible: true,
             absorption: [0.2; 3],
             scattering: [0.2; 3],
-            offset: 0.0,
-            scale: 1.0,
+            data_min: file.min(),
+            data_max: file.max(),
+            user_min: 0.0,
+            user_max: 1.0,
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {

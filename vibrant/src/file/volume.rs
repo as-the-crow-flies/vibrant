@@ -2,7 +2,11 @@ use std::io::Cursor;
 
 use flate2::read::GzDecoder;
 use glam::{Mat4, UVec3, Vec3};
-use nifti::{InMemNiftiObject, NiftiObject, NiftiType};
+use itertools::{Itertools, MinMaxResult};
+use nifti::{
+    object::GenericNiftiObject, DataElement, InMemNiftiObject, InMemNiftiVolume, NiftiObject,
+    NiftiType,
+};
 use wgpu::{TextureFormat, TextureSampleType};
 
 use crate::file::File;
@@ -50,6 +54,8 @@ pub struct VolumeFile {
     transform: Mat4,
     data: Vec<u8>,
     dim: Vec<u16>,
+    min: f32,
+    max: f32,
 }
 
 impl VolumeFile {
@@ -79,6 +85,8 @@ impl VolumeFile {
 
         let transform = voxel_to_texture * mm_to_voxel;
 
+        let name = file.name.replace(".nii", "").replace(".gz", "").to_owned();
+
         let ty = match obj.header().data_type().expect("Invalid Nifti data type") {
             NiftiType::Uint8 => VolumeType::Uint8,
             NiftiType::Uint16 => VolumeType::Uint16,
@@ -94,12 +102,25 @@ impl VolumeFile {
             .expect("Invalid Nifti dimension")
             .to_vec();
 
+        let data = obj.volume().raw_data().to_vec();
+
+        let (min, max) = match ty {
+            VolumeType::Uint8 => Self::minmax::<u8>(obj, u8::MAX as f32),
+            VolumeType::Uint16 => Self::minmax::<u16>(obj, u16::MAX as f32),
+            VolumeType::Int8 => Self::minmax::<i8>(obj, i8::MAX as f32),
+            VolumeType::Int16 => Self::minmax::<i16>(obj, i16::MAX as f32),
+            VolumeType::Float32 => Self::minmax::<f32>(obj, 1.0),
+        }
+        .unwrap_or((0.0, 1.0));
+
         Self {
-            data: obj.into_volume().into_raw_data(),
-            name: file.name.replace(".nii", "").replace(".gz", "").to_owned(),
+            data,
+            name,
             transform,
             ty,
             dim,
+            min,
+            max,
         }
     }
 
@@ -121,5 +142,28 @@ impl VolumeFile {
 
     pub fn size(&self) -> UVec3 {
         UVec3::new(self.dim[0] as u32, self.dim[1] as u32, self.dim[2] as u32)
+    }
+
+    fn minmax<T: DataElement + PartialOrd + Into<f32>>(
+        v: GenericNiftiObject<InMemNiftiVolume>,
+        scale: f32,
+    ) -> Option<(f32, f32)> {
+        match v
+            .into_volume()
+            .into_nifti_typed_data::<T>()
+            .ok()
+            .map(|vec| vec.into_iter().minmax())
+        {
+            Some(MinMaxResult::MinMax(min, max)) => Some((min.into() / scale, max.into() / scale)),
+            _ => None,
+        }
+    }
+
+    pub fn min(&self) -> f32 {
+        self.min
+    }
+
+    pub fn max(&self) -> f32 {
+        self.max
     }
 }

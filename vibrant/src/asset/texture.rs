@@ -13,6 +13,8 @@ pub trait MipTextureFormat {
             _ => SamplerBindingType::NonFiltering,
         }
     }
+    fn filter() -> FilterMode;
+    fn mipmap_filter() -> MipmapFilterMode;
 }
 
 pub struct Rgba16Float {}
@@ -28,6 +30,14 @@ impl MipTextureFormat for R32Float {
     fn sample_type() -> TextureSampleType {
         TextureSampleType::Float { filterable: true }
     }
+
+    fn filter() -> FilterMode {
+        FilterMode::Linear
+    }
+
+    fn mipmap_filter() -> MipmapFilterMode {
+        MipmapFilterMode::Linear
+    }
 }
 
 impl MipTextureFormat for Rgba16Float {
@@ -37,6 +47,14 @@ impl MipTextureFormat for Rgba16Float {
 
     fn sample_type() -> TextureSampleType {
         TextureSampleType::Float { filterable: true }
+    }
+
+    fn filter() -> FilterMode {
+        FilterMode::Linear
+    }
+
+    fn mipmap_filter() -> MipmapFilterMode {
+        MipmapFilterMode::Linear
     }
 }
 
@@ -48,6 +66,14 @@ impl MipTextureFormat for Rgba8Unorm {
     fn sample_type() -> TextureSampleType {
         TextureSampleType::Float { filterable: true }
     }
+
+    fn filter() -> FilterMode {
+        FilterMode::Linear
+    }
+
+    fn mipmap_filter() -> MipmapFilterMode {
+        MipmapFilterMode::Linear
+    }
 }
 
 impl MipTextureFormat for R32Uint {
@@ -57,6 +83,14 @@ impl MipTextureFormat for R32Uint {
 
     fn sample_type() -> TextureSampleType {
         TextureSampleType::Uint
+    }
+
+    fn filter() -> FilterMode {
+        FilterMode::Nearest
+    }
+
+    fn mipmap_filter() -> MipmapFilterMode {
+        MipmapFilterMode::Nearest
     }
 }
 
@@ -74,14 +108,7 @@ pub struct MipTexture<const DIMENSION: u32, Format: MipTextureFormat> {
 }
 
 impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Format> {
-    pub fn new(
-        gpu: &Gpu,
-        width: u32,
-        height: u32,
-        depth: u32,
-        filter: FilterMode,
-        address: AddressMode,
-    ) -> Self {
+    pub fn new(gpu: &Gpu, width: u32, height: u32, depth: u32, address: AddressMode) -> Self {
         let label = Some(type_name::<Self>());
 
         let mip_level_count = width.min(height).ilog2().max(1);
@@ -115,9 +142,9 @@ impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Forma
             address_mode_v: address,
             address_mode_w: address,
             border_color: None,
-            mag_filter: filter,
-            min_filter: filter,
-            mipmap_filter: filter,
+            mag_filter: Format::filter(),
+            min_filter: Format::filter(),
+            mipmap_filter: Format::mipmap_filter(),
             ..Default::default()
         });
 

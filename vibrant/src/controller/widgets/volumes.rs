@@ -3,7 +3,8 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use egui::{collapsing_header::CollapsingState, Slider, Ui};
+use egui::{collapsing_header::CollapsingState, Ui};
+use egui_double_slider::DoubleSlider;
 
 use crate::asset::volume_fraction::VolumeFractionBuffer;
 
@@ -43,9 +44,11 @@ impl VolumesWidget {
             .show_header(ui, |ui| ui.heading("Volumes"))
             .body(|ui| {
                 for (index, volume) in volumes.iter_mut().enumerate() {
+                    let settings = volume.settings_mut();
+
                     CollapsingState::load_with_default_open(
                         ui.ctx(),
-                        volume.settings_mut().name.to_string().into(),
+                        settings.name.to_string().into(),
                         false,
                     )
                     .show_header(ui, |ui| {
@@ -54,34 +57,31 @@ impl VolumesWidget {
                             self.changed = true;
                         }
 
-                        self.changed |= ui
-                            .checkbox(&mut volume.settings_mut().visible, "")
-                            .changed();
+                        self.changed |= ui.checkbox(&mut settings.visible, "").changed();
 
-                        self.changed |= ui
-                            .color_edit_button_rgb(&mut volume.settings_mut().absorption)
-                            .changed();
+                        self.changed |=
+                            ui.color_edit_button_rgb(&mut settings.absorption).changed();
 
-                        self.changed |= ui
-                            .color_edit_button_rgb(&mut volume.settings_mut().scattering)
-                            .changed();
+                        self.changed |=
+                            ui.color_edit_button_rgb(&mut settings.scattering).changed();
 
-                        ui.text_edit_singleline(&mut volume.settings_mut().name);
+                        ui.text_edit_singleline(&mut settings.name);
                     })
                     .body(|ui| {
-                        self.changed |= ui
-                            .add(
-                                Slider::new(&mut volume.settings_mut().offset, -255.0..=255.0)
-                                    .text("Offset"),
-                            )
-                            .changed();
-
-                        self.changed |= ui
-                            .add(
-                                Slider::new(&mut volume.settings_mut().scale, 0.0..=1.0)
-                                    .text("Scale"),
-                            )
-                            .changed();
+                        ui.horizontal(|ui| {
+                            ui.label("Contrast");
+                            self.changed |= ui
+                                .add(
+                                    DoubleSlider::new(
+                                        &mut settings.user_min,
+                                        &mut settings.user_max,
+                                        0.0..=1.0,
+                                    )
+                                    .width(400.0)
+                                    .separation_distance(0.01),
+                                )
+                                .changed();
+                        });
                     });
                 }
             });

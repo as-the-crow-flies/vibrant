@@ -3,7 +3,7 @@ use std::any::type_name;
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, Buffer, BufferBinding,
-    BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoder, FilterMode, ShaderStages,
+    BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
 };
 
 use crate::{
@@ -37,7 +37,6 @@ impl OccupancyBuffer {
             resolution,
             resolution,
             resolution,
-            FilterMode::Linear,
             AddressMode::ClampToEdge,
         );
         let count = MipTexture3D::new(
@@ -45,7 +44,6 @@ impl OccupancyBuffer {
             resolution,
             resolution,
             resolution,
-            FilterMode::Nearest,
             AddressMode::ClampToEdge,
         );
 

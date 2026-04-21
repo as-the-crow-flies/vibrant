@@ -1,6 +1,7 @@
 use std::any::type_name;
 
-use egui::{collapsing_header::CollapsingState, Slider, Ui};
+use egui::{collapsing_header::CollapsingState, Ui};
+use egui_double_slider::DoubleSlider;
 
 use crate::controller::settings::Settings;
 
@@ -46,13 +47,16 @@ impl CropWidget {
 
         ui.horizontal(|ui| {
             ui.label(label);
-            changed = Self::slider(ui, min) | Self::slider(ui, max);
+
+            changed = ui
+                .add(
+                    DoubleSlider::new(min, max, -0.5..=0.5)
+                        .width(400.0)
+                        .separation_distance(0.001),
+                )
+                .changed()
         });
 
         changed
-    }
-
-    fn slider(ui: &mut Ui, value: &mut f32) -> bool {
-        ui.add(Slider::new(value, -0.5..=0.5)).changed()
     }
 }
