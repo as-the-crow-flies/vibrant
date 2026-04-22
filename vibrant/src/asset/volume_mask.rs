@@ -1,7 +1,7 @@
 use std::any::type_name;
 
 use bytemuck::{bytes_of, Pod, Zeroable};
-use glam::Mat4;
+use float_derive::FloatHash;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     wgt::TextureDataOrder,
@@ -10,63 +10,48 @@ use wgpu::{
 
 use crate::{file::VolumeFile, gpu::Gpu};
 
-#[derive(Debug, Clone)]
-pub struct VolumeFractionSettings {
+#[derive(Debug, Clone, FloatHash)]
+pub struct VolumeMaskSettings {
     pub name: String,
     pub visible: bool,
-    pub absorption: [f32; 3],
-    pub scattering: [f32; 3],
-    pub data_min: f32,
-    pub data_max: f32,
-    pub user_min: f32,
-    pub user_max: f32,
-    pub inverted: bool,
+    pub invert: bool,
+    pub scale: f32,
+    pub offset: f32,
+    pub width: f32,
 }
 
-impl VolumeFractionSettings {
-    fn to_buffer(&self) -> VolumeFractionSettingsBuffer {
-        let [ar, ag, ab] = self.absorption;
-        let [sr, sg, sb] = self.scattering;
-
-        VolumeFractionSettingsBuffer {
-            absorption: [ar, ag, ab, 0.0],
-            scattering: [sr, sg, sb, 0.0],
-            data_min: self.data_min,
-            data_max: self.data_max,
-            user_min: self.user_min,
-            user_max: self.user_max,
-            inverted: self.inverted as u32,
-            padding: [0, 0, 0],
+impl VolumeMaskSettings {
+    fn to_buffer(&self) -> VolumeMaskSettingsBuffer {
+        VolumeMaskSettingsBuffer {
+            visible: self.visible as u32,
+            invert: self.invert as u32,
+            scale: self.scale,
+            offset: self.offset,
+            width: self.width,
         }
     }
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct VolumeFractionSettingsBuffer {
-    absorption: [f32; 4],
-    scattering: [f32; 4],
-    data_min: f32,
-    data_max: f32,
-    user_min: f32,
-    user_max: f32,
-    inverted: u32,
-    padding: [u32; 3],
+pub struct VolumeMaskSettingsBuffer {
+    pub visible: u32,
+    pub invert: u32,
+    pub scale: f32,
+    pub offset: f32,
+    pub width: f32,
 }
 
-pub struct VolumeFractionBuffer {
+pub struct VolumeMaskBuffer {
     texture: Texture,
 
-    transform: Mat4,
-    transform_buffer: Buffer,
-
-    settings: VolumeFractionSettings,
+    settings: VolumeMaskSettings,
     settings_buffer: Buffer,
 
     binding: BindGroup,
 }
 
-impl VolumeFractionBuffer {
+impl VolumeMaskBuffer {
     pub fn new(gpu: &Gpu, file: &VolumeFile) -> Self {
         let label = Some(type_name::<Self>());
 
@@ -92,40 +77,24 @@ impl VolumeFractionBuffer {
             file.data(),
         );
 
-        let sampler = gpu.device().create_sampler(&SamplerDescriptor {
-            label,
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: MipmapFilterMode::Linear,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 0.0,
-            compare: None,
-            anisotropy_clamp: 1,
-            border_color: None,
-        });
-
-        let transform = file.transform();
-
-        let transform_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytes_of(&transform),
-            usage: BufferUsages::UNIFORM,
-        });
-
-        let settings = VolumeFractionSettings {
+        let settings = VolumeMaskSettings {
             name: file.name().to_string(),
             visible: true,
-            absorption: [1.0; 3],
-            scattering: [1.0; 3],
-            data_min: file.min(),
-            data_max: file.max(),
-            user_min: 0.0,
-            user_max: 1.0,
-            inverted: false,
+            scale: file.min().abs().max(file.max().abs()),
+            offset: 0.0,
+            width: 0.02,
+            invert: false,
         };
+
+        Self::from_texture_settings(gpu, texture, settings)
+    }
+
+    pub fn from_texture_settings(
+        gpu: &Gpu,
+        texture: Texture,
+        settings: VolumeMaskSettings,
+    ) -> Self {
+        let label = Some(type_name::<Self>());
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
@@ -145,14 +114,6 @@ impl VolumeFractionBuffer {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: transform_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 3,
                     resource: settings_buffer.as_entire_binding(),
                 },
             ],
@@ -160,8 +121,6 @@ impl VolumeFractionBuffer {
 
         Self {
             texture,
-            transform,
-            transform_buffer,
             settings,
             settings_buffer,
             binding,
@@ -176,11 +135,7 @@ impl VolumeFractionBuffer {
         &self.binding
     }
 
-    pub fn transform(&self) -> Mat4 {
-        self.transform
-    }
-
-    pub fn settings_mut(&mut self) -> &mut VolumeFractionSettings {
+    pub fn settings_mut(&mut self) -> &mut VolumeMaskSettings {
         &mut self.settings
     }
 
@@ -212,22 +167,6 @@ impl VolumeFractionBuffer {
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -239,14 +178,48 @@ impl VolumeFractionBuffer {
             })
     }
 
-    pub fn settings(&self) -> &VolumeFractionSettings {
+    pub fn settings(&self) -> &VolumeMaskSettings {
         &self.settings
+    }
+
+    pub fn white(gpu: &Gpu) -> VolumeMaskBuffer {
+        let label = Some(type_name::<Self>());
+
+        let texture = gpu.device().create_texture_with_data(
+            gpu.queue(),
+            &TextureDescriptor {
+                label,
+                size: Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D3,
+                format: TextureFormat::R32Float,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            TextureDataOrder::LayerMajor,
+            bytes_of(&1.0),
+        );
+
+        let settings = VolumeMaskSettings {
+            name: "default".to_string(),
+            visible: false,
+            scale: 1.0,
+            offset: 0.0,
+            width: 0.00,
+            invert: false,
+        };
+
+        Self::from_texture_settings(gpu, texture, settings)
     }
 }
 
-impl Drop for VolumeFractionBuffer {
+impl Drop for VolumeMaskBuffer {
     fn drop(&mut self) {
         self.texture.destroy();
-        self.transform_buffer.destroy();
     }
 }

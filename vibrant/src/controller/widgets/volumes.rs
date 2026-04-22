@@ -49,7 +49,7 @@ impl VolumesWidget {
                     CollapsingState::load_with_default_open(
                         ui.ctx(),
                         settings.name.to_string().into(),
-                        false,
+                        true,
                     )
                     .show_header(ui, |ui| {
                         if ui.button("🗑").clicked() {
@@ -68,6 +68,8 @@ impl VolumesWidget {
                         ui.text_edit_singleline(&mut settings.name);
                     })
                     .body(|ui| {
+                        self.changed |= ui.checkbox(&mut settings.inverted, "Invert").changed();
+
                         ui.horizontal(|ui| {
                             ui.label("Contrast");
                             self.changed |= ui
@@ -77,7 +79,7 @@ impl VolumesWidget {
                                         &mut settings.user_max,
                                         0.0..=1.0,
                                     )
-                                    .width(400.0)
+                                    .width(300.0)
                                     .separation_distance(0.01),
                                 )
                                 .changed();

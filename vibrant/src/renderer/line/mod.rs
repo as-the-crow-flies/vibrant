@@ -61,7 +61,10 @@ impl LineRenderer {
             return;
         }
 
-        if controller.tractography().changed() | controller.crop().changed() {
+        if controller.tractography().changed()
+            | controller.volumes().changed()
+            | controller.crop().changed()
+        {
             self.transform.dispatch(cmd, line, environment);
 
             self.crop.dispatch(cmd, line, environment);

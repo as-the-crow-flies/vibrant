@@ -4,17 +4,29 @@ struct Material {
     data_min: f32,
     data_max: f32,
     user_min: f32,
-    user_max: f32
+    user_max: f32,
+    inverted: u32
+};
+
+struct MaskSettings {
+    visible: u32,
+    invert: u32,
+    scale: f32,
+    offset: f32,
+    width: f32
 };
 
 @group(0) @binding(0) var FRACTION: texture_3d<f32>;
 @group(0) @binding(3) var<uniform> MATERIAL: Material;
 
-@group(1) @binding(0) var ABSORPTION: texture_storage_3d<rgba8unorm, read_write>;
-@group(1) @binding(1) var SCATTERING: texture_storage_3d<rgba8unorm, read_write>;
-@group(1) @binding(2) var EXTINCTION: texture_storage_3d<rgba8unorm, read_write>;
+@group(1) @binding(0) var MASK: texture_3d<f32>;
+@group(1) @binding(1) var<uniform> MASK_SETTINGS: MaskSettings;
 
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(2) @binding(0) var ABSORPTION: texture_storage_3d<rgba8unorm, read_write>;
+@group(2) @binding(1) var SCATTERING: texture_storage_3d<rgba8unorm, read_write>;
+@group(2) @binding(2) var EXTINCTION: texture_storage_3d<rgba8unorm, read_write>;
+
+@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 @compute
 @workgroup_size(4, 4, 4)
@@ -39,9 +51,25 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         any(voxel >= textureDimensions(ABSORPTION)))
         { return; }
 
+    var mask = select(1.0, -1.0, bool(MASK_SETTINGS.invert)) * textureLoad(MASK, voxel, 0).x / MASK_SETTINGS.scale;
+        mask = smoothstep(
+                    MASK_SETTINGS.offset - MASK_SETTINGS.width,
+                    MASK_SETTINGS.offset + MASK_SETTINGS.width,
+                    mask);
+        mask = select(1.0, mask, bool(MASK_SETTINGS.visible));
+
     var fraction = textureLoad(FRACTION, voxel, 0).x;
         fraction = (fraction - MATERIAL.data_min) / (MATERIAL.data_max - MATERIAL.data_min);
+
+
+    if (bool(MATERIAL.inverted)) {
+        fraction = 1.0 - fraction;
+    }
+
         fraction = (fraction - MATERIAL.user_min) / (MATERIAL.user_max - MATERIAL.user_min);
+        fraction *= mask;
+
+        fraction = saturate(fraction);
 
     let absorption = fraction * MATERIAL.absorption;
     let scattering = fraction * MATERIAL.scattering;

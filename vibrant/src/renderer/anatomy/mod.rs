@@ -44,15 +44,20 @@ impl AnatomyRenderer {
         frame: &Frame,
         asset: &Asset,
     ) {
-        if let (Some(volume), Some(radiance), Some(hdri)) =
-            (&asset.physical_volume, &asset.radiance, &asset.hdri)
-        {
-            let data_changed = controller.volumes().changed() | controller.crop().changed();
+        if let (Some(volume), Some(mask), Some(radiance), Some(hdri)) = (
+            &asset.physical_volume,
+            &asset.mask,
+            &asset.radiance,
+            &asset.hdri,
+        ) {
+            let data_changed = controller.volumes().changed()
+                | controller.mask().changed()
+                | controller.crop().changed();
             let lighting_changed = data_changed | controller.hdri().changed();
 
             if data_changed {
                 self.transfer
-                    .dispatch(cmd, environment, &asset.volumes, volume);
+                    .dispatch(cmd, environment, &asset.volumes, mask, volume);
 
                 self.gradient.dispatch(cmd, volume);
             }

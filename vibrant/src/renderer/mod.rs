@@ -2,26 +2,18 @@ pub mod anatomy;
 pub mod environment;
 pub mod line;
 pub mod ui;
+pub mod util;
 pub mod wgsl;
 
 use std::sync::Arc;
 
-use crate::{
-    asset::{
-        hdri::HdriBuffer, radiance::RadianceVolume, volume::PhysicalVolume,
-        volume_fraction::VolumeFractionBuffer,
-    },
-    renderer::{anatomy::AnatomyRenderer, line::LineRenderer},
-};
+use crate::renderer::{anatomy::AnatomyRenderer, line::LineRenderer, util::clear::ClearPipeline};
 use environment::Environment;
 use pollster::FutureExt;
 use ui::UiRenderer;
 use winit::window::Window;
 
-use crate::{
-    asset::{line::LineBuffer, Asset},
-    file::FileStage,
-};
+use crate::{asset::Asset, file::FileStage};
 
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
@@ -29,6 +21,7 @@ pub struct Renderer {
     surface: Surface,
     egui: egui_winit::State,
 
+    clear: ClearPipeline,
     anatomy: AnatomyRenderer,
     line: LineRenderer,
     ui: UiRenderer,
@@ -50,6 +43,8 @@ impl Renderer {
             ),
             surface: Surface::new(gpu, window),
 
+            clear: ClearPipeline::new(gpu),
+
             anatomy: AnatomyRenderer::new(gpu),
             line: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
@@ -70,46 +65,7 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
-        FileStage::on_lines(|lines| {
-            let line = LineBuffer::new(gpu, &lines);
-
-            if let Some(volume) = self.asset.volumes.last() {
-                line.set_transform(gpu, &volume.transform());
-            }
-
-            self.asset.line = Some(line);
-        });
-
-        FileStage::on_volumes(|volumes| {
-            self.asset.volumes.extend(
-                volumes
-                    .iter()
-                    .map(|volume| VolumeFractionBuffer::new(gpu, volume)),
-            );
-
-            if let Some(volume) = volumes.last() {
-                if let Some(line) = &self.asset.line {
-                    line.set_transform(gpu, &volume.transform());
-                }
-
-                if self.asset.physical_volume.is_none() {
-                    self.asset.physical_volume =
-                        Some(PhysicalVolume::new(gpu, volume.size(), volume.transform()));
-
-                    self.asset.radiance = Some(RadianceVolume::new(gpu, volume.size()))
-                }
-
-                if self.asset.hdri.is_none() {
-                    self.asset.hdri = Some(HdriBuffer::white(gpu))
-                }
-            }
-        });
-
-        FileStage::on_hdris(|hdris| {
-            for hdri in hdris {
-                self.asset.hdri = Some(HdriBuffer::from_file(gpu, &hdri));
-            }
-        });
+        self.asset.update(gpu);
 
         let surface = self.surface.maybe_resize(gpu, &controller.settings());
 
@@ -129,11 +85,16 @@ impl Renderer {
         if let Some(hdri) = &self.asset.hdri {
             hdri.update_settings(gpu);
         }
+        if let Some(mask) = &self.asset.mask {
+            mask.update_settings(gpu);
+        }
         for volume in &self.asset.volumes {
             volume.update_settings(gpu);
         }
 
         let mut cmd = gpu.cmd();
+
+        self.clear.dispatch(&mut cmd, surface.frame().post());
 
         self.anatomy.render(
             &mut cmd,

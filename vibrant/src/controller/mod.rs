@@ -18,6 +18,7 @@ use winit::dpi::PhysicalSize;
 
 use crate::controller::widgets::crop::CropWidget;
 use crate::controller::widgets::hdri::HdriWidget;
+use crate::controller::widgets::mask::MaskWidget;
 use crate::controller::widgets::tractography::TractographyWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
 use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
@@ -32,6 +33,7 @@ pub struct Controller {
     time: Instant,
 
     volumes_widget: VolumesWidget,
+    mask_widget: MaskWidget,
     tractography_widget: TractographyWidget,
     crop_widget: CropWidget,
     hdri_widget: HdriWidget,
@@ -52,6 +54,7 @@ impl Controller {
             time: Instant::now(),
 
             volumes_widget: VolumesWidget::new(),
+            mask_widget: MaskWidget::new(),
             tractography_widget: TractographyWidget::new(),
             crop_widget: CropWidget::new(),
             hdri_widget: HdriWidget::new(),
@@ -77,6 +80,10 @@ impl Controller {
 
     pub fn volumes(&self) -> &VolumesWidget {
         &self.volumes_widget
+    }
+
+    pub fn mask(&self) -> &MaskWidget {
+        &self.mask_widget
     }
 
     pub fn event(&mut self, event: Event) {
@@ -246,6 +253,10 @@ impl Controller {
                 self.crop_widget.show(ui, &mut self.settings);
 
                 self.volumes_widget.show(ui, &mut asset.volumes);
+
+                if let Some(mask) = &mut asset.mask {
+                    self.mask_widget.show(ui, mask);
+                }
 
                 if let Some(lines) = &mut asset.line {
                     self.tractography_widget.show(ui, lines);
