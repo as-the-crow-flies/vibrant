@@ -43,6 +43,10 @@ impl HdriWidget {
                     .changed();
 
                 self.changed |= ui
+                    .add(Slider::new(&mut hdri.settings_mut().specular, 0.0..=1.0).text("Specular"))
+                    .changed();
+
+                self.changed |= ui
                     .add(Slider::new(&mut hdri.settings_mut().rotation, 0.0..=1.0).text("Rotation"))
                     .changed();
             });

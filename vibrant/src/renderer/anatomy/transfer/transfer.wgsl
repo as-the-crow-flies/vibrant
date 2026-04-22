@@ -1,17 +1,14 @@
 struct Material {
     absorption: vec4<f32>,
     scattering: vec4<f32>,
-    data_min: f32,
-    data_max: f32,
-    user_min: f32,
-    user_max: f32,
+    min: f32,
+    max: f32,
     inverted: u32
 };
 
 struct MaskSettings {
     visible: u32,
     invert: u32,
-    scale: f32,
     offset: f32,
     width: f32
 };
@@ -51,7 +48,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         any(voxel >= textureDimensions(ABSORPTION)))
         { return; }
 
-    var mask = select(1.0, -1.0, bool(MASK_SETTINGS.invert)) * textureLoad(MASK, voxel, 0).x / MASK_SETTINGS.scale;
+    var mask = select(1.0, -1.0, bool(MASK_SETTINGS.invert)) * textureLoad(MASK, voxel, 0).x;
         mask = smoothstep(
                     MASK_SETTINGS.offset - MASK_SETTINGS.width,
                     MASK_SETTINGS.offset + MASK_SETTINGS.width,
@@ -59,17 +56,13 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         mask = select(1.0, mask, bool(MASK_SETTINGS.visible));
 
     var fraction = textureLoad(FRACTION, voxel, 0).x;
-        fraction = (fraction - MATERIAL.data_min) / (MATERIAL.data_max - MATERIAL.data_min);
 
+    if (bool(MATERIAL.inverted)) { fraction = 1.0 - fraction; }
 
-    if (bool(MATERIAL.inverted)) {
-        fraction = 1.0 - fraction;
-    }
+    fraction = (fraction - MATERIAL.min) / (MATERIAL.max - MATERIAL.min);
+    fraction *= mask;
 
-        fraction = (fraction - MATERIAL.user_min) / (MATERIAL.user_max - MATERIAL.user_min);
-        fraction *= mask;
-
-        fraction = saturate(fraction);
+    fraction = saturate(fraction);
 
     let absorption = fraction * MATERIAL.absorption;
     let scattering = fraction * MATERIAL.scattering;

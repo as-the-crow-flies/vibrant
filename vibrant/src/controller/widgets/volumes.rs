@@ -75,8 +75,8 @@ impl VolumesWidget {
                             self.changed |= ui
                                 .add(
                                     DoubleSlider::new(
-                                        &mut settings.user_min,
-                                        &mut settings.user_max,
+                                        &mut settings.min,
+                                        &mut settings.max,
                                         0.0..=1.0,
                                     )
                                     .width(300.0)

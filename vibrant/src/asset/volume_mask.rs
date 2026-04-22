@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use bytemuck::{bytes_of, Pod, Zeroable};
+use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
 use float_derive::FloatHash;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -15,7 +15,6 @@ pub struct VolumeMaskSettings {
     pub name: String,
     pub visible: bool,
     pub invert: bool,
-    pub scale: f32,
     pub offset: f32,
     pub width: f32,
 }
@@ -25,7 +24,6 @@ impl VolumeMaskSettings {
         VolumeMaskSettingsBuffer {
             visible: self.visible as u32,
             invert: self.invert as u32,
-            scale: self.scale,
             offset: self.offset,
             width: self.width,
         }
@@ -37,7 +35,6 @@ impl VolumeMaskSettings {
 pub struct VolumeMaskSettingsBuffer {
     pub visible: u32,
     pub invert: u32,
-    pub scale: f32,
     pub offset: f32,
     pub width: f32,
 }
@@ -69,18 +66,17 @@ impl VolumeMaskBuffer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D3,
-                format: file.ty().into(),
+                format: TextureFormat::R32Float,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
             },
             TextureDataOrder::LayerMajor,
-            file.data(),
+            cast_slice(file.data()),
         );
 
         let settings = VolumeMaskSettings {
             name: file.name().to_string(),
             visible: true,
-            scale: file.min().abs().max(file.max().abs()),
             offset: 0.0,
             width: 0.02,
             invert: false,
@@ -208,7 +204,6 @@ impl VolumeMaskBuffer {
         let settings = VolumeMaskSettings {
             name: "default".to_string(),
             visible: false,
-            scale: 1.0,
             offset: 0.0,
             width: 0.00,
             invert: false,

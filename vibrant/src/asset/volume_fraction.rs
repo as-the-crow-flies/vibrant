@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use bytemuck::{bytes_of, Pod, Zeroable};
+use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
 use glam::Mat4;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -16,10 +16,8 @@ pub struct VolumeFractionSettings {
     pub visible: bool,
     pub absorption: [f32; 3],
     pub scattering: [f32; 3],
-    pub data_min: f32,
-    pub data_max: f32,
-    pub user_min: f32,
-    pub user_max: f32,
+    pub min: f32,
+    pub max: f32,
     pub inverted: bool,
 }
 
@@ -31,12 +29,10 @@ impl VolumeFractionSettings {
         VolumeFractionSettingsBuffer {
             absorption: [ar, ag, ab, 0.0],
             scattering: [sr, sg, sb, 0.0],
-            data_min: self.data_min,
-            data_max: self.data_max,
-            user_min: self.user_min,
-            user_max: self.user_max,
+            min: self.min,
+            max: self.max,
             inverted: self.inverted as u32,
-            padding: [0, 0, 0],
+            padding: 0,
         }
     }
 }
@@ -46,12 +42,10 @@ impl VolumeFractionSettings {
 pub struct VolumeFractionSettingsBuffer {
     absorption: [f32; 4],
     scattering: [f32; 4],
-    data_min: f32,
-    data_max: f32,
-    user_min: f32,
-    user_max: f32,
+    min: f32,
+    max: f32,
     inverted: u32,
-    padding: [u32; 3],
+    padding: u32,
 }
 
 pub struct VolumeFractionBuffer {
@@ -84,12 +78,12 @@ impl VolumeFractionBuffer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D3,
-                format: file.ty().into(),
+                format: TextureFormat::R32Float,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
             },
             TextureDataOrder::LayerMajor,
-            file.data(),
+            cast_slice(file.data()),
         );
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
@@ -120,10 +114,8 @@ impl VolumeFractionBuffer {
             visible: true,
             absorption: [1.0; 3],
             scattering: [1.0; 3],
-            data_min: file.min(),
-            data_max: file.max(),
-            user_min: 0.0,
-            user_max: 1.0,
+            min: 0.0,
+            max: 1.0,
             inverted: false,
         };
 

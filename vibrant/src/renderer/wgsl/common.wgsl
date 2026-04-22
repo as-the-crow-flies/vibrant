@@ -54,6 +54,7 @@ struct LineSettings {
 struct HdriSettings {
     rotation: f32,
     strength: f32,
+    specular: f32,
     show: u32,
 }
 
@@ -561,7 +562,7 @@ fn hash(co: vec2<f32>) -> f32 {
 }
 
 fn equirectangular(direction: vec3<f32>, rotation: f32) -> vec2<f32> {
-    let d = rotation_y(rotation * 2.0 * PI) * normalize(direction);
+    let d = rotation_z(rotation * 2.0 * PI) * normalize(direction);
     return vec2<f32>(0.5 - atan2(d.z, d.x) / (2.0 * PI), acos(d.y) / PI);
 }
 
@@ -573,6 +574,17 @@ fn rotation_y(angle: f32) -> mat3x3<f32> {
         vec3<f32>( c, 0.0, -s),
         vec3<f32>(0.0, 1.0, 0.0),
         vec3<f32>( s, 0.0,  c)
+    );
+}
+
+fn rotation_z(angle: f32) -> mat3x3<f32> {
+    let c = cos(angle);
+    let s = sin(angle);
+
+    return mat3x3<f32>(
+        vec3<f32>( c,  s, 0.0),
+        vec3<f32>(-s,  c, 0.0),
+        vec3<f32>(0.0, 0.0, 1.0)
     );
 }
 

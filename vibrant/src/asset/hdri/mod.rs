@@ -16,6 +16,7 @@ use crate::{file::hdri::HdriFile, gpu::Gpu};
 pub struct HdriBufferSettings {
     pub rotation: f32,
     pub strength: f32,
+    pub specular: f32,
     pub show: u32,
 }
 
@@ -78,6 +79,7 @@ impl HdriBuffer {
         let settings = HdriBufferSettings {
             rotation: 0.0,
             strength: 1.0,
+            specular: 0.3,
             show: 0,
         };
 
