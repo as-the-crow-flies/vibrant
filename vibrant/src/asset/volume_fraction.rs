@@ -2,6 +2,7 @@ use std::any::type_name;
 
 use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
 use glam::Mat4;
+use strum::EnumIter;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     wgt::TextureDataOrder,
@@ -10,15 +11,36 @@ use wgpu::{
 
 use crate::{file::VolumeFile, gpu::Gpu};
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, EnumIter)]
+pub enum MaterialPreset {
+    Custom,
+    White,
+    Brain,
+    Blood,
+}
+
+impl Into<([f32; 3], [f32; 3])> for MaterialPreset {
+    fn into(self) -> ([f32; 3], [f32; 3]) {
+        match self {
+            MaterialPreset::Custom => ([1.0; 3], [1.0; 3]),
+            MaterialPreset::White => ([1.0; 3], [1.0; 3]),
+            MaterialPreset::Brain => ([0.162, 0.662, 1.0], [1.0, 0.732, 0.575]),
+            MaterialPreset::Blood => ([0.510, 0.768, 0.871], [0.544, 0.056, 0.100]),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct VolumeFractionSettings {
     pub name: String,
     pub visible: bool,
+    pub preset: MaterialPreset,
     pub absorption: [f32; 3],
     pub scattering: [f32; 3],
     pub min: f32,
     pub max: f32,
     pub inverted: bool,
+    pub masked: bool,
 }
 
 impl VolumeFractionSettings {
@@ -32,7 +54,7 @@ impl VolumeFractionSettings {
             min: self.min,
             max: self.max,
             inverted: self.inverted as u32,
-            padding: 0,
+            masked: self.masked as u32,
         }
     }
 }
@@ -45,7 +67,7 @@ pub struct VolumeFractionSettingsBuffer {
     min: f32,
     max: f32,
     inverted: u32,
-    padding: u32,
+    masked: u32,
 }
 
 pub struct VolumeFractionBuffer {
@@ -112,11 +134,13 @@ impl VolumeFractionBuffer {
         let settings = VolumeFractionSettings {
             name: file.name().to_string(),
             visible: true,
+            preset: MaterialPreset::White,
             absorption: [1.0; 3],
             scattering: [1.0; 3],
             min: 0.0,
             max: 1.0,
             inverted: false,
+            masked: true,
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {

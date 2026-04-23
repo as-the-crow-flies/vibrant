@@ -36,13 +36,34 @@ impl MaskWidget {
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), self.changed)
             .show_header(ui, |ui| {
                 ui.checkbox(&mut settings.visible, "");
-                ui.heading("Mask");
+                ui.heading("Masks");
             })
             .body(|ui| {
                 ui.spacing_mut().slider_width = 300.0;
-                ui.checkbox(&mut settings.invert, "Invert");
-                ui.add(Slider::new(&mut settings.offset, -1.0..=1.0).text("Offset"));
-                ui.add(Slider::new(&mut settings.width, 0.001..=0.2).text("Width"));
+
+                CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    settings.name.to_string().into(),
+                    true,
+                )
+                .show_header(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(&mut settings.name);
+                        self.changed |= ui.toggle_value(&mut settings.visible, "👁").changed();
+                        self.changed |= ui.toggle_value(&mut settings.inverted, "🌗").changed();
+                    });
+                })
+                .body(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Offset");
+                        ui.add(Slider::new(&mut settings.offset, -0.5..=0.5));
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Width");
+                        ui.add(Slider::new(&mut settings.width, 0.01..=0.1));
+                    });
+                });
             });
     }
 

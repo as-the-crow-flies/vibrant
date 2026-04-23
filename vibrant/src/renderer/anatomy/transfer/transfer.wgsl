@@ -3,7 +3,8 @@ struct Material {
     scattering: vec4<f32>,
     min: f32,
     max: f32,
-    inverted: u32
+    inverted: u32,
+    masked: u32
 };
 
 struct MaskSettings {
@@ -53,7 +54,9 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
                     MASK_SETTINGS.offset - MASK_SETTINGS.width,
                     MASK_SETTINGS.offset + MASK_SETTINGS.width,
                     mask);
+
         mask = select(1.0, mask, bool(MASK_SETTINGS.visible));
+        mask = select(1.0, mask, bool(MATERIAL.masked));
 
     var fraction = textureLoad(FRACTION, voxel, 0).x;
 

@@ -3,10 +3,11 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use egui::{collapsing_header::CollapsingState, Ui};
+use egui::{collapsing_header::CollapsingState, ComboBox, Ui};
 use egui_double_slider::DoubleSlider;
+use strum::IntoEnumIterator;
 
-use crate::asset::volume_fraction::VolumeFractionBuffer;
+use crate::asset::volume_fraction::{MaterialPreset, VolumeFractionBuffer};
 
 #[derive(Debug)]
 pub struct VolumesWidget {
@@ -52,23 +53,51 @@ impl VolumesWidget {
                         true,
                     )
                     .show_header(ui, |ui| {
+                        ui.text_edit_singleline(&mut settings.name);
+
+                        self.changed |= ui.toggle_value(&mut settings.visible, "👁").changed();
+                        self.changed |= ui.toggle_value(&mut settings.inverted, "🌗").changed();
+                        self.changed |= ui.toggle_value(&mut settings.masked, "▣").changed();
+
                         if ui.button("🗑").clicked() {
                             index_to_remove = Some(index);
                             self.changed = true;
                         }
-
-                        self.changed |= ui.checkbox(&mut settings.visible, "").changed();
-
-                        self.changed |=
-                            ui.color_edit_button_rgb(&mut settings.absorption).changed();
-
-                        self.changed |=
-                            ui.color_edit_button_rgb(&mut settings.scattering).changed();
-
-                        ui.text_edit_singleline(&mut settings.name);
                     })
                     .body(|ui| {
-                        self.changed |= ui.checkbox(&mut settings.inverted, "Invert").changed();
+                        ui.horizontal(|ui| {
+                            ui.label("Material");
+
+                            let mut material_changed = false;
+
+                            material_changed |=
+                                ui.color_edit_button_rgb(&mut settings.absorption).changed();
+                            material_changed |=
+                                ui.color_edit_button_rgb(&mut settings.scattering).changed();
+
+                            let mut preset_changed = false;
+
+                            ComboBox::from_id_salt("MaterialPreset")
+                                .selected_text(format!("{:?}", settings.preset))
+                                .show_ui(ui, |ui| {
+                                    for value in MaterialPreset::iter() {
+                                        let label = format!("{:?}", value);
+                                        preset_changed |= ui
+                                            .selectable_value(&mut settings.preset, value, label)
+                                            .changed();
+                                    }
+                                });
+
+                            if material_changed {
+                                settings.preset = MaterialPreset::Custom;
+                            }
+
+                            if preset_changed {
+                                (settings.absorption, settings.scattering) = settings.preset.into();
+                            }
+
+                            self.changed |= material_changed || preset_changed;
+                        });
 
                         ui.horizontal(|ui| {
                             ui.label("Contrast");
