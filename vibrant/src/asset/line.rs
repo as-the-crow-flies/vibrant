@@ -1,7 +1,6 @@
 use std::any::type_name;
 
 use bytemuck::{Pod, Zeroable};
-use float_derive::FloatHash;
 use glam::{Mat4, Vec3, Vec4};
 use itertools::Itertools;
 use random_color::{options::Luminosity, RandomColor};
@@ -21,7 +20,7 @@ pub struct GlobalLineSettings {
     pub color_visible: bool,
 }
 
-#[derive(Debug, FloatHash)]
+#[derive(Debug)]
 pub struct LineSettings {
     pub name: String,
     pub selected: bool,
@@ -42,7 +41,7 @@ pub struct LineSettingsBuffer {
 }
 
 impl LineSettings {
-    pub fn to_buffer(&self) -> LineSettingsBuffer {
+    fn to_buffer(&self) -> LineSettingsBuffer {
         let [r, g, b] = self.color;
 
         LineSettingsBuffer {

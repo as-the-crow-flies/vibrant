@@ -1,7 +1,6 @@
 use std::any::type_name;
 
 use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
-use float_derive::FloatHash;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     wgt::TextureDataOrder,
@@ -10,7 +9,7 @@ use wgpu::{
 
 use crate::{file::VolumeFile, gpu::Gpu};
 
-#[derive(Debug, Clone, FloatHash)]
+#[derive(Debug, Clone)]
 pub struct VolumeMaskSettings {
     pub name: String,
     pub visible: bool,
@@ -178,7 +177,7 @@ impl VolumeMaskBuffer {
         &self.settings
     }
 
-    pub fn white(gpu: &Gpu) -> VolumeMaskBuffer {
+    pub fn none(gpu: &Gpu) -> VolumeMaskBuffer {
         let label = Some(type_name::<Self>());
 
         let texture = gpu.device().create_texture_with_data(
@@ -202,7 +201,7 @@ impl VolumeMaskBuffer {
         );
 
         let settings = VolumeMaskSettings {
-            name: "default".to_string(),
+            name: "None".to_string(),
             visible: false,
             offset: 0.0,
             width: 0.00,

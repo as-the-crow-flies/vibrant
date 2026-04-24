@@ -44,31 +44,28 @@ impl AnatomyRenderer {
         frame: &Frame,
         asset: &Asset,
     ) {
-        if let (Some(volume), Some(mask), Some(radiance), Some(hdri)) = (
-            &asset.physical_volume,
-            &asset.mask,
-            &asset.radiance,
-            &asset.hdri,
-        ) {
-            let data_changed = controller.volumes().changed()
-                | controller.mask().changed()
-                | controller.crop().changed();
-            let lighting_changed = data_changed | controller.hdri().changed();
-
-            if data_changed {
+        if let (Some(volume), Some(radiance), Some(hdri)) =
+            (&asset.physical_volume, &asset.radiance, &asset.hdri)
+        {
+            if asset.changed() | controller.changed() {
                 self.transfer
-                    .dispatch(cmd, environment, &asset.volumes, mask, volume);
+                    .dispatch(cmd, environment, &asset.volumes, &asset.masks, volume);
 
                 self.gradient.dispatch(cmd, volume);
-            }
 
-            if lighting_changed {
                 self.radiance
                     .dispatch(cmd, environment, hdri, volume, radiance);
             }
 
-            self.trace
-                .dispatch(cmd, environment, hdri, frame, volume, radiance);
+            self.trace.dispatch(
+                cmd,
+                environment,
+                controller.viewport(),
+                hdri,
+                frame,
+                volume,
+                radiance,
+            );
         }
     }
 }

@@ -1,54 +1,46 @@
-use std::{
-    any::type_name,
-    hash::{DefaultHasher, Hash, Hasher},
-};
+use std::any::type_name;
 
 use egui::{collapsing_header::CollapsingState, Slider, Ui};
 
-use crate::asset::hdri::HdriBuffer;
+use crate::{
+    asset::hdri::HdriBuffer,
+    util::{ResponseExtentions, Tracked},
+};
 
 #[derive(Debug)]
 pub struct HdriWidget {
-    hash: u64,
     changed: bool,
+}
+
+impl Tracked for HdriWidget {
+    fn track(&mut self) {
+        self.changed = true;
+    }
 }
 
 impl HdriWidget {
     pub fn new() -> Self {
-        Self {
-            changed: false,
-            hash: 0,
-        }
+        Self { changed: false }
     }
 
     pub fn show(&mut self, ui: &mut Ui, hdri: &mut HdriBuffer) {
         self.changed = false;
 
-        let mut hasher = DefaultHasher::new();
-        hdri.name().hash(&mut hasher);
-        let hash = hasher.finish();
+        if hdri.name() == "Default" {
+            return;
+        }
 
-        self.changed = hash != self.hash;
-        self.hash = hash;
-
-        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), self.changed)
+        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
             .show_header(ui, |ui| ui.heading("Environment Map"))
             .body(|ui| {
-                if ui.button("Show/Hide").clicked() {
-                    hdri.settings_mut().show = 1 - hdri.settings_mut().show;
-                }
+                ui.add(Slider::new(&mut hdri.settings_mut().strength, 0.0..=2.0).text("Strength"))
+                    .track(self);
 
-                self.changed |= ui
-                    .add(Slider::new(&mut hdri.settings_mut().strength, 0.0..=2.0).text("Strength"))
-                    .changed();
+                ui.add(Slider::new(&mut hdri.settings_mut().specular, 0.0..=1.0).text("Specular"))
+                    .track(self);
 
-                self.changed |= ui
-                    .add(Slider::new(&mut hdri.settings_mut().specular, 0.0..=1.0).text("Specular"))
-                    .changed();
-
-                self.changed |= ui
-                    .add(Slider::new(&mut hdri.settings_mut().rotation, 0.0..=1.0).text("Rotation"))
-                    .changed();
+                ui.add(Slider::new(&mut hdri.settings_mut().rotation, 0.0..=1.0).text("Rotation"))
+                    .track(self);
             });
     }
 

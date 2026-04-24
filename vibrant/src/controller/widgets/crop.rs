@@ -20,7 +20,9 @@ impl CropWidget {
     }
 
     pub fn show(&mut self, ui: &mut Ui, settings: &mut Settings) {
-        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), self.changed)
+        self.changed = false;
+
+        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
             .show_header(ui, |ui| ui.heading("Crop"))
             .body(|ui| {
                 self.changed = Self::sliders(

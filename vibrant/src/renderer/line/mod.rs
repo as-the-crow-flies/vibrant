@@ -11,7 +11,7 @@ use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::line::LineBuffer,
+    asset::Asset,
     controller::Controller,
     gpu::Gpu,
     renderer::line::{
@@ -55,34 +55,33 @@ impl LineRenderer {
         controller: &Controller,
         environment: &Environment,
         frame: &Frame,
-        line: &LineBuffer,
+        asset: &Asset,
     ) {
         if !controller.tractography().visible() {
             return;
         }
 
-        if controller.tractography().changed()
-            | controller.volumes().changed()
-            | controller.crop().changed()
-        {
-            self.transform.dispatch(cmd, line, environment);
+        if let Some(line) = &asset.line {
+            if asset.changed() | controller.changed() {
+                self.transform.dispatch(cmd, line, environment);
 
-            self.crop.dispatch(cmd, line, environment);
+                self.crop.dispatch(cmd, line, environment);
 
-            self.occupancy
-                .dispatch(cmd, frame, environment, controller.settings(), line);
+                self.occupancy
+                    .dispatch(cmd, frame, environment, controller.settings(), line);
 
-            self.cull.dispatch(cmd, frame, environment);
+                self.cull.dispatch(cmd, frame, environment);
 
-            self.occlusion.dispatch(cmd, frame, environment);
+                self.occlusion.dispatch(cmd, frame, environment);
 
-            self.populate
-                .dispatch(cmd, frame, environment, controller.settings(), line);
+                self.populate
+                    .dispatch(cmd, frame, environment, controller.settings(), line);
+            }
+
+            self.render
+                .dispatch(cmd, environment, frame, line, controller.settings());
+
+            self.post.dispatch(cmd, environment, frame);
         }
-
-        self.render
-            .dispatch(cmd, environment, frame, line, controller.settings());
-
-        self.post.dispatch(cmd, environment, frame);
     }
 }

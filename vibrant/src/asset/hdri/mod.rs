@@ -128,7 +128,7 @@ impl HdriBuffer {
     }
 
     pub fn white(gpu: &Gpu) -> Self {
-        Self::new(gpu, "default", UVec2::ONE, &[[f16::ONE; 4]])
+        Self::new(gpu, "Default", UVec2::ONE, &[[f16::ONE; 4]])
     }
 
     pub fn name(&self) -> &str {

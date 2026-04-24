@@ -42,7 +42,7 @@ impl AnatomyTransferPipeline {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         fractions: &[VolumeFractionBuffer],
-        mask: &VolumeMaskBuffer,
+        masks: &[VolumeMaskBuffer],
         volume: &PhysicalVolume,
     ) {
         let n_workgroups = volume.size().add(3).div(4);
@@ -50,16 +50,17 @@ impl AnatomyTransferPipeline {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
         pass.set_bind_group(0, volume.binding_write(), &[]);
-        pass.set_bind_group(1, mask.binding(), &[]);
-        pass.set_bind_group(2, volume.binding_write(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
 
         pass.set_pipeline(&self.clear);
         pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
 
+        pass.set_bind_group(2, volume.binding_write(), &[]);
+        pass.set_bind_group(3, environment.binding(), &[]);
+
         pass.set_pipeline(&self.transfer);
         for fraction in fractions.iter().filter(|x| x.settings().visible) {
             pass.set_bind_group(0, fraction.binding(), &[]);
+            pass.set_bind_group(1, masks[fraction.settings().mask].binding(), &[]);
             pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
         }
     }

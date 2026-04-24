@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, hash::Hash};
 
 use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
 use glam::Mat4;
@@ -11,7 +11,7 @@ use wgpu::{
 
 use crate::{file::VolumeFile, gpu::Gpu};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, EnumIter)]
 pub enum MaterialPreset {
     Custom,
     White,
@@ -30,11 +30,12 @@ impl Into<([f32; 3], [f32; 3])> for MaterialPreset {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VolumeFractionSettings {
     pub name: String,
     pub visible: bool,
     pub preset: MaterialPreset,
+    pub mask: usize,
     pub absorption: [f32; 3],
     pub scattering: [f32; 3],
     pub min: f32,
@@ -135,6 +136,7 @@ impl VolumeFractionBuffer {
             name: file.name().to_string(),
             visible: true,
             preset: MaterialPreset::White,
+            mask: 0,
             absorption: [1.0; 3],
             scattering: [1.0; 3],
             min: 0.0,
@@ -196,6 +198,10 @@ impl VolumeFractionBuffer {
         self.transform
     }
 
+    pub fn settings(&self) -> &VolumeFractionSettings {
+        &self.settings
+    }
+
     pub fn settings_mut(&mut self) -> &mut VolumeFractionSettings {
         &mut self.settings
     }
@@ -253,10 +259,6 @@ impl VolumeFractionBuffer {
                     },
                 ],
             })
-    }
-
-    pub fn settings(&self) -> &VolumeFractionSettings {
-        &self.settings
     }
 }
 

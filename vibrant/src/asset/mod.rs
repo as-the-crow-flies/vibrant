@@ -22,14 +22,26 @@ use crate::{
 pub struct Asset {
     pub line: Option<LineBuffer>,
     pub volumes: Vec<VolumeFractionBuffer>,
-    pub mask: Option<VolumeMaskBuffer>,
+    pub masks: Vec<VolumeMaskBuffer>,
     pub physical_volume: Option<PhysicalVolume>,
     pub radiance: Option<RadianceVolume>,
     pub hdri: Option<HdriBuffer>,
+
+    pub changed: bool,
 }
 
 impl Asset {
-    pub fn update(&mut self, gpu: &Gpu) {
+    pub fn maybe_update(&mut self, gpu: &Gpu) {
+        self.changed = false;
+
+        if self.masks.is_empty() {
+            self.masks.push(VolumeMaskBuffer::none(gpu));
+        }
+
+        if self.hdri.is_none() {
+            self.hdri = Some(HdriBuffer::white(gpu))
+        }
+
         FileStage::on_lines(|lines| {
             let line = LineBuffer::new(gpu, &lines);
 
@@ -38,12 +50,14 @@ impl Asset {
             }
 
             self.line = Some(line);
+
+            self.changed = true;
         });
 
         FileStage::on_volumes(|volumes| {
             for volume in &volumes {
                 if volume.name().contains("mask") {
-                    self.mask = Some(VolumeMaskBuffer::new(gpu, volume));
+                    self.masks.push(VolumeMaskBuffer::new(gpu, volume));
                 } else {
                     self.volumes.push(VolumeFractionBuffer::new(gpu, volume));
                 }
@@ -60,21 +74,21 @@ impl Asset {
 
                     self.radiance = Some(RadianceVolume::new(gpu, volume.size()))
                 }
-
-                if self.mask.is_none() {
-                    self.mask = Some(VolumeMaskBuffer::white(gpu));
-                }
-
-                if self.hdri.is_none() {
-                    self.hdri = Some(HdriBuffer::white(gpu))
-                }
             }
+
+            self.changed = true;
         });
 
         FileStage::on_hdris(|hdris| {
             for hdri in hdris {
                 self.hdri = Some(HdriBuffer::from_file(gpu, &hdri));
             }
+
+            self.changed = true;
         });
+    }
+
+    pub fn changed(&self) -> bool {
+        self.changed
     }
 }

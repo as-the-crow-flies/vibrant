@@ -1,3 +1,4 @@
+use egui::Rect;
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
 use crate::{
@@ -32,6 +33,7 @@ impl AnatomyTracePipeline {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
+        _viewport: Rect,
         hdri: &HdriBuffer,
         frame: &Frame,
         volume: &PhysicalVolume,

@@ -8,7 +8,7 @@ pub mod widgets;
 
 use camera::Camera;
 use egui::{Align, CentralPanel, Frame, Layout, Margin, ScrollArea, Slider, Ui};
-use egui::{ComboBox, Panel};
+use egui::{Panel, Rect};
 use event::Event;
 use light::Light;
 use settings::Settings;
@@ -18,7 +18,7 @@ use winit::dpi::PhysicalSize;
 
 use crate::controller::widgets::crop::CropWidget;
 use crate::controller::widgets::hdri::HdriWidget;
-use crate::controller::widgets::mask::MaskWidget;
+use crate::controller::widgets::masks::MasksWidget;
 use crate::controller::widgets::tractography::TractographyWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
 use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
@@ -33,13 +33,15 @@ pub struct Controller {
     time: Instant,
 
     volumes_widget: VolumesWidget,
-    mask_widget: MaskWidget,
+    mask_widget: MasksWidget,
     tractography_widget: TractographyWidget,
     crop_widget: CropWidget,
     hdri_widget: HdriWidget,
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
+
+    viewport: Rect,
     hovered: bool,
 }
 
@@ -54,7 +56,7 @@ impl Controller {
             time: Instant::now(),
 
             volumes_widget: VolumesWidget::new(),
-            mask_widget: MaskWidget::new(),
+            mask_widget: MasksWidget::new(),
             tractography_widget: TractographyWidget::new(),
             crop_widget: CropWidget::new(),
             hdri_widget: HdriWidget::new(),
@@ -62,6 +64,7 @@ impl Controller {
             show_left_side_panel: false,
             show_right_side_panel: true,
 
+            viewport: Rect::ZERO,
             hovered: true,
         }
     }
@@ -82,7 +85,7 @@ impl Controller {
         &self.volumes_widget
     }
 
-    pub fn mask(&self) -> &MaskWidget {
+    pub fn masks(&self) -> &MasksWidget {
         &self.mask_widget
     }
 
@@ -144,66 +147,7 @@ impl Controller {
                     ..Default::default()
                 })
                 .show_inside(ui, |ui| {
-                    ui.heading("Rendering");
-                    ui.separator();
-
-                    ComboBox::from_label("Voxel Resolution")
-                        .selected_text(format!("{:?}", self.settings.volume))
-                        .show_ui(ui, |ui| {
-                            for power in 5u32..10 {
-                                ui.selectable_value(
-                                    &mut self.settings.volume,
-                                    2u32.pow(power),
-                                    format!("{}", 2u32.pow(power)),
-                                );
-                            }
-                        });
-
-                    ui.separator();
-                    ui.label("Appearance");
-                    ui.separator();
-
-                    ui.add(Slider::new(&mut self.camera.fov, 0.1..=3.0));
-                    ui.add(
-                        Slider::new(&mut self.settings.radius, 0.01..=1.0)
-                            .text("Streamline Radius"),
-                    );
-                    ui.add(Slider::new(&mut self.settings.lighting, 0.0..=10.0).text("Lighting"));
-                    ui.add(
-                        Slider::new(&mut self.settings.ambient_light, 0.0..=10.0)
-                            .text("Ambient Light"),
-                    );
-                    ui.add(
-                        Slider::new(&mut self.settings.direct_light, 0.0..=1.0)
-                            .text("Direct Light"),
-                    );
-                    ui.add(
-                        Slider::new(&mut self.settings.tangent_color, 0.0..=2.0)
-                            .text("Tangent Color"),
-                    );
-                    ui.add(Slider::new(&mut self.settings.alpha, 0.01..=1.0).text("Alpha"));
-                    ui.add(Slider::new(&mut self.settings.smoothing, 0.0..=1.0).text("Smoothing"));
-                    ui.add(
-                        Slider::new(&mut self.settings.crop_start, 0.0..=1.0).text("Crop Start"),
-                    );
-                    ui.add(Slider::new(&mut self.settings.crop_end, 0.0..=1.0).text("Crop End"));
-
-                    if ui
-                        .add(
-                            Slider::new(&mut self.settings.crop_middle, 0.0..=0.5)
-                                .text("Crop Middle"),
-                        )
-                        .changed()
-                    {
-                        self.settings.crop_start = 0.5 - self.settings().crop_middle;
-                        self.settings.crop_end = 0.5 + self.settings().crop_middle;
-                    }
-
-                    ui.add(Slider::new(&mut self.settings.plane, 0.0..=1.0).text("plane"));
-
-                    ui.add(
-                        Slider::new(&mut self.settings.workgroups, 1..=128).text("# Workgroups"),
-                    );
+                    ui.add(Slider::new(&mut self.camera.fov, 0.1..=3.0).text("Field of View"));
                 });
 
             Panel::bottom("bottom_panel")
@@ -252,14 +196,12 @@ impl Controller {
             ScrollArea::new([false, true]).show(ui, |ui| {
                 self.crop_widget.show(ui, &mut self.settings);
 
-                self.volumes_widget.show(ui, &mut asset.volumes);
-
-                if let Some(mask) = &mut asset.mask {
-                    self.mask_widget.show(ui, mask);
-                }
+                self.volumes_widget
+                    .show(ui, &mut asset.volumes, &mut asset.masks);
+                self.mask_widget.show(ui, &mut asset.masks);
 
                 if let Some(lines) = &mut asset.line {
-                    self.tractography_widget.show(ui, lines);
+                    self.tractography_widget.show(ui, &mut self.settings, lines);
                 }
 
                 if let Some(hdri) = &mut asset.hdri {
@@ -268,10 +210,10 @@ impl Controller {
             });
         });
 
-        self.hovered = CentralPanel::no_frame()
-            .show_inside(ui, |_| {})
-            .response
-            .hovered();
+        let viewport = CentralPanel::no_frame().show_inside(ui, |_| {});
+
+        self.hovered = viewport.response.hovered();
+        self.viewport = viewport.response.rect;
     }
 
     pub fn camera(&self) -> &Camera {
@@ -299,8 +241,21 @@ impl Controller {
         Instant::now().duration_since(self.time).as_secs_f32()
     }
 
+    pub fn viewport(&self) -> Rect {
+        self.viewport
+    }
+
     pub fn hovered(&self) -> bool {
         self.hovered
+    }
+
+    pub fn changed(&self) -> bool {
+        false
+            | self.crop().changed()
+            | self.volumes().changed()
+            | self.masks().changed()
+            | self.tractography().changed()
+            | self.hdri().changed()
     }
 }
 

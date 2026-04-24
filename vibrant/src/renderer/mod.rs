@@ -65,7 +65,7 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
-        self.asset.update(gpu);
+        self.asset.maybe_update(gpu);
 
         let surface = self.surface.maybe_resize(gpu, &controller.settings());
 
@@ -85,11 +85,11 @@ impl Renderer {
         if let Some(hdri) = &self.asset.hdri {
             hdri.update_settings(gpu);
         }
-        if let Some(mask) = &self.asset.mask {
-            mask.update_settings(gpu);
-        }
         for volume in &self.asset.volumes {
             volume.update_settings(gpu);
+        }
+        for mask in &self.asset.masks {
+            mask.update_settings(gpu);
         }
 
         let mut cmd = gpu.cmd();
@@ -104,15 +104,13 @@ impl Renderer {
             &self.asset,
         );
 
-        if let Some(line) = &self.asset.line {
-            self.line.render(
-                &mut cmd,
-                controller,
-                &self.environment,
-                surface.frame(),
-                line,
-            );
-        };
+        self.line.render(
+            &mut cmd,
+            controller,
+            &self.environment,
+            surface.frame(),
+            &self.asset,
+        );
 
         if !FileStage::about_to_save() {
             self.ui
