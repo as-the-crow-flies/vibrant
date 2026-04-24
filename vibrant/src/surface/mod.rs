@@ -106,6 +106,7 @@ impl Frame {
 pub struct Surface {
     surface: wgpu::Surface<'static>,
     frame: Frame,
+    changed: bool,
 }
 
 impl Surface {
@@ -122,22 +123,24 @@ impl Surface {
         Self {
             surface,
             frame: Frame::new(gpu, &Settings::new()),
+            changed: true,
         }
     }
 
-    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
+    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) {
         if settings.width == self.frame.color().width()
             && settings.height == self.frame.color().height()
             && settings.volume == self.frame.occupancy().resolution()
         {
-            return self;
+            self.changed = false;
+            return;
         }
 
         self.frame = Frame::new(gpu, &settings);
         self.surface
             .configure(gpu.device(), &Self::config(settings.width, settings.height));
 
-        self
+        self.changed = true;
     }
 
     fn get_current_texture(&self) -> Option<SurfaceTexture> {
@@ -196,5 +199,9 @@ impl Surface {
 
     pub fn frame(&self) -> &Frame {
         &self.frame
+    }
+
+    pub fn changed(&self) -> bool {
+        self.changed
     }
 }

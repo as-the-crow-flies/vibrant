@@ -16,7 +16,7 @@ use crate::{
         },
         environment::Environment,
     },
-    surface::Frame,
+    surface::Surface,
 };
 
 pub struct AnatomyRenderer {
@@ -41,13 +41,13 @@ impl AnatomyRenderer {
         cmd: &mut CommandEncoder,
         controller: &Controller,
         environment: &Environment,
-        frame: &Frame,
+        surface: &Surface,
         asset: &Asset,
     ) {
         if let (Some(volume), Some(radiance), Some(hdri)) =
             (&asset.physical_volume, &asset.radiance, &asset.hdri)
         {
-            if asset.changed() | controller.changed() {
+            if surface.changed() | asset.changed() | controller.changed() {
                 self.transfer
                     .dispatch(cmd, environment, &asset.volumes, &asset.masks, volume);
 
@@ -62,7 +62,7 @@ impl AnatomyRenderer {
                 environment,
                 controller.viewport(),
                 hdri,
-                frame,
+                surface.frame(),
                 volume,
                 radiance,
             );

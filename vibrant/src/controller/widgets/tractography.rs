@@ -61,6 +61,8 @@ impl TractographyWidget {
                             for line in lines.settings() {
                                 line.visible = visible;
                             }
+
+                            self.track();
                         }
 
                         if let Some(color_visible) = ternary_checkbox(
@@ -73,6 +75,8 @@ impl TractographyWidget {
                             for line in lines.settings() {
                                 line.color_visible = color_visible
                             }
+
+                            self.track();
                         }
                     })
                     .body(|ui| {

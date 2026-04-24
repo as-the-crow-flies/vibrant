@@ -19,7 +19,7 @@ use crate::{
         populate::LinePopulatePipeline, post::PostProcessingPipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
-    surface::Frame,
+    surface::Surface,
 };
 
 use super::environment::Environment;
@@ -54,15 +54,19 @@ impl LineRenderer {
         cmd: &mut CommandEncoder,
         controller: &Controller,
         environment: &Environment,
-        frame: &Frame,
+        surface: &Surface,
         asset: &Asset,
     ) {
         if !controller.tractography().visible() {
             return;
         }
 
+        let frame = surface.frame();
+
         if let Some(line) = &asset.line {
-            if asset.changed() | controller.changed() {
+            if surface.changed() | asset.changed() | controller.changed() {
+                dbg!("Update Tractogram");
+
                 self.transform.dispatch(cmd, line, environment);
 
                 self.crop.dispatch(cmd, line, environment);

@@ -345,19 +345,22 @@ fn shade(
 
     let color = unpack4x8unorm(settings.color);
 
-    let d = abs(tangent).xzy;
+    let tangent_color = tangent2rgb(abs(tangent).xzy);
+    let line_color = unpack4x8unorm(settings.color);
 
+    let rgb = factor * mix(tangent_color, line_color.rgb, line_color.a);
+    let alpha = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
+
+    return vec4<f32>(rgb, alpha);
+}
+
+fn tangent2rgb(tangent: vec3<f32>) -> vec3<f32> {
     let red = vec2<f32>(0.217, 0.125);
     let green = vec2<f32>(-0.217, 0.125);
     let blue = vec2<f32>(0.000, -0.250);
 
-    let oklab = vec3<f32>(environment.settings.lighting, environment.settings.tangent_color * d.r * red + d.g * green + d.b * blue);
-    let result = select(oklab2rgb(oklab), d, environment.settings.lighting == 0.0);
-
-    let rgb = factor * result;
-    let alpha = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
-
-    return vec4<f32>(rgb, alpha);
+    let oklab = vec3<f32>(0.8, tangent.r * red + tangent.g * green + tangent.b * blue);
+    return oklab2rgb(oklab);
 }
 
 /*

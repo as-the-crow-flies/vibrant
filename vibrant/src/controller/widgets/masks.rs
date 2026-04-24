@@ -24,13 +24,11 @@ impl MasksWidget {
     }
 
     pub fn show(&mut self, ui: &mut Ui, masks: &mut Vec<VolumeMaskBuffer>) {
+        self.changed = false;
+
         if masks.len() <= 1 {
             return;
         }
-
-        self.changed = false;
-
-        let mut index_to_remove: Option<usize> = None;
 
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
             .show_header(ui, |ui| {
@@ -39,7 +37,7 @@ impl MasksWidget {
             .body(|ui| {
                 ui.spacing_mut().slider_width = 300.0;
 
-                for (index, mask) in masks.iter_mut().enumerate() {
+                for mask in masks.iter_mut() {
                     let settings = mask.settings_mut();
 
                     // Don't show default mask
@@ -57,11 +55,6 @@ impl MasksWidget {
                             ui.checkbox(&mut settings.visible, "").track(self);
                             ui.text_edit_singleline(&mut settings.name).track(self);
                             ui.toggle_value(&mut settings.inverted, "🌗").track(self);
-
-                            if ui.button("🗑").clicked() {
-                                index_to_remove = Some(index);
-                                self.track();
-                            }
                         });
                     })
                     .body(|ui| {
@@ -79,11 +72,6 @@ impl MasksWidget {
                     });
                 }
             });
-
-        if let Some(index) = index_to_remove {
-            masks.remove(index);
-            self.track();
-        }
     }
 
     pub fn changed(&self) -> bool {

@@ -65,9 +65,8 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
+        self.surface.maybe_resize(gpu, &controller.settings());
         self.asset.maybe_update(gpu);
-
-        let surface = self.surface.maybe_resize(gpu, &controller.settings());
 
         let input = self.egui.take_egui_input(window);
         let output = self
@@ -94,13 +93,13 @@ impl Renderer {
 
         let mut cmd = gpu.cmd();
 
-        self.clear.dispatch(&mut cmd, surface.frame().post());
+        self.clear.dispatch(&mut cmd, self.surface.frame().post());
 
         self.anatomy.render(
             &mut cmd,
             controller,
             &self.environment,
-            surface.frame(),
+            &self.surface,
             &self.asset,
         );
 
@@ -108,17 +107,25 @@ impl Renderer {
             &mut cmd,
             controller,
             &self.environment,
-            surface.frame(),
+            &self.surface,
             &self.asset,
         );
 
         if !FileStage::about_to_save() {
-            self.ui
-                .render(gpu, &mut cmd, surface.frame(), self.egui.egui_ctx(), output);
+            self.ui.render(
+                gpu,
+                &mut cmd,
+                self.surface.frame(),
+                self.egui.egui_ctx(),
+                output,
+            );
         }
 
-        surface.present(gpu, cmd);
+        self.surface.present(gpu, cmd);
 
-        FileStage::on_save(|path| gpu.save(path, surface.frame().color().texture()).block_on());
+        FileStage::on_save(|path| {
+            gpu.save(path, self.surface.frame().color().texture())
+                .block_on()
+        });
     }
 }
