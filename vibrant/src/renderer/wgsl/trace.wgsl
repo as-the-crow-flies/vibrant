@@ -134,7 +134,7 @@ fn minimum(v: vec3<f32>) -> f32 {
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
-    let t = TRANSFORM_VIEW * ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
+    let t = TRANSFORM * ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
     return t.xyz / t.w;
 }
 

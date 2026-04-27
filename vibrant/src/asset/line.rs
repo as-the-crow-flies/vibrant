@@ -1,7 +1,7 @@
 use std::{any::type_name, iter::zip};
 
-use bytemuck::{cast_slice, Pod, Zeroable};
-use glam::{Mat4, Vec3, Vec4};
+use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
+use glam::{Mat4, Vec4};
 use itertools::Itertools;
 use random_color::{options::Luminosity, RandomColor};
 use strum::EnumIter;
@@ -94,7 +94,6 @@ pub struct LineBuffer {
     raw_offsets: Buffer,
 
     transform: Buffer,
-    transform_view: Buffer,
 
     binding_read: BindGroup,
     binding_write: BindGroup,
@@ -264,12 +263,6 @@ impl LineBuffer {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let transform_view = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::bytes_of(&(Mat4::from_scale(Vec3::ONE * 0.01))),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&settings_buffer),
@@ -318,10 +311,6 @@ impl LineBuffer {
                 resource: transform.as_entire_binding(),
             },
             BindGroupEntry {
-                binding: 10,
-                resource: transform_view.as_entire_binding(),
-            },
-            BindGroupEntry {
                 binding: 11,
                 resource: scalar.as_entire_binding(),
             },
@@ -363,7 +352,6 @@ impl LineBuffer {
             colormap,
 
             transform,
-            transform_view,
 
             raw_indices,
             raw_vertices,
@@ -386,6 +374,10 @@ impl LineBuffer {
 
     pub fn bounds(&self) -> &Bounds {
         &self.bounds
+    }
+
+    pub fn colormap(&self) -> &Colormap {
+        &self.colormap
     }
 
     pub fn binding(&self, read_only: bool) -> &BindGroup {
@@ -420,10 +412,7 @@ impl LineBuffer {
 
     pub fn set_transform(&self, gpu: &Gpu, transform: &Mat4) {
         gpu.queue()
-            .write_buffer(&self.transform, 0, bytemuck::bytes_of(transform));
-
-        gpu.queue()
-            .write_buffer(&self.transform_view, 0, bytemuck::bytes_of(transform));
+            .write_buffer(&self.transform, 0, bytes_of(transform));
     }
 
     pub fn layout(gpu: &Gpu, read_only: bool) -> BindGroupLayout {
@@ -539,17 +528,6 @@ impl LineBuffer {
                     // Transform
                     BindGroupLayoutEntry {
                         binding: 9,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Transform View
-                    BindGroupLayoutEntry {
-                        binding: 10,
                         visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,

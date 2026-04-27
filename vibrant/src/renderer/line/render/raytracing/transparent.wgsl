@@ -3,7 +3,6 @@
 @group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
 @group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
 @group(2) @binding(9) var<uniform> TRANSFORM: mat4x4<f32>;
-@group(2) @binding(10) var<uniform> TRANSFORM_VIEW: mat4x4<f32>;
 @group(2) @binding(11) var<storage> LINE_SCALAR: array<f32>;
 @group(2) @binding(12) var COLORMAP: texture_2d<f32>;
 
