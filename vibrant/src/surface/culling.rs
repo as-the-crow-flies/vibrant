@@ -43,7 +43,11 @@ impl CullingBuffer {
 
         let index = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 1024 * 1024 * 1024,
+            size: gpu
+                .device()
+                .limits()
+                .max_storage_buffer_binding_size
+                .min(2 * 1024 * 1024 * 1024),
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
