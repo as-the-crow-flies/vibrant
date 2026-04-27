@@ -54,6 +54,7 @@ impl From<&str> for File {
 #[derive(Default)]
 pub struct FileStage {
     pub lines: Vec<LineFile>,
+    pub track_scalars: Vec<TrackScalarFile>,
     pub volumes: Vec<VolumeFile>,
     pub hdris: Vec<HdriFile>,
     pub save: Option<PathBuf>,
@@ -100,6 +101,7 @@ impl FileStage {
 
     fn load_files(files: Vec<File>) {
         let mut lines: Vec<LineFile> = Vec::new();
+        let mut track_scalars: Vec<TrackScalarFile> = Vec::new();
         let mut volumes: Vec<VolumeFile> = Vec::new();
         let mut hdris: Vec<HdriFile> = Vec::new();
 
@@ -108,6 +110,8 @@ impl FileStage {
                 lines.push(LineFile::from_tck(file));
             } else if file.name().ends_with(".obj") {
                 lines.push(LineFile::from_obj(file));
+            } else if file.name().ends_with(".tsf") {
+                track_scalars.push(TrackScalarFile::from_tsf(file));
             } else if file.name().ends_with(".nii.gz") {
                 volumes.push(VolumeFile::from_nifti(&file));
             } else if file.name().ends_with(".exr") {
@@ -122,6 +126,7 @@ impl FileStage {
 
         if let Ok(stage) = QUEUE.lock().as_mut() {
             stage.lines.extend(lines);
+            stage.track_scalars.extend(track_scalars);
             stage.volumes.extend(volumes);
             stage.hdris.extend(hdris);
         }
@@ -147,6 +152,14 @@ impl FileStage {
 
         if !data.lines.is_empty() {
             callback(data.lines.drain(..).collect());
+        }
+    }
+
+    pub fn on_track_scalars(callback: impl FnOnce(Vec<TrackScalarFile>)) {
+        let mut data = QUEUE.lock().unwrap();
+
+        if !data.track_scalars.is_empty() {
+            callback(data.track_scalars.drain(..).collect());
         }
     }
 

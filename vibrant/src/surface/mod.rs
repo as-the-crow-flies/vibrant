@@ -179,8 +179,6 @@ impl Surface {
             if !gpu.wait() {
                 warn!("Could not poll GPU")
             }
-        } else {
-            warn!("Could not obtain surface texture");
         }
     }
 

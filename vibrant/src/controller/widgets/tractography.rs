@@ -1,9 +1,13 @@
 use egui::{collapsing_header::CollapsingState, ComboBox, Grid, Slider, Ui};
 use egui_double_slider::DoubleSlider;
 use itertools::Itertools;
+use strum::IntoEnumIterator;
 
 use crate::{
-    asset::line::LineBuffer,
+    asset::{
+        colormap::ColormapSelection,
+        line::{LineBuffer, LineColorMode},
+    },
     controller::{settings::Settings, ternary_checkbox},
     util::{ResponseExtentions, Tracked},
 };
@@ -64,20 +68,6 @@ impl TractographyWidget {
 
                             self.track();
                         }
-
-                        if let Some(color_visible) = ternary_checkbox(
-                            ui,
-                            Some(lines.settings_global().color_visible),
-                            "   🎨   ",
-                        ) {
-                            lines.settings_global().color_visible = color_visible;
-
-                            for line in lines.settings() {
-                                line.color_visible = color_visible
-                            }
-
-                            self.track();
-                        }
                     })
                     .body(|ui| {
                         Grid::new("TractographySettings").show(ui, |ui| {
@@ -127,15 +117,40 @@ impl TractographyWidget {
                     CollapsingState::load_with_default_open(ui.ctx(), id, false)
                         .show_header(ui, |ui| {
                             ui.toggle_value(&mut line.visible, "👁").track(self);
-                            ui.color_edit_button_srgb(&mut line.color).track(self);
+
                             ui.text_edit_singleline(&mut line.name).track(self);
+
+                            ComboBox::from_id_salt(format!("{}_LineColorMode", line.name))
+                                .selected_text(format!("{:?}", line.color_mode))
+                                .show_ui(ui, |ui| {
+                                    for mode in LineColorMode::iter() {
+                                        ui.selectable_value(
+                                            &mut line.color_mode,
+                                            mode,
+                                            format!("{:?}", mode),
+                                        );
+                                    }
+                                });
+
+                            if line.color_mode == LineColorMode::Color {
+                                ui.color_edit_button_srgb(&mut line.color).track(self);
+                            }
+
+                            if line.color_mode == LineColorMode::Scalar {
+                                ComboBox::from_id_salt(format!("{}_LineColormap", line.name))
+                                    .selected_text(format!("{:?}", line.colormap))
+                                    .show_ui(ui, |ui| {
+                                        for map in ColormapSelection::iter() {
+                                            ui.selectable_value(
+                                                &mut line.colormap,
+                                                map,
+                                                format!("{:?}", map),
+                                            );
+                                        }
+                                    });
+                            }
                         })
-                        .body(|ui| {
-                            ui.add(Slider::new(&mut line.crop_start, 0.0..=1.0).text("Crop Start"))
-                                .track(self);
-                            ui.add(Slider::new(&mut line.crop_end, 0.0..=1.0).text("Crop End"))
-                                .track(self);
-                        });
+                        .body(|_| {});
                 }
             });
     }

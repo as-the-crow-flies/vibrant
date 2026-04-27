@@ -65,8 +65,6 @@ impl LineRenderer {
 
         if let Some(line) = &asset.line {
             if surface.changed() | asset.changed() | controller.changed() {
-                dbg!("Update Tractogram");
-
                 self.transform.dispatch(cmd, line, environment);
 
                 self.crop.dispatch(cmd, line, environment);

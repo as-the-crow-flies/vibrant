@@ -47,6 +47,7 @@ struct Environment {
 struct LineSettings {
     visible: u32,
     color: u32,
+    colormap: u32,
     crop_start: f32,
     crop_end: f32,
 }
@@ -308,13 +309,16 @@ fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
 fn shade(
     v0: Vertex,
     v1: Vertex,
+    v0s: f32,
+    v1s: f32,
     radius: f32,
     position: vec3<f32>,
     settings: LineSettings,
     environment: Environment,
     occlusion_ambient: texture_3d<f32>,
     occlusion_directional: texture_3d<f32>,
-    occlusion_sampler: sampler
+    occlusion_sampler: sampler,
+    colormap: texture_2d<f32>
 ) -> vec4<f32> {
     let delta = v1.xyz - v0.xyz;
     let pa = position - v0.xyz;
@@ -348,7 +352,19 @@ fn shade(
     let tangent_color = tangent2rgb(abs(tangent).xzy);
     let line_color = unpack4x8unorm(settings.color);
 
-    let rgb = factor * mix(tangent_color, line_color.rgb, line_color.a);
+    let scalar_sample = u32(mix(v0s, v1s, height) * 255.0);
+    let scalar_color = textureLoad(colormap, vec2<u32>(scalar_sample, settings.colormap), 0).rgb;
+
+    let has_scalar_color = line_color.a == 1.0;
+    let has_line_color = !has_scalar_color && line_color.a > 0.4;
+    let has_tangent_color = !has_line_color && !has_scalar_color;
+
+    let rgb = factor * (
+        f32(has_line_color) * line_color.rgb +
+        f32(has_scalar_color) * scalar_color +
+        f32(has_tangent_color) * tangent_color
+    );
+
     let alpha = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
 
     return vec4<f32>(rgb, alpha);

@@ -1,3 +1,4 @@
+pub mod colormap;
 pub mod hdri;
 pub mod line;
 pub mod radiance;
@@ -52,6 +53,14 @@ impl Asset {
             self.line = Some(line);
 
             self.changed = true;
+        });
+
+        FileStage::on_track_scalars(|track_scalars| {
+            if let Some(line) = &mut self.line {
+                for scalar in track_scalars {
+                    line.set_scalar(gpu, scalar);
+                }
+            }
         });
 
         FileStage::on_volumes(|volumes| {

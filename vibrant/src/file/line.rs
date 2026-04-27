@@ -1,6 +1,6 @@
 use glam::{Vec3, Vec4};
-use itertools::Itertools;
 
+use bytemuck::{checked::cast_slice, try_cast_slice};
 use std::{collections::HashMap, io::BufRead};
 
 use crate::file::File;
@@ -55,8 +55,6 @@ impl LineFile {
 
         lines.pop();
 
-        // Self::orient_lines(&mut lines);
-
         Self {
             name,
             bounds: Bounds::from_vertices(lines.iter().flatten()),
@@ -67,7 +65,67 @@ impl LineFile {
     pub fn from_tck(file: File) -> LineFile {
         let bytes = file.data();
 
-        let header: HashMap<String, String> = bytes
+        let header = TckHeader::parse(bytes);
+
+        let lines: Vec<Vec3> = try_cast_slice(&bytes[header.offset..])
+            .map(|slice| slice.to_vec())
+            // Fallback to copy when vertices are not aligned properly
+            .unwrap_or_else(|_| cast_slice(&bytes[header.offset..].to_owned()).to_vec());
+
+        let lines: Vec<Vec<Vec4>> = lines
+            .split(|vertex| !vertex.is_finite())
+            .filter(|line| line.len() >= 2)
+            .map(|line| line.iter().map(|v| Vec4::new(v.x, v.y, v.z, 1.0)).collect())
+            .collect();
+
+        Self {
+            name: file.name.replace(".tck", ""),
+            bounds: Bounds::from_vertices(lines.iter().flatten()),
+            lines,
+        }
+    }
+}
+
+pub struct TrackScalarFile {
+    name: String,
+    values: Vec<f32>,
+}
+
+impl TrackScalarFile {
+    pub fn from_tsf(file: File) -> TrackScalarFile {
+        let bytes = file.data();
+
+        let header = TckHeader::parse(bytes);
+
+        let values = cast_slice(&bytes[header.offset..])
+            .split(|value: &f32| !value.is_finite())
+            .filter(|line| line.len() >= 2)
+            .flatten()
+            .copied()
+            .collect();
+
+        Self {
+            name: file.name,
+            values,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn values(&self) -> &Vec<f32> {
+        &self.values
+    }
+}
+
+struct TckHeader {
+    offset: usize,
+}
+
+impl TckHeader {
+    pub fn parse(data: &[u8]) -> Self {
+        let header: HashMap<String, String> = data
             .lines()
             .map(|line| line.unwrap())
             .take_while(|line| line != "END")
@@ -85,54 +143,6 @@ impl LineFile {
             .parse()
             .expect("Couldn't parse 'file' entry in .tck header as usize");
 
-        let lines: Vec<Vec3> = bytemuck::try_cast_slice(&bytes[offset..])
-            .map(|slice| slice.to_vec())
-            // Fallback to copy when vertices are not aligned properly
-            .unwrap_or_else(|_| bytemuck::cast_slice(&bytes[offset..].to_owned()).to_vec());
-
-        let mut lines: Vec<Vec<Vec4>> = lines
-            .split(|vertex| !vertex.is_finite())
-            .filter(|line| line.len() >= 2)
-            .map(|line| line.iter().map(|v| Vec4::new(v.x, v.y, v.z, 1.0)).collect())
-            .collect();
-
-        Self::orient_lines(&mut lines);
-
-        Self {
-            name: file.name.replace(".tck", ""),
-            bounds: Bounds::from_vertices(lines.iter().flatten()),
-            lines,
-        }
-    }
-
-    fn orient_lines(lines: &mut Vec<Vec<Vec4>>) {
-        lines.sort_by_key(|line| -(line.len() as i32));
-
-        let mut reference = lines.first().unwrap().iter().copied().collect_vec();
-
-        Self::orient_line(&mut reference, Vec4::new(0.0, 0.0, 1.0, 0.0));
-
-        for line in lines {
-            Self::orient_to_reference(line, &reference);
-        }
-    }
-
-    fn orient_line(line: &mut Vec<Vec4>, preferred: Vec4) {
-        let dir = line.last().unwrap() - line.first().unwrap();
-        if dir.dot(preferred) < 0.0 {
-            line.reverse();
-        }
-    }
-
-    fn orient_to_reference(line: &mut Vec<Vec4>, reference: &Vec<Vec4>) {
-        let d_forward = line.first().unwrap().distance(*reference.first().unwrap())
-            + line.last().unwrap().distance(*reference.last().unwrap());
-
-        let d_reverse = line.first().unwrap().distance(*reference.last().unwrap())
-            + line.last().unwrap().distance(*reference.first().unwrap());
-
-        if d_reverse < d_forward {
-            line.reverse();
-        }
+        Self { offset }
     }
 }
