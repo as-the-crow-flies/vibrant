@@ -6,14 +6,14 @@ Visualizing Brain Anatomy and Tractography... Vibrantly!
 
 ## Getting Started
 
-1. Install rust using https://rustup.rs/
+1. Install Rust using https://rustup.rs/
 2. Clone Git Repository `git clone git@github.com:as-the-crow-flies/vibrant.git`
 3. Build & Run the application using `cargo run`
 
 ## Tractography Rendering
 
 Load any number of `.tck` tract files to render them with vibrant colors and shadows.
-Tracts can be colored using the tangent (default), a color per file, or using a `.tsf` tract scalar file.
+Tracts can be colored using their tangent (default), a color per file, or using a `.tsf` tract scalar file.
 
 ### (Experimental) Tract Scalar File Support
 
@@ -25,14 +25,14 @@ Load any scalar `.nii.gz` volume file to render it with given contrast and mater
 
 ### Masking
 
-Load any NIfTI file with 'mask' in the name to import a mask. Then assign a mask to one or more volumes to apply it. Two types of masks are supported:
+Load any `*mask*.nii.gz` NIfTI file with 'mask' anywhere in the name to import a mask. Then assign it to one or more volumes. Two types of masks are supported:
 
-- Binary Masks - standard masks
-- Signed Distance Field Masks - allows for e.g. eroding the brain surface
+- Binary Masks - the classic mask we all know and love
+- Signed Distance Field Masks - allowing for e.g. eroding the brain surface
 
 ### (Experimental) Environment Maps
 
-By loading a `.exr` HDRI environment texture (e.g. from https://polyhaven.com/hdris/studio), the application uses it as a light source to render your data.
+By loading a `.exr` HDRI environment texture (e.g. from [Poly Haven](https://polyhaven.com/hdris/studio)), the application uses it as a light source to render your with colored lighting.
 
 ## Known Limitations
 
