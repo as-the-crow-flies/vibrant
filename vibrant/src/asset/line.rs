@@ -26,7 +26,7 @@ pub enum LineColorMode {
 #[derive(Debug)]
 pub struct GlobalLineSettings {
     pub selected: Option<bool>,
-    pub visible: Option<bool>,
+    pub visible: bool,
     pub color_mode: LineColorMode,
 }
 
@@ -107,7 +107,7 @@ impl LineBuffer {
 
         let global_settings = GlobalLineSettings {
             selected: Some(false),
-            visible: Some(true),
+            visible: true,
             color_mode: LineColorMode::Tangent,
         };
 
@@ -364,11 +364,11 @@ impl LineBuffer {
         }
     }
 
-    pub fn settings_global(&mut self) -> &mut GlobalLineSettings {
+    pub fn settings_global_mut(&mut self) -> &mut GlobalLineSettings {
         &mut self.global_settings
     }
 
-    pub fn settings(&mut self) -> &mut [LineSettings] {
+    pub fn settings_mut(&mut self) -> &mut [LineSettings] {
         &mut self.settings
     }
 

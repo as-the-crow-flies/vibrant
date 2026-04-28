@@ -1,13 +1,22 @@
 use std::any::type_name;
 
-use egui::{collapsing_header::CollapsingState, Ui};
+use egui::{collapsing_header::CollapsingState, Grid, Ui};
 use egui_double_slider::DoubleSlider;
 
-use crate::controller::settings::Settings;
+use crate::{
+    controller::settings::Settings,
+    util::{ResponseExtentions, Tracked},
+};
 
 #[derive(Debug)]
 pub struct CropWidget {
     changed: bool,
+}
+
+impl Tracked for CropWidget {
+    fn track(&mut self) {
+        self.changed = true;
+    }
 }
 
 impl CropWidget {
@@ -25,40 +34,41 @@ impl CropWidget {
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
             .show_header(ui, |ui| ui.heading("Crop"))
             .body(|ui| {
-                self.changed = Self::sliders(
-                    ui,
-                    "X",
-                    &mut settings.crop_x_start,
-                    &mut settings.crop_x_end,
-                ) | Self::sliders(
-                    ui,
-                    "Y",
-                    &mut settings.crop_y_start,
-                    &mut settings.crop_y_end,
-                ) | Self::sliders(
-                    ui,
-                    "Z",
-                    &mut settings.crop_z_start,
-                    &mut settings.crop_z_end,
-                );
+                Grid::new("CropWidgetGrid").num_columns(2).show(ui, |ui| {
+                    self.slider(
+                        ui,
+                        "Axial",
+                        &mut settings.crop_z_start,
+                        &mut settings.crop_z_end,
+                    );
+
+                    self.slider(
+                        ui,
+                        "Sagittal",
+                        &mut settings.crop_x_start,
+                        &mut settings.crop_x_end,
+                    );
+
+                    self.slider(
+                        ui,
+                        "Coronal",
+                        &mut settings.crop_y_start,
+                        &mut settings.crop_y_end,
+                    );
+                });
             });
     }
 
-    fn sliders(ui: &mut Ui, label: &str, min: &mut f32, max: &mut f32) -> bool {
-        let mut changed = false;
+    fn slider(&mut self, ui: &mut Ui, label: &str, min: &mut f32, max: &mut f32) {
+        ui.label(label);
 
-        ui.horizontal(|ui| {
-            ui.label(label);
+        ui.add(
+            DoubleSlider::new(min, max, -0.5..=0.5)
+                .width(ui.available_width())
+                .separation_distance(0.001),
+        )
+        .track(self);
 
-            changed = ui
-                .add(
-                    DoubleSlider::new(min, max, -0.5..=0.5)
-                        .width(400.0)
-                        .separation_distance(0.001),
-                )
-                .changed()
-        });
-
-        changed
+        ui.end_row();
     }
 }

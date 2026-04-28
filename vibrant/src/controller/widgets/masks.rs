@@ -1,9 +1,10 @@
 use std::any::type_name;
 
-use egui::{collapsing_header::CollapsingState, Grid, Slider, Ui};
+use egui::{collapsing_header::CollapsingState, Align, Grid, Layout, RichText, Ui};
 
 use crate::{
     asset::volume_mask::VolumeMaskBuffer,
+    controller::components::UIComponents,
     util::{ResponseExtentions, Tracked},
 };
 
@@ -35,8 +36,6 @@ impl MasksWidget {
                 ui.heading("Masks");
             })
             .body(|ui| {
-                ui.spacing_mut().slider_width = 300.0;
-
                 for mask in masks.iter_mut() {
                     let settings = mask.settings_mut();
 
@@ -45,38 +44,43 @@ impl MasksWidget {
                         continue;
                     }
 
-                    CollapsingState::load_with_default_open(
-                        ui.ctx(),
-                        settings.name.to_string().into(),
-                        false,
-                    )
-                    .show_header(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.checkbox(&mut settings.visible, "").track(self);
-                            ui.text_edit_singleline(&mut settings.name).track(self);
-                            ui.toggle_value(&mut settings.inverted, "🌗").track(self);
-                        });
-                    })
-                    .body(|ui| {
-                        if settings.binary {
+                    ui.frame(|ui| {
+                        CollapsingState::load_with_default_open(
+                            ui.ctx(),
+                            settings.name.to_string().into(),
+                            true,
+                        )
+                        .show_header(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label("Blend");
-                                ui.add(Slider::new(&mut settings.offset, 0.0..=1.0))
-                                    .track(self);
-                            });
-                        } else {
-                            Grid::new("MaskSettings").show(ui, |ui| {
-                                ui.label("Offset");
-                                ui.add(Slider::new(&mut settings.offset, -0.5..=0.5))
-                                    .track(self);
-                                ui.end_row();
+                                ui.label(RichText::new(&settings.name).strong());
 
-                                ui.label("Smoothing");
-                                ui.add(Slider::new(&mut settings.width, 0.01..=0.1))
-                                    .track(self);
-                                ui.end_row();
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    ui.toggle_inverted(&mut settings.inverted).track(self);
+                                    ui.toggle_visible(&mut settings.visible).track(self);
+                                });
                             });
-                        }
+                        })
+                        .body(|ui| {
+                            if settings.binary {
+                                ui.horizontal(|ui| {
+                                    ui.label("Blend");
+                                    ui.scope(|ui| {
+                                        ui.slider(&mut settings.offset, 0.0..=1.0).track(self);
+                                    });
+                                });
+                            } else {
+                                Grid::new("MaskSettings").num_columns(2).show(ui, |ui| {
+                                    ui.label("Offset");
+
+                                    ui.slider(&mut settings.offset, -0.5..=0.5).track(self);
+                                    ui.end_row();
+
+                                    ui.label("Smoothing");
+                                    ui.slider(&mut settings.width, 0.01..=0.1).track(self);
+                                    ui.end_row();
+                                });
+                            }
+                        });
                     });
                 }
             });

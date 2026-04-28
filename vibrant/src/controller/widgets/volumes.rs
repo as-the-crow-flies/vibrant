@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use egui::{collapsing_header::CollapsingState, ComboBox, Grid, Ui};
+use egui::{collapsing_header::CollapsingState, Align, ComboBox, Grid, Layout, RichText, Ui};
 use egui_double_slider::DoubleSlider;
 use strum::IntoEnumIterator;
 
@@ -9,6 +9,7 @@ use crate::{
         volume_fraction::{MaterialPreset, VolumeFractionBuffer},
         volume_mask::VolumeMaskBuffer,
     },
+    controller::components::UIComponents,
     util::{ResponseExtentions, Tracked},
 };
 
@@ -48,91 +49,105 @@ impl VolumesWidget {
                 for (index, volume) in volumes.iter_mut().enumerate() {
                     let settings = volume.settings_mut();
 
-                    CollapsingState::load_with_default_open(
-                        ui.ctx(),
-                        settings.name.to_string().into(),
-                        true,
-                    )
-                    .show_header(ui, |ui| {
-                        ui.checkbox(&mut settings.visible, "").track(self);
-                        ui.text_edit_singleline(&mut settings.name).track(self);
-                        ui.toggle_value(&mut settings.inverted, "🌗").track(self);
+                    ui.frame(|ui| {
+                        CollapsingState::load_with_default_open(
+                            ui.ctx(),
+                            settings.name.to_string().into(),
+                            true,
+                        )
+                        .show_header(ui, |ui| {
+                            ui.label(RichText::new(&settings.name).strong());
 
-                        if ui.button("🗑").clicked() {
-                            index_to_remove = Some(index);
-                            self.track();
-                        }
-                    })
-                    .body(|ui| {
-                        Grid::new("VolumeSettingsGrid").show(ui, |ui| {
-                            ui.label("Contrast");
-                            ui.add(
-                                DoubleSlider::new(&mut settings.min, &mut settings.max, 0.0..=1.0)
-                                    .width(300.0)
-                                    .separation_distance(0.01),
-                            )
-                            .track(self);
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                if ui.button("🗑").clicked() {
+                                    index_to_remove = Some(index);
+                                    self.track();
+                                }
+                                ui.toggle_inverted(&mut settings.inverted).track(self);
+                                ui.toggle_visible(&mut settings.visible).track(self);
+                            });
+                        })
+                        .body(|ui| {
+                            Grid::new("VolumeSettingsGrid")
+                                .num_columns(2)
+                                .show(ui, |ui| {
+                                    ui.label("Contrast");
+                                    ui.add(
+                                        DoubleSlider::new(
+                                            &mut settings.min,
+                                            &mut settings.max,
+                                            0.0..=1.0,
+                                        )
+                                        .width(ui.available_width())
+                                        .separation_distance(0.01),
+                                    )
+                                    .track(self);
 
-                            ui.end_row();
+                                    ui.end_row();
 
-                            ui.label("Mask");
-                            ui.horizontal(|ui| {
-                                ComboBox::from_id_salt("VolumeMask")
-                                    .selected_text(masks[settings.mask].settings().name.clone())
-                                    .show_ui(ui, |ui| {
-                                        for (index, mask) in masks.iter().enumerate() {
-                                            ui.selectable_value(
-                                                &mut settings.mask,
-                                                index,
-                                                mask.settings().name.clone(),
+                                    ui.label("Mask");
+                                    ui.horizontal(|ui| {
+                                        ComboBox::from_id_salt("VolumeMask")
+                                            .selected_text(
+                                                masks[settings.mask].settings().name.clone(),
                                             )
+                                            .width(ui.available_width())
+                                            .show_ui(ui, |ui| {
+                                                for (index, mask) in masks.iter().enumerate() {
+                                                    ui.selectable_value(
+                                                        &mut settings.mask,
+                                                        index,
+                                                        mask.settings().name.clone(),
+                                                    )
+                                                    .track(self);
+                                                }
+                                            });
+                                    });
+
+                                    ui.end_row();
+
+                                    ui.label("Material");
+
+                                    ui.horizontal(|ui| {
+                                        let mut material_changed = false;
+
+                                        material_changed |= ui
+                                            .color_edit_button_rgb(&mut settings.absorption)
                                             .track(self);
+                                        material_changed |= ui
+                                            .color_edit_button_rgb(&mut settings.scattering)
+                                            .track(self);
+
+                                        if material_changed {
+                                            settings.preset = MaterialPreset::Custom;
+                                        }
+
+                                        let mut preset_changed = false;
+
+                                        ComboBox::from_id_salt("MaterialPreset")
+                                            .selected_text(format!("{:?}", settings.preset))
+                                            .width(ui.available_width())
+                                            .show_ui(ui, |ui| {
+                                                for value in MaterialPreset::iter() {
+                                                    let label = format!("{:?}", value);
+                                                    preset_changed |= ui
+                                                        .selectable_value(
+                                                            &mut settings.preset,
+                                                            value,
+                                                            label,
+                                                        )
+                                                        .track(self);
+                                                }
+                                            });
+
+                                        if preset_changed {
+                                            (settings.absorption, settings.scattering) =
+                                                settings.preset.into();
                                         }
                                     });
-                            });
 
-                            ui.end_row();
-
-                            ui.label("Material");
-
-                            ui.horizontal(|ui| {
-                                let mut preset_changed = false;
-
-                                ComboBox::from_id_salt("MaterialPreset")
-                                    .selected_text(format!("{:?}", settings.preset))
-                                    .show_ui(ui, |ui| {
-                                        for value in MaterialPreset::iter() {
-                                            let label = format!("{:?}", value);
-                                            preset_changed |= ui
-                                                .selectable_value(
-                                                    &mut settings.preset,
-                                                    value,
-                                                    label,
-                                                )
-                                                .track(self);
-                                        }
-                                    });
-
-                                if preset_changed {
-                                    (settings.absorption, settings.scattering) =
-                                        settings.preset.into();
-                                }
-
-                                let mut material_changed = false;
-
-                                material_changed |= ui
-                                    .color_edit_button_rgb(&mut settings.absorption)
-                                    .track(self);
-                                material_changed |= ui
-                                    .color_edit_button_rgb(&mut settings.scattering)
-                                    .track(self);
-
-                                if material_changed {
-                                    settings.preset = MaterialPreset::Custom;
-                                }
-                            });
-
-                            ui.end_row();
+                                    ui.end_row();
+                                });
                         });
                     });
                 }

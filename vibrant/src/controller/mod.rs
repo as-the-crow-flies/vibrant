@@ -1,4 +1,5 @@
 pub mod camera;
+pub mod components;
 pub mod event;
 pub mod light;
 pub mod segment;
@@ -7,7 +8,7 @@ pub mod state;
 pub mod widgets;
 
 use camera::Camera;
-use egui::{Align, CentralPanel, Frame, Layout, Margin, ScrollArea, Slider, Ui};
+use egui::{Align, CentralPanel, Frame, Layout, Margin, ScrollArea, Ui};
 use egui::{Panel, Rect};
 use event::Event;
 use light::Light;
@@ -19,6 +20,7 @@ use winit::dpi::PhysicalSize;
 use crate::controller::widgets::crop::CropWidget;
 use crate::controller::widgets::hdri::HdriWidget;
 use crate::controller::widgets::masks::MasksWidget;
+use crate::controller::widgets::settings::SettingsWidget;
 use crate::controller::widgets::tractography::TractographyWidget;
 use crate::controller::widgets::volumes::VolumesWidget;
 use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
@@ -32,6 +34,7 @@ pub struct Controller {
     settings: Settings,
     time: Instant,
 
+    settings_widget: SettingsWidget,
     volumes_widget: VolumesWidget,
     mask_widget: MasksWidget,
     tractography_widget: TractographyWidget,
@@ -55,6 +58,7 @@ impl Controller {
             settings: Settings::new(),
             time: Instant::now(),
 
+            settings_widget: SettingsWidget::new(),
             volumes_widget: VolumesWidget::new(),
             mask_widget: MasksWidget::new(),
             tractography_widget: TractographyWidget::new(),
@@ -147,7 +151,8 @@ impl Controller {
                     ..Default::default()
                 })
                 .show_inside(ui, |ui| {
-                    ui.add(Slider::new(&mut self.camera.fov, 0.1..=3.0).text("Field of View"));
+                    self.settings_widget
+                        .show(ui, &mut self.settings, &mut self.camera);
                 });
 
             Panel::bottom("bottom_panel")
@@ -192,23 +197,27 @@ impl Controller {
                 });
         });
 
-        Panel::right("SidePanelRight").show_animated_inside(ui, self.show_right_side_panel, |ui| {
-            ScrollArea::new([false, true]).show(ui, |ui| {
-                self.crop_widget.show(ui, &mut self.settings);
+        Panel::right("SidePanelRight")
+            .min_size(400.0)
+            .max_size(800.0)
+            .show_animated_inside(ui, self.show_right_side_panel, |ui| {
+                ScrollArea::new([false, true]).show(ui, |ui| {
+                    self.crop_widget.show(ui, &mut self.settings);
 
-                self.volumes_widget
-                    .show(ui, &mut asset.volumes, &mut asset.masks);
-                self.mask_widget.show(ui, &mut asset.masks);
+                    self.volumes_widget
+                        .show(ui, &mut asset.volumes, &mut asset.masks);
 
-                if let Some(lines) = &mut asset.line {
-                    self.tractography_widget.show(ui, &mut self.settings, lines);
-                }
+                    self.mask_widget.show(ui, &mut asset.masks);
 
-                if let Some(hdri) = &mut asset.hdri {
-                    self.hdri_widget.show(ui, hdri);
-                }
+                    if let Some(lines) = &mut asset.line {
+                        self.tractography_widget.show(ui, lines);
+                    }
+
+                    if let Some(hdri) = &mut asset.hdri {
+                        self.hdri_widget.show(ui, hdri);
+                    }
+                });
             });
-        });
 
         let viewport = CentralPanel::no_frame().show_inside(ui, |_| {});
 
@@ -251,19 +260,11 @@ impl Controller {
     }
 
     pub fn changed(&self) -> bool {
-        false
+        self.settings_widget.changed()
             | self.crop().changed()
             | self.volumes().changed()
             | self.masks().changed()
             | self.tractography().changed()
             | self.hdri().changed()
     }
-}
-
-fn ternary_checkbox(ui: &mut Ui, input: Option<bool>, text: &str) -> Option<bool> {
-    let mut checked = input.unwrap_or_default();
-
-    ui.toggle_value(&mut checked, text)
-        .clicked()
-        .then_some(checked)
 }
