@@ -213,9 +213,7 @@ impl Controller {
                         self.tractography_widget.show(ui, lines);
                     }
 
-                    if let Some(hdri) = &mut asset.hdri {
-                        self.hdri_widget.show(ui, hdri);
-                    }
+                    self.hdri_widget.show(ui, &mut asset.hdri);
                 });
             });
 

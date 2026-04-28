@@ -1,9 +1,10 @@
 use std::any::type_name;
 
-use egui::{collapsing_header::CollapsingState, Slider, Ui};
+use egui::{collapsing_header::CollapsingState, Grid, Ui};
 
 use crate::{
     asset::hdri::HdriBuffer,
+    controller::components::UIComponents,
     util::{ResponseExtentions, Tracked},
 };
 
@@ -23,25 +24,49 @@ impl HdriWidget {
         Self { changed: false }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, hdri: &mut HdriBuffer) {
+    pub fn show(&mut self, ui: &mut Ui, hdri: &mut Option<HdriBuffer>) {
         self.changed = false;
 
-        if hdri.name() == "Default" {
-            return;
+        let mut remove = false;
+
+        if let Some(hdri) = hdri {
+            if hdri.name() == "Default" {
+                return;
+            }
+
+            CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
+                .show_header(ui, |ui| {
+                    ui.heading("Environment Map");
+                    if ui.button("🗑").clicked() {
+                        remove = true;
+                        self.track();
+                    }
+                })
+                .body(|ui| {
+                    Grid::new("EnvironmentMapGrid")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            ui.label("Strength");
+                            ui.slider(&mut hdri.settings_mut().strength, 0.0..=2.0)
+                                .track(self);
+                            ui.end_row();
+
+                            ui.label("Specular");
+                            ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                                .track(self);
+                            ui.end_row();
+
+                            ui.label("Rotation");
+                            ui.slider(&mut hdri.settings_mut().rotation, 0.0..=1.0)
+                                .track(self);
+                            ui.end_row();
+                        });
+                });
         }
 
-        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
-            .show_header(ui, |ui| ui.heading("Environment Map"))
-            .body(|ui| {
-                ui.add(Slider::new(&mut hdri.settings_mut().strength, 0.0..=2.0).text("Strength"))
-                    .track(self);
-
-                ui.add(Slider::new(&mut hdri.settings_mut().specular, 0.0..=1.0).text("Specular"))
-                    .track(self);
-
-                ui.add(Slider::new(&mut hdri.settings_mut().rotation, 0.0..=1.0).text("Rotation"))
-                    .track(self);
-            });
+        if remove {
+            hdri.take();
+        }
     }
 
     pub fn changed(&self) -> bool {

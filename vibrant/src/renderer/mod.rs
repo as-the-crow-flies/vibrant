@@ -66,7 +66,6 @@ impl Renderer {
         dt: f32,
     ) {
         self.surface.maybe_resize(gpu, &controller.settings());
-        self.asset.maybe_update(gpu);
 
         let input = self.egui.take_egui_input(window);
         let output = self.egui.egui_ctx().run_ui(input, |ui| {
@@ -76,6 +75,8 @@ impl Renderer {
             .handle_platform_output(&window, output.platform_output.clone());
 
         self.environment.update(gpu, &controller);
+
+        self.asset.maybe_update(gpu);
 
         if let Some(line) = &self.asset.line {
             line.update_settings(gpu);
