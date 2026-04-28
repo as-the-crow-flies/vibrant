@@ -13,6 +13,7 @@ use crate::{file::VolumeFile, gpu::Gpu};
 pub struct VolumeMaskSettings {
     pub name: String,
     pub visible: bool,
+    pub binary: bool,
     pub inverted: bool,
     pub offset: f32,
     pub width: f32,
@@ -23,6 +24,7 @@ impl VolumeMaskSettings {
         VolumeMaskSettingsBuffer {
             visible: self.visible as u32,
             invert: self.inverted as u32,
+            binary: self.binary as u32,
             offset: self.offset,
             width: self.width,
         }
@@ -32,10 +34,11 @@ impl VolumeMaskSettings {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct VolumeMaskSettingsBuffer {
-    pub visible: u32,
-    pub invert: u32,
-    pub offset: f32,
-    pub width: f32,
+    visible: u32,
+    invert: u32,
+    binary: u32,
+    offset: f32,
+    width: f32,
 }
 
 pub struct VolumeMaskBuffer {
@@ -79,47 +82,10 @@ impl VolumeMaskBuffer {
             offset: 0.0,
             width: 0.02,
             inverted: false,
+            binary: file.is_binary(),
         };
 
         Self::from_texture_settings(gpu, texture, settings)
-    }
-
-    pub fn from_texture_settings(
-        gpu: &Gpu,
-        texture: Texture,
-        settings: VolumeMaskSettings,
-    ) -> Self {
-        let label = Some(type_name::<Self>());
-
-        let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytes_of(&settings.to_buffer()),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-        });
-
-        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(
-                        &texture.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: settings_buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-        Self {
-            texture,
-            settings,
-            settings_buffer,
-            binding,
-        }
     }
 
     pub fn size(&self) -> Extent3d {
@@ -206,9 +172,44 @@ impl VolumeMaskBuffer {
             offset: 0.0,
             width: 0.00,
             inverted: false,
+            binary: true,
         };
 
         Self::from_texture_settings(gpu, texture, settings)
+    }
+
+    fn from_texture_settings(gpu: &Gpu, texture: Texture, settings: VolumeMaskSettings) -> Self {
+        let label = Some(type_name::<Self>());
+
+        let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytes_of(&settings.to_buffer()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+        });
+
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &Self::layout(gpu),
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(
+                        &texture.create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: settings_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        Self {
+            texture,
+            settings,
+            settings_buffer,
+            binding,
+        }
     }
 }
 

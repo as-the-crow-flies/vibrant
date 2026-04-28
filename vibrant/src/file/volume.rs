@@ -15,7 +15,7 @@ pub struct VolumeFile {
     name: String,
     transform: Mat4,
     data: Vec<f32>,
-    dim: Vec<u16>,
+    size: UVec3,
 }
 
 impl VolumeFile {
@@ -53,6 +53,8 @@ impl VolumeFile {
             .expect("Invalid Nifti dimension")
             .to_vec();
 
+        let size = UVec3::new(dim[0] as u32, dim[1] as u32, dim[2] as u32);
+
         let ty = nitfi.header().data_type().expect("Invalid Nifti data type");
 
         let data: Vec<f32> = match ty {
@@ -73,7 +75,7 @@ impl VolumeFile {
             data,
             name,
             transform,
-            dim,
+            size,
         }
     }
 
@@ -90,7 +92,11 @@ impl VolumeFile {
     }
 
     pub fn size(&self) -> UVec3 {
-        UVec3::new(self.dim[0] as u32, self.dim[1] as u32, self.dim[2] as u32)
+        self.size
+    }
+
+    pub fn is_binary(&self) -> bool {
+        self.data.iter().all(|&x| x == 0.0 || x == 1.0)
     }
 
     fn to_f32<T: DataElement + ToPrimitive>(

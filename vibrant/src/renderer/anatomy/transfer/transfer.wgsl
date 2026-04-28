@@ -10,6 +10,7 @@ struct Material {
 struct MaskSettings {
     visible: u32,
     invert: u32,
+    binary: u32,
     offset: f32,
     width: f32
 };
@@ -49,21 +50,14 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         any(voxel >= textureDimensions(ABSORPTION)))
         { return; }
 
-    var mask = select(1.0, -1.0, bool(MASK_SETTINGS.invert)) * textureLoad(MASK, voxel, 0).x;
-        mask = smoothstep(
-                    MASK_SETTINGS.offset - MASK_SETTINGS.width,
-                    MASK_SETTINGS.offset + MASK_SETTINGS.width,
-                    mask);
 
-        mask = select(1.0, mask, bool(MASK_SETTINGS.visible));
-        mask = select(1.0, mask, bool(MATERIAL.masked));
 
     var fraction = textureLoad(FRACTION, voxel, 0).x;
 
     if (bool(MATERIAL.inverted)) { fraction = 1.0 - fraction; }
 
     fraction = (fraction - MATERIAL.min) / (MATERIAL.max - MATERIAL.min);
-    fraction *= mask;
+    fraction *= get_mask(voxel);
 
     fraction = saturate(fraction);
 
@@ -73,4 +67,21 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + absorption);
     textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + scattering);
     textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + absorption + scattering);
+}
+
+fn get_mask(voxel: vec3<u32>) -> f32 {
+    var mask = textureLoad(MASK, voxel, 0).x;
+
+    if (bool(MASK_SETTINGS.binary)) {
+        mask = select(mask, 1.0 - mask, bool(MASK_SETTINGS.invert));
+        mask = saturate(mask + MASK_SETTINGS.offset);
+    } else {
+        mask = select(1.0, -1.0, bool(MASK_SETTINGS.invert)) * mask;
+        mask = smoothstep(MASK_SETTINGS.offset - MASK_SETTINGS.width, MASK_SETTINGS.offset + MASK_SETTINGS.width, mask);
+    }
+
+    mask = select(1.0, mask, bool(MASK_SETTINGS.visible));
+    mask = select(1.0, mask, bool(MATERIAL.masked));
+
+    return mask;
 }

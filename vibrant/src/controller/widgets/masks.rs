@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use egui::{collapsing_header::CollapsingState, Slider, Ui};
+use egui::{collapsing_header::CollapsingState, Grid, Slider, Ui};
 
 use crate::{
     asset::volume_mask::VolumeMaskBuffer,
@@ -48,7 +48,7 @@ impl MasksWidget {
                     CollapsingState::load_with_default_open(
                         ui.ctx(),
                         settings.name.to_string().into(),
-                        true,
+                        false,
                     )
                     .show_header(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -58,17 +58,25 @@ impl MasksWidget {
                         });
                     })
                     .body(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label("Offset");
-                            ui.add(Slider::new(&mut settings.offset, -0.5..=0.5))
-                                .track(self);
-                        });
+                        if settings.binary {
+                            ui.horizontal(|ui| {
+                                ui.label("Blend");
+                                ui.add(Slider::new(&mut settings.offset, 0.0..=1.0))
+                                    .track(self);
+                            });
+                        } else {
+                            Grid::new("MaskSettings").show(ui, |ui| {
+                                ui.label("Offset");
+                                ui.add(Slider::new(&mut settings.offset, -0.5..=0.5))
+                                    .track(self);
+                                ui.end_row();
 
-                        ui.horizontal(|ui| {
-                            ui.label("Width");
-                            ui.add(Slider::new(&mut settings.width, 0.01..=0.1))
-                                .track(self);
-                        });
+                                ui.label("Smoothing");
+                                ui.add(Slider::new(&mut settings.width, 0.01..=0.1))
+                                    .track(self);
+                                ui.end_row();
+                            });
+                        }
                     });
                 }
             });
