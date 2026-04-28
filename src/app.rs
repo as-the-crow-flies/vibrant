@@ -40,7 +40,7 @@ impl App {
         let window = self.window.as_ref().expect("Window");
         let renderer = self.renderer.as_mut().expect("Renderer");
 
-        let consumed_by_egui = renderer.egui().on_window_event(window, &event).consumed;
+        let consumed = renderer.egui().on_window_event(window, &event).consumed;
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -63,7 +63,7 @@ impl App {
         }
 
         if let Some(vibrant_event) = vibrant_event(event) {
-            if !consumed_by_egui {
+            if self.controller.hovered() | !consumed {
                 self.controller.event(vibrant_event);
             }
         }
@@ -81,7 +81,10 @@ impl App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let mut attributes = window::Window::default_attributes();
-        attributes = attributes.with_title("VIBRANT").with_maximized(true);
+        attributes = attributes
+            .with_title("VIBRANT")
+            .with_visible(false)
+            .with_maximized(true);
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -105,6 +108,8 @@ impl ApplicationHandler for App {
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
         let renderer = Renderer::new(&self.gpu, Arc::clone(&window));
+
+        window.set_visible(true);
 
         self.window = Some(window);
         self.renderer = Some(renderer);

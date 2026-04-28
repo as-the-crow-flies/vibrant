@@ -3,7 +3,7 @@ use std::fs;
 use criterion::{criterion_group, criterion_main, Criterion};
 use pollster::FutureExt;
 use vibrant::{
-    asset::{line::LineBuffer, transform::TransformBuffer},
+    asset::line::LineBuffer,
     controller::Controller,
     file::{File, LineFile},
     gpu::Gpu,
@@ -21,11 +21,10 @@ fn occlusion(criterion: &mut Criterion, id: &str, gpu: &Gpu, line: &LineBuffer) 
     criterion.bench_function(id, |bench| {
         let controller = &Controller::new();
         let environment = &Environment::from_controller(gpu, controller);
-        let transform = &TransformBuffer::new(gpu, line.bounds().transform().inverse());
         let frame = &Frame::new(gpu, controller.settings());
 
         let mut cmd = gpu.cmd();
-        LineTransformPipeline::new(gpu).dispatch(&mut cmd, line, transform, environment);
+        LineTransformPipeline::new(gpu).dispatch(&mut cmd, line, environment);
         LineCropPipeline::new(gpu).dispatch(&mut cmd, line, environment);
         gpu.submit(cmd);
         gpu.wait();

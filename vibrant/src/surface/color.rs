@@ -2,11 +2,11 @@ use std::any::type_name;
 
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BlendComponent,
-    BlendState, Color, ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, Operations,
-    RenderPassColorAttachment, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp,
-    Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    TextureView, TextureViewDescriptor, TextureViewDimension,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BlendState,
+    Color, ColorTargetState, ColorWrites, Extent3d, FilterMode, LoadOp, MipmapFilterMode,
+    Operations, RenderPassColorAttachment, SamplerBindingType, SamplerDescriptor, ShaderStages,
+    StoreOp, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType,
+    TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -61,7 +61,7 @@ impl ColorBuffer {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
             ..Default::default()
         });
 
@@ -115,10 +115,7 @@ impl ColorBuffer {
     pub fn target_srgb() -> ColorTargetState {
         ColorTargetState {
             format: Self::FORMAT_SRGB,
-            blend: Some(BlendState {
-                color: BlendComponent::REPLACE,
-                alpha: BlendComponent::OVER,
-            }),
+            blend: Some(BlendState::ALPHA_BLENDING),
             write_mask: ColorWrites::all(),
         }
     }

@@ -1,31 +1,44 @@
-use std::any::type_name;
+use std::{any::type_name, iter::zip};
 
-use bytemuck::{Pod, Zeroable};
-use glam::Vec4;
+use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
+use glam::{Mat4, Vec4};
 use itertools::Itertools;
 use random_color::{options::Luminosity, RandomColor};
+use strum::EnumIter;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     *,
 };
 
 use crate::{
-    file::{bounds::Bounds, LineFile},
+    asset::colormap::{Colormap, ColormapSelection},
+    file::{bounds::Bounds, LineFile, TrackScalarFile},
     gpu::Gpu,
 };
 
-pub struct GlobalLineSettings {
-    pub selected: Option<bool>,
-    pub visible: Option<bool>,
-    pub color_visible: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
+pub enum LineColorMode {
+    Tangent,
+    Color,
+    Scalar,
 }
 
+#[derive(Debug)]
+pub struct GlobalLineSettings {
+    pub selected: Option<bool>,
+    pub visible: bool,
+    pub color_mode: LineColorMode,
+}
+
+#[derive(Debug)]
 pub struct LineSettings {
     pub name: String,
+    pub offset: u64,
     pub selected: bool,
     pub visible: bool,
     pub color: [u8; 3],
-    pub color_visible: bool,
+    pub color_mode: LineColorMode,
+    pub colormap: ColormapSelection,
     pub crop_start: f32,
     pub crop_end: f32,
 }
@@ -35,17 +48,25 @@ pub struct LineSettings {
 pub struct LineSettingsBuffer {
     visible: u32,
     color: [u8; 4],
+    colormap: u32,
     crop_start: f32,
     crop_end: f32,
 }
 
 impl LineSettings {
-    pub fn to_buffer(&self) -> LineSettingsBuffer {
+    fn to_buffer(&self) -> LineSettingsBuffer {
         let [r, g, b] = self.color;
+
+        let a = match self.color_mode {
+            LineColorMode::Tangent => 0,
+            LineColorMode::Color => 128,
+            LineColorMode::Scalar => 255,
+        };
 
         LineSettingsBuffer {
             visible: self.visible as u32,
-            color: [r, g, b, if self.color_visible { 255 } else { 0 }],
+            color: [r, g, b, a],
+            colormap: self.colormap as u32,
             crop_start: self.crop_start,
             crop_end: self.crop_end,
         }
@@ -56,18 +77,23 @@ pub struct LineBuffer {
     global_settings: GlobalLineSettings,
     settings: Vec<LineSettings>,
     settings_buffer: Buffer,
+
     bounds: Bounds,
 
     vertices: Buffer,
     indices: Buffer,
+    scalar: Buffer,
     length: Buffer,
     offset: Buffer,
 
     materials: Buffer,
+    colormap: Colormap,
 
     raw_indices: Buffer,
     raw_vertices: Buffer,
     raw_offsets: Buffer,
+
+    transform: Buffer,
 
     binding_read: BindGroup,
     binding_write: BindGroup,
@@ -79,26 +105,27 @@ impl LineBuffer {
     pub fn new(gpu: &Gpu, files: &[LineFile]) -> Self {
         let label = Some(type_name::<Self>());
 
-        let max_line_length = files
-            .iter()
-            .flat_map(|file| file.lines())
-            .map(|line| line.len())
-            .max();
-
-        dbg!(max_line_length);
-
         let global_settings = GlobalLineSettings {
             selected: Some(false),
-            visible: Some(true),
-            color_visible: false,
+            visible: true,
+            color_mode: LineColorMode::Tangent,
         };
 
         let bounds = Bounds::from_bounds(&files.iter().map(|file| *file.bounds()).collect_vec());
 
-        let settings: Vec<LineSettings> = files
+        let offsets: Vec<u64> = files
             .iter()
-            .map(|line| LineSettings {
+            .map(|file| file.lines().iter().flatten().count() as u64)
+            .scan(0u64, |sum, x| {
+                *sum += x;
+                Some(*sum - x)
+            })
+            .collect();
+
+        let settings: Vec<LineSettings> = zip(files, offsets)
+            .map(|(line, offset)| LineSettings {
                 name: line.name().to_owned(),
+                offset,
                 color: RandomColor {
                     luminosity: Some(Luminosity::Bright),
                     ..Default::default()
@@ -119,7 +146,8 @@ impl LineBuffer {
                 .into_rgb_array(),
                 selected: false,
                 visible: true,
-                color_visible: false,
+                color_mode: LineColorMode::Tangent,
+                colormap: ColormapSelection::Greys,
                 crop_start: 0.0,
                 crop_end: 1.0,
             })
@@ -214,10 +242,25 @@ impl LineBuffer {
             mapped_at_creation: false,
         });
 
+        let scalar = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: vertices.size() / 4,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let materials = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&materials),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        });
+
+        let colormap = Colormap::new(gpu);
+
+        let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::bytes_of(&bounds.transform().inverse()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -263,6 +306,22 @@ impl LineBuffer {
                 binding: 8,
                 resource: raw_offsets.as_entire_binding(),
             },
+            BindGroupEntry {
+                binding: 9,
+                resource: transform.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 11,
+                resource: scalar.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 12,
+                resource: BindingResource::TextureView(
+                    &colormap
+                        .texture()
+                        .create_view(&TextureViewDescriptor::default()),
+                ),
+            },
         ];
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -285,10 +344,14 @@ impl LineBuffer {
 
             vertices,
             indices,
+            scalar,
             length,
             offset,
 
             materials,
+            colormap,
+
+            transform,
 
             raw_indices,
             raw_vertices,
@@ -301,16 +364,20 @@ impl LineBuffer {
         }
     }
 
-    pub fn settings_global(&mut self) -> &mut GlobalLineSettings {
+    pub fn settings_global_mut(&mut self) -> &mut GlobalLineSettings {
         &mut self.global_settings
     }
 
-    pub fn settings(&mut self) -> &mut [LineSettings] {
+    pub fn settings_mut(&mut self) -> &mut [LineSettings] {
         &mut self.settings
     }
 
     pub fn bounds(&self) -> &Bounds {
         &self.bounds
+    }
+
+    pub fn colormap(&self) -> &Colormap {
+        &self.colormap
     }
 
     pub fn binding(&self, read_only: bool) -> &BindGroup {
@@ -341,6 +408,11 @@ impl LineBuffer {
             0,
             bytemuck::cast_slice(&settings_buffer),
         );
+    }
+
+    pub fn set_transform(&self, gpu: &Gpu, transform: &Mat4) {
+        gpu.queue()
+            .write_buffer(&self.transform, 0, bytes_of(transform));
     }
 
     pub fn layout(gpu: &Gpu, read_only: bool) -> BindGroupLayout {
@@ -453,6 +525,39 @@ impl LineBuffer {
                         },
                         count: None,
                     },
+                    // Transform
+                    BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Scalar
+                    BindGroupLayoutEntry {
+                        binding: 11,
+                        visibility,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Colormap
+                    BindGroupLayoutEntry {
+                        binding: 12,
+                        visibility,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -460,12 +565,26 @@ impl LineBuffer {
     pub fn n_lines(&self) -> u32 {
         self.n_lines
     }
+
+    pub fn set_scalar(&mut self, gpu: &Gpu, scalar: TrackScalarFile) {
+        if let Some(line) = self
+            .settings
+            .iter_mut()
+            .find(|x| scalar.name().contains(&x.name))
+        {
+            gpu.queue()
+                .write_buffer(&self.scalar, line.offset * 4, cast_slice(scalar.values()));
+
+            line.color_mode = LineColorMode::Scalar
+        }
+    }
 }
 
 impl Drop for LineBuffer {
     fn drop(&mut self) {
         self.vertices.destroy();
         self.indices.destroy();
+        self.scalar.destroy();
         self.length.destroy();
         self.offset.destroy();
         self.materials.destroy();

@@ -11,12 +11,12 @@ name = "vibrant_app_web"
 crate-type = ["cdylib"]
 
 [workspace.dependencies]
-wgpu = "27"
+wgpu = "29"
 winit = "0.30.12"
 
-egui = { version = "0.33" }
-egui-wgpu = { version = "0.33", features = ["winit"] }
-egui-winit = { version = "0.33", default-features = false }
+egui = { version = "0.34" }
+egui-wgpu = { version = "0.34", features = ["winit"] }
+egui-winit = { version = "0.34", default-features = false }
 log = "0.4.28"
 pollster = "0.3"
 web-time = "1.1"

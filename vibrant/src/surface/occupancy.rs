@@ -1,9 +1,9 @@
 use std::any::type_name;
 
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoder, FilterMode, ShaderStages,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, Buffer, BufferBinding,
+    BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoder, ShaderStages,
 };
 
 use crate::{
@@ -32,9 +32,20 @@ impl OccupancyBuffer {
             mapped_at_creation: false,
         });
 
-        let density =
-            MipTexture3D::new(gpu, resolution, resolution, resolution, FilterMode::Linear);
-        let count = MipTexture3D::new(gpu, resolution, resolution, resolution, FilterMode::Nearest);
+        let density = MipTexture3D::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            AddressMode::ClampToEdge,
+        );
+        let count = MipTexture3D::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            AddressMode::ClampToEdge,
+        );
 
         let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,

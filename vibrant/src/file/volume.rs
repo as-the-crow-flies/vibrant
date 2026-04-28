@@ -1,65 +1,81 @@
 use std::io::Cursor;
 
 use flate2::read::GzDecoder;
-use glam::Mat4;
-use nifti::{InMemNiftiObject, NiftiObject, NiftiType};
+use glam::{Mat4, UVec3, Vec3};
+use itertools::Itertools;
+use nifti::{
+    object::GenericNiftiObject, DataElement, InMemNiftiObject, InMemNiftiVolume, NiftiObject,
+    NiftiType,
+};
+use num::ToPrimitive;
 
 use crate::file::File;
 
-pub enum VolumeType {
-    Uint8,
-    Uint16,
-    Uint32,
-    Int8,
-    Int16,
-    Int32,
-    Float32,
-}
-
 pub struct VolumeFile {
     name: String,
-    ty: VolumeType,
     transform: Mat4,
-    data: Vec<u8>,
-    dim: Vec<u16>,
+    data: Vec<f32>,
+    size: UVec3,
 }
 
 impl VolumeFile {
     pub fn from_nifti(file: &File) -> Self {
-        let obj = InMemNiftiObject::from_reader(GzDecoder::new(Cursor::new(&file.data)))
+        let nitfi = InMemNiftiObject::from_reader(GzDecoder::new(Cursor::new(&file.data)))
             .expect("Nifti should contain volume data");
 
-        let transform = Mat4::from_cols_array_2d(&[
-            obj.header().srow_x,
-            obj.header().srow_y,
-            obj.header().srow_z,
+        let dim = nitfi
+            .header()
+            .dim()
+            .expect("Nifti should contain valid dimensionality");
+
+        let voxel_to_texture = Mat4::from_scale(Vec3::new(
+            1.0 / dim[0] as f32,
+            1.0 / dim[1] as f32,
+            1.0 / dim[2] as f32,
+        ));
+
+        let mm_to_voxel = Mat4::from_cols_array_2d(&[
+            nitfi.header().srow_x,
+            nitfi.header().srow_y,
+            nitfi.header().srow_z,
             [0.0, 0.0, 0.0, 1.0],
         ])
-        .transpose();
+        .transpose()
+        .inverse();
 
-        let ty = match obj.header().data_type().expect("Invalid Nifti data type") {
-            NiftiType::Uint8 => VolumeType::Uint8,
-            NiftiType::Uint16 => VolumeType::Uint16,
-            NiftiType::Uint32 => VolumeType::Uint32,
-            NiftiType::Int8 => VolumeType::Int8,
-            NiftiType::Int16 => VolumeType::Int16,
-            NiftiType::Int32 => VolumeType::Int32,
-            NiftiType::Float32 => VolumeType::Float32,
-            _ => panic!("Unsupported Nifti data type"),
-        };
+        let transform = voxel_to_texture * mm_to_voxel;
 
-        let dim = obj
+        let name = file.name.replace(".nii", "").replace(".gz", "").to_owned();
+
+        let dim = nitfi
             .header()
             .dim()
             .expect("Invalid Nifti dimension")
             .to_vec();
 
+        let size = UVec3::new(dim[0] as u32, dim[1] as u32, dim[2] as u32);
+
+        let ty = nitfi.header().data_type().expect("Invalid Nifti data type");
+
+        let data: Vec<f32> = match ty {
+            NiftiType::Uint8 => Self::to_f32::<u8>(nitfi),
+            NiftiType::Int16 => Self::to_f32::<i16>(nitfi),
+            NiftiType::Int32 => Self::to_f32::<i32>(nitfi),
+            NiftiType::Float32 => Self::to_f32::<f32>(nitfi),
+            NiftiType::Float64 => Self::to_f32::<f64>(nitfi),
+            NiftiType::Int8 => Self::to_f32::<i8>(nitfi),
+            NiftiType::Uint16 => Self::to_f32::<u16>(nitfi),
+            NiftiType::Uint32 => Self::to_f32::<u32>(nitfi),
+            NiftiType::Int64 => Self::to_f32::<i64>(nitfi),
+            NiftiType::Uint64 => Self::to_f32::<u64>(nitfi),
+            _ => panic!("Unsupported Nifti format: {:?}", ty),
+        };
+
         Self {
-            data: obj.into_volume().into_raw_data(),
-            name: file.name.replace(".nii", "").replace(".gz", "").to_owned(),
+            data,
+            name,
             transform,
-            ty,
-            dim,
+            size,
         }
     }
 
@@ -71,48 +87,41 @@ impl VolumeFile {
         self.transform
     }
 
-    pub fn data(&self) -> &[u8] {
+    pub fn data(&self) -> &[f32] {
         &self.data
     }
 
-    pub fn ty(&self) -> &VolumeType {
-        &self.ty
+    pub fn size(&self) -> UVec3 {
+        self.size
     }
 
-    pub fn dim(&self) -> &[u16] {
-        &self.dim
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::fs;
-
-    use crate::file::{volume::VolumeFile, File};
-
-    #[test]
-    fn can_read_nifti_file() {
-        let file = File {
-            name: "T1w_acpc_dc_restore_1.25.nii.gz".to_owned(),
-            data: fs::read("/Users/bkraaijeveld/Projects/vibrant/assets/HCP-100307/T1w_acpc_dc_restore_1.25.nii.gz")
-                .expect("Should be able to load nifti file"),
-        };
-
-        let volume = VolumeFile::from_nifti(&file);
-
-        dbg!(volume.transform());
+    pub fn is_binary(&self) -> bool {
+        self.data.iter().all(|&x| x == 0.0 || x == 1.0)
     }
 
-    #[test]
-    fn can_read_integer_nifti_file() {
-        let file = File {
-            name: "T1w_acpc_dc_restore_1.25.nii.gz".to_owned(),
-            data: fs::read("/Users/bkraaijeveld/Projects/vibrant/assets/HCP-100307/m2m_hcp-100307/final_tissues.nii.gz")
-                .expect("Should be able to load nifti file"),
-        };
+    fn to_f32<T: DataElement + ToPrimitive>(
+        nifti: GenericNiftiObject<InMemNiftiVolume>,
+    ) -> Vec<f32> {
+        let data: Vec<f32> = nifti
+            .into_volume()
+            .into_nifti_typed_data::<T>()
+            .unwrap()
+            .into_iter()
+            .filter_map(|voxel| voxel.to_f32())
+            .collect();
 
-        let volume = VolumeFile::from_nifti(&file);
+        if let Some((&min, &max)) = data.iter().minmax().into_option() {
+            if min < 0.0 {
+                let scale = min.abs().max(max.abs());
 
-        dbg!(volume.transform());
+                data.into_iter().map(|voxel| voxel / scale).collect()
+            } else {
+                data.into_iter()
+                    .map(|voxel| (voxel - min) / (max - min))
+                    .collect()
+            }
+        } else {
+            data
+        }
     }
 }

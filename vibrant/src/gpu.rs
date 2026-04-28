@@ -3,7 +3,6 @@ use std::{any::type_name, borrow::Cow, path::PathBuf};
 use bytemuck::Pod;
 use futures::channel::oneshot::channel;
 use itertools::Itertools;
-use log::info;
 use wgpu::{
     BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
     CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Extent3d, Features,
@@ -14,7 +13,7 @@ use wgpu::{
     VertexState,
 };
 
-use crate::renderer::wgsl::COMMON;
+use crate::renderer::wgsl::{COMMON, PBR};
 
 pub struct Gpu {
     instance: wgpu::Instance,
@@ -37,8 +36,6 @@ impl Gpu {
 
         let limits = adapter.limits();
 
-        info!("{:?}", adapter.features());
-
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some(type_name::<Self>()),
@@ -47,10 +44,12 @@ impl Gpu {
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                     max_storage_buffers_per_shader_stage: limits
                         .max_storage_buffers_per_shader_stage,
+                    max_sampled_textures_per_shader_stage: 20,
                     ..Default::default()
                 },
-                required_features: Features::FLOAT32_FILTERABLE
-                    | Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | Features::TEXTURE_FORMAT_16BIT_NORM
+                    | Features::FLOAT32_FILTERABLE,
                 ..Default::default()
             })
             .await
@@ -83,7 +82,7 @@ impl Gpu {
     pub fn shader(&self, source: &str) -> ShaderModule {
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + source)),
+            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + PBR + source)),
         })
     }
 
@@ -133,7 +132,7 @@ impl Gpu {
                 }),
                 multisample: Default::default(),
                 depth_stencil: None,
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             })
     }
@@ -142,8 +141,8 @@ impl Gpu {
         self.device()
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: layouts,
-                push_constant_ranges: &[],
+                bind_group_layouts: &layouts.iter().map(|&layout| Some(layout)).collect_vec(),
+                immediate_size: 0,
             })
     }
 

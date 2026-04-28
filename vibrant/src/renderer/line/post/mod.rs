@@ -31,6 +31,6 @@ impl PostProcessingPipeline {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, environment.binding(), &[]);
         pass.set_bind_group(1, frame.color().binding(), &[]);
-        pass.draw(0..6, 0..1);
+        pass.draw(0..4, 0..1);
     }
 }

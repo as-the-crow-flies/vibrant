@@ -1,11 +1,11 @@
 use std::{any::type_name, ops::Mul};
 
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBinding, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoder, Extent3d, FilterMode, ShaderStages,
-    StorageTextureAccess, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
+    BufferBinding, BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoder, Extent3d,
+    ShaderStages, StorageTextureAccess, Texture, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 
 use crate::{
@@ -43,13 +43,22 @@ impl CullingBuffer {
 
         let index = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 1024 * 1024 * 1024,
+            size: gpu
+                .device()
+                .limits()
+                .max_storage_buffer_binding_size
+                .min(2 * 1024 * 1024 * 1024),
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
 
-        let culling: MipTexture3D<R32Float> =
-            MipTexture3D::new(gpu, resolution, resolution, resolution, FilterMode::Linear);
+        let culling: MipTexture3D<R32Float> = MipTexture3D::new(
+            gpu,
+            resolution,
+            resolution,
+            resolution,
+            AddressMode::ClampToEdge,
+        );
 
         let entries = &[
             BindGroupEntry {

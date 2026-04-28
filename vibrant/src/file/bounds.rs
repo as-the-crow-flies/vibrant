@@ -42,7 +42,7 @@ impl Bounds {
 
     pub fn transform(&self) -> Mat4 {
         Mat4::IDENTITY
-            * Mat4::from_translation(self.min + 0.5 * self.scale())
+            * Mat4::from_translation(self.min)
             * Mat4::from_scale(Vec3::splat(self.scale().max_element()))
     }
 

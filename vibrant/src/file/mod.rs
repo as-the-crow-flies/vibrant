@@ -1,4 +1,5 @@
 pub mod bounds;
+pub mod hdri;
 pub mod line;
 pub mod volume;
 
@@ -6,11 +7,14 @@ pub use line::*;
 pub use volume::*;
 
 use std::{
+    fs,
     path::PathBuf,
     sync::{LazyLock, Mutex},
 };
 
 use log::warn;
+
+use crate::file::hdri::HdriFile;
 
 pub struct File {
     name: String,
@@ -38,10 +42,21 @@ impl File {
     }
 }
 
+impl From<&str> for File {
+    fn from(value: &str) -> Self {
+        File {
+            name: value.to_string(),
+            data: fs::read(value).expect("Could not read file"),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct FileStage {
     pub lines: Vec<LineFile>,
+    pub track_scalars: Vec<TrackScalarFile>,
     pub volumes: Vec<VolumeFile>,
+    pub hdris: Vec<HdriFile>,
     pub save: Option<PathBuf>,
 }
 
@@ -86,15 +101,21 @@ impl FileStage {
 
     fn load_files(files: Vec<File>) {
         let mut lines: Vec<LineFile> = Vec::new();
+        let mut track_scalars: Vec<TrackScalarFile> = Vec::new();
         let mut volumes: Vec<VolumeFile> = Vec::new();
+        let mut hdris: Vec<HdriFile> = Vec::new();
 
         for file in files {
             if file.name().ends_with(".tck") {
                 lines.push(LineFile::from_tck(file));
             } else if file.name().ends_with(".obj") {
                 lines.push(LineFile::from_obj(file));
+            } else if file.name().ends_with(".tsf") {
+                track_scalars.push(TrackScalarFile::from_tsf(file));
             } else if file.name().ends_with(".nii.gz") {
                 volumes.push(VolumeFile::from_nifti(&file));
+            } else if file.name().ends_with(".exr") {
+                hdris.push(HdriFile::from_exr(&file));
             } else {
                 warn!(
                     "Cannot open `{}`. Supported file types are [.tck .obj .nii.gz]",
@@ -103,12 +124,11 @@ impl FileStage {
             }
         }
 
-        if !lines.is_empty() {
-            QUEUE.lock().unwrap().lines.extend(lines);
-        }
-
-        if !volumes.is_empty() {
-            QUEUE.lock().unwrap().volumes.extend(volumes);
+        if let Ok(stage) = QUEUE.lock().as_mut() {
+            stage.lines.extend(lines);
+            stage.track_scalars.extend(track_scalars);
+            stage.volumes.extend(volumes);
+            stage.hdris.extend(hdris);
         }
     }
 
@@ -135,11 +155,27 @@ impl FileStage {
         }
     }
 
+    pub fn on_track_scalars(callback: impl FnOnce(Vec<TrackScalarFile>)) {
+        let mut data = QUEUE.lock().unwrap();
+
+        if !data.track_scalars.is_empty() {
+            callback(data.track_scalars.drain(..).collect());
+        }
+    }
+
     pub fn on_volumes(callback: impl FnOnce(Vec<VolumeFile>)) {
         let mut data = QUEUE.lock().unwrap();
 
         if !data.volumes.is_empty() {
             callback(data.volumes.drain(..).collect());
+        }
+    }
+
+    pub fn on_hdris(callback: impl FnOnce(Vec<HdriFile>)) {
+        let mut data = QUEUE.lock().unwrap();
+
+        if !data.hdris.is_empty() {
+            callback(data.hdris.drain(..).collect());
         }
     }
 
@@ -157,6 +193,10 @@ impl FileStage {
 
     fn publish_save_path(path: PathBuf) {
         QUEUE.lock().unwrap().save = Some(path);
+    }
+
+    pub fn load_volume_fractions() {
+        todo!()
     }
 }
 

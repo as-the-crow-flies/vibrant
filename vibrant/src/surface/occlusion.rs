@@ -1,7 +1,7 @@
 use std::any::type_name;
 
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, FilterMode,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
 };
 
 use crate::{
@@ -22,14 +22,14 @@ impl OcclusionBuffer {
             resolution,
             resolution,
             resolution,
-            FilterMode::Linear,
+            AddressMode::ClampToEdge,
         );
         let directional = MipTexture3D::<R32Float>::new(
             gpu,
             resolution,
             resolution,
             resolution,
-            FilterMode::Linear,
+            AddressMode::ClampToEdge,
         );
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {

@@ -1,6 +1,7 @@
 struct Settings {
     radius: f32,
     lighting: f32,
+    ambient_light: f32,
     direct_light: f32,
     tangent_color: f32,
     shadows: f32,
@@ -46,8 +47,16 @@ struct Environment {
 struct LineSettings {
     visible: u32,
     color: u32,
+    colormap: u32,
     crop_start: f32,
     crop_end: f32,
+}
+
+struct HdriSettings {
+    rotation: f32,
+    strength: f32,
+    specular: f32,
+    show: u32,
 }
 
 struct Vertex {
@@ -300,13 +309,16 @@ fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
 fn shade(
     v0: Vertex,
     v1: Vertex,
+    v0s: f32,
+    v1s: f32,
     radius: f32,
     position: vec3<f32>,
     settings: LineSettings,
     environment: Environment,
     occlusion_ambient: texture_3d<f32>,
     occlusion_directional: texture_3d<f32>,
-    occlusion_sampler: sampler
+    occlusion_sampler: sampler,
+    colormap: texture_2d<f32>
 ) -> vec4<f32> {
     let delta = v1.xyz - v0.xyz;
     let pa = position - v0.xyz;
@@ -337,19 +349,34 @@ fn shade(
 
     let color = unpack4x8unorm(settings.color);
 
-    let d = abs(tangent).xzy;
+    let tangent_color = tangent2rgb(abs(tangent).xzy);
+    let line_color = unpack4x8unorm(settings.color);
 
+    let scalar_sample = u32(mix(v0s, v1s, height) * 255.0);
+    let scalar_color = textureLoad(colormap, vec2<u32>(scalar_sample, settings.colormap), 0).rgb;
+
+    let has_scalar_color = line_color.a == 1.0;
+    let has_line_color = !has_scalar_color && line_color.a > 0.4;
+    let has_tangent_color = !has_line_color && !has_scalar_color;
+
+    let rgb = factor * (
+        f32(has_line_color) * line_color.rgb +
+        f32(has_scalar_color) * scalar_color +
+        f32(has_tangent_color) * tangent_color
+    );
+
+    let alpha = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
+
+    return vec4<f32>(rgb, alpha);
+}
+
+fn tangent2rgb(tangent: vec3<f32>) -> vec3<f32> {
     let red = vec2<f32>(0.217, 0.125);
     let green = vec2<f32>(-0.217, 0.125);
     let blue = vec2<f32>(0.000, -0.250);
 
-    let oklab = vec3<f32>(environment.settings.lighting, environment.settings.tangent_color * d.r * red + d.g * green + d.b * blue);
-    let result = select(oklab2rgb(oklab), d, environment.settings.lighting == 0.0);
-
-    let rgb = factor * result;
-    let alpha = environment.settings.alpha * mix(v0.alpha, v1.alpha, height);
-
-    return vec4<f32>(rgb, alpha);
+    let oklab = vec3<f32>(0.8, tangent.r * red + tangent.g * green + tangent.b * blue);
+    return oklab2rgb(oklab);
 }
 
 /*
@@ -547,4 +574,95 @@ fn unpack_normal(packed: u32) -> vec3<f32> {
     }
 
     return normalize(v);
+}
+
+fn hash(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+}
+
+fn equirectangular(direction: vec3<f32>, rotation: f32) -> vec2<f32> {
+    let d = rotation_z(rotation * 2.0 * PI) * normalize(direction);
+    return vec2<f32>(0.5 - atan2(d.z, d.x) / (2.0 * PI), acos(d.y) / PI);
+}
+
+fn rotation_y(angle: f32) -> mat3x3<f32> {
+    let c = cos(angle);
+    let s = sin(angle);
+
+    return mat3x3<f32>(
+        vec3<f32>( c, 0.0, -s),
+        vec3<f32>(0.0, 1.0, 0.0),
+        vec3<f32>( s, 0.0,  c)
+    );
+}
+
+fn rotation_z(angle: f32) -> mat3x3<f32> {
+    let c = cos(angle);
+    let s = sin(angle);
+
+    return mat3x3<f32>(
+        vec3<f32>( c,  s, 0.0),
+        vec3<f32>(-s,  c, 0.0),
+        vec3<f32>(0.0, 0.0, 1.0)
+    );
+}
+
+struct CubeCoordinates {
+    face: u32,
+    uv: vec2<f32>,
+};
+
+fn cubemap_encode(direction: vec3<f32>) -> CubeCoordinates {
+    let d = normalize(direction);
+    let ad = abs(d);
+
+    var face: u32;
+    var uv: vec2<f32>;
+
+    if (ad.x >= ad.y && ad.x >= ad.z) {
+        if (d.x > 0.0) {
+            face = 0u; // +X
+            uv = vec2(-d.z, -d.y) / ad.x;
+        } else {
+            face = 3u; // -X
+            uv = vec2(d.z, -d.y) / ad.x;
+        }
+    } else if (ad.y >= ad.x && ad.y >= ad.z) {
+        if (d.y > 0.0) {
+            face = 1u; // +Y
+            uv = vec2(d.x, d.z) / ad.y;
+        } else {
+            face = 4u; // -Y
+            uv = vec2(d.x, -d.z) / ad.y;
+        }
+    } else {
+        if (d.z > 0.0) {
+            face = 2u; // +Z
+            uv = vec2(d.x, -d.y) / ad.z;
+        } else {
+            face = 5u; // -Z
+            uv = vec2(-d.x, -d.y) / ad.z;
+        }
+    }
+
+    uv = uv * 0.5 + 0.5;
+
+    return CubeCoordinates(face, uv);
+}
+
+fn cubemap_decode(c: CubeCoordinates) -> vec3<f32> {
+    let uv = c.uv * 2.0 - 1.0;
+
+    var dir: vec3<f32>;
+
+    switch (c.face) {
+        case 0u: { dir = vec3( 1.0, -uv.y, -uv.x); } // +X
+        case 3u: { dir = vec3(-1.0, -uv.y,  uv.x); } // -X
+        case 1u: { dir = vec3( uv.x,  1.0,  uv.y); } // +Y
+        case 4u: { dir = vec3( uv.x, -1.0, -uv.y); } // -Y
+        case 2u: { dir = vec3( uv.x, -uv.y,  1.0); } // +Z
+        default: { dir = vec3(-uv.x, -uv.y, -1.0); } // -Z
+    }
+
+    return normalize(dir);
 }

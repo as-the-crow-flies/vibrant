@@ -11,8 +11,9 @@ use occlusion::OcclusionBuffer;
 use occupancy::OccupancyBuffer;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, CommandEncoder,
-    CompositeAlphaMode, Extent3d, Origin3d, PresentMode, SurfaceConfiguration, SurfaceTarget,
-    TexelCopyTextureInfo, TextureAspect, TextureFormat, TextureUsages,
+    CompositeAlphaMode, CurrentSurfaceTexture, Extent3d, Origin3d, PresentMode,
+    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, TexelCopyTextureInfo, TextureAspect,
+    TextureFormat, TextureUsages,
 };
 
 use crate::{
@@ -104,7 +105,8 @@ impl Frame {
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
-    buffer: Frame,
+    frame: Frame,
+    changed: bool,
 }
 
 impl Surface {
@@ -120,30 +122,40 @@ impl Surface {
 
         Self {
             surface,
-            buffer: Frame::new(gpu, &Settings::new()),
+            frame: Frame::new(gpu, &Settings::new()),
+            changed: true,
         }
     }
 
-    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) -> &Self {
-        if settings.width == self.buffer.color().width()
-            && settings.height == self.buffer.color().height()
-            && settings.volume == self.buffer.occupancy().resolution()
+    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) {
+        if settings.width == self.frame.color().width()
+            && settings.height == self.frame.color().height()
+            && settings.volume == self.frame.occupancy().resolution()
         {
-            return self;
+            self.changed = false;
+            return;
         }
 
-        self.buffer = Frame::new(gpu, &settings);
+        self.frame = Frame::new(gpu, &settings);
         self.surface
             .configure(gpu.device(), &Self::config(settings.width, settings.height));
 
-        self
+        self.changed = true;
+    }
+
+    fn get_current_texture(&self) -> Option<SurfaceTexture> {
+        match self.surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(texture) => Some(texture),
+            CurrentSurfaceTexture::Suboptimal(texture) => Some(texture),
+            _ => None,
+        }
     }
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
-        if let Some(surface) = self.surface.get_current_texture().ok() {
+        if let Some(surface) = self.get_current_texture() {
             cmd.copy_texture_to_texture(
                 TexelCopyTextureInfo {
-                    texture: self.buffer.post().texture(),
+                    texture: self.frame.post().texture(),
                     mip_level: 0,
                     origin: Origin3d::ZERO,
                     aspect: TextureAspect::All,
@@ -167,8 +179,6 @@ impl Surface {
             if !gpu.wait() {
                 warn!("Could not poll GPU")
             }
-        } else {
-            warn!("Could not obtain surface texture");
         }
     }
 
@@ -185,7 +195,11 @@ impl Surface {
         }
     }
 
-    pub fn buffer(&self) -> &Frame {
-        &self.buffer
+    pub fn frame(&self) -> &Frame {
+        &self.frame
+    }
+
+    pub fn changed(&self) -> bool {
+        self.changed
     }
 }

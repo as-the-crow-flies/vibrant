@@ -11,15 +11,15 @@ use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::{line::LineBuffer, transform::TransformBuffer},
-    controller::settings::Settings,
+    asset::Asset,
+    controller::Controller,
     gpu::Gpu,
     renderer::line::{
         crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
         populate::LinePopulatePipeline, post::PostProcessingPipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
-    surface::Frame,
+    surface::Surface,
 };
 
 use super::environment::Environment;
@@ -52,33 +52,44 @@ impl LineRenderer {
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
+        controller: &Controller,
         environment: &Environment,
-        frame: &Frame,
-        line: &LineBuffer,
-        transform: &TransformBuffer,
-        settings: &Settings,
-        needs_transform: bool,
-        _needs_update: bool,
+        surface: &Surface,
+        asset: &Asset,
     ) {
-        if needs_transform {
-            self.transform.dispatch(cmd, line, transform, environment);
+        if !controller.tractography().visible() {
+            return;
         }
 
-        self.crop.dispatch(cmd, line, environment);
+        let frame = surface.frame();
 
-        self.occupancy
-            .dispatch(cmd, frame, environment, settings, line);
+        if let Some(line) = &asset.line {
+            if surface.changed() | asset.changed() | controller.changed() {
+                self.transform.dispatch(cmd, line, environment);
 
-        self.cull.dispatch(cmd, frame, environment);
+                self.crop.dispatch(cmd, line, environment);
 
-        self.occlusion.dispatch(cmd, frame, environment);
+                self.occupancy
+                    .dispatch(cmd, frame, environment, controller.settings(), line);
 
-        self.populate
-            .dispatch(cmd, frame, environment, settings, line);
+                self.cull.dispatch(cmd, frame, environment);
 
-        self.render
-            .dispatch(cmd, environment, frame, line, settings);
+                self.occlusion.dispatch(cmd, frame, environment);
 
-        self.post.dispatch(cmd, environment, frame);
+                self.populate
+                    .dispatch(cmd, frame, environment, controller.settings(), line);
+            }
+
+            self.render.dispatch(
+                cmd,
+                frame,
+                environment,
+                controller.settings(),
+                controller.viewport(),
+                line,
+            );
+
+            self.post.dispatch(cmd, environment, frame);
+        }
     }
 }
