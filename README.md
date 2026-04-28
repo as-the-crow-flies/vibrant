@@ -1,51 +1,39 @@
-VIBRANT
--------
+# Vibrant
 
-Experimental Line Rendering Software
+Visualizing Brain Anatomy and Tractography... Vibrantly!
 
-# How to Run
+![Screenshot of Vibrant Application](cover.png)
 
-1. Ensure you have Rust installed on your system: https://rustup.rs/
-2. Build and Run using `cargo run`
+## Getting Started
 
-# User Interface
+1. Install rust using https://rustup.rs/
+2. Clone Git Repository `git clone git@github.com:as-the-crow-flies/vibrant.git`
+3. Build & Run the application using `cargo run`
 
-1. Settings - Opens Settings Side Panel
-2. Open - Allows Importing `.tck` and `.obj` line files
-3. Screenshot - Captures a Screenshot
+## Tractography Rendering
 
-## Settings
+Load any number of `.tck` tract files to render them with vibrant colors and shadows.
+Tracts can be colored using the tangent (default), a color per file, or using a `.tsf` tract scalar file.
 
-### Render Mode
+### (Experimental) Tract Scalar File Support
 
-- RayTracing - Our Voxel Ray Tracing Method
-- RayTracingQuantized - Kanzler et al.
-- RasterizationOrderCorrecting - Groß and Gumhold
-- Rasterization - Baseline Rasterization
+After loading `.tck` files, load any `.tsf` files with corresponding names to apply the scalar values to this tract, e.g. `test_AF_Left_fa.tsf` will be automatically applied to `AF_Left.tck`. A few sequential colormaps are supported.
 
-### Display Mode
+## NIfTI Volume Rendering
 
-- Geometry - Render Tube Geometry
-- Volume - Render Occupancy Volume
+Load any scalar `.nii.gz` volume file to render it with given contrast and material. Load multiple NIfTI files to show ROIs or segmentations.
 
-### Voxelization Mode
+### Masking
 
-- Tube - Our Conservative Voxelization Method
-- Box - Axis Aligned Bounding Box Voxelization
-- Line - DDA Voxelization
+Load any NIfTI file with 'mask' in the name to import a mask. Then assign a mask to one or more volumes to apply it. Two types of masks are supported:
 
-### Resolutions
+- Binary Masks - standard masks
+- Signed Distance Field Masks - allows for e.g. eroding the brain surface
 
-- Volume - Resolution of Occupancy Volume and A-Buffer
+### (Experimental) Environment Maps
 
-### Appearance
+By loading a `.exr` HDRI environment texture (e.g. from https://polyhaven.com/hdris/studio), the application uses it as a light source to render your data.
 
-- Streamline Radius - Line Radius radius relative to voxel size
-- Lighting - How much lighting to apply
-- Ambient/Shadow - Contribution of Ambient Occlusion versus Direct Shadows
-- Tangent Color - Contribution of Tangent Coloring
-- Alpha - Line Alpha for all lines
-- Smoothing - Clamping Value for Phone-Wire Anti-Aliasing
-- Culling Slices - Number of slices for culling in RasterizationOrderCorrecting
-- Workgroups - How many work groups to launch (set equal to number of workgroups in your GPU for optimal performance)
-- Enable Culling - Turn Culling on/off
+## Known Limitations
+
+- All loaded NIfTI files should have the exact same transform. The application cannot handle different volume resolutions at once yet.
