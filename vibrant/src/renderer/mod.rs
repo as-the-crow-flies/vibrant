@@ -69,10 +69,9 @@ impl Renderer {
         self.asset.maybe_update(gpu);
 
         let input = self.egui.take_egui_input(window);
-        let output = self
-            .egui
-            .egui_ctx()
-            .run_ui(input, |ui| controller.ui(ui, &mut self.asset, dt));
+        let output = self.egui.egui_ctx().run_ui(input, |ui| {
+            controller.ui(ui, &mut self.asset, window.scale_factor() as f32, dt)
+        });
         self.egui
             .handle_platform_output(&window, output.platform_output.clone());
 

@@ -33,7 +33,7 @@ impl AnatomyTracePipeline {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
-        _viewport: Rect,
+        viewport: Rect,
         hdri: &HdriBuffer,
         frame: &Frame,
         volume: &PhysicalVolume,
@@ -43,6 +43,15 @@ impl AnatomyTracePipeline {
             color_attachments: &[Some(frame.post().attachment_srgb())],
             ..Default::default()
         });
+
+        pass.set_viewport(
+            viewport.min.x,
+            viewport.min.y,
+            viewport.width(),
+            viewport.height(),
+            0.0,
+            1.0,
+        );
 
         pass.set_pipeline(&self.trace);
         pass.set_bind_group(0, volume.binding_read(), &[]);

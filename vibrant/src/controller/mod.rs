@@ -96,7 +96,7 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, _dt: f32) {
+    pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, scale: f32, _dt: f32) {
         Panel::top("TopBottomPanel").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -213,7 +213,8 @@ impl Controller {
         let viewport = CentralPanel::no_frame().show_inside(ui, |_| {});
 
         self.hovered = viewport.response.hovered();
-        self.viewport = viewport.response.rect;
+        self.viewport = viewport.response.rect * scale;
+        self.camera.aspect = self.viewport.aspect_ratio();
     }
 
     pub fn camera(&self) -> &Camera {

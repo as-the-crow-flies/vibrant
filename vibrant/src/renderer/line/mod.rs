@@ -80,8 +80,14 @@ impl LineRenderer {
                     .dispatch(cmd, frame, environment, controller.settings(), line);
             }
 
-            self.render
-                .dispatch(cmd, environment, frame, line, controller.settings());
+            self.render.dispatch(
+                cmd,
+                frame,
+                environment,
+                controller.settings(),
+                controller.viewport(),
+                line,
+            );
 
             self.post.dispatch(cmd, environment, frame);
         }

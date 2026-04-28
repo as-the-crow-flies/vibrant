@@ -26,22 +26,25 @@
 @group(3) @binding(1) var HDRI_SAMPLER: sampler;
 @group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
 
+struct Fragment {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>
+}
+
 @vertex
-fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
-    return vec4<f32>(
+fn vertex(@builtin(vertex_index) index: u32) -> Fragment {
+    let uv = vec2<f32>(
         select(-1.0, 1.0, bool(index & 1)),
-        select(-1.0, 1.0, bool(index & 2)),
-        0.0,
-        1.0
+        select(-1.0, 1.0, bool(index & 2))
     );
+
+    return Fragment(vec4<f32>(uv, 0.0, 1.0), uv);
 }
 
 @fragment
-fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = vec2<f32>(1.0, -1.0) * (pixel.xy / vec2<f32>(ENVIRONMENT.surface) * 2.0 - 1.0);
-
-    let near = unproject(vec3<f32>(uv.xy, 0.0));
-    let far = unproject(vec3<f32>(uv.xy, 1.0));
+fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
+    let near = unproject(vec3<f32>(fragment.uv, 0.0));
+    let far = unproject(vec3<f32>(fragment.uv, 1.0));
 
     let direction_world = normalize(far - near);
 
@@ -54,7 +57,7 @@ fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
         return vec4<f32>(aces(sample_hdri(direction_world)), 0.0);
     }
 
-    let t0 = max(hit.x, 0.0) + hash(pixel.xy + fract(ENVIRONMENT.time));
+    let t0 = max(hit.x, 0.0) + hash(fragment.position.xy + fract(ENVIRONMENT.time));
     let t1 = hit.y;
 
     let light_direction = (TRANSFORM * vec4<f32>(ENVIRONMENT.light, 0.0)).xyz;

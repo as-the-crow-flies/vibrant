@@ -6,22 +6,20 @@ use super::state::ControllerState;
 
 #[derive(Debug)]
 pub struct Camera {
-    width: u32,
-    height: u32,
+    pub aspect: f32,
+    pub fov: f32,
     pub yaw: f32,
     pub pitch: f32,
-    distance: f32,
-    pan: Vec3,
-    pub fov: f32,
-    near: f32,
-    far: f32,
+    pub distance: f32,
+    pub pan: Vec3,
+    pub near: f32,
+    pub far: f32,
 }
 
 impl Camera {
     pub fn new() -> Self {
         Self {
-            width: 1,
-            height: 1,
+            aspect: 1.0,
             yaw: 0.0,
             pitch: -0.5 * PI,
             distance: 300.0,
@@ -33,8 +31,7 @@ impl Camera {
     }
 
     pub fn update(&mut self, state: &ControllerState) {
-        self.width = state.width;
-        self.height = state.height;
+        self.aspect = state.width as f32 / state.height as f32;
 
         if state.shift {
             return;
@@ -64,12 +61,8 @@ impl Camera {
         self.zoom(-10.0 * state.scroll.y);
     }
 
-    pub fn aspect(&self) -> f32 {
-        self.width as f32 / self.height as f32
-    }
-
     pub fn projection(&self) -> Mat4 {
-        Mat4::perspective_lh(self.fov, self.aspect(), self.near, self.far) * self.view()
+        Mat4::perspective_lh(self.fov, self.aspect, self.near, self.far) * self.view()
     }
 
     pub fn rotation(&self) -> Quat {
