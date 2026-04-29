@@ -4,11 +4,10 @@ use wgpu::*;
 
 use crate::{
     asset::{
-        volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
+        crop::CropBuffer, volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
         volume_mask::VolumeMaskBuffer,
     },
     gpu::Gpu,
-    renderer::environment::Environment,
 };
 
 pub struct AnatomyTransferPipeline {
@@ -30,7 +29,7 @@ impl AnatomyTransferPipeline {
                     &VolumeFractionBuffer::layout(gpu),
                     &VolumeMaskBuffer::layout(gpu),
                     &PhysicalVolume::layout_write(gpu),
-                    &Environment::layout(gpu),
+                    &CropBuffer::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("transfer.wgsl")),
             ),
@@ -40,10 +39,10 @@ impl AnatomyTransferPipeline {
     pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
-        environment: &Environment,
         fractions: &[VolumeFractionBuffer],
         masks: &[VolumeMaskBuffer],
         volume: &PhysicalVolume,
+        crop: &CropBuffer,
     ) {
         let n_workgroups = volume.size().add(3).div(4);
 
@@ -55,7 +54,7 @@ impl AnatomyTransferPipeline {
         pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
 
         pass.set_bind_group(2, volume.binding_write(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(3, crop.binding(), &[]);
 
         pass.set_pipeline(&self.transfer);
         for fraction in fractions.iter().filter(|x| x.settings().visible) {

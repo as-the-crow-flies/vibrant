@@ -59,6 +59,12 @@ struct HdriSettings {
     show: u32,
 }
 
+struct CropSettings {
+    spherical: vec4<f32>,
+    min: vec4<f32>,
+    max: vec4<f32>,
+}
+
 struct Vertex {
     xyz: vec3<f32>,
     clip: vec3<f32>,

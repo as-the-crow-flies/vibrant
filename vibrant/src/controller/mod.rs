@@ -202,7 +202,9 @@ impl Controller {
             .max_size(800.0)
             .show_animated_inside(ui, self.show_right_side_panel, |ui| {
                 ScrollArea::new([false, true]).show(ui, |ui| {
-                    self.crop_widget.show(ui, &mut self.settings);
+                    if let Some(crop) = &mut asset.crop {
+                        self.crop_widget.show(ui, crop);
+                    }
 
                     self.volumes_widget
                         .show(ui, &mut asset.volumes, &mut asset.masks);

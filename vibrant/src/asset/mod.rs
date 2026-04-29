@@ -1,4 +1,5 @@
 pub mod colormap;
+pub mod crop;
 pub mod hdri;
 pub mod line;
 pub mod radiance;
@@ -12,8 +13,8 @@ use volume::PhysicalVolume;
 
 use crate::{
     asset::{
-        hdri::HdriBuffer, radiance::RadianceVolume, volume_fraction::VolumeFractionBuffer,
-        volume_mask::VolumeMaskBuffer,
+        crop::CropBuffer, hdri::HdriBuffer, radiance::RadianceVolume,
+        volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
     },
     file::FileStage,
     gpu::Gpu,
@@ -27,6 +28,7 @@ pub struct Asset {
     pub physical_volume: Option<PhysicalVolume>,
     pub radiance: Option<RadianceVolume>,
     pub hdri: Option<HdriBuffer>,
+    pub crop: Option<CropBuffer>,
 
     pub changed: bool,
 }
@@ -34,6 +36,10 @@ pub struct Asset {
 impl Asset {
     pub fn maybe_update(&mut self, gpu: &Gpu) {
         self.changed = false;
+
+        if self.crop.is_none() {
+            self.crop = Some(CropBuffer::new(gpu))
+        }
 
         if self.masks.is_empty() {
             self.masks.push(VolumeMaskBuffer::none(gpu));

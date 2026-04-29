@@ -84,6 +84,9 @@ impl Renderer {
         if let Some(hdri) = &self.asset.hdri {
             hdri.update_settings(gpu);
         }
+        if let Some(crop) = &self.asset.crop {
+            crop.update_settings(gpu);
+        }
         for volume in &self.asset.volumes {
             volume.update_settings(gpu);
         }

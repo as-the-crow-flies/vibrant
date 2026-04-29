@@ -25,32 +25,20 @@ struct MaskSettings {
 @group(2) @binding(1) var SCATTERING: texture_storage_3d<rgba8unorm, read_write>;
 @group(2) @binding(2) var EXTINCTION: texture_storage_3d<rgba8unorm, read_write>;
 
-@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(3) @binding(0) var<uniform> CROP: CropSettings;
 
 @compute
 @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
-    let crop_min = 0.5 + vec3<f32>(
-        ENVIRONMENT.settings.crop_x_start,
-        ENVIRONMENT.settings.crop_y_start,
-        ENVIRONMENT.settings.crop_z_start,
-    );
+    let crop_min = 0.5 + CROP.min.xyz;
+    let crop_max = 0.5 + CROP.max.xyz;
 
     let crop_min_u32 = vec3<u32>(crop_min * vec3<f32>(textureDimensions(ABSORPTION)));
-
-    let crop_max = 0.5 + vec3<f32>(
-        ENVIRONMENT.settings.crop_x_end,
-        ENVIRONMENT.settings.crop_y_end,
-        ENVIRONMENT.settings.crop_z_end,
-    );
-
     let crop_max_u32 = vec3<u32>(crop_max * vec3<f32>(textureDimensions(ABSORPTION)));
 
     if (any(voxel < crop_min_u32) | any(voxel > crop_max_u32) |
         any(voxel >= textureDimensions(ABSORPTION)))
         { return; }
-
-
 
     var fraction = textureLoad(FRACTION, voxel, 0).x;
 

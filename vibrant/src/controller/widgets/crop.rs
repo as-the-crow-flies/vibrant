@@ -4,7 +4,7 @@ use egui::{collapsing_header::CollapsingState, Grid, Ui};
 use egui_double_slider::DoubleSlider;
 
 use crate::{
-    controller::settings::Settings,
+    asset::crop::CropBuffer,
     util::{ResponseExtentions, Tracked},
 };
 
@@ -28,33 +28,18 @@ impl CropWidget {
         self.changed
     }
 
-    pub fn show(&mut self, ui: &mut Ui, settings: &mut Settings) {
+    pub fn show(&mut self, ui: &mut Ui, crop: &mut CropBuffer) {
         self.changed = false;
+
+        let s = crop.settings_mut();
 
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
             .show_header(ui, |ui| ui.heading("Crop"))
             .body(|ui| {
                 Grid::new("CropWidgetGrid").num_columns(2).show(ui, |ui| {
-                    self.slider(
-                        ui,
-                        "Axial",
-                        &mut settings.crop_z_start,
-                        &mut settings.crop_z_end,
-                    );
-
-                    self.slider(
-                        ui,
-                        "Sagittal",
-                        &mut settings.crop_x_start,
-                        &mut settings.crop_x_end,
-                    );
-
-                    self.slider(
-                        ui,
-                        "Coronal",
-                        &mut settings.crop_y_start,
-                        &mut settings.crop_y_end,
-                    );
+                    self.slider(ui, "Axial", &mut s.min.z, &mut s.max.z);
+                    self.slider(ui, "Sagittal", &mut s.min.x, &mut s.max.x);
+                    self.slider(ui, "Coronal", &mut s.min.y, &mut s.max.y);
                 });
             });
     }
