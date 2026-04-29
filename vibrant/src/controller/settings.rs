@@ -59,8 +59,8 @@ impl Settings {
         Self {
             width: 1920,
             height: 1080,
-            volume: 128,
-            radius: 0.15,
+            volume: 256,
+            radius: 0.2,
             lighting: 0.85,
             ambient_light: 1.0,
             direct_light: 1.0,

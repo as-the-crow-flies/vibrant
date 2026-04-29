@@ -59,8 +59,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     fraction = saturate(fraction);
 
-    let absorption = fraction * MATERIAL.absorption;
-    let scattering = fraction * MATERIAL.scattering;
+    let absorption = fraction * vec4<f32>(MATERIAL.absorption.rgb, 1.0) * MATERIAL.absorption.a;
+    let scattering = fraction * vec4<f32>(MATERIAL.scattering.rgb, 1.0) * MATERIAL.scattering.a;
 
     textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + absorption);
     textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + scattering);

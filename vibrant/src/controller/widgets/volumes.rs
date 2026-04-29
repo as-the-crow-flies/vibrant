@@ -71,20 +71,6 @@ impl VolumesWidget {
                             Grid::new("VolumeSettingsGrid")
                                 .num_columns(2)
                                 .show(ui, |ui| {
-                                    ui.label("Contrast");
-                                    ui.add(
-                                        DoubleSlider::new(
-                                            &mut settings.min,
-                                            &mut settings.max,
-                                            0.0..=1.0,
-                                        )
-                                        .width(ui.available_width())
-                                        .separation_distance(0.01),
-                                    )
-                                    .track(self);
-
-                                    ui.end_row();
-
                                     ui.label("Mask");
                                     ui.horizontal(|ui| {
                                         ComboBox::from_id_salt("VolumeMask")
@@ -103,7 +89,24 @@ impl VolumesWidget {
                                                 }
                                             });
                                     });
+                                    ui.end_row();
 
+                                    ui.label("Contrast");
+                                    ui.add(
+                                        DoubleSlider::new(
+                                            &mut settings.min,
+                                            &mut settings.max,
+                                            0.0..=1.0,
+                                        )
+                                        .width(ui.available_width())
+                                        .separation_distance(0.01),
+                                    )
+                                    .track(self);
+
+                                    ui.end_row();
+
+                                    ui.label("Opacity");
+                                    ui.slider(&mut settings.opacity, 0.0..=1.0).track(self);
                                     ui.end_row();
 
                                     ui.label("Material");

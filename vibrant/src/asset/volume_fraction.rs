@@ -38,6 +38,7 @@ pub struct VolumeFractionSettings {
     pub mask: usize,
     pub absorption: [f32; 3],
     pub scattering: [f32; 3],
+    pub opacity: f32,
     pub min: f32,
     pub max: f32,
     pub inverted: bool,
@@ -50,8 +51,8 @@ impl VolumeFractionSettings {
         let [sr, sg, sb] = self.scattering;
 
         VolumeFractionSettingsBuffer {
-            absorption: [ar, ag, ab, 0.0],
-            scattering: [sr, sg, sb, 0.0],
+            absorption: [ar, ag, ab, self.opacity],
+            scattering: [sr, sg, sb, self.opacity],
             min: self.min,
             max: self.max,
             inverted: self.inverted as u32,
@@ -139,6 +140,7 @@ impl VolumeFractionBuffer {
             mask: 0,
             absorption: [1.0; 3],
             scattering: [1.0; 3],
+            opacity: 1.0,
             min: 0.0,
             max: 1.0,
             inverted: false,
