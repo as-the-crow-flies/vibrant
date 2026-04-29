@@ -52,8 +52,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if(all(v0 >= CROP.min.xyz) && all(v0 <= CROP.max.xyz) &&
-           all(v1 >= CROP.min.xyz) && all(v1 <= CROP.max.xyz)) {
+        if (should_keep(v0, v1)) {
            total_length++;
         }
     }
@@ -67,10 +66,32 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if(all(v0 >= CROP.min.xyz) && all(v0 <= CROP.max.xyz) &&
-           all(v1 >= CROP.min.xyz) && all(v1 <= CROP.max.xyz)) {
+        if (should_keep(v0, v1)) {
             LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
             offset_index++;
         }
     }
+}
+
+fn should_keep(v0: vec3<f32>, v1: vec3<f32>) -> bool {
+    let crop_normal = normal_from_spherical(CROP.spherical.x, CROP.spherical.y);
+    let v0_distance = dot(crop_normal, v0) + CROP.spherical.z - 0.5;
+    let v1_distance = dot(crop_normal, v1) + CROP.spherical.z - 0.5;
+
+    let within_spherical_crop = v0_distance < 0.0 && v1_distance < 0.0;
+
+    let within_orthogonal_crop =
+        all(v0 >= CROP.min.xyz) && all(v0 <= CROP.max.xyz) &&
+        all(v1 >= CROP.min.xyz) && all(v1 <= CROP.max.xyz);
+
+    return within_orthogonal_crop && within_spherical_crop;
+}
+
+fn normal_from_spherical(phi: f32, theta: f32) -> vec3<f32> {
+    let sin_theta = sin(theta);
+    return vec3<f32>(
+        sin_theta * cos(phi),
+        sin_theta * sin(phi),
+        cos(theta)
+    );
 }

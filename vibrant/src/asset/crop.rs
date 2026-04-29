@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, f32::consts::PI};
 
 use bytemuck::{bytes_of, Pod, Zeroable};
 use glam::Vec4;
@@ -30,7 +30,7 @@ impl CropBuffer {
         let label = Some(type_name::<Self>());
 
         let settings = CropSettings {
-            spherical: Vec4::ZERO,
+            spherical: Vec4::new(0.0, 0.5 * PI, 0.0, 0.01),
             min: Vec4::NEG_ONE,
             max: Vec4::ONE,
         };
