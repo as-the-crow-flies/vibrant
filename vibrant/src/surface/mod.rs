@@ -40,7 +40,7 @@ impl Frame {
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
-        let culling = CullingBuffer::new(gpu, settings.volume);
+        let culling = CullingBuffer::new(gpu, settings.volume, settings.fragment_list_size);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -131,6 +131,7 @@ impl Surface {
         if settings.width == self.frame.color().width()
             && settings.height == self.frame.color().height()
             && settings.volume == self.frame.occupancy().resolution()
+            && settings.fragment_list_size == self.frame().culling().fragment_list_size()
         {
             self.changed = false;
             return;

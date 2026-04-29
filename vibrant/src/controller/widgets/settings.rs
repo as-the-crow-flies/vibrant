@@ -51,7 +51,22 @@ impl SettingsWidget {
                                 .track(self);
                             }
                         });
+                    ui.end_row();
 
+                    ui.label("Memory (MB)");
+                    ComboBox::from_id_salt("Memory")
+                        .selected_text(format!("{:?}", settings.fragment_list_size))
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for power in 6u32..13 {
+                                ui.selectable_value(
+                                    &mut settings.fragment_list_size,
+                                    2u32.pow(power),
+                                    format!("{}", 2u32.pow(power)),
+                                )
+                                .track(self);
+                            }
+                        });
                     ui.end_row();
 
                     ui.label("Radius");
