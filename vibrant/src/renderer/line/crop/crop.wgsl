@@ -11,6 +11,8 @@
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+@group(2) @binding(0) var<uniform> CROP: CropSettings;
+
 var<workgroup> OFFSET: u32;
 
 @compute
@@ -33,7 +35,6 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let length = end - start;
 
     let start_index = LINE_INDEX_RAW[start];
-    let t = ENVIRONMENT.time;
 
     let crop_start = max(ENVIRONMENT.settings.crop_start, settings.crop_start);
     let crop_end = min(ENVIRONMENT.settings.crop_end, settings.crop_end);
@@ -45,26 +46,13 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
     if (crop_length == 0) { return; }
 
-    let crop_min = vec3<f32>(
-        ENVIRONMENT.settings.crop_x_start,
-        ENVIRONMENT.settings.crop_y_start,
-        ENVIRONMENT.settings.crop_z_start
-    );
-
-    let crop_max = vec3<f32>(
-        ENVIRONMENT.settings.crop_x_end,
-        ENVIRONMENT.settings.crop_y_end,
-        ENVIRONMENT.settings.crop_z_end
-    );
-
     var total_length = 0u;
     for (var i=0u; i<crop_length; i++) {
         let index = LINE_INDEX_RAW[start + offset_start + i];
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if(all(v0 >= crop_min) && all(v0 <= crop_max) &&
-           all(v1 >= crop_min) && all(v1 <= crop_max)) {
+        if (should_keep(v0, v1)) {
            total_length++;
         }
     }
@@ -78,10 +66,32 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if(all(v0 >= crop_min) && all(v0 <= crop_max) &&
-           all(v1 >= crop_min) && all(v1 <= crop_max)) {
+        if (should_keep(v0, v1)) {
             LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
             offset_index++;
         }
     }
+}
+
+fn should_keep(v0: vec3<f32>, v1: vec3<f32>) -> bool {
+    let crop_normal = normal_from_spherical(CROP.spherical.x, CROP.spherical.y);
+    let v0_distance = dot(crop_normal, v0) + CROP.spherical.z - 0.5;
+    let v1_distance = dot(crop_normal, v1) + CROP.spherical.z - 0.5;
+
+    let within_spherical_crop = v0_distance < 0.0 && v1_distance < 0.0;
+
+    let within_orthogonal_crop =
+        all(v0 >= CROP.min.xyz) && all(v0 <= CROP.max.xyz) &&
+        all(v1 >= CROP.min.xyz) && all(v1 <= CROP.max.xyz);
+
+    return within_orthogonal_crop && within_spherical_crop;
+}
+
+fn normal_from_spherical(phi: f32, theta: f32) -> vec3<f32> {
+    let sin_theta = sin(theta);
+    return vec3<f32>(
+        sin_theta * cos(phi),
+        sin_theta * sin(phi),
+        cos(theta)
+    );
 }

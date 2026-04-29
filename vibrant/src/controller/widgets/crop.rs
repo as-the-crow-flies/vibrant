@@ -1,10 +1,11 @@
-use std::any::type_name;
+use std::{any::type_name, f32::consts::PI};
 
-use egui::{collapsing_header::CollapsingState, Grid, Ui};
+use egui::{collapsing_header::CollapsingState, Grid, RichText, Ui};
 use egui_double_slider::DoubleSlider;
 
 use crate::{
-    controller::settings::Settings,
+    asset::crop::CropBuffer,
+    controller::components::UIComponents,
     util::{ResponseExtentions, Tracked},
 };
 
@@ -28,33 +29,46 @@ impl CropWidget {
         self.changed
     }
 
-    pub fn show(&mut self, ui: &mut Ui, settings: &mut Settings) {
+    pub fn show(&mut self, ui: &mut Ui, crop: &mut CropBuffer) {
         self.changed = false;
 
+        let s = crop.settings_mut();
+
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
-            .show_header(ui, |ui| ui.heading("Crop"))
+            .show_header(ui, |ui| ui.heading("Slicing"))
             .body(|ui| {
-                Grid::new("CropWidgetGrid").num_columns(2).show(ui, |ui| {
-                    self.slider(
-                        ui,
-                        "Axial",
-                        &mut settings.crop_z_start,
-                        &mut settings.crop_z_end,
-                    );
+                ui.frame(|ui| {
+                    ui.label(RichText::new("Orthogonal").strong());
+                    Grid::new("CropWidgetGridOrthogonal")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            self.slider(ui, "Axial", &mut s.min.z, &mut s.max.z);
+                            self.slider(ui, "Sagittal", &mut s.min.x, &mut s.max.x);
+                            self.slider(ui, "Coronal", &mut s.min.y, &mut s.max.y);
+                        });
+                });
 
-                    self.slider(
-                        ui,
-                        "Sagittal",
-                        &mut settings.crop_x_start,
-                        &mut settings.crop_x_end,
-                    );
+                ui.frame(|ui| {
+                    ui.label(RichText::new("Spherical").strong());
+                    Grid::new("CropWidgetGridSpherical")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            ui.label("Azimuth");
+                            ui.slider(&mut s.spherical.x, 0.0..=2.0 * PI).track(self);
+                            ui.end_row();
 
-                    self.slider(
-                        ui,
-                        "Coronal",
-                        &mut settings.crop_y_start,
-                        &mut settings.crop_y_end,
-                    );
+                            ui.label("Elevation");
+                            ui.slider(&mut s.spherical.y, 0.0..=PI).track(self);
+                            ui.end_row();
+
+                            ui.label("Depth");
+                            ui.slider(&mut s.spherical.z, 0.0..=1.0).track(self);
+                            ui.end_row();
+
+                            ui.label("Smooth");
+                            ui.slider(&mut s.spherical.w, 0.0..=1.0).track(self);
+                            ui.end_row();
+                        });
                 });
             });
     }

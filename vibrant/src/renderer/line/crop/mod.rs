@@ -1,6 +1,10 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
-use crate::{asset::line::LineBuffer, gpu::Gpu, renderer::environment::Environment};
+use crate::{
+    asset::{crop::CropBuffer, line::LineBuffer},
+    gpu::Gpu,
+    renderer::environment::Environment,
+};
 
 pub struct LineCropPipeline {
     crop: ComputePipeline,
@@ -12,7 +16,11 @@ impl LineCropPipeline {
         Self {
             crop: gpu.compute(
                 "Crop",
-                &gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false), &Environment::layout(gpu)]),
+                &gpu.pipeline_layout(&[
+                    &LineBuffer::layout(gpu, false),
+                    &Environment::layout(gpu),
+                    &CropBuffer::layout(gpu),
+                ]),
                 &gpu.shader(include_str!("crop.wgsl")),
             ),
             adjacency: gpu.compute(
@@ -23,12 +31,24 @@ impl LineCropPipeline {
         }
     }
 
-    pub fn dispatch(&self, cmd: &mut CommandEncoder, line: &LineBuffer, environment: &Environment) {
-        self.crop(cmd, line, environment);
+    pub fn dispatch(
+        &self,
+        cmd: &mut CommandEncoder,
+        line: &LineBuffer,
+        environment: &Environment,
+        crop: &CropBuffer,
+    ) {
+        self.crop(cmd, line, environment, crop);
         self.adjacency(cmd, line);
     }
 
-    fn crop(&self, cmd: &mut CommandEncoder, line: &LineBuffer, environment: &Environment) {
+    fn crop(
+        &self,
+        cmd: &mut CommandEncoder,
+        line: &LineBuffer,
+        environment: &Environment,
+        crop: &CropBuffer,
+    ) {
         line.clear_length(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -39,6 +59,7 @@ impl LineCropPipeline {
         pass.set_pipeline(&self.crop);
         pass.set_bind_group(0, line.binding(false), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(2, crop.binding(), &[]);
         pass.dispatch_workgroups(line.n_lines().div_ceil(32), 1, 1);
     }
 
