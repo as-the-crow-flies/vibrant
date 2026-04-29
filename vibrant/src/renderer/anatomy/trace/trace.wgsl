@@ -86,14 +86,13 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let light_sample = sample;
 
         let diffuse = sample_diffuse(light_sample);
-        let diffuse_sample = ENVIRONMENT.settings.ambient_light * diffuse * material.scattering * phase_function;
+        let diffuse_sample = diffuse * material.scattering * phase_function;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
         let specular = gradient.a * HDRI_SETTINGS.specular * sample_specular(light_sample, reflection);
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
-        // color += ENVIRONMENT.settings.ambient_light * abs(gradient.xyz) * transmittance * transmittance_in_step;
         color += transmittance * transmittance_in_step * (diffuse_sample + specular);
 
         transmittance *= exp(-extinction);

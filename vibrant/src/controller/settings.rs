@@ -62,7 +62,7 @@ impl Settings {
             height: 1080,
             volume: 256,
             fragment_list_size: 256,
-            radius: 0.2,
+            radius: 0.3,
             lighting: 0.85,
             ambient_light: 1.0,
             direct_light: 1.0,

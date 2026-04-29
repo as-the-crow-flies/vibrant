@@ -28,7 +28,7 @@ impl SettingsWidget {
         ui.collapsing("Camera", |ui| {
             Grid::new("CameraSettings").num_columns(2).show(ui, |ui| {
                 ui.label("Field of View");
-                ui.slider(&mut camera.fov, 0.1..=3.0).track(self);
+                ui.slider(&mut camera.fov, 0.4..=1.0).track(self);
                 ui.end_row();
             });
         });
@@ -71,6 +71,15 @@ impl SettingsWidget {
 
                     ui.label("Radius");
                     ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
+                    ui.end_row();
+
+                    ui.label("Ambient");
+                    ui.slider(&mut settings.ambient_light, 0.0..=3.0)
+                        .track(self);
+                    ui.end_row();
+
+                    ui.label("Sun");
+                    ui.slider(&mut settings.direct_light, 0.0..=3.0).track(self);
                     ui.end_row();
 
                     ui.label("Alpha");

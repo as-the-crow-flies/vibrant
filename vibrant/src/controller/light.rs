@@ -4,17 +4,30 @@ use glam::{Quat, Vec3};
 
 use super::state::ControllerState;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Light {
     yaw: f32,
     pitch: f32,
+    changed: bool,
 }
 
 impl Light {
+    pub fn new() -> Self {
+        Self {
+            yaw: 0.0,
+            pitch: 0.5 * PI,
+            changed: false,
+        }
+    }
+
     pub fn update(&mut self, state: &ControllerState) {
+        self.changed = false;
+
         if state.left && state.shift {
             let rotation = state.relative_delta() * 10.0;
             self.rotate(-rotation.x, -rotation.y);
+
+            self.changed = true;
         }
     }
 
@@ -28,6 +41,10 @@ impl Light {
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
         self.yaw += yaw;
-        self.pitch = (self.pitch + pitch).clamp(-PI / 2.0, PI / 2.0)
+        self.pitch = (self.pitch + pitch).clamp(0.0, PI)
+    }
+
+    pub fn changed(&self) -> bool {
+        self.changed
     }
 }

@@ -17,12 +17,10 @@ use state::ControllerState;
 use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
-use crate::controller::widgets::crop::CropWidget;
-use crate::controller::widgets::hdri::HdriWidget;
-use crate::controller::widgets::masks::MasksWidget;
-use crate::controller::widgets::settings::SettingsWidget;
-use crate::controller::widgets::tractography::TractographyWidget;
-use crate::controller::widgets::volumes::VolumesWidget;
+use crate::controller::widgets::{
+    crop::CropWidget, hdri::HdriWidget, masks::MasksWidget, settings::SettingsWidget,
+    tractography::TractographyWidget, volumes::VolumesWidget,
+};
 use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
 
 #[derive(Debug)]
@@ -53,7 +51,7 @@ impl Controller {
         Self {
             state: ControllerState::default(),
             camera: Camera::new(),
-            light: Light::default(),
+            light: Light::new(),
             segment: Segment::new(),
             settings: Settings::new(),
             time: Instant::now(),
@@ -259,12 +257,16 @@ impl Controller {
         self.hovered
     }
 
+    pub fn lighting_changed(&self) -> bool {
+        self.changed() || self.light().changed()
+    }
+
     pub fn changed(&self) -> bool {
         self.settings_widget.changed()
-            | self.crop().changed()
-            | self.volumes().changed()
-            | self.masks().changed()
-            | self.tractography().changed()
-            | self.hdri().changed()
+            || self.crop().changed()
+            || self.volumes().changed()
+            || self.masks().changed()
+            || self.tractography().changed()
+            || self.hdri().changed()
     }
 }

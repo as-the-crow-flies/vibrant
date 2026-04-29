@@ -64,7 +64,9 @@ impl LineRenderer {
         let frame = surface.frame();
 
         if let (Some(line), Some(crop)) = (&asset.line, &asset.crop) {
-            if surface.changed() | asset.changed() | controller.changed() {
+            let changed = surface.changed() | asset.changed() | controller.changed();
+
+            if changed {
                 self.transform.dispatch(cmd, line, environment);
 
                 self.crop.dispatch(cmd, line, environment, crop);
@@ -74,10 +76,12 @@ impl LineRenderer {
 
                 self.cull.dispatch(cmd, frame, environment);
 
-                self.occlusion.dispatch(cmd, frame, environment);
-
                 self.populate
                     .dispatch(cmd, frame, environment, controller.settings(), line);
+            }
+
+            if changed || controller.lighting_changed() {
+                self.occlusion.dispatch(cmd, frame, environment);
             }
 
             self.render.dispatch(

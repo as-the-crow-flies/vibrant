@@ -349,7 +349,7 @@ fn shade(
     let ambient = 1.0 - textureSampleLevel(occlusion_ambient, occlusion_sampler, position + 0.5, 0.0).x;
     let directional = 1.0 - textureSampleLevel(occlusion_directional, occlusion_sampler, position + 0.5, 0.0).x;
 
-    let ao = ambient;
+    let ao = ambient * environment.settings.ambient_light;
     let shadow = diffuse * environment.settings.direct_light * directional;
     let factor = 1.0 - (1.0 - shadow) * (1.0 - ao);
 
