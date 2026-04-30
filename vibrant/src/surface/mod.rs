@@ -40,7 +40,7 @@ impl Frame {
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
-        let culling = CullingBuffer::new(gpu, settings.volume, settings.fragment_list_size);
+        let culling = CullingBuffer::new(gpu, settings.volume, settings.index_size);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -105,7 +105,7 @@ impl Frame {
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
-    frame: Frame,
+    frame: Option<Frame>,
     changed: bool,
 }
 
@@ -122,22 +122,32 @@ impl Surface {
 
         Self {
             surface,
-            frame: Frame::new(gpu, &Settings::new()),
+            frame: None,
             changed: true,
         }
     }
 
-    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) {
-        if settings.width == self.frame.color().width()
-            && settings.height == self.frame.color().height()
-            && settings.volume == self.frame.occupancy().resolution()
-            && settings.fragment_list_size == self.frame().culling().fragment_list_size()
-        {
-            self.changed = false;
-            return;
+    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &mut Settings) {
+        if let Some(frame) = &self.frame {
+            // Update Required Index Size
+            let required_index_size = frame.culling().get_required_index_size(gpu);
+            if required_index_size > settings.index_size {
+                settings.index_size = required_index_size.next_power_of_two()
+            }
+
+            if settings.width == frame.color().width()
+                && settings.height == frame.color().height()
+                && settings.volume == frame.occupancy().resolution()
+                && settings.index_size == frame.culling().fragment_list_size()
+            {
+                self.changed = false;
+                return;
+            }
         }
 
-        self.frame = Frame::new(gpu, &settings);
+        self.frame.take();
+        self.frame = Some(Frame::new(gpu, &settings));
+
         self.surface
             .configure(gpu.device(), &Self::config(settings.width, settings.height));
 
@@ -153,10 +163,10 @@ impl Surface {
     }
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
-        if let Some(surface) = self.get_current_texture() {
+        if let (Some(frame), Some(surface)) = (&self.frame, self.get_current_texture()) {
             cmd.copy_texture_to_texture(
                 TexelCopyTextureInfo {
-                    texture: self.frame.post().texture(),
+                    texture: frame.post().texture(),
                     mip_level: 0,
                     origin: Origin3d::ZERO,
                     aspect: TextureAspect::All,
@@ -196,7 +206,7 @@ impl Surface {
         }
     }
 
-    pub fn frame(&self) -> &Frame {
+    pub fn frame(&self) -> &Option<Frame> {
         &self.frame
     }
 
