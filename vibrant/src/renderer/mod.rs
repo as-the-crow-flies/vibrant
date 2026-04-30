@@ -65,7 +65,7 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
-        self.surface.maybe_resize(gpu, &controller.settings());
+        self.surface.maybe_resize(gpu, controller.settings_mut());
 
         let input = self.egui.take_egui_input(window);
         let output = self.egui.egui_ctx().run_ui(input, |ui| {
@@ -77,41 +77,35 @@ impl Renderer {
         self.environment.update(gpu, &controller);
         self.asset.update(gpu);
 
-        let mut cmd = gpu.cmd();
+        if let Some(frame) = self.surface.frame() {
+            let mut cmd = gpu.cmd();
 
-        self.clear.dispatch(&mut cmd, self.surface.frame().post());
+            self.clear.dispatch(&mut cmd, frame.post());
 
-        self.anatomy.render(
-            &mut cmd,
-            controller,
-            &self.environment,
-            &self.surface,
-            &self.asset,
-        );
-
-        self.line.render(
-            &mut cmd,
-            controller,
-            &self.environment,
-            &self.surface,
-            &self.asset,
-        );
-
-        if !FileStage::about_to_save() {
-            self.ui.render(
-                gpu,
+            self.anatomy.render(
                 &mut cmd,
-                self.surface.frame(),
-                self.egui.egui_ctx(),
-                output,
+                controller,
+                &self.environment,
+                &self.surface,
+                &self.asset,
             );
+
+            self.line.render(
+                &mut cmd,
+                controller,
+                &self.environment,
+                &self.surface,
+                &self.asset,
+            );
+
+            if !FileStage::about_to_save() {
+                let ctx = self.egui.egui_ctx();
+                self.ui.render(gpu, &mut cmd, frame, ctx, output);
+            }
+
+            self.surface.present(gpu, cmd);
+
+            FileStage::on_save(|path| gpu.save(path, frame.color().texture()).block_on());
         }
-
-        self.surface.present(gpu, cmd);
-
-        FileStage::on_save(|path| {
-            gpu.save(path, self.surface.frame().color().texture())
-                .block_on()
-        });
     }
 }

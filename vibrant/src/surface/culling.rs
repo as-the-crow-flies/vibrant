@@ -1,5 +1,6 @@
 use std::{any::type_name, ops::Mul};
 
+use pollster::FutureExt;
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
@@ -247,6 +248,11 @@ impl CullingBuffer {
 
     pub fn fragment_list_size(&self) -> u32 {
         self.index_size
+    }
+
+    pub fn get_required_index_size(&self, gpu: &Gpu) -> u32 {
+        let index_size_bytes: u32 = gpu.read_buffer(&self.offset_total).block_on()[0];
+        return index_size_bytes * 4 / (1024 * 1024);
     }
 }
 

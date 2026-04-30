@@ -61,9 +61,7 @@ impl LineRenderer {
             return;
         }
 
-        let frame = surface.frame();
-
-        if let Some(line) = &asset.line {
+        if let (Some(frame), Some(line)) = (surface.frame(), &asset.line) {
             let changed = surface.changed() | asset.changed() | controller.changed();
 
             if changed {
