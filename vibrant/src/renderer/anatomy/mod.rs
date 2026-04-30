@@ -44,27 +44,22 @@ impl AnatomyRenderer {
         surface: &Surface,
         asset: &Asset,
     ) {
-        if let (Some(volume), Some(radiance), Some(hdri), Some(crop)) = (
-            &asset.physical_volume,
-            &asset.radiance,
-            &asset.hdri,
-            &asset.crop,
-        ) {
+        if let (Some(volume), Some(radiance)) = (&asset.physical_volume, &asset.radiance) {
             if surface.changed() | asset.changed() | controller.changed() {
                 self.transfer
-                    .dispatch(cmd, &asset.volumes, &asset.masks, volume, crop);
+                    .dispatch(cmd, &asset.volumes, &asset.masks, volume, &asset.crop);
 
                 self.gradient.dispatch(cmd, volume);
 
                 self.radiance
-                    .dispatch(cmd, environment, hdri, volume, radiance);
+                    .dispatch(cmd, environment, &asset.hdri, volume, radiance);
             }
 
             self.trace.dispatch(
                 cmd,
                 environment,
                 controller.viewport(),
-                hdri,
+                &asset.hdri,
                 surface.frame(),
                 volume,
                 radiance,

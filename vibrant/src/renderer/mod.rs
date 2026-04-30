@@ -50,7 +50,7 @@ impl Renderer {
             ui: UiRenderer::new(gpu),
 
             environment: Environment::new(gpu),
-            asset: Asset::default(),
+            asset: Asset::new(gpu),
         }
     }
 
@@ -75,24 +75,7 @@ impl Renderer {
             .handle_platform_output(&window, output.platform_output.clone());
 
         self.environment.update(gpu, &controller);
-
-        self.asset.maybe_update(gpu);
-
-        if let Some(line) = &self.asset.line {
-            line.update_settings(gpu);
-        }
-        if let Some(hdri) = &self.asset.hdri {
-            hdri.update_settings(gpu);
-        }
-        if let Some(crop) = &self.asset.crop {
-            crop.update_settings(gpu);
-        }
-        for volume in &self.asset.volumes {
-            volume.update_settings(gpu);
-        }
-        for mask in &self.asset.masks {
-            mask.update_settings(gpu);
-        }
+        self.asset.update(gpu);
 
         let mut cmd = gpu.cmd();
 
