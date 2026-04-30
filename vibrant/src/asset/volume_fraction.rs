@@ -1,7 +1,7 @@
 use std::{any::type_name, hash::Hash};
 
 use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
-use glam::Mat4;
+use glam::{Mat4, UVec2};
 use strum::EnumIter;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -9,7 +9,11 @@ use wgpu::{
     *,
 };
 
-use crate::{file::VolumeFile, gpu::Gpu};
+use crate::{
+    asset::colormap::{Colormap, ColormapSelection},
+    file::VolumeFile,
+    gpu::Gpu,
+};
 
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, EnumIter)]
 pub enum MaterialPreset {
@@ -43,6 +47,8 @@ pub struct VolumeFractionSettings {
     pub max: f32,
     pub inverted: bool,
     pub masked: bool,
+    pub use_colormap: bool,
+    pub colormap: ColormapSelection,
 }
 
 impl VolumeFractionSettings {
@@ -57,12 +63,15 @@ impl VolumeFractionSettings {
             max: self.max,
             inverted: self.inverted as u32,
             masked: self.masked as u32,
+            use_colormap: self.use_colormap as u32,
+            colormap: self.colormap as u32,
+            ..Default::default()
         }
     }
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
 pub struct VolumeFractionSettingsBuffer {
     absorption: [f32; 4],
     scattering: [f32; 4],
@@ -70,6 +79,9 @@ pub struct VolumeFractionSettingsBuffer {
     max: f32,
     inverted: u32,
     masked: u32,
+    use_colormap: u32,
+    colormap: u32,
+    padding: UVec2,
 }
 
 pub struct VolumeFractionBuffer {
@@ -85,7 +97,7 @@ pub struct VolumeFractionBuffer {
 }
 
 impl VolumeFractionBuffer {
-    pub fn new(gpu: &Gpu, file: &VolumeFile) -> Self {
+    pub fn new(gpu: &Gpu, file: &VolumeFile, colormap: &Colormap) -> Self {
         let label = Some(type_name::<Self>());
 
         let size = Extent3d {
@@ -145,6 +157,8 @@ impl VolumeFractionBuffer {
             max: 1.0,
             inverted: false,
             masked: true,
+            use_colormap: false,
+            colormap: ColormapSelection::Viridis,
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -174,6 +188,14 @@ impl VolumeFractionBuffer {
                 BindGroupEntry {
                     binding: 3,
                     resource: settings_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: BindingResource::TextureView(
+                        &colormap
+                            .texture()
+                            .create_view(&TextureViewDescriptor::default()),
+                    ),
                 },
             ],
         });
@@ -223,6 +245,7 @@ impl VolumeFractionBuffer {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
+                    // Texture
                     BindGroupLayoutEntry {
                         binding: 0,
                         visibility,
@@ -233,12 +256,14 @@ impl VolumeFractionBuffer {
                         },
                         count: None,
                     },
+                    // Sampler
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
+                    // Transform
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility,
@@ -249,6 +274,7 @@ impl VolumeFractionBuffer {
                         },
                         count: None,
                     },
+                    // Settings
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility,
@@ -256,6 +282,17 @@ impl VolumeFractionBuffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Colormap
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
                         },
                         count: None,
                     },

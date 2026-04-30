@@ -13,44 +13,48 @@ use volume::PhysicalVolume;
 
 use crate::{
     asset::{
-        crop::CropBuffer, hdri::HdriBuffer, radiance::RadianceVolume,
+        colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer, radiance::RadianceVolume,
         volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
     },
     file::FileStage,
     gpu::Gpu,
 };
 
-#[derive(Default)]
 pub struct Asset {
+    pub colormap: Colormap,
+    pub hdri: HdriBuffer,
+    pub crop: CropBuffer,
+
     pub line: Option<LineBuffer>,
     pub volumes: Vec<VolumeFractionBuffer>,
     pub masks: Vec<VolumeMaskBuffer>,
     pub physical_volume: Option<PhysicalVolume>,
     pub radiance: Option<RadianceVolume>,
-    pub hdri: Option<HdriBuffer>,
-    pub crop: Option<CropBuffer>,
 
     pub changed: bool,
 }
 
 impl Asset {
-    pub fn maybe_update(&mut self, gpu: &Gpu) {
+    pub fn new(gpu: &Gpu) -> Self {
+        Self {
+            colormap: Colormap::new(gpu),
+            crop: CropBuffer::new(gpu),
+            hdri: HdriBuffer::white(gpu),
+            masks: vec![VolumeMaskBuffer::none(gpu)],
+
+            line: None,
+            volumes: Vec::new(),
+            physical_volume: None,
+            radiance: None,
+            changed: false,
+        }
+    }
+
+    pub fn update(&mut self, gpu: &Gpu) {
         self.changed = false;
 
-        if self.crop.is_none() {
-            self.crop = Some(CropBuffer::new(gpu))
-        }
-
-        if self.masks.is_empty() {
-            self.masks.push(VolumeMaskBuffer::none(gpu));
-        }
-
-        if self.hdri.is_none() {
-            self.hdri = Some(HdriBuffer::white(gpu))
-        }
-
         FileStage::on_lines(|lines| {
-            let line = LineBuffer::new(gpu, &lines);
+            let line = LineBuffer::new(gpu, &lines, &self.colormap);
 
             if let Some(volume) = self.volumes.last() {
                 line.set_transform(gpu, &volume.transform());
@@ -74,7 +78,8 @@ impl Asset {
                 if volume.name().contains("mask") {
                     self.masks.push(VolumeMaskBuffer::new(gpu, volume));
                 } else {
-                    self.volumes.push(VolumeFractionBuffer::new(gpu, volume));
+                    self.volumes
+                        .push(VolumeFractionBuffer::new(gpu, volume, &self.colormap));
                 }
             }
 
@@ -96,11 +101,24 @@ impl Asset {
 
         FileStage::on_hdris(|hdris| {
             for hdri in hdris {
-                self.hdri = Some(HdriBuffer::from_file(gpu, &hdri));
+                self.hdri = HdriBuffer::from_file(gpu, &hdri);
             }
 
             self.changed = true;
         });
+
+        self.hdri.update_settings(gpu);
+        self.crop.update_settings(gpu);
+
+        if let Some(line) = &self.line {
+            line.update_settings(gpu);
+        }
+        for volume in &self.volumes {
+            volume.update_settings(gpu);
+        }
+        for mask in &self.masks {
+            mask.update_settings(gpu);
+        }
     }
 
     pub fn changed(&self) -> bool {

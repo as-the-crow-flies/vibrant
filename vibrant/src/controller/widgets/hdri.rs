@@ -24,49 +24,37 @@ impl HdriWidget {
         Self { changed: false }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, hdri: &mut Option<HdriBuffer>) {
+    pub fn show(&mut self, ui: &mut Ui, hdri: &mut HdriBuffer) {
         self.changed = false;
 
-        let mut remove = false;
-
-        if let Some(hdri) = hdri {
-            if hdri.name() == "Default" {
-                return;
-            }
-
-            CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
-                .show_header(ui, |ui| {
-                    ui.heading("Environment Map");
-                    if ui.button("🗑").clicked() {
-                        remove = true;
-                        self.track();
-                    }
-                })
-                .body(|ui| {
-                    Grid::new("EnvironmentMapGrid")
-                        .num_columns(2)
-                        .show(ui, |ui| {
-                            ui.label("Strength");
-                            ui.slider(&mut hdri.settings_mut().strength, 0.0..=2.0)
-                                .track(self);
-                            ui.end_row();
-
-                            ui.label("Specular");
-                            ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
-                                .track(self);
-                            ui.end_row();
-
-                            ui.label("Rotation");
-                            ui.slider(&mut hdri.settings_mut().rotation, 0.0..=1.0)
-                                .track(self);
-                            ui.end_row();
-                        });
-                });
+        if hdri.name() == "Default" {
+            return;
         }
 
-        if remove {
-            hdri.take();
-        }
+        CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
+            .show_header(ui, |ui| {
+                ui.heading("Environment Map");
+            })
+            .body(|ui| {
+                Grid::new("EnvironmentMapGrid")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        ui.label("Strength");
+                        ui.slider(&mut hdri.settings_mut().strength, 0.0..=2.0)
+                            .track(self);
+                        ui.end_row();
+
+                        ui.label("Specular");
+                        ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                            .track(self);
+                        ui.end_row();
+
+                        ui.label("Rotation");
+                        ui.slider(&mut hdri.settings_mut().rotation, 0.0..=1.0)
+                            .track(self);
+                        ui.end_row();
+                    });
+            });
     }
 
     pub fn changed(&self) -> bool {

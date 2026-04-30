@@ -87,7 +87,6 @@ pub struct LineBuffer {
     offset: Buffer,
 
     materials: Buffer,
-    colormap: Colormap,
 
     raw_indices: Buffer,
     raw_vertices: Buffer,
@@ -102,7 +101,7 @@ pub struct LineBuffer {
 }
 
 impl LineBuffer {
-    pub fn new(gpu: &Gpu, files: &[LineFile]) -> Self {
+    pub fn new(gpu: &Gpu, files: &[LineFile], colormap: &Colormap) -> Self {
         let label = Some(type_name::<Self>());
 
         let global_settings = GlobalLineSettings {
@@ -255,8 +254,6 @@ impl LineBuffer {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
-        let colormap = Colormap::new(gpu);
-
         let transform = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::bytes_of(&bounds.transform().inverse()),
@@ -349,7 +346,6 @@ impl LineBuffer {
             offset,
 
             materials,
-            colormap,
 
             transform,
 
@@ -374,10 +370,6 @@ impl LineBuffer {
 
     pub fn bounds(&self) -> &Bounds {
         &self.bounds
-    }
-
-    pub fn colormap(&self) -> &Colormap {
-        &self.colormap
     }
 
     pub fn binding(&self, read_only: bool) -> &BindGroup {

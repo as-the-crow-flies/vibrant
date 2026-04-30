@@ -4,7 +4,9 @@ struct Material {
     min: f32,
     max: f32,
     inverted: u32,
-    masked: u32
+    masked: u32,
+    use_colormap: u32,
+    colormap: u32,
 };
 
 struct MaskSettings {
@@ -16,7 +18,9 @@ struct MaskSettings {
 };
 
 @group(0) @binding(0) var FRACTION: texture_3d<f32>;
+@group(0) @binding(1) var SAMPLER: sampler;
 @group(0) @binding(3) var<uniform> MATERIAL: Material;
+@group(0) @binding(4) var COLORMAP: texture_2d<f32>;
 
 @group(1) @binding(0) var MASK: texture_3d<f32>;
 @group(1) @binding(1) var<uniform> MASK_SETTINGS: MaskSettings;
@@ -50,21 +54,36 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         -CROP.spherical.w, CROP.spherical.w,
         0.5 - CROP.spherical.z - voxel_distance);
 
-    var fraction = textureLoad(FRACTION, voxel, 0).x;
+    let uv = vec3<f32>(voxel) / dim;
 
-    if (bool(MATERIAL.inverted)) { fraction = 1.0 - fraction; }
+    var fraction = textureSampleLevel(FRACTION, SAMPLER, uv, 0.0).x;
+    if (bool(MATERIAL.inverted) && fraction != 0.0) { fraction = 1.0 - fraction; }
 
-    fraction = (fraction - MATERIAL.min) / (MATERIAL.max - MATERIAL.min);
-    fraction *= get_mask(voxel) * voxel_distance_transform;
+    var color = vec3<f32>(fraction);
 
-    fraction = saturate(fraction);
+    if (bool(MATERIAL.use_colormap) && all(color != vec3<f32>(0.0))) {
+        color = textureLoad(COLORMAP, vec2<u32>(u32(fraction * 255.0), MATERIAL.colormap), 0).rgb;
+    }
 
-    let absorption = fraction * vec4<f32>(MATERIAL.absorption.rgb, 1.0) * MATERIAL.absorption.a;
-    let scattering = fraction * vec4<f32>(MATERIAL.scattering.rgb, 1.0) * MATERIAL.scattering.a;
+    color = (color - MATERIAL.min) / (MATERIAL.max - MATERIAL.min);
 
-    textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + absorption);
-    textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + scattering);
-    textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + absorption + scattering);
+    color *= get_mask(voxel) * voxel_distance_transform;
+    color = saturate(color);
+
+    var absorption = MATERIAL.absorption.rgb * MATERIAL.absorption.a;
+    var scattering = MATERIAL.scattering.rgb * MATERIAL.scattering.a;
+
+    if (bool(MATERIAL.use_colormap)) {
+        absorption *= invert_hue_approx(color);
+        scattering *= color;
+    } else {
+        absorption *= color;
+        scattering *= color;
+    }
+
+    textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + vec4<f32>(absorption, 1.0));
+    textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + vec4<f32>(scattering, 1.0));
+    textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + vec4<f32>(absorption + scattering, 1.0));
 }
 
 fn get_mask(voxel: vec3<u32>) -> f32 {
@@ -91,4 +110,9 @@ fn normal_from_spherical(phi: f32, theta: f32) -> vec3<f32> {
         sin_theta * sin(phi),
         cos(theta)
     );
+}
+
+fn invert_hue_approx(color: vec3<f32>) -> vec3<f32> {
+    let luma = dot(color, vec3<f32>(0.299, 0.587, 0.114));
+    return vec3<f32>(2.0 * luma) - color;
 }
