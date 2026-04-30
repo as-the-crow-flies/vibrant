@@ -55,7 +55,6 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         0.5 - CROP.spherical.z - voxel_distance);
 
     let uv = vec3<f32>(voxel) / dim;
-
     var fraction = textureSampleLevel(FRACTION, SAMPLER, uv, 0.0).x;
     if (bool(MATERIAL.inverted) && fraction != 0.0) { fraction = 1.0 - fraction; }
 
@@ -67,7 +66,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     color = (color - MATERIAL.min) / (MATERIAL.max - MATERIAL.min);
 
-    color *= get_mask(voxel) * voxel_distance_transform;
+    color *= get_mask(uv) * voxel_distance_transform;
     color = saturate(color);
 
     var absorption = MATERIAL.absorption.rgb * MATERIAL.absorption.a;
@@ -86,8 +85,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + vec4<f32>(absorption + scattering, 1.0));
 }
 
-fn get_mask(voxel: vec3<u32>) -> f32 {
-    var mask = textureLoad(MASK, voxel, 0).x;
+fn get_mask(uv: vec3<f32>) -> f32 {
+    var mask = textureSampleLevel(MASK, SAMPLER, uv, 0.0).x;
 
     if (bool(MASK_SETTINGS.binary)) {
         mask = select(mask, 1.0 - mask, bool(MASK_SETTINGS.invert));
