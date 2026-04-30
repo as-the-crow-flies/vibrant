@@ -16,6 +16,7 @@ struct MaskSettings {
 };
 
 @group(0) @binding(0) var FRACTION: texture_3d<f32>;
+@group(0) @binding(1) var SAMPLER: sampler;
 @group(0) @binding(3) var<uniform> MATERIAL: Material;
 
 @group(1) @binding(0) var MASK: texture_3d<f32>;
@@ -50,7 +51,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         -CROP.spherical.w, CROP.spherical.w,
         0.5 - CROP.spherical.z - voxel_distance);
 
-    var fraction = textureLoad(FRACTION, voxel, 0).x;
+    let uv = vec3<f32>(voxel) / dim;
+    var fraction = textureSampleLevel(FRACTION, SAMPLER, uv, 0.0).x;
 
     if (bool(MATERIAL.inverted)) { fraction = 1.0 - fraction; }
 
