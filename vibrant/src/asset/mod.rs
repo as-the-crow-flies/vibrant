@@ -78,7 +78,8 @@ impl Asset {
                 if volume.name().contains("mask") {
                     self.masks.push(VolumeMaskBuffer::new(gpu, volume));
                 } else {
-                    self.volumes.push(VolumeFractionBuffer::new(gpu, volume));
+                    self.volumes
+                        .push(VolumeFractionBuffer::new(gpu, volume, &self.colormap));
                 }
             }
 
