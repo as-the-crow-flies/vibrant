@@ -105,7 +105,7 @@ impl Renderer {
 
             self.surface.present(gpu, cmd);
 
-            FileStage::on_save(|path| gpu.save(path, frame.color().texture()).block_on());
+            FileStage::on_save(|path| gpu.save(path, frame.post().texture()).block_on());
         }
     }
 }
