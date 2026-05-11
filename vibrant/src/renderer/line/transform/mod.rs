@@ -11,7 +11,10 @@ impl LineTransformPipeline {
         Self {
             transform: gpu.compute(
                 "Transform",
-                &gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false), &Environment::layout(gpu)]),
+                &gpu.pipeline_layout(&[
+                    &LineBuffer::layout_transform(gpu),
+                    &Environment::layout(gpu),
+                ]),
                 &gpu.shader(include_str!("transform.wgsl")),
             ),
         }
@@ -26,7 +29,7 @@ impl LineTransformPipeline {
         });
 
         pass.set_pipeline(&self.transform);
-        pass.set_bind_group(0, line.binding(false), &[]);
+        pass.set_bind_group(0, line.binding_transform(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }

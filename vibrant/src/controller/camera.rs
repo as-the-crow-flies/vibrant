@@ -84,7 +84,7 @@ impl Camera {
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
         self.yaw += yaw;
-        self.pitch = (self.pitch + pitch).clamp(-1.33 * PI, 0.33 * PI)
+        self.pitch += pitch;
     }
 
     pub fn pan(&mut self, x: f32, y: f32) {

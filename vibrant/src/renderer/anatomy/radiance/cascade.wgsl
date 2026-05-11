@@ -8,8 +8,8 @@
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-@group(2) @binding(0) var CASCADE_OUT_RADIANCE: texture_storage_3d<rgba16float, write>;
-@group(2) @binding(1) var CASCADE_OUT_TRANSMISSION: texture_storage_3d<rgba16float, write>;
+@group(2) @binding(0) var CASCADE_OUT_RADIANCE: texture_storage_3d<rgba8unorm, write>;
+@group(2) @binding(1) var CASCADE_OUT_TRANSMISSION: texture_storage_3d<rgba8unorm, write>;
 @group(2) @binding(2) var CASCADE_IN: texture_3d<f32>;
 @group(2) @binding(3) var CASCADE_SAMPLER: sampler;
 @group(2) @binding(4) var<uniform> CASCADE_INDEX: u32;

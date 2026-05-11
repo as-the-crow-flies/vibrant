@@ -17,17 +17,17 @@ struct MaskSettings {
     width: f32
 };
 
-@group(0) @binding(0) var FRACTION: texture_3d<f32>;
-@group(0) @binding(1) var SAMPLER: sampler;
-@group(0) @binding(3) var<uniform> MATERIAL: Material;
-@group(0) @binding(4) var COLORMAP: texture_2d<f32>;
+@group(0) @binding(0) var ABSORPTION: texture_storage_3d<r32uint, read_write>;
+@group(0) @binding(1) var SCATTERING: texture_storage_3d<r32uint, read_write>;
+@group(0) @binding(2) var EXTINCTION: texture_storage_3d<r32uint, read_write>;
 
-@group(1) @binding(0) var MASK: texture_3d<f32>;
-@group(1) @binding(1) var<uniform> MASK_SETTINGS: MaskSettings;
+@group(1) @binding(0) var FRACTION: texture_3d<f32>;
+@group(1) @binding(1) var SAMPLER: sampler;
+@group(1) @binding(3) var<uniform> MATERIAL: Material;
+@group(1) @binding(4) var COLORMAP: texture_2d<f32>;
 
-@group(2) @binding(0) var ABSORPTION: texture_storage_3d<rgba8unorm, read_write>;
-@group(2) @binding(1) var SCATTERING: texture_storage_3d<rgba8unorm, read_write>;
-@group(2) @binding(2) var EXTINCTION: texture_storage_3d<rgba8unorm, read_write>;
+@group(2) @binding(0) var MASK: texture_3d<f32>;
+@group(2) @binding(1) var<uniform> MASK_SETTINGS: MaskSettings;
 
 @group(3) @binding(0) var<uniform> CROP: CropSettings;
 
@@ -80,9 +80,9 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         scattering *= color;
     }
 
-    textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + vec4<f32>(absorption, 1.0));
-    textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + vec4<f32>(scattering, 1.0));
-    textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + vec4<f32>(absorption + scattering, 1.0));
+    textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + pack4x8unorm(vec4<f32>(absorption, 1.0)));
+    textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + pack4x8unorm(vec4<f32>(scattering, 1.0)));
+    textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + pack4x8unorm(vec4<f32>(absorption + scattering, 1.0)));
 }
 
 fn get_mask(uv: vec3<f32>) -> f32 {

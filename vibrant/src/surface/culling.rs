@@ -251,8 +251,15 @@ impl CullingBuffer {
     }
 
     pub fn get_required_index_size(&self, gpu: &Gpu) -> u32 {
-        let index_size_bytes: u32 = gpu.read_buffer(&self.offset_total).block_on()[0];
-        return index_size_bytes * 4 / (1024 * 1024);
+        #[cfg(target_arch = "wasm32")]
+        {
+            return 64;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let index_size_bytes: u32 = gpu.read_buffer(&self.offset_total).block_on()[0];
+            return index_size_bytes * 4 / (1024 * 1024);
+        }
     }
 }
 

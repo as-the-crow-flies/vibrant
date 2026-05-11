@@ -23,7 +23,7 @@ impl LinePopulatePipeline {
         let layout = &gpu.pipeline_layout(&[
             &CullingBuffer::layout_write(gpu),
             &MipTexture3D::<R32Float>::layout(gpu),
-            &LineBuffer::layout(gpu, true),
+            &LineBuffer::layout_render(gpu),
             &Environment::layout(gpu),
         ]);
 
@@ -91,7 +91,7 @@ impl LinePopulatePipeline {
 
         pass.set_bind_group(0, frame.culling().binding_write(), &[]);
         pass.set_bind_group(1, frame.culling().pyramid().binding(), &[]);
-        pass.set_bind_group(2, line.binding(true), &[]);
+        pass.set_bind_group(2, line.binding_render(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(settings.workgroups, 1, 1);
     }
