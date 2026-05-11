@@ -434,7 +434,7 @@ impl LineBuffer {
                     // Length
                     BindGroupLayoutEntry {
                         binding: 2,
-                        ..buffer_readwrite
+                        ..buffer_read
                     },
                     // Offset
                     BindGroupLayoutEntry {

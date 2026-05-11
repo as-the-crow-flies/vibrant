@@ -1,6 +1,6 @@
 @group(0) @binding(0) var<storage, read_write> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage, read_write> LINE_VERTEX: array<vec4<f32>>;
-@group(0) @binding(2) var<storage, read_write> LINE_LENGTH: u32;
+@group(0) @binding(2) var<storage, read> LINE_LENGTH: u32;
 @group(0) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
 
 const WORKGROUP_SIZE: u32 = 256;
@@ -43,5 +43,7 @@ fn main(@builtin(local_invocation_index) local: u32) {
 
             LINE_VERTEX[vi] = vec4<f32>(v.xyz, pack_clip_alpha(vec4<f32>(clip, alpha)));
         }
+
+         workgroupBarrier();
     }
 }
