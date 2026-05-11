@@ -1,13 +1,10 @@
 @group(0) @binding(0) var<storage, read_write> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage, read_write> LINE_VERTEX: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> LINE_LENGTH: atomic<u32>;
-
-@group(0) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
-@group(0) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
-
-@group(0) @binding(6) var<storage> LINE_INDEX_RAW: array<u32>;
-@group(0) @binding(7) var<storage> LINE_VERTEX_RAW: array<vec4<f32>>;
-@group(0) @binding(8) var<storage> LINE_OFFSET_RAW: array<u32>;
+@group(0) @binding(3) var<storage> LINE_MATERIAL: array<u32>;
+@group(0) @binding(4) var<storage> LINE_SETTINGS: array<LineSettings>;
+@group(0) @binding(5) var<storage> LINE_INDEX_RAW: array<u32>;
+@group(0) @binding(6) var<storage> LINE_OFFSET_RAW: array<u32>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 

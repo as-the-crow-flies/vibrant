@@ -71,7 +71,7 @@ pub struct RadianceVolume {
 }
 
 impl RadianceVolume {
-    const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
     const N_CASCADES: u32 = 7;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {

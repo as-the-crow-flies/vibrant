@@ -23,7 +23,7 @@ impl LineOccupancyPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let voxelize_layout = &gpu.pipeline_layout(&[
             &OccupancyBuffer::layout_write(gpu),
-            &LineBuffer::layout(gpu, true),
+            &LineBuffer::layout_render(gpu),
             &Environment::layout(gpu),
         ]);
 
@@ -82,7 +82,7 @@ impl LineOccupancyPipeline {
         let n = frame.occupancy().pyramid().resolution().div_ceil(4);
 
         pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
-        pass.set_bind_group(1, line.binding(true), &[]);
+        pass.set_bind_group(1, line.binding_render(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
 
         pass.set_pipeline(match settings.voxelization {

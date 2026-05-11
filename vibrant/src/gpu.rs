@@ -4,13 +4,13 @@ use bytemuck::Pod;
 use futures::channel::oneshot::channel;
 use itertools::Itertools;
 use wgpu::{
-    BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ColorTargetState,
-    CommandEncoderDescriptor, ComputePipeline, ComputePipelineDescriptor, Extent3d, Features,
-    FragmentState, Limits, MapMode, Origin3d, PipelineLayout, PipelineLayoutDescriptor, PollType,
-    PowerPreference, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
-    RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo,
-    TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat,
-    VertexState,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
+    BufferDescriptor, BufferUsages, ColorTargetState, CommandEncoderDescriptor, ComputePipeline,
+    ComputePipelineDescriptor, Extent3d, Features, FragmentState, Limits, MapMode, Origin3d,
+    PipelineLayout, PipelineLayoutDescriptor, PollType, PowerPreference, PrimitiveState,
+    PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
+    ShaderModule, ShaderModuleDescriptor, ShaderSource, TexelCopyBufferInfo, TexelCopyBufferLayout,
+    TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat, VertexState,
 };
 
 use crate::renderer::wgsl::{COMMON, PBR};
@@ -45,11 +45,10 @@ impl Gpu {
                     max_storage_buffers_per_shader_stage: limits
                         .max_storage_buffers_per_shader_stage,
                     max_sampled_textures_per_shader_stage: 20,
+                    max_storage_textures_per_shader_stage: 6,
                     ..Default::default()
                 },
-                required_features: Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                    | Features::TEXTURE_FORMAT_16BIT_NORM
-                    | Features::FLOAT32_FILTERABLE,
+                required_features: Features::FLOAT32_FILTERABLE,
                 ..Default::default()
             })
             .await
@@ -101,6 +100,26 @@ impl Gpu {
                 compilation_options: Default::default(),
                 cache: None,
             })
+    }
+
+    pub fn binding(
+        &self,
+        label: &str,
+        layout: &BindGroupLayout,
+        entries: Vec<BindingResource>,
+    ) -> BindGroup {
+        self.device().create_bind_group(&BindGroupDescriptor {
+            label: Some(label),
+            layout,
+            entries: &entries
+                .into_iter()
+                .enumerate()
+                .map(|(binding, resource)| BindGroupEntry {
+                    binding: binding as u32,
+                    resource: resource,
+                })
+                .collect_vec(),
+        })
     }
 
     pub fn quad(

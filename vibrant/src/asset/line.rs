@@ -94,8 +94,9 @@ pub struct LineBuffer {
 
     transform: Buffer,
 
-    binding_read: BindGroup,
-    binding_write: BindGroup,
+    binding_transform: BindGroup,
+    binding_crop: BindGroup,
+    binding_render: BindGroup,
 
     n_lines: u32,
 }
@@ -266,72 +267,52 @@ impl LineBuffer {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
         });
 
-        let entries = [
-            BindGroupEntry {
-                binding: 0,
-                resource: indices.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: vertices.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: length.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: offset.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 4,
-                resource: materials.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 5,
-                resource: settings_buffer.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 6,
-                resource: raw_indices.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 7,
-                resource: raw_vertices.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 8,
-                resource: raw_offsets.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 9,
-                resource: transform.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 11,
-                resource: scalar.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 12,
-                resource: BindingResource::TextureView(
+        let binding_transform = gpu.binding(
+            "LineTransform",
+            &Self::layout_transform(gpu),
+            vec![
+                indices.as_entire_binding(),
+                vertices.as_entire_binding(),
+                length.as_entire_binding(),
+                offset.as_entire_binding(),
+                raw_vertices.as_entire_binding(),
+                transform.as_entire_binding(),
+            ],
+        );
+
+        let binding_crop = gpu.binding(
+            "LineCrop",
+            &Self::layout_crop(gpu),
+            vec![
+                indices.as_entire_binding(),
+                vertices.as_entire_binding(),
+                length.as_entire_binding(),
+                materials.as_entire_binding(),
+                settings_buffer.as_entire_binding(),
+                raw_indices.as_entire_binding(),
+                raw_offsets.as_entire_binding(),
+            ],
+        );
+
+        let binding_render = gpu.binding(
+            "LineRender",
+            &Self::layout_render(gpu),
+            vec![
+                indices.as_entire_binding(),
+                vertices.as_entire_binding(),
+                length.as_entire_binding(),
+                offset.as_entire_binding(),
+                materials.as_entire_binding(),
+                settings_buffer.as_entire_binding(),
+                transform.as_entire_binding(),
+                scalar.as_entire_binding(),
+                BindingResource::TextureView(
                     &colormap
                         .texture()
                         .create_view(&TextureViewDescriptor::default()),
                 ),
-            },
-        ];
-
-        let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout(gpu, true),
-            entries: &entries,
-        });
-
-        let binding_write = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout(gpu, false),
-            entries: &entries,
-        });
+            ],
+        );
 
         Self {
             global_settings,
@@ -352,9 +333,9 @@ impl LineBuffer {
             raw_indices,
             raw_vertices,
             raw_offsets,
-
-            binding_read,
-            binding_write,
+            binding_transform,
+            binding_crop,
+            binding_render,
 
             n_lines,
         }
@@ -372,12 +353,16 @@ impl LineBuffer {
         &self.bounds
     }
 
-    pub fn binding(&self, read_only: bool) -> &BindGroup {
-        if read_only {
-            &self.binding_read
-        } else {
-            &self.binding_write
-        }
+    pub fn binding_transform(&self) -> &BindGroup {
+        &self.binding_transform
+    }
+
+    pub fn binding_crop(&self) -> &BindGroup {
+        &self.binding_crop
+    }
+
+    pub fn binding_render(&self) -> &BindGroup {
+        &self.binding_render
     }
 
     pub fn clear_offset(&self, cmd: &mut CommandEncoder) {
@@ -407,11 +392,29 @@ impl LineBuffer {
             .write_buffer(&self.transform, 0, bytes_of(transform));
     }
 
-    pub fn layout(gpu: &Gpu, read_only: bool) -> BindGroupLayout {
-        let visibility = if read_only {
-            ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT
-        } else {
-            ShaderStages::COMPUTE | ShaderStages::FRAGMENT
+    pub fn layout_transform(gpu: &Gpu) -> BindGroupLayout {
+        let visibility = ShaderStages::COMPUTE;
+
+        let buffer_readwrite = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        let buffer_read = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
         };
 
         gpu.device()
@@ -421,106 +424,174 @@ impl LineBuffer {
                     // Indices
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                        ..buffer_readwrite
                     },
                     // Vertices
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                        ..buffer_readwrite
                     },
                     // Length
                     BindGroupLayoutEntry {
                         binding: 2,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                        ..buffer_read
                     },
                     // Offset
                     BindGroupLayoutEntry {
                         binding: 3,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ..buffer_readwrite
+                    },
+                    // Raw Vertices
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        ..buffer_read
+                    },
+                    // Transform
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility,
                         ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
+                            ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
                         count: None,
                     },
-                    // Materials
+                ],
+            })
+    }
+
+    pub fn layout_crop(gpu: &Gpu) -> BindGroupLayout {
+        let visibility = ShaderStages::COMPUTE;
+
+        let buffer_readwrite = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        let buffer_read = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    // Indices
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        ..buffer_readwrite
+                    },
+                    // Vertices
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        ..buffer_readwrite
+                    },
+                    // Length
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        ..buffer_readwrite
+                    },
+                    // Material
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        ..buffer_read
+                    },
+                    // Settings
                     BindGroupLayoutEntry {
                         binding: 4,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                        ..buffer_read
+                    },
+                    // Index Raw
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        ..buffer_read
+                    },
+                    // Offset Raw
+                    BindGroupLayoutEntry {
+                        binding: 6,
+                        ..buffer_read
+                    },
+                ],
+            })
+    }
+
+    pub fn layout_render(gpu: &Gpu) -> BindGroupLayout {
+        let visibility = ShaderStages::COMPUTE | ShaderStages::FRAGMENT;
+
+        let buffer_read = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        let buffer_readwrite = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    // Indices
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        ..buffer_read
+                    },
+                    // Vertices
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        ..buffer_read
+                    },
+                    // Length
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        ..buffer_read
+                    },
+                    // Offset
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        ..buffer_readwrite
+                    },
+                    // Material
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        ..buffer_read
                     },
                     // Settings
                     BindGroupLayoutEntry {
                         binding: 5,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Raw Indices
-                    BindGroupLayoutEntry {
-                        binding: 6,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Raw Vertices
-                    BindGroupLayoutEntry {
-                        binding: 7,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // Raw Offsets
-                    BindGroupLayoutEntry {
-                        binding: 8,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                        ..buffer_read
                     },
                     // Transform
                     BindGroupLayoutEntry {
-                        binding: 9,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
+                        binding: 6,
+                        visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -530,18 +601,12 @@ impl LineBuffer {
                     },
                     // Scalar
                     BindGroupLayoutEntry {
-                        binding: 11,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                        binding: 7,
+                        ..buffer_read
                     },
                     // Colormap
                     BindGroupLayoutEntry {
-                        binding: 12,
+                        binding: 8,
                         visibility,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Float { filterable: true },

@@ -17,7 +17,7 @@ impl LineCropPipeline {
             crop: gpu.compute(
                 "Crop",
                 &gpu.pipeline_layout(&[
-                    &LineBuffer::layout(gpu, false),
+                    &LineBuffer::layout_crop(gpu),
                     &Environment::layout(gpu),
                     &CropBuffer::layout(gpu),
                 ]),
@@ -25,7 +25,7 @@ impl LineCropPipeline {
             ),
             adjacency: gpu.compute(
                 "Adjacency",
-                &gpu.pipeline_layout(&[&LineBuffer::layout(gpu, false)]),
+                &gpu.pipeline_layout(&[&LineBuffer::layout_transform(gpu)]),
                 &gpu.shader(include_str!("adjacency.wgsl")),
             ),
         }
@@ -57,7 +57,7 @@ impl LineCropPipeline {
         });
 
         pass.set_pipeline(&self.crop);
-        pass.set_bind_group(0, line.binding(false), &[]);
+        pass.set_bind_group(0, line.binding_crop(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
         pass.set_bind_group(2, crop.binding(), &[]);
         pass.dispatch_workgroups(line.n_lines().div_ceil(32), 1, 1);
@@ -72,7 +72,7 @@ impl LineCropPipeline {
         });
 
         pass.set_pipeline(&self.adjacency);
-        pass.set_bind_group(0, line.binding(false), &[]);
+        pass.set_bind_group(0, line.binding_transform(), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }
 }

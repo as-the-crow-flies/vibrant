@@ -130,6 +130,7 @@ impl Surface {
     pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &mut Settings) {
         if let Some(frame) = &self.frame {
             // Update Required Index Size
+
             let required_index_size = frame.culling().get_required_index_size(gpu);
             if required_index_size > settings.index_size {
                 settings.index_size = required_index_size.next_power_of_two()

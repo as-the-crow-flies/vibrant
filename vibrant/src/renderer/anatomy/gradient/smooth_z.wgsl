@@ -1,7 +1,6 @@
-@group(0) @binding(0) var SOURCE: texture_storage_3d<rgba8unorm, read_write>;
-@group(0) @binding(1) var GRADIENT: texture_storage_3d<rgba8unorm, read_write>;
-@group(0) @binding(2) var PING: texture_storage_3d<rgba8unorm, read_write>;
-@group(0) @binding(3) var PONG: texture_storage_3d<rgba8unorm, read_write>;
+@group(0) @binding(0) var SOURCE: texture_storage_3d<rgba8unorm, read>;
+@group(0) @binding(2) var PING: texture_storage_3d<rgba8unorm, write>;
+@group(0) @binding(3) var PONG: texture_storage_3d<rgba8unorm, read>;
 
 @compute
 @workgroup_size(4, 4, 4)
