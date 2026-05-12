@@ -19,11 +19,24 @@ pub struct VolumeFile {
 }
 
 impl VolumeFile {
-    pub fn from_nifti(file: &File) -> Self {
-        let nitfi = InMemNiftiObject::from_reader(GzDecoder::new(Cursor::new(&file.data)))
-            .expect("Nifti should contain volume data");
+    pub fn from_comressed_nifti(file: &File) -> Self {
+        Self::from_nifti_obj(
+            file.name.replace(".nii.gz", "").to_owned(),
+            InMemNiftiObject::from_reader(GzDecoder::new(Cursor::new(&file.data)))
+                .expect("Nifti should contain volume data"),
+        )
+    }
 
-        let dim = nitfi
+    pub fn from_nifti(file: &File) -> Self {
+        Self::from_nifti_obj(
+            file.name.replace(".nii", "").to_owned(),
+            InMemNiftiObject::from_reader(Cursor::new(&file.data))
+                .expect("Nifti should contain volume data"),
+        )
+    }
+
+    fn from_nifti_obj(name: String, nifti: InMemNiftiObject) -> Self {
+        let dim = nifti
             .header()
             .dim()
             .expect("Nifti should contain valid dimensionality");
@@ -35,9 +48,9 @@ impl VolumeFile {
         ));
 
         let mm_to_voxel = Mat4::from_cols_array_2d(&[
-            nitfi.header().srow_x,
-            nitfi.header().srow_y,
-            nitfi.header().srow_z,
+            nifti.header().srow_x,
+            nifti.header().srow_y,
+            nifti.header().srow_z,
             [0.0, 0.0, 0.0, 1.0],
         ])
         .transpose()
@@ -45,9 +58,7 @@ impl VolumeFile {
 
         let transform = voxel_to_texture * mm_to_voxel;
 
-        let name = file.name.replace(".nii", "").replace(".gz", "").to_owned();
-
-        let dim = nitfi
+        let dim = nifti
             .header()
             .dim()
             .expect("Invalid Nifti dimension")
@@ -55,19 +66,19 @@ impl VolumeFile {
 
         let size = UVec3::new(dim[0] as u32, dim[1] as u32, dim[2] as u32);
 
-        let ty = nitfi.header().data_type().expect("Invalid Nifti data type");
+        let ty = nifti.header().data_type().expect("Invalid Nifti data type");
 
         let data: Vec<f32> = match ty {
-            NiftiType::Uint8 => Self::to_f32::<u8>(nitfi),
-            NiftiType::Int16 => Self::to_f32::<i16>(nitfi),
-            NiftiType::Int32 => Self::to_f32::<i32>(nitfi),
-            NiftiType::Float32 => Self::to_f32::<f32>(nitfi),
-            NiftiType::Float64 => Self::to_f32::<f64>(nitfi),
-            NiftiType::Int8 => Self::to_f32::<i8>(nitfi),
-            NiftiType::Uint16 => Self::to_f32::<u16>(nitfi),
-            NiftiType::Uint32 => Self::to_f32::<u32>(nitfi),
-            NiftiType::Int64 => Self::to_f32::<i64>(nitfi),
-            NiftiType::Uint64 => Self::to_f32::<u64>(nitfi),
+            NiftiType::Uint8 => Self::to_f32::<u8>(nifti),
+            NiftiType::Int16 => Self::to_f32::<i16>(nifti),
+            NiftiType::Int32 => Self::to_f32::<i32>(nifti),
+            NiftiType::Float32 => Self::to_f32::<f32>(nifti),
+            NiftiType::Float64 => Self::to_f32::<f64>(nifti),
+            NiftiType::Int8 => Self::to_f32::<i8>(nifti),
+            NiftiType::Uint16 => Self::to_f32::<u16>(nifti),
+            NiftiType::Uint32 => Self::to_f32::<u32>(nifti),
+            NiftiType::Int64 => Self::to_f32::<i64>(nifti),
+            NiftiType::Uint64 => Self::to_f32::<u64>(nifti),
             _ => panic!("Unsupported Nifti format: {:?}", ty),
         };
 

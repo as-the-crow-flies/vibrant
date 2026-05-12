@@ -127,7 +127,7 @@ impl Controller {
 
                     if ui
                         .button("📂 open")
-                        .on_hover_text("Open .tck/.obj files")
+                        .on_hover_text("Open .nii.gz/.tck/.tsf files")
                         .clicked()
                     {
                         FileStage::load();
