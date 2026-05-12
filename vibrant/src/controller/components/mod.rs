@@ -6,6 +6,7 @@ pub trait UIComponents {
     fn toggle(&mut self, icon: &str, tooltip: &str, selected: &mut bool) -> Response;
     fn toggle_visible(&mut self, selected: &mut bool) -> Response;
     fn toggle_inverted(&mut self, selected: &mut bool) -> Response;
+    fn delete(&mut self) -> Response;
     fn frame(&mut self, contents: impl FnOnce(&mut Ui));
     fn slider<'a, Num>(&mut self, value: &'a mut Num, range: RangeInclusive<Num>) -> Response
     where
@@ -23,6 +24,10 @@ impl UIComponents for Ui {
 
     fn toggle_inverted(&mut self, selected: &mut bool) -> Response {
         self.toggle("🌗", "Invert", selected)
+    }
+
+    fn delete(&mut self) -> Response {
+        self.button("🗑").on_hover_text("Delete")
     }
 
     fn frame(&mut self, contents: impl FnOnce(&mut Ui)) {

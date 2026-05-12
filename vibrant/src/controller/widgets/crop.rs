@@ -1,11 +1,11 @@
 use std::{any::type_name, f32::consts::PI};
 
-use egui::{collapsing_header::CollapsingState, Grid, RichText, Ui};
+use egui::{collapsing_header::CollapsingState, Grid, Ui};
 use egui_double_slider::DoubleSlider;
 
 use crate::{
     asset::crop::CropBuffer,
-    controller::components::UIComponents,
+    controller::{components::UIComponents, widgets::util::UiResponseExtensions},
     util::{ResponseExtentions, Tracked},
 };
 
@@ -35,10 +35,14 @@ impl CropWidget {
         let s = crop.settings_mut();
 
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
-            .show_header(ui, |ui| ui.heading("Slicing"))
+            .show_header(ui, |ui| {
+                ui.heading("Slicing").help(
+                    "Slicing",
+                    "Crop volume using orthogonal and spherical slice controls.",
+                )
+            })
             .body(|ui| {
-                ui.frame(|ui| {
-                    ui.label(RichText::new("Orthogonal").strong());
+                ui.collapsing("Orthogonal", |ui| {
                     Grid::new("CropWidgetGridOrthogonal")
                         .num_columns(2)
                         .show(ui, |ui| {
@@ -48,8 +52,7 @@ impl CropWidget {
                         });
                 });
 
-                ui.frame(|ui| {
-                    ui.label(RichText::new("Spherical").strong());
+                ui.collapsing("Spherical", |ui| {
                     Grid::new("CropWidgetGridSpherical")
                         .num_columns(2)
                         .show(ui, |ui| {

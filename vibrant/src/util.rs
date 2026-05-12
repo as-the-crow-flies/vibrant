@@ -5,17 +5,17 @@ pub trait Tracked {
 }
 
 pub trait ResponseExtentions {
-    fn track<T: Tracked>(&self, tracked: &mut T) -> bool;
+    fn track<T: Tracked>(self, tracked: &mut T) -> Self;
 }
 
 impl ResponseExtentions for Response {
-    fn track<T: Tracked>(&self, tracked: &mut T) -> bool {
+    fn track<T: Tracked>(self, tracked: &mut T) -> Self {
         let changed = self.changed();
 
         if changed {
             tracked.track();
         }
 
-        changed
+        self
     }
 }

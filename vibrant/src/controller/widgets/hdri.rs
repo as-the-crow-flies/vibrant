@@ -4,7 +4,7 @@ use egui::{collapsing_header::CollapsingState, Grid, Ui};
 
 use crate::{
     asset::hdri::HdriBuffer,
-    controller::components::UIComponents,
+    controller::{components::UIComponents, widgets::util::UiResponseExtensions},
     util::{ResponseExtentions, Tracked},
 };
 
@@ -27,15 +27,19 @@ impl HdriWidget {
     pub fn show(&mut self, ui: &mut Ui, hdri: &mut HdriBuffer) {
         self.changed = false;
 
-        if hdri.name() == "Default" {
-            return;
-        }
-
         CollapsingState::load_with_default_open(ui.ctx(), type_name::<Self>().into(), true)
             .show_header(ui, |ui| {
-                ui.heading("Environment Map");
+                ui.heading("Environment").help(
+                    "Environment Textures",
+                    "Add realistic lighting by loading an environment texture.\n
+                    Click open to load an .exr file (e.g. from http://polyhaven.com)",
+                )
             })
             .body(|ui| {
+                if hdri.name() == "Default" {
+                    return;
+                }
+
                 Grid::new("EnvironmentMapGrid")
                     .num_columns(2)
                     .show(ui, |ui| {

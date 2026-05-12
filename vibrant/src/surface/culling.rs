@@ -253,7 +253,7 @@ impl CullingBuffer {
     pub fn get_required_index_size(&self, gpu: &Gpu) -> u32 {
         #[cfg(target_arch = "wasm32")]
         {
-            return 64;
+            return 256;
         }
         #[cfg(not(target_arch = "wasm32"))]
         {

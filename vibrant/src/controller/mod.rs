@@ -207,9 +207,7 @@ impl Controller {
 
                     self.mask_widget.show(ui, &mut asset.masks);
 
-                    if let Some(lines) = &mut asset.line {
-                        self.tractography_widget.show(ui, lines);
-                    }
+                    self.tractography_widget.show(ui, &mut asset.line);
 
                     self.hdri_widget.show(ui, &mut asset.hdri);
                 });
