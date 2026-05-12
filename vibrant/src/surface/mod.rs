@@ -6,7 +6,6 @@ pub mod occupancy;
 use std::any::type_name;
 
 use color::ColorBuffer;
-use log::warn;
 use occlusion::OcclusionBuffer;
 use occupancy::OccupancyBuffer;
 use wgpu::{
@@ -187,10 +186,6 @@ impl Surface {
 
             gpu.submit(cmd);
             surface.present();
-
-            if !gpu.wait() {
-                warn!("Could not poll GPU")
-            }
         }
     }
 

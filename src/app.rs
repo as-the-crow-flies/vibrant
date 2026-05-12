@@ -57,7 +57,11 @@ impl App {
 
                 renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
 
-                self.request_redraw();
+                if let Some(window) = self.window.clone() {
+                    self.gpu.queue().on_submitted_work_done(move || {
+                        window.request_redraw();
+                    });
+                }
             }
             _ => (),
         }
