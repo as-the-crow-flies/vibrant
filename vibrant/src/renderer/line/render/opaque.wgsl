@@ -1,14 +1,3 @@
-@group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
-@group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
-@group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
-@group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
-@group(2) @binding(6) var<uniform> TRANSFORM: mat4x4<f32>;
-@group(2) @binding(7) var<storage> LINE_SCALAR: array<f32>;
-@group(2) @binding(8) var COLORMAP: texture_2d<f32>;
-
-@group(3) @binding(0) var<storage> OFFSET: array<u32>;
-@group(3) @binding(2) var<storage> INDEX: array<u32>;
-
 struct Hit {
     distance: f32,
     index: u32
@@ -62,5 +51,5 @@ fn result(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
 
     let position = origin + direction * HIT.distance;
 
-    return shade(v0, v1, v0s, v1s, RADIUS, position, settings, ENVIRONMENT, OCCLUSION_AMBIENT, OCCLUSION_DIRECTIONAL, SAMPLER, COLORMAP);
+    return shade(v0, v1, v0s, v1s, RADIUS, position, settings);
 }
