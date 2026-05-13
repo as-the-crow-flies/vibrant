@@ -10,6 +10,10 @@
   <strong>Web-based Cinematic Visualization for Neuroanatomy and Tractography</strong>
 </p>
 
+<p align="center">
+  <a href="https://as-the-crow-flies.github.io/vibrant/">🌐 Launch Web App 🌐</a>
+</p>
+
 ---
 
 ## Overview
