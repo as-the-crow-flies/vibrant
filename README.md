@@ -6,23 +6,28 @@
 
 ## Getting Started
 
-VIBRANT runs on the Web and natively on Windows, MacOS and Linux.
+[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) runs on the Web and natively on Windows, MacOS and Linux.
 
 ### Web Application
 
-[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) is built for the web, using WebGPU to power its cinematic rendering. It runs in all [web browers that support WebGPU](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status).
+[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) is built for the web, using WebGPU to power its cinematic rendering. It works best on Chrome.
 
 ### Running Natively
 
 [VIBRANT](https://as-the-crow-flies.github.io/vibrant/) can run natively on all major platforms, including Windows, MacOS and Linux. 
 
-It is built in Rust and therefore easy to compile for your platform!
+It is built in Rust and therefore easy to compile for your system!
 
-1. Install Rust using https://rustup.rs/
+1. Install Rust
+
+   https://rustup.rs/
 2. Clone Git Repository 
 
    `git clone git@github.com:as-the-crow-flies/vibrant.git`
-3. Build & Run the application
+3. Navigate to the application folder
+
+   `cd vibrant`
+4. Build & Run the application
 
    `cargo run`
 
