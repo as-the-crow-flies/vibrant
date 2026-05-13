@@ -127,7 +127,7 @@ impl Controller {
 
                     if ui
                         .button("📂 open")
-                        .on_hover_text("Open .tck/.obj files")
+                        .on_hover_text("Open .nii.gz/.tck/.tsf files")
                         .clicked()
                     {
                         FileStage::load();
@@ -192,6 +192,12 @@ impl Controller {
                             ui.label("Shift + Left Mouse Button");
                             ui.end_row();
                         });
+
+                    ui.separator();
+                    ui.hyperlink_to(
+                        "\u{E624} View on GitHub",
+                        "https://github.com/as-the-crow-flies/vibrant",
+                    );
                 });
         });
 
@@ -207,9 +213,7 @@ impl Controller {
 
                     self.mask_widget.show(ui, &mut asset.masks);
 
-                    if let Some(lines) = &mut asset.line {
-                        self.tractography_widget.show(ui, lines);
-                    }
+                    self.tractography_widget.show(ui, &mut asset.line);
 
                     self.hdri_widget.show(ui, &mut asset.hdri);
                 });

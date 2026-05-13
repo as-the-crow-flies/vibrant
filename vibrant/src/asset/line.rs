@@ -345,6 +345,10 @@ impl LineBuffer {
         &mut self.global_settings
     }
 
+    pub fn settings(&self) -> &[LineSettings] {
+        &self.settings
+    }
+
     pub fn settings_mut(&mut self) -> &mut [LineSettings] {
         &mut self.settings
     }

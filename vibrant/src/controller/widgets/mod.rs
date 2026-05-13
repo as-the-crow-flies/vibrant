@@ -3,4 +3,5 @@ pub mod hdri;
 pub mod masks;
 pub mod settings;
 pub mod tractography;
+pub mod util;
 pub mod volumes;

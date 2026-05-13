@@ -112,8 +112,10 @@ impl FileStage {
                 lines.push(LineFile::from_obj(file));
             } else if file.name().ends_with(".tsf") {
                 track_scalars.push(TrackScalarFile::from_tsf(file));
-            } else if file.name().ends_with(".nii.gz") {
+            } else if file.name().ends_with(".nii") {
                 volumes.push(VolumeFile::from_nifti(&file));
+            } else if file.name().ends_with(".nii.gz") {
+                volumes.push(VolumeFile::from_comressed_nifti(&file));
             } else if file.name().ends_with(".exr") {
                 hdris.push(HdriFile::from_exr(&file));
             } else {

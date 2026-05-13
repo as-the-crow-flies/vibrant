@@ -6,6 +6,17 @@
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+@group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
+@group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
+@group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
+@group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
+@group(2) @binding(6) var<uniform> TRANSFORM: mat4x4<f32>;
+@group(2) @binding(7) var<storage> LINE_SCALAR: array<f32>;
+@group(2) @binding(8) var COLORMAP: texture_2d<f32>;
+
+@group(3) @binding(0) var<storage> OFFSET: array<u32>;
+@group(3) @binding(2) var<storage> INDEX: array<u32>;
+
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
 var<private> DIR_INV: f32;
@@ -186,4 +197,63 @@ fn background(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     let occlusion = 1.0 - (1.0 - shadow) * (1.0 - ao);
 
     return vec4<f32>(vec3<f32>(occlusion), 1.0);
+}
+
+fn shade(
+    v0: Vertex,
+    v1: Vertex,
+    v0s: f32,
+    v1s: f32,
+    radius: f32,
+    position: vec3<f32>,
+    settings: LineSettings
+) -> vec4<f32> {
+    let delta = v1.xyz - v0.xyz;
+    let pa = position - v0.xyz;
+    let height = saturate(dot(pa, delta) / dot(delta, delta));
+
+    let is_start = all(v0.clip == vec3<f32>());
+    let is_end = all(v1.clip == vec3<f32>());
+
+    let delta_norm = normalize(delta);
+    let tangent = normalize(mix(
+        select(v0.clip, delta_norm, is_start),
+        select(v1.clip, delta_norm, is_end),
+        height
+    ));
+
+    let normal = normalize((pa - height * delta) / radius);
+
+    let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
+    let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
+    let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
+
+    let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, position + 0.5, 0.0).x;
+    let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, position + 0.5, 0.0).x;
+
+    let ao = ambient * ENVIRONMENT.settings.ambient_light;
+    let shadow = diffuse * ENVIRONMENT.settings.direct_light * directional;
+    let factor = 1.0 - (1.0 - shadow) * (1.0 - ao);
+
+    let color = unpack4x8unorm(settings.color);
+
+    let tangent_color = tangent2rgb(abs(tangent));
+    let line_color = unpack4x8unorm(settings.color);
+
+    let scalar_sample = u32(mix(v0s, v1s, height) * 255.0);
+    let scalar_color = textureLoad(COLORMAP, vec2<u32>(scalar_sample, settings.colormap), 0).rgb;
+
+    let has_scalar_color = line_color.a == 1.0;
+    let has_line_color = !has_scalar_color && line_color.a > 0.4;
+    let has_tangent_color = !has_line_color && !has_scalar_color;
+
+    let rgb = factor * (
+        f32(has_line_color) * line_color.rgb +
+        f32(has_scalar_color) * scalar_color +
+        f32(has_tangent_color) * tangent_color
+    );
+
+    let alpha = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height);
+
+    return vec4<f32>(rgb, alpha);
 }

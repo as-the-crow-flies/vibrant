@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 use crate::renderer::{anatomy::AnatomyRenderer, line::LineRenderer, util::clear::ClearPipeline};
 use environment::Environment;
-use log::info;
 use pollster::FutureExt;
 use ui::UiRenderer;
 use winit::window::Window;

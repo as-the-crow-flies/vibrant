@@ -1,5 +1,4 @@
 use egui::{ComboBox, Grid, Ui};
-use egui_double_slider::DoubleSlider;
 
 use crate::{
     controller::{camera::Camera, components::UIComponents, settings::Settings},
@@ -25,9 +24,10 @@ impl SettingsWidget {
     pub fn show(&mut self, ui: &mut Ui, settings: &mut Settings, camera: &mut Camera) {
         self.changed = false;
 
-        ui.collapsing("Camera", |ui| {
+        ui.collapse("Camera", false, |ui| {
             Grid::new("CameraSettings").num_columns(2).show(ui, |ui| {
-                ui.label("Field of View");
+                ui.label("Field of View")
+                    .on_hover_text("Camera Field of View");
                 ui.slider(&mut camera.fov, 0.4..=1.0).track(self);
                 ui.end_row();
             });
@@ -37,7 +37,9 @@ impl SettingsWidget {
             Grid::new("TractographySettings")
                 .num_columns(2)
                 .show(ui, |ui| {
-                    ui.label("Resolution");
+                    ui.label("Resolution").on_hover_text(
+                        "Voxel Resolution for Tractography Ray Tracing.\nHigher values result in sharper shadows, but may be slower.",
+                    );
                     ComboBox::from_id_salt("Voxel Resolution")
                         .selected_text(format!("{:?}", settings.volume))
                         .width(ui.available_width())
@@ -53,7 +55,7 @@ impl SettingsWidget {
                         });
                     ui.end_row();
 
-                    ui.label("Memory (MB)");
+                    ui.label("Memory (MB)").on_hover_text("Tractography Acceleration Structure Memory Usage.\nAutoselected on native platforms.");
                     ComboBox::from_id_salt("Memory")
                         .selected_text(format!("{:?}", settings.index_size))
                         .width(ui.available_width())
@@ -69,34 +71,21 @@ impl SettingsWidget {
                         });
                     ui.end_row();
 
-                    ui.label("Radius");
+                    ui.label("Radius").on_hover_text("Tractography Line Radius");
                     ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
                     ui.end_row();
 
-                    ui.label("Ambient");
+                    ui.label("Ambient").on_hover_text("Ambient Lighting Strength");
                     ui.slider(&mut settings.ambient_light, 0.0..=3.0)
                         .track(self);
                     ui.end_row();
 
-                    ui.label("Sun");
+                    ui.label("Sun").on_hover_text("Directional Lighting Strength");
                     ui.slider(&mut settings.direct_light, 0.0..=3.0).track(self);
                     ui.end_row();
 
-                    ui.label("Alpha");
+                    ui.label("Opacity").on_hover_text("Tractography Opacity");
                     ui.slider(&mut settings.alpha, 0.01..=1.0).track(self);
-                    ui.end_row();
-
-                    ui.label("Crop");
-                    ui.add(
-                        DoubleSlider::new(
-                            &mut settings.crop_start,
-                            &mut settings.crop_end,
-                            0.0..=1.0,
-                        )
-                        .width(ui.available_width())
-                        .separation_distance(0.01),
-                    )
-                    .track(self);
                     ui.end_row();
                 });
         });
