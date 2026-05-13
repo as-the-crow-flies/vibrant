@@ -24,7 +24,7 @@ impl SettingsWidget {
     pub fn show(&mut self, ui: &mut Ui, settings: &mut Settings, camera: &mut Camera) {
         self.changed = false;
 
-        ui.collapsing("Camera", |ui| {
+        ui.collapse("Camera", false, |ui| {
             Grid::new("CameraSettings").num_columns(2).show(ui, |ui| {
                 ui.label("Field of View")
                     .on_hover_text("Camera Field of View");
