@@ -100,7 +100,9 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         if (all(transmittance <= vec3<f32>(1E-5))) { break; }
     }
 
-    return vec4<f32>(aces(sample_hdri(direction_world) * transmittance + color.rgb), 1.0);
+    let alpha = 1.0 - dot(transmittance, vec3<f32>(1.0 / 3.0));
+
+    return vec4<f32>(aces(sample_hdri(direction_world) * transmittance + color.rgb), alpha);
 }
 
 fn aces(x: vec3<f32>) -> vec3<f32> {
