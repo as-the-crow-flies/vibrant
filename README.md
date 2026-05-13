@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://as-the-crow-flies.github.io/vibrant/">
-    <img src="cover.png" alt="Screenshot of the VIBRANT application" width="50%" height=50% />
+    <img src="cover.png" alt="Screenshot of the VIBRANT application" width="75%" height=75% />
   </a>
 </p>
 
