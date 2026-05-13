@@ -16,7 +16,7 @@ winit = "0.30.12"
 
 egui = { version = "0.34" }
 egui-wgpu = { version = "0.34", features = ["winit"] }
-egui-winit = { version = "0.34", default-features = false }
+egui-winit = { version = "0.34", default-features = false, features=["links"] }
 log = "0.4.28"
 pollster = "0.3"
 web-time = "1.1"

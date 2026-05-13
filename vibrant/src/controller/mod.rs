@@ -192,6 +192,12 @@ impl Controller {
                             ui.label("Shift + Left Mouse Button");
                             ui.end_row();
                         });
+
+                    ui.separator();
+                    ui.hyperlink_to(
+                        "\u{E624} View on GitHub",
+                        "https://github.com/as-the-crow-flies/vibrant",
+                    );
                 });
         });
 
