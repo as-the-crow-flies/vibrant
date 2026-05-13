@@ -36,7 +36,7 @@ impl HdriWidget {
                 .num_columns(2)
                 .show(ui, |ui| {
                     ui.label("Strength");
-                    ui.slider(&mut hdri.settings_mut().strength, 0.0..=2.0)
+                    ui.slider(&mut hdri.settings_mut().strength, 0.0..=5.0)
                         .track(self);
                     ui.end_row();
 

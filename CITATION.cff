@@ -1,0 +1,42 @@
+cff-version: "1.2.0"
+message: "If you use this work, please cite it as below."
+title: "Real-Time Rendering of Dynamic Line Sets using Voxel Ray Tracing"
+version: "v1"
+doi: "10.1111/cgf.70372"
+date-released: "2026-04-14"
+url: "https://doi.org/10.1111/cgf.70372"
+authors:
+  - given-names: "Bram"
+    family-names: "Kraaijeveld"
+  - given-names: "Andrei C."
+    family-names: "Jalba"
+  - given-names: "Anna"
+    family-names: "Vilanova"
+  - given-names: "Maxime"
+    family-names: "Chamberland"
+abstract: |
+    Real-time rendering of dynamic line sets is relevant in many visualization tasks, including unsteady flow visualization and interactive white matter reconstruction from Magnetic Resonance Imaging. High-quality global illumination and transparency are important for conveying the spatial structure of dense line sets, yet remain difficult to achieve at interactive rates. We propose an efficient voxel-based ray-tracing framework for rendering large dynamic line sets with ambient occlusion and ground-truth transparency. We introduce a voxelization algorithm that supports efficient on-the-fly construction of acceleration structures for both voxel cone tracing and ray tracing. To further reduce per-frame preprocessing cost, we propose a voxel-based culling method that restricts acceleration structure construction to camera-visible voxels. Together, these contributions enable real-time rendering of large-scale dynamic line sets with high quality and physically accurate transparency. We demonstrate that our method outperforms the state of the art in quality and performance when rendering (semi-)opaque dynamic line sets.
+keywords:
+  - "Graphics"
+  - "Visualization"
+  - "Ray Tracing"
+  - "Voxelization"
+license: "CC BY-SA 4.0"
+repository-code: "https://github.com/as-the-crow-flies/vibrant-tractography"
+
+preferred-citation:
+  type: article
+  title: "Real-Time Rendering of Dynamic Line Sets using Voxel Ray Tracing"
+  authors:
+    - given-names: "Bram"
+      family-names: "Kraaijeveld"
+    - given-names: "Andrei C."
+      family-names: "Jalba"
+    - given-names: "Anna"
+      family-names: "Vilanova"
+    - given-names: "Maxime"
+      family-names: "Chamberland"
+  journal: "Computer Graphics Forum"
+  year: 2026
+  doi: "10.1111/cgf.70372"
+  url: "https://doi.org/10.1111/cgf.70372"
