@@ -14,8 +14,6 @@
   <a href="https://as-the-crow-flies.github.io/vibrant/">🌐 Launch Web App 🌐</a>
 </p>
 
----
-
 ## Overview
 
 [VIBRANT](https://as-the-crow-flies.github.io/vibrant/) is an interactive visualization tool for neuroanatomy and tractography, designed for high-quality real-time rendering directly in the browser or as a native desktop application.
@@ -28,8 +26,6 @@ It supports:
 - ✂️ Volume masking workflows
 - 🌍 HDR environment lighting
 - ⚡ Real-time rendering using Rust and WebGPU
-
----
 
 # Features
 
@@ -58,8 +54,6 @@ AF_Left_fa.tsf
 | --- | --- | --- |
 | ![](img/tractography-tangent.png) | ![](img/tractography-color.png) | ![](img/tractography-scalar.png) |
 
----
-
 ## 🧠 NIfTI Volume Rendering
 
 Load scalar `.nii` and `.nii.gz` files for high-quality volume rendering with adjustable material properties.
@@ -86,8 +80,6 @@ Supported mask types:
 | --- | --- |
 | ![](img/volume.png) | ![](img/volume-cinematic.png) |
 
----
-
 ## 🌍 (Experimental) Environment Maps
 
 Load `.exr` HDR environment textures to illuminate scenes using image-based lighting.
@@ -96,8 +88,6 @@ This enables more realistic cinematic rendering and soft reflections.
 
 HDRIs from resources like [Poly Haven](https://polyhaven.com/hdris/studio) work well.
 
----
-
 # Getting Started
 
 ## 🌐 Web Application
@@ -105,8 +95,6 @@ HDRIs from resources like [Poly Haven](https://polyhaven.com/hdris/studio) work 
 VIBRANT runs directly in the browser using **WebGPU** for hardware-accelerated rendering.
 
 👉 https://as-the-crow-flies.github.io/vibrant/
-
----
 
 ## 💻 Running Natively
 
@@ -140,8 +128,6 @@ cd vibrant
 cargo run
 ```
 
----
-
 # Citation
 
 If you use VIBRANT in academic work, please cite [Our Paper](https://doi.org/10.1111/cgf.70372):
@@ -160,8 +146,6 @@ If you use VIBRANT in academic work, please cite [Our Paper](https://doi.org/10.
   eprint = {https://onlinelibrary.wiley.com/doi/pdf/10.1111/cgf.70372}
 }
 ```
-
----
 
 # Acknowledgements
 
