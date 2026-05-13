@@ -1,77 +1,164 @@
-# VIBRANT Visualizing Brain Anatomy and Tractography
+# VIBRANT — Visualizing Brain Anatomy & Tractography
 
-[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) is a web-based cinematic anatomy and tractography tool.
+<p align="center">
+  <a href="https://as-the-crow-flies.github.io/vibrant/">
+    <img src="cover.png" alt="Screenshot of the VIBRANT application" width="50%" height=50% />
+  </a>
+</p>
 
-![Screenshot of Vibrant Application](cover.png)
+<p align="center">
+  <strong>Web-based Cinematic Visualization for Neuroanatomy and Tractography</strong>
+</p>
 
-## Getting Started
+---
 
-[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) runs on the Web and natively on Windows, MacOS and Linux.
+## Overview
 
-### Web Application
+[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) is an interactive visualization tool for neuroanatomy and tractography, designed for high-quality real-time rendering directly in the browser or as a native desktop application.
 
-[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) is built for the web, using WebGPU to power its cinematic rendering. It works best on Chrome.
+It supports:
 
-### Running Natively
+- 🧵 Cinematic tractography rendering
+- 🎨 Tract scalar overlays (`.tsf`)
+- 🧠 NIfTI volume rendering
+- ✂️ Volume masking workflows
+- 🌍 HDR environment lighting
+- ⚡ Real-time rendering using Rust and WebGPU
 
-[VIBRANT](https://as-the-crow-flies.github.io/vibrant/) can run natively on all major platforms, including Windows, MacOS and Linux. 
+---
 
-It is built in Rust and therefore easy to compile for your system!
+# Features
 
-1. Install Rust
+## 🧵 Tractography Rendering
 
-   https://rustup.rs/
-2. Clone Git Repository 
+Load any number of `.tck` tractography files and render them with vibrant coloring and shadows.
 
-   `git clone git@github.com:as-the-crow-flies/vibrant.git`
-3. Navigate to the application folder
+Tracts can be colored using:
 
-   `cd vibrant`
-4. Build & Run the application
+- **Tangent direction** *(default)*
+- **Per-bundle colors**
+- **Tract scalar files (`.tsf`)**
 
-   `cargo run`
+### 🎨 Tract Scalar File Support
 
-## Features
+After loading `.tck` files, VIBRANT automatically applies matching `.tsf` scalar files. Several sequential colormaps are supported.
 
-### Tractography Rendering
+Example:
 
-Load any number of `.tck` tract files to render them with vibrant colors and shadows.
-Tracts can be colored using their tangent (default), a color per file, or using a `.tsf` tract scalar file.
+```text
+AF_Left.tck
+AF_Left_fa.tsf
+```
 
-#### Tract Scalar File Support
+| Tangent Coloring | Bundle Coloring | Scalar Coloring |
+| --- | --- | --- |
+| ![](img/tractography-tangent.png) | ![](img/tractography-color.png) | ![](img/tractography-scalar.png) |
 
-After loading `.tck` files, load any `.tsf` files with corresponding names to apply the scalar values to this tract, e.g. `test_AF_Left_fa.tsf` will be automatically applied to `AF_Left.tck`. A few sequential colormaps are supported.
+---
 
-| Tangent Coloring                  | Bundle Coloring                  | Tract Scalar File Coloring |
-| --------------------------------- | -------------------------------- | -------------------------------- |
-| ![](img/tractography-tangent.png) | ![](img/tractography-color.png)  | ![](img/tractography-scalar.png)  |
+## 🧠 NIfTI Volume Rendering
 
-### NIfTI Volume Rendering
+Load scalar `.nii` and `.nii.gz` files for high-quality volume rendering with adjustable material properties.
 
-Load any scalar `.nii.gz` volume file to render it with given contrast and material. Load multiple NIfTI files to show ROIs or segmentations.
+Multiple NIfTI volumes can be loaded simultaneously, making it easy to visualize:
 
-#### Masking
+- Anatomical scans
+- ROIs
+- Segmentations
+- Functional overlays
 
-Load any `*mask*.nii.gz` NIfTI file with 'mask' anywhere in the name to import a mask. Then assign it to one or more volumes. Two types of masks are supported:
+### ✂️ Masking Support
 
-- Binary Masks - the classic mask we all know and love
-- Signed Distance Field Masks - allowing for e.g. eroding the brain surface
+Any NIfTI file containing `mask` in its filename (e.g. `brain_mask.nii.gz`) is automatically imported as a mask.
 
-| Volume Rendering    | Cinematic Rendering           |
-| ------------------- | ----------------------------- |
+Masks can then be assigned to one or more volumes.
+
+Supported mask types:
+
+- **Binary Masks** — classic voxel masking
+- **Signed Distance Field Masks** — useful for erosion effects
+
+| Volume Rendering | Cinematic Rendering |
+| --- | --- |
 | ![](img/volume.png) | ![](img/volume-cinematic.png) |
 
-### (Experimental) Environment Maps
+---
 
-By loading a `.exr` HDRI environment texture (e.g. from [Poly Haven](https://polyhaven.com/hdris/studio)), the application uses it as a light source to render your with colored lighting.
+## 🌍 (Experimental) Environment Maps
 
-## Citing this Repository
+Load `.exr` HDR environment textures to illuminate scenes using image-based lighting.
 
-If you use this software in your work, please cite our article:
+This enables more realistic cinematic rendering and soft reflections.
+
+HDRIs from resources like [Poly Haven](https://polyhaven.com/hdris/studio) work well.
+
+---
+
+# Getting Started
+
+## 🌐 Web Application
+
+VIBRANT runs directly in the browser using **WebGPU** for hardware-accelerated rendering.
+
+👉 https://as-the-crow-flies.github.io/vibrant/
+
+---
+
+## 💻 Running Natively
+
+VIBRANT can also run natively on:
+
+- Windows
+- macOS
+- Linux
+
+VIBRANT is written in **Rust**, making it portable and easy to build:
+
+### 1. Install Rust
+
+https://rustup.rs/
+
+### 2. Clone the Repository
+
+```bash
+git clone git@github.com:as-the-crow-flies/vibrant.git
 ```
-Kraaijeveld, B., Jalba, A. C., Vilanova, A., & Chamberland, M. (2026). Real‐Time Rendering of Dynamic Line Sets using Voxel Ray Tracing. Computer Graphics Forum, e70372. https://doi.org/10.1111/cgf.70372
+
+### 3. Enter the Project Directory
+
+```bash
+cd vibrant
 ```
 
-## Acknowledgements
+### 4. Build & Run
 
-This work was funded by the Dutch Research Council (NWO) grant number OCENW.M.22.352 awarded to Maxime Chamberland
+```bash
+cargo run
+```
+
+---
+
+# Citation
+
+If you use VIBRANT in academic work, please cite [Our Paper](https://doi.org/10.1111/cgf.70372):
+
+```bibtex
+@article{https://doi.org/10.1111/cgf.70372,
+  author = {Kraaijeveld, B. and Jalba, A.C. and Vilanova, A. and Chamberland, M.},
+  title = {Real-Time Rendering of Dynamic Line Sets using Voxel Ray Tracing},
+  journal = {Computer Graphics Forum},
+  volume = {n/a},
+  number = {n/a},
+  pages = {e70372},
+  keywords = {CCS Concepts, • Computing methodologies → Visibility, Ray tracing, Rasterization, • Human-centered computing → Scientific visualization},
+  doi = {https://doi.org/10.1111/cgf.70372},
+  url = {https://onlinelibrary.wiley.com/doi/abs/10.1111/cgf.70372},
+  eprint = {https://onlinelibrary.wiley.com/doi/pdf/10.1111/cgf.70372}
+}
+```
+
+---
+
+# Acknowledgements
+
+This work was funded by the Dutch Research Council (NWO), grant **OCENW.M.22.352**, awarded to Maxime Chamberland.
