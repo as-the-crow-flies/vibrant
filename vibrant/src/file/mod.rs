@@ -7,7 +7,7 @@ pub use line::*;
 pub use volume::*;
 
 use std::{
-    fs,
+    fs::{self},
     path::PathBuf,
     sync::{LazyLock, Mutex},
 };
@@ -51,6 +51,18 @@ impl From<&str> for File {
     }
 }
 
+impl From<&PathBuf> for File {
+    fn from(path: &PathBuf) -> Self {
+        Self {
+            name: path.file_name().unwrap().to_str().unwrap().to_owned(),
+            data: fs::read(&path).expect(&format!(
+                "should be able to read path: `{:?}`",
+                path.to_str()
+            )),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct FileStage {
     pub lines: Vec<LineFile>,
@@ -81,22 +93,13 @@ impl FileStage {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load() {
-        use std::fs;
-
         if let Some(paths) = rfd::FileDialog::new().pick_files() {
-            Self::load_files(
-                paths
-                    .into_iter()
-                    .map(|path| File {
-                        name: path.file_name().unwrap().to_str().unwrap().to_owned(),
-                        data: fs::read(&path).expect(&format!(
-                            "should be able to read path: `{:?}`",
-                            path.to_str()
-                        )),
-                    })
-                    .collect(),
-            );
+            Self::load_files(paths.iter().map(|path| path.into()).collect());
         }
+    }
+
+    pub fn load_path(path: &PathBuf) {
+        Self::load_files(vec![path.into()]);
     }
 
     fn load_files(files: Vec<File>) {

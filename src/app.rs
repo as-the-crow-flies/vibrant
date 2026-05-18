@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use vibrant::controller::event::{Key, MouseButton};
+use vibrant::file::FileStage;
 use vibrant::gpu::Gpu;
 use vibrant::Vec2;
 use web_time::Instant;
@@ -42,16 +43,16 @@ impl App {
 
         let consumed = renderer.egui().on_window_event(window, &event).consumed;
 
-        match event {
+        match &event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Focused(focused) => {
-                self.focused = focused;
+                self.focused = *focused;
 
-                if focused {
+                if self.focused {
                     self.request_redraw()
                 }
             }
-            WindowEvent::Resized(size) => self.controller.resize(size),
+            WindowEvent::Resized(size) => self.controller.resize(*size),
             WindowEvent::RedrawRequested => {
                 self.fps.tick();
 
@@ -63,6 +64,7 @@ impl App {
                     });
                 }
             }
+            WindowEvent::DroppedFile(path) => FileStage::load_path(path),
             _ => (),
         }
 
