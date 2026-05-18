@@ -145,8 +145,8 @@ struct Material {
 };
 
 fn sample_material(sample: vec3<f32>) -> Material {
-    let absorption = tex(ABSORPTION, sample).rgb;
-    let scattering = tex(SCATTERING, sample).rgb;
+    let absorption = unpack_rgb(tex(ABSORPTION, sample));
+    let scattering = unpack_rgb(tex(SCATTERING, sample));
     let extinction = absorption + scattering;
 
     return Material(absorption, scattering, extinction);

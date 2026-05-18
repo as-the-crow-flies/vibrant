@@ -80,9 +80,12 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         scattering *= color;
     }
 
-    textureStore(ABSORPTION, voxel, textureLoad(ABSORPTION, voxel) + pack4x8unorm(vec4<f32>(absorption, 1.0)));
-    textureStore(SCATTERING, voxel, textureLoad(SCATTERING, voxel) + pack4x8unorm(vec4<f32>(scattering, 1.0)));
-    textureStore(EXTINCTION, voxel, textureLoad(EXTINCTION, voxel) + pack4x8unorm(vec4<f32>(absorption + scattering, 1.0)));
+    absorption = unpack_rgb(unpack4x8unorm(textureLoad(ABSORPTION, voxel).x)) + absorption;
+    scattering = unpack_rgb(unpack4x8unorm(textureLoad(SCATTERING, voxel).x)) + scattering;
+
+    textureStore(ABSORPTION, voxel, vec4<u32>(pack4x8unorm(pack_rgb(absorption))));
+    textureStore(SCATTERING, voxel, vec4<u32>(pack4x8unorm(pack_rgb(scattering))));
+    textureStore(EXTINCTION, voxel, vec4<u32>(pack4x8unorm(pack_rgb(absorption + scattering))));
 }
 
 fn get_mask(uv: vec3<f32>) -> f32 {

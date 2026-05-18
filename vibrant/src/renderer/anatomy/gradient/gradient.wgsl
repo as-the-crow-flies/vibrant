@@ -9,23 +9,23 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     let gradient = vec3<f32>(
         KERNEL_SMOOTHING[1] * (
-            length(textureLoad(PING, voxel + vec3<u32>(1, 0, 0)).rgb) -
-            length(textureLoad(PING, voxel - vec3<u32>(1, 0, 0)).rgb)) +
+            textureLoad(PING, voxel + vec3<u32>(1, 0, 0)).a -
+            textureLoad(PING, voxel - vec3<u32>(1, 0, 0)).a) +
         KERNEL_SMOOTHING[2] * (
-            length(textureLoad(PING, voxel + vec3<u32>(2, 0, 0)).rgb) -
-            length(textureLoad(PING, voxel - vec3<u32>(2, 0, 0)).rgb)),
+            textureLoad(PING, voxel + vec3<u32>(2, 0, 0)).a -
+            textureLoad(PING, voxel - vec3<u32>(2, 0, 0)).a),
         KERNEL_SMOOTHING[1] * (
-            length(textureLoad(PING, voxel + vec3<u32>(0, 1, 0)).rgb) -
-            length(textureLoad(PING, voxel - vec3<u32>(0, 1, 0)).rgb)) +
+            textureLoad(PING, voxel + vec3<u32>(0, 1, 0)).a -
+            textureLoad(PING, voxel - vec3<u32>(0, 1, 0)).a) +
         KERNEL_SMOOTHING[2] * (
-            length(textureLoad(PING, voxel + vec3<u32>(0, 2, 0)).rgb) -
-            length(textureLoad(PING, voxel - vec3<u32>(0, 2, 0)).rgb)),
+            textureLoad(PING, voxel + vec3<u32>(0, 2, 0)).a -
+            textureLoad(PING, voxel - vec3<u32>(0, 2, 0)).a),
         KERNEL_SMOOTHING[1] * (
-            length(textureLoad(PING, voxel + vec3<u32>(0, 0, 1)).rgb) -
-            length(textureLoad(PING, voxel - vec3<u32>(0, 0, 1)).rgb)) +
+            textureLoad(PING, voxel + vec3<u32>(0, 0, 1)).a -
+            textureLoad(PING, voxel - vec3<u32>(0, 0, 1)).a) +
         KERNEL_SMOOTHING[2] * (
-            length(textureLoad(PING, voxel + vec3<u32>(0, 0, 2)).rgb) -
-            length(textureLoad(PING, voxel - vec3<u32>(0, 0, 2)).rgb))
+            textureLoad(PING, voxel + vec3<u32>(0, 0, 2)).a -
+            textureLoad(PING, voxel - vec3<u32>(0, 0, 2)).a)
         );
 
     textureStore(GRADIENT, voxel, vec4<f32>(0.5 + 0.5 * gradient, length(gradient) + 1E-5));

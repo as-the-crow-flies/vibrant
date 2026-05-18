@@ -608,3 +608,16 @@ fn cubemap_decode(c: CubeCoordinates) -> vec3<f32> {
 
     return normalize(dir);
 }
+
+fn pack_rgb(src: vec3<f32>) -> vec4<f32> {
+    if (all(src == vec3<f32>(0.0))) {
+        return vec4<f32>(0.0);
+    }
+
+    let norm = length(src);
+    return vec4<f32>(src / norm, norm * 0.1);
+}
+
+fn unpack_rgb(src: vec4<f32>) -> vec3<f32> {
+    return src.rgb * src.a * 10.0;
+}

@@ -1,5 +1,3 @@
-@group(0) @binding(0) var ABSORPTION: texture_3d<f32>;
-@group(0) @binding(1) var SCATTERING: texture_3d<f32>;
 @group(0) @binding(2) var EXTINCTION: texture_3d<f32>;
 @group(0) @binding(3) var GRADIENT: texture_3d<f32>;
 @group(0) @binding(4) var SAMPLER: sampler;
@@ -39,7 +37,7 @@ fn main(@builtin(global_invocation_id) texel: vec3<u32>) {
 
     if (any(texel >= CASCADE_OUT_DIM)) { return; }
 
-    SOURCE_DIM = textureDimensions(ABSORPTION);
+    SOURCE_DIM = textureDimensions(EXTINCTION);
     SOURCE_DIM_INV = 1.0 / vec3<f32>(SOURCE_DIM);
 
     CASCADE_OUT_DIRECTION_DIM = CASCADE_OUT_DIM >> vec3<u32>(CASCADE_INDEX, CASCADE_INDEX, 0u);
@@ -129,13 +127,7 @@ fn radiance_interval(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) 
         let position_voxel_space = origin + direction * t;
         let sample = position_voxel_space * dim_inv;
 
-        // let irradiance = textureSampleLevel(IRRADIANCE, SAMPLER, sample, 0.0).rgb;
-        // let scattering = textureSampleLevel(SCATTERING, SAMPLER, sample, 0.0).rgb;
-
-        // In-Scattering
-        // radiance += irradiance * phase_function * scattering * transmission;
-
-        let extinction = textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0).rgb;
+        let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
 
         transmission *= exp(-STEP_SIZE * extinction); // TODO: should be in mm
     }
