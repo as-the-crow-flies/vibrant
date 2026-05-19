@@ -56,7 +56,11 @@ impl Asset {
         FileStage::on_lines(|lines| {
             let line = LineBuffer::new(gpu, &lines, &self.colormap);
 
-            if let Some(volume) = self.volumes.last() {
+            if let Some(volume) = self
+                .volumes
+                .iter()
+                .max_by_key(|volume| volume.size().element_product())
+            {
                 line.set_transform(gpu, &volume.transform());
             }
 
@@ -83,20 +87,22 @@ impl Asset {
                 }
             }
 
-            if let Some(volume) = volumes.last() {
+            if let Some(volume) = self
+                .volumes
+                .iter()
+                .max_by_key(|volume| volume.size().element_product())
+            {
                 if let Some(line) = &self.line {
                     line.set_transform(gpu, &volume.transform());
                 }
 
-                if self.physical_volume.is_none() {
-                    self.physical_volume =
-                        Some(PhysicalVolume::new(gpu, volume.size(), volume.transform()));
+                self.physical_volume =
+                    Some(PhysicalVolume::new(gpu, volume.size(), volume.transform()));
 
-                    self.radiance = Some(RadianceVolume::new(gpu, volume.size()))
-                }
+                self.radiance = Some(RadianceVolume::new(gpu, volume.size()));
+
+                self.changed = true;
             }
-
-            self.changed = true;
         });
 
         FileStage::on_hdris(|hdris| {

@@ -1,7 +1,7 @@
 use std::{any::type_name, hash::Hash};
 
 use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
-use glam::{Mat4, UVec2};
+use glam::{Mat4, UVec2, UVec3};
 use strum::EnumIter;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -86,6 +86,7 @@ pub struct VolumeFractionSettingsBuffer {
 
 pub struct VolumeFractionBuffer {
     texture: Texture,
+    size: UVec3,
 
     transform: Mat4,
     transform_buffer: Buffer,
@@ -202,6 +203,7 @@ impl VolumeFractionBuffer {
 
         Self {
             texture,
+            size: file.size(),
             transform,
             transform_buffer,
             settings,
@@ -210,8 +212,8 @@ impl VolumeFractionBuffer {
         }
     }
 
-    pub fn size(&self) -> Extent3d {
-        self.texture.size()
+    pub fn size(&self) -> UVec3 {
+        self.size
     }
 
     pub fn binding(&self) -> &BindGroup {
