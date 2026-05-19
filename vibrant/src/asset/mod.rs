@@ -39,7 +39,7 @@ impl Asset {
         Self {
             colormap: Colormap::new(gpu),
             crop: CropBuffer::new(gpu),
-            hdri: HdriBuffer::white(gpu),
+            hdri: HdriBuffer::new(gpu),
             masks: vec![VolumeMaskBuffer::none(gpu)],
 
             line: None,
@@ -107,7 +107,7 @@ impl Asset {
 
         FileStage::on_hdris(|hdris| {
             for hdri in hdris {
-                self.hdri = HdriBuffer::from_file(gpu, &hdri);
+                self.hdri.import(gpu, hdri);
             }
 
             self.changed = true;

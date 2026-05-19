@@ -89,7 +89,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let diffuse_sample = diffuse * material.scattering * phase_function;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
-        let specular = gradient.a * HDRI_SETTINGS.specular * sample_specular(light_sample, reflection);
+        let specular = gradient.a * HDRI_SETTINGS.strength * HDRI_SETTINGS.specular * sample_specular(light_sample, reflection);
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
@@ -160,33 +160,41 @@ fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
 fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
     let coordinate = cubemap_encode(direction);
 
-    let max_level = u32(ENVIRONMENT.settings.tangent_color * 5.0);
+    let max_level = 5u;
 
     var transmission = vec3<f32>(1.0);
 
-    if (ENVIRONMENT.settings.smoothing > 0.5) {
-        for (var level = 0u; level < max_level; level++) {
-            transmission *= sample_transmission(uv, coordinate, level).rgb;
-        }
+    for (var level = 0u; level < max_level; level++) {
+        transmission *= sample_transmission(uv, coordinate, level).rgb;
     }
 
     return transmission * sample_radiance(uv, coordinate, max_level).rgb;
 }
 
-fn cascade_sample(uv: vec3<f32>, coordinate: CubeCoordinates, level: u32) -> vec3<f32> {
-    let root_dim = level_dim(0) / vec3<u32>(1, 1, 6);
-    let cascade_dim = level_dim(level) / vec3<u32>(1, 1, 6);
+fn cascade_sample(
+    uv: vec3<f32>,
+    coordinate: CubeCoordinates,
+    level: u32
+) -> vec3<f32> {
+
+    let root_dim = level_dim(0) / vec3<u32>(1,1,6);
+    let cascade_dim = level_dim(level) / vec3<u32>(1,1,6);
     let direction_dim = root_dim >> vec3<u32>(level);
 
-    let face = vec3<u32>(0u, 0u, coordinate.face * cascade_dim.z);
+    let n = 1u << level;
 
-    let n_directions = f32(1u << level);
-    let direction_index = vec3<u32>(vec2<u32>(coordinate.uv * n_directions), 0);
-    let direction = direction_index * direction_dim;
+    let direction_index = min(
+        vec2<u32>(coordinate.uv * f32(n)),
+        vec2<u32>(n - 1u)
+    );
 
-    let voxel = vec3<u32>(uv * vec3<f32>(root_dim) / n_directions);
+    let face_offset = vec3<u32>(0,0,coordinate.face * cascade_dim.z);
+    let tile_origin = vec3<u32>(direction_index * direction_dim.xy, 0);
+    let voxel = vec3<u32>(uv * vec3<f32>(direction_dim));
 
-    return vec3<f32>(face + direction + voxel) / vec3<f32>(level_dim(level));
+    return (
+        vec3<f32>(face_offset + tile_origin + voxel) + 0.5
+    ) / vec3<f32>(level_dim(level));
 }
 
 fn level_dim(level: u32) -> vec3<u32> {

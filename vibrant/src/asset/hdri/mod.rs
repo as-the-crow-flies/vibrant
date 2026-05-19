@@ -9,7 +9,10 @@ use wgpu::{
     *,
 };
 
-use crate::{file::hdri::HdriFile, gpu::Gpu};
+use crate::{
+    file::{hdri::HdriFile, File},
+    gpu::Gpu,
+};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -20,44 +23,116 @@ pub struct HdriBufferSettings {
     pub show: u32,
 }
 
-pub struct HdriBuffer {
+pub struct HdriTexture {
     name: String,
-    settings: HdriBufferSettings,
-
     texture: Texture,
-    settings_buffer: Buffer,
     binding: BindGroup,
 }
 
-impl HdriBuffer {
+impl HdriTexture {
     const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
-    pub fn new(gpu: &Gpu, name: &str, size: UVec2, data: &[[half::f16; 4]]) -> Self {
-        let label = Some(type_name::<Self>());
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 
-        let descriptor = TextureDescriptor {
-            label,
-            size: Extent3d {
-                width: size.x,
-                height: size.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: Self::FORMAT,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
-            view_formats: &[],
-        };
+    fn new(
+        gpu: &Gpu,
+        name: &str,
+        size: UVec2,
+        data: &[[half::f16; 4]],
+        sampler: &Sampler,
+        settings: &Buffer,
+    ) -> Self {
+        let label = Some(name);
 
-        let staging = gpu.device().create_texture_with_data(
+        let texture = gpu.device().create_texture_with_data(
             gpu.queue(),
-            &descriptor,
+            &TextureDescriptor {
+                label,
+                size: Extent3d {
+                    width: size.x,
+                    height: size.y,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: Self::FORMAT,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
+                view_formats: &[],
+            },
             TextureDataOrder::MipMajor,
             bytemuck::cast_slice(data),
         );
 
-        let texture = gpu.device().create_texture(&descriptor);
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &HdriBuffer::layout(gpu),
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(
+                        &texture.create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&sampler),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &settings,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+            ],
+        });
+
+        Self {
+            name: name.to_string(),
+            texture,
+            binding,
+        }
+    }
+
+    fn default(gpu: &Gpu, sampler: &Sampler, settings: &Buffer) -> Self {
+        Self::new(gpu, "None", UVec2::ONE, &[[f16::ONE; 4]], sampler, settings)
+    }
+
+    fn from_exr_bytes(
+        gpu: &Gpu,
+        name: &str,
+        bytes: Vec<u8>,
+        sampler: &Sampler,
+        settings: &Buffer,
+    ) -> Self {
+        let file = HdriFile::from_exr(&File::new(name, bytes));
+
+        Self::new(
+            gpu,
+            &file.name(),
+            file.size(),
+            file.data(),
+            sampler,
+            settings,
+        )
+    }
+}
+
+pub struct HdriBuffer {
+    pub index: usize,
+    textures: Vec<HdriTexture>,
+    sampler: Sampler,
+    settings: HdriBufferSettings,
+    settings_buffer: Buffer,
+}
+
+impl HdriBuffer {
+    pub fn new(gpu: &Gpu) -> Self {
+        let label = Some(type_name::<Self>());
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -74,12 +149,10 @@ impl HdriBuffer {
             border_color: None,
         });
 
-        Self::prefilter(gpu, &staging, &sampler, &texture);
-
         let settings = HdriBufferSettings {
             rotation: 0.0,
-            strength: 1.0,
-            specular: 0.3,
+            strength: 5.0,
+            specular: 0.5,
             show: 0,
         };
 
@@ -89,50 +162,86 @@ impl HdriBuffer {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(
-                        &texture.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &settings_buffer,
-                        offset: 0,
-                        size: None,
-                    }),
-                },
-            ],
-        });
+        let textures = vec![
+            HdriTexture::default(gpu, &sampler, &settings_buffer),
+            HdriTexture::from_exr_bytes(
+                gpu,
+                "Brown",
+                include_bytes!("brown.exr").to_vec(),
+                &sampler,
+                &settings_buffer,
+            ),
+            HdriTexture::from_exr_bytes(
+                gpu,
+                "Country",
+                include_bytes!("country.exr").to_vec(),
+                &sampler,
+                &settings_buffer,
+            ),
+            HdriTexture::from_exr_bytes(
+                gpu,
+                "Ferndale",
+                include_bytes!("ferndale.exr").to_vec(),
+                &sampler,
+                &settings_buffer,
+            ),
+            HdriTexture::from_exr_bytes(
+                gpu,
+                "Hangar",
+                include_bytes!("hangar.exr").to_vec(),
+                &sampler,
+                &settings_buffer,
+            ),
+            HdriTexture::from_exr_bytes(
+                gpu,
+                "Loft",
+                include_bytes!("loft.exr").to_vec(),
+                &sampler,
+                &settings_buffer,
+            ),
+            HdriTexture::from_exr_bytes(
+                gpu,
+                "Studio",
+                include_bytes!("studio.exr").to_vec(),
+                &sampler,
+                &settings_buffer,
+            ),
+            HdriTexture::from_exr_bytes(
+                gpu,
+                "Workshop",
+                include_bytes!("workshop.exr").to_vec(),
+                &sampler,
+                &settings_buffer,
+            ),
+        ];
 
         Self {
-            name: name.to_string(),
+            textures,
+            sampler,
+            index: 0,
             settings,
-            texture,
             settings_buffer,
-            binding,
         }
     }
 
-    pub fn from_file(gpu: &Gpu, file: &HdriFile) -> Self {
-        Self::new(gpu, file.name(), file.size(), file.data())
+    pub fn import(&mut self, gpu: &Gpu, file: HdriFile) {
+        self.textures.push(HdriTexture::new(
+            gpu,
+            file.name(),
+            file.size(),
+            file.data(),
+            &self.sampler,
+            &self.settings_buffer,
+        ));
+        self.index = self.textures().len() - 1;
     }
 
-    pub fn white(gpu: &Gpu) -> Self {
-        Self::new(gpu, "Default", UVec2::ONE, &[[f16::ONE; 4]])
+    pub fn texture(&self) -> &HdriTexture {
+        &self.textures[self.index]
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn textures(&self) -> &[HdriTexture] {
+        &self.textures
     }
 
     pub fn settings_mut(&mut self) -> &mut HdriBufferSettings {
@@ -145,7 +254,7 @@ impl HdriBuffer {
     }
 
     pub fn binding(&self) -> &BindGroup {
-        &self.binding
+        &self.texture().binding
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -184,101 +293,16 @@ impl HdriBuffer {
                 ],
             })
     }
+}
 
-    fn prefilter(gpu: &Gpu, source: &Texture, sampler: &Sampler, destination: &Texture) {
-        let source_layout = gpu
-            .device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let destination_layout =
-            gpu.device()
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some(type_name::<Self>()),
-                    entries: &[BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::WriteOnly,
-                            format: Self::FORMAT,
-                            view_dimension: TextureViewDimension::D2,
-                        },
-                        count: None,
-                    }],
-                });
-
-        let source_binding = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label: Some(type_name::<Self>()),
-            layout: &source_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(
-                        &source.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        let destination_binding = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label: Some(type_name::<Self>()),
-            layout: &destination_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(
-                    &destination.create_view(&TextureViewDescriptor::default()),
-                ),
-            }],
-        });
-
-        let pipeline = gpu.compute(
-            type_name::<Self>(),
-            &gpu.pipeline_layout(&[&source_layout, &destination_layout]),
-            &gpu.shader(include_str!("prefilter.wgsl")),
-        );
-
-        let mut cmd = gpu
-            .device()
-            .create_command_encoder(&CommandEncoderDescriptor::default());
-
-        {
-            let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
-            pass.set_pipeline(&pipeline);
-            pass.set_bind_group(0, &source_binding, &[]);
-            pass.set_bind_group(1, &destination_binding, &[]);
-            pass.dispatch_workgroups(source.width().div_ceil(8), source.height().div_ceil(8), 1);
-        }
-
-        gpu.submit(cmd);
+impl Drop for HdriTexture {
+    fn drop(&mut self) {
+        self.texture.destroy();
     }
 }
 
 impl Drop for HdriBuffer {
     fn drop(&mut self) {
-        self.texture.destroy();
         self.settings_buffer.destroy();
     }
 }
