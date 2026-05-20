@@ -28,5 +28,5 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
             textureLoad(PING, voxel - vec3<u32>(0, 0, 2)).a)
         );
 
-    textureStore(GRADIENT, voxel, vec4<f32>(0.5 + 0.5 * gradient, length(gradient) + 1E-5));
+    textureStore(GRADIENT, voxel, vec4<f32>(0.5 + 0.5 * normalize(gradient), length(gradient)));
 }

@@ -95,8 +95,11 @@ fn get_mask(uv: vec3<f32>) -> f32 {
         mask = select(mask, 1.0 - mask, bool(MASK_SETTINGS.invert));
         mask = saturate(mask + MASK_SETTINGS.offset);
     } else {
+        let offset = 0.1 * MASK_SETTINGS.offset;
+        let width = 0.01 * MASK_SETTINGS.width;
+
         mask = select(1.0, -1.0, bool(MASK_SETTINGS.invert)) * mask;
-        mask = smoothstep(MASK_SETTINGS.offset - MASK_SETTINGS.width, MASK_SETTINGS.offset + MASK_SETTINGS.width, mask);
+        mask = smoothstep(offset - width, offset + width, mask);
     }
 
     mask = select(1.0, mask, bool(MASK_SETTINGS.visible));

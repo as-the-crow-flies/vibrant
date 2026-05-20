@@ -57,7 +57,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         return vec4<f32>(aces(sample_hdri(direction_world)), 0.0);
     }
 
-    let t0 = max(hit.x, 0.0) + hash(fragment.position.xy + fract(ENVIRONMENT.time));
+    var t0 = max(hit.x, 0.0) + hash(fragment.position.xy + fract(ENVIRONMENT.time));
     let t1 = hit.y;
 
     let light_direction = (TRANSFORM * vec4<f32>(ENVIRONMENT.light, 0.0)).xyz;
@@ -67,9 +67,16 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     let phase_function = 1.0 / (4.0 * PI);
 
-    var step = 1.0;
+    var step = 0.5;
 
     let direction_norm = normalize(direction);
+
+    while (t0 < t1) {
+        let sample = origin + direction * (t0 + 4.0);
+
+        if (tex(GRADIENT, sample).a > 0.0) { break; }
+        else { t0 += 4.0; }
+    }
 
     for (var t = t0; t < t1; t += step) {
         let sample = origin + direction * t;
@@ -154,7 +161,7 @@ fn sample_material(sample: vec3<f32>) -> Material {
 
 fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
     let gradient_raw = tex(GRADIENT, sample);
-    return vec4<f32>(2.0 * gradient_raw.xyz - 1.0, gradient_raw.a);
+    return vec4<f32>((2.0 * gradient_raw.xyz - 1.0) * gradient_raw.a, gradient_raw.a);
 }
 
 fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {

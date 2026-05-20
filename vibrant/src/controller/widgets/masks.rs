@@ -78,12 +78,12 @@ impl MasksWidget {
                 ui.label("Offset")
                     .on_hover_text("Signed Distance Mask Offset");
 
-                ui.slider(&mut mask.offset, -0.5..=0.5).track(self);
+                ui.slider(&mut mask.offset, -1.0..=1.0).track(self);
                 ui.end_row();
 
                 ui.label("Smoothing")
                     .on_hover_text("Signed Distance Mask Smoothing");
-                ui.slider(&mut mask.width, 0.01..=0.1).track(self);
+                ui.slider(&mut mask.width, 0.1..=1.0).track(self);
                 ui.end_row();
             });
         }
