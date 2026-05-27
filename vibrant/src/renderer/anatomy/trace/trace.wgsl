@@ -198,11 +198,14 @@ fn cascade_sample(
 
     let face_offset = vec3<u32>(0,0,coordinate.face * cascade_dim.z);
     let tile_origin = vec3<u32>(direction_index * direction_dim.xy, 0);
-    let voxel = vec3<u32>(uv * vec3<f32>(direction_dim));
 
-    return (
-        vec3<f32>(face_offset + tile_origin + voxel) + 0.5
-    ) / vec3<f32>(level_dim(level));
+    let voxel = clamp(
+        uv * vec3<f32>(direction_dim),
+        vec3<f32>(0.5),
+        vec3<f32>(direction_dim) - vec3<f32>(0.5)
+    );
+
+    return (vec3<f32>(face_offset + tile_origin) + voxel) / vec3<f32>(level_dim(level));
 }
 
 fn level_dim(level: u32) -> vec3<u32> {
