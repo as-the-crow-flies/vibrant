@@ -89,14 +89,11 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let gradient = sample_gradient(sample);
         let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
-        // let light_sample = sample - 0.005 * gradient_norm;
-        let light_sample = sample;
-
-        let diffuse = sample_diffuse(light_sample);
+        let diffuse = sample_diffuse(sample);
         let diffuse_sample = diffuse * material.scattering * phase_function;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
-        let specular = gradient.a * HDRI_SETTINGS.strength * HDRI_SETTINGS.specular * sample_specular(light_sample, reflection);
+        let specular = gradient.a * HDRI_SETTINGS.strength * HDRI_SETTINGS.specular * sample_specular(sample, reflection);
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
@@ -172,7 +169,7 @@ fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
 
     var transmission = vec3<f32>(1.0);
 
-    for (var level = 0u; level < max_level; level++) {
+    for (var level = 1u; level < max_level; level++) {
         transmission *= sample_transmission(uv, coordinate, level).rgb;
     }
 
