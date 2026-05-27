@@ -89,14 +89,11 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let gradient = sample_gradient(sample);
         let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
-        // let light_sample = sample - 0.005 * gradient_norm;
-        let light_sample = sample;
-
-        let diffuse = sample_diffuse(light_sample);
+        let diffuse = sample_diffuse(sample);
         let diffuse_sample = diffuse * material.scattering * phase_function;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
-        let specular = gradient.a * HDRI_SETTINGS.strength * HDRI_SETTINGS.specular * sample_specular(light_sample, reflection);
+        let specular = gradient.a * HDRI_SETTINGS.strength * HDRI_SETTINGS.specular * sample_specular(sample, reflection);
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
@@ -198,11 +195,14 @@ fn cascade_sample(
 
     let face_offset = vec3<u32>(0,0,coordinate.face * cascade_dim.z);
     let tile_origin = vec3<u32>(direction_index * direction_dim.xy, 0);
-    let voxel = vec3<u32>(uv * vec3<f32>(direction_dim));
 
-    return (
-        vec3<f32>(face_offset + tile_origin + voxel) + 0.5
-    ) / vec3<f32>(level_dim(level));
+    let voxel = clamp(
+        uv * vec3<f32>(direction_dim),
+        vec3<f32>(0.5),
+        vec3<f32>(direction_dim) - vec3<f32>(0.5)
+    );
+
+    return (vec3<f32>(face_offset + tile_origin) + voxel) / vec3<f32>(level_dim(level));
 }
 
 fn level_dim(level: u32) -> vec3<u32> {
