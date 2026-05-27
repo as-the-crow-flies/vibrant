@@ -523,10 +523,12 @@ fn hash(co: vec2<f32>) -> f32 {
 }
 
 fn equirectangular(direction: vec3<f32>, rotation: f32) -> vec2<f32> {
-    let d = rotation_z(rotation * 2.0 * PI) * normalize(direction);
-    return vec2<f32>(0.5 - atan2(d.z, d.x) / (2.0 * PI), acos(d.y) / PI);
-}
+    let d = rotation_y(rotation * 2.0 * PI) * normalize(direction);
+    let u = 0.5 + atan2(d.z, d.x) / (2.0 * PI);
+    let v = acos(clamp(d.y, -1.0, 1.0)) / PI;
 
+    return vec2<f32>(u, v);
+}
 fn rotation_y(angle: f32) -> mat3x3<f32> {
     let c = cos(angle);
     let s = sin(angle);
