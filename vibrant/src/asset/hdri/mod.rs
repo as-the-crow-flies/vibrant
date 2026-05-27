@@ -151,7 +151,7 @@ impl HdriBuffer {
 
         let settings = HdriBufferSettings {
             rotation: 0.0,
-            strength: 5.0,
+            strength: 1.0,
             specular: 0.5,
             show: 0,
         };

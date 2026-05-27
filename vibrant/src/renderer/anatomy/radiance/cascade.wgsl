@@ -85,10 +85,10 @@ fn radiance(
     if (CASCADE_INDEX < MAX_CASCADE) {
         let ri = radiance_interval(origin, direction, t0, t1);
         let cascade =
-            cascade_radiance(voxel, face, 2 * direction_index + vec2<u32>(0, 0)) +
-            cascade_radiance(voxel, face, 2 * direction_index + vec2<u32>(0, 1)) +
-            cascade_radiance(voxel, face, 2 * direction_index + vec2<u32>(1, 0)) +
-            cascade_radiance(voxel, face, 2 * direction_index + vec2<u32>(1, 1));
+            cascade_radiance(voxel, direction, face, 2 * direction_index + vec2<u32>(0, 0)) +
+            cascade_radiance(voxel, direction, face, 2 * direction_index + vec2<u32>(0, 1)) +
+            cascade_radiance(voxel, direction, face, 2 * direction_index + vec2<u32>(1, 0)) +
+            cascade_radiance(voxel, direction, face, 2 * direction_index + vec2<u32>(1, 1));
 
         let radiance = (ri.radiance + ri.transmission * 0.25 * cascade);
         let transmission = ri.transmission;
@@ -103,13 +103,13 @@ fn radiance(
     return RadianceInterval(radiance, vec3<f32>(1.0, 1.0, 1.0));
 }
 
-fn cascade_radiance(voxel: vec3<u32>, face: u32, direction: vec2<u32>) -> vec3<f32> {
+fn cascade_radiance(voxel: vec3<u32>, direction: vec3<f32>, face: u32, direction_index: vec2<u32>) -> vec3<f32> {
     let origin = vec3<u32>(
-        direction * CASCADE_IN_DIRECTION_DIM.xy,
+        direction_index * CASCADE_IN_DIRECTION_DIM.xy,
         face * CASCADE_IN_DIM.z
     );
 
-    let position = vec3<f32>(origin) + 0.5 * (vec3<f32>(voxel) + 0.5);
+    let position = vec3<f32>(origin) + 0.5 * (vec3<f32>(voxel) + 0.5) + 0.66 * direction;
     let sample = position / vec3<f32>(textureDimensions(CASCADE_IN));
     return textureSampleLevel(CASCADE_IN, CASCADE_SAMPLER, sample, 0.0).rgb;
 }
