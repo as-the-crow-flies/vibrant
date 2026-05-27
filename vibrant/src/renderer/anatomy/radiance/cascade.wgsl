@@ -104,12 +104,15 @@ fn radiance(
 }
 
 fn cascade_radiance(voxel: vec3<u32>, direction: vec3<f32>, face: u32, direction_index: vec2<u32>) -> vec3<f32> {
-    let origin = vec3<u32>(
+    let origin = vec3<f32>(vec3<u32>(
         direction_index * CASCADE_IN_DIRECTION_DIM.xy,
         face * CASCADE_IN_DIM.z
-    );
+    ));
 
-    let position = vec3<f32>(origin) + 0.5 * (vec3<f32>(voxel) + 0.5) + 0.66 * direction;
+    let position = origin + clamp(
+        0.5 * (vec3<f32>(voxel) + 0.5) + 0.66 * direction,
+        vec3<f32>(0.5),
+        vec3<f32>(CASCADE_IN_DIRECTION_DIM) - vec3<f32>(0.5));
     let sample = position / vec3<f32>(textureDimensions(CASCADE_IN));
     return textureSampleLevel(CASCADE_IN, CASCADE_SAMPLER, sample, 0.0).rgb;
 }
