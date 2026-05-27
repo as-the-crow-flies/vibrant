@@ -97,7 +97,7 @@ fn radiance(
     }
 
     let direction_world = normalize((TRANSFORM_INVERSE * vec4<f32>(direction, 0.0)).xyz);
-    let sample = equirectangular(direction_world, HDRI_SETTINGS.rotation);
+    let sample = equirectangular(direction_world.xzy, HDRI_SETTINGS.rotation);
     let radiance = HDRI_SETTINGS.strength * textureSampleLevel(HDRI, HDRI_SAMPLER, sample, 0.0).rgb;
 
     return RadianceInterval(radiance, vec3<f32>(1.0, 1.0, 1.0));
