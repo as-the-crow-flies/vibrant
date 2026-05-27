@@ -161,7 +161,8 @@ fn sample_material(sample: vec3<f32>) -> Material {
 
 fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
     let gradient_raw = tex(GRADIENT, sample);
-    return vec4<f32>((2.0 * gradient_raw.xyz - 1.0) * gradient_raw.a, gradient_raw.a);
+    let alpha = 2.0 * gradient_raw.a;
+    return vec4<f32>(normalize(2.0 * gradient_raw.xyz - 1.0) * alpha, alpha);
 }
 
 fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
@@ -171,7 +172,7 @@ fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
 
     var transmission = vec3<f32>(1.0);
 
-    for (var level = 0u; level < max_level; level++) {
+    for (var level = 1u; level < max_level; level++) {
         transmission *= sample_transmission(uv, coordinate, level).rgb;
     }
 

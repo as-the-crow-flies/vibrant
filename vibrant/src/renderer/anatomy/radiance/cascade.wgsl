@@ -121,11 +121,11 @@ fn radiance_interval(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) 
     var transmission = vec3<f32>(1.0);
     var radiance = vec3<f32>(0.0);
 
-    var outside = 0.0;
-
     for (var t=t0; t<t1; t+=STEP_SIZE) {
         let position_voxel_space = origin + direction * t;
         let sample = position_voxel_space * dim_inv;
+
+        if (any(sample < vec3<f32>(0.0)) || any(sample > vec3<f32>(1.0))) { break; }
 
         let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
 

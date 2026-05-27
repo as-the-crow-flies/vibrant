@@ -80,14 +80,6 @@ Supported mask types:
 | --- | --- |
 | ![](img/volume.png) | ![](img/volume-cinematic.png) |
 
-## 🌍 (Experimental) Environment Maps
-
-Load `.exr` HDR environment textures to illuminate scenes using image-based lighting.
-
-This enables more realistic cinematic rendering and soft reflections.
-
-HDRIs from resources like [Poly Haven](https://polyhaven.com/hdris/studio) work well.
-
 # Getting Started
 
 ## 🌐 Web Application
