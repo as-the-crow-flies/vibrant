@@ -172,7 +172,7 @@ fn sample_specular(uv: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
 
     var transmission = vec3<f32>(1.0);
 
-    for (var level = 1u; level < max_level; level++) {
+    for (var level = 0u; level < max_level; level++) {
         transmission *= sample_transmission(uv, coordinate, level).rgb;
     }
 
