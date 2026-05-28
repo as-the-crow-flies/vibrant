@@ -49,8 +49,6 @@ impl VolumeFile {
 
         let mm_to_voxel = Mat4::from_cols_array_2d(&nifti.header().affine().into()).inverse();
 
-        dbg!(mm_to_voxel);
-
         let transform = voxel_to_texture * mm_to_voxel;
 
         let dim = nifti
