@@ -81,7 +81,11 @@ impl RadianceVolume {
             .map(|cascade| {
                 Cascade::new(
                     gpu,
-                    UVec3::new(size.x >> 1, size.y >> 1, size.z >> cascade),
+                    UVec3::new(
+                        (size.x >> 1).max(1),
+                        (size.y >> 1).max(1),
+                        (size.z >> cascade).max(1),
+                    ),
                     Self::FORMAT,
                 )
             })
