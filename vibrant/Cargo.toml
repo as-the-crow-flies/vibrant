@@ -16,7 +16,7 @@ web-time.workspace = true
 bytemuck = { version = "1.24", features = ["derive", "min_const_generics"] }
 glam = { version = "0.29", features = ["bytemuck"] }
 rfd = "0.17"
-nifti = "0.17"
+nifti = { version= "0.17", features = ["nalgebra_affine"] }
 flate2 = "1.1"
 png = "0.17"
 futures = "0.3"
