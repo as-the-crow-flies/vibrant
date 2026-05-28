@@ -72,10 +72,10 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let direction_norm = normalize(direction);
 
     while (t0 < t1) {
-        let sample = origin + direction * (t0 + 4.0);
+        let sample = origin + direction * (t0 + 2.0);
 
         if (tex(GRADIENT, sample).a > 0.0) { break; }
-        else { t0 += 4.0; }
+        else { t0 += 2.0; }
     }
 
     for (var t = t0; t < t1; t += step) {

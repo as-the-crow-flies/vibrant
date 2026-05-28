@@ -47,14 +47,7 @@ impl VolumeFile {
             1.0 / dim[2] as f32,
         ));
 
-        let mm_to_voxel = Mat4::from_cols_array_2d(&[
-            nifti.header().srow_x,
-            nifti.header().srow_y,
-            nifti.header().srow_z,
-            [0.0, 0.0, 0.0, 1.0],
-        ])
-        .transpose()
-        .inverse();
+        let mm_to_voxel = Mat4::from_cols_array_2d(&nifti.header().affine().into()).inverse();
 
         let transform = voxel_to_texture * mm_to_voxel;
 
