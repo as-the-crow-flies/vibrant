@@ -8,11 +8,11 @@ use crate::{
     renderer::environment::Environment,
 };
 
-pub struct AnatomyRadiancePipeline {
+pub struct ExplicitCascadePipeline {
     cascade: ComputePipeline,
 }
 
-impl AnatomyRadiancePipeline {
+impl ExplicitCascadePipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             cascade: gpu.compute(

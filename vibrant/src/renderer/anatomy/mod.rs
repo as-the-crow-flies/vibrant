@@ -1,6 +1,5 @@
 pub mod gradient;
-pub mod radiance;
-pub mod trace;
+pub mod render;
 pub mod transfer;
 
 use wgpu::CommandEncoder;
@@ -11,8 +10,8 @@ use crate::{
     gpu::Gpu,
     renderer::{
         anatomy::{
-            gradient::GradientPipeline, radiance::AnatomyRadiancePipeline,
-            trace::AnatomyTracePipeline, transfer::AnatomyTransferPipeline,
+            gradient::GradientPipeline, render::explicit::ExplicitRenderPipeline,
+            transfer::AnatomyTransferPipeline,
         },
         environment::Environment,
     },
@@ -22,8 +21,7 @@ use crate::{
 pub struct AnatomyRenderer {
     transfer: AnatomyTransferPipeline,
     gradient: GradientPipeline,
-    radiance: AnatomyRadiancePipeline,
-    trace: AnatomyTracePipeline,
+    render: ExplicitRenderPipeline,
 }
 
 impl AnatomyRenderer {
@@ -31,8 +29,7 @@ impl AnatomyRenderer {
         Self {
             transfer: AnatomyTransferPipeline::new(gpu),
             gradient: GradientPipeline::new(gpu),
-            radiance: AnatomyRadiancePipeline::new(gpu),
-            trace: AnatomyTracePipeline::new(gpu),
+            render: ExplicitRenderPipeline::new(gpu),
         }
     }
 
@@ -47,17 +44,16 @@ impl AnatomyRenderer {
         if let (Some(frame), Some(volume), Some(radiance)) =
             (surface.frame(), &asset.physical_volume, &asset.radiance)
         {
-            if surface.changed() | asset.changed() | controller.changed() {
+            let recompute = surface.changed() | asset.changed() | controller.changed();
+
+            if recompute {
                 self.transfer
                     .dispatch(cmd, &asset.volumes, &asset.masks, volume, &asset.crop);
 
                 self.gradient.dispatch(cmd, volume);
-
-                self.radiance
-                    .dispatch(cmd, environment, &asset.hdri, volume, radiance);
             }
 
-            self.trace.dispatch(
+            self.render.dispatch(
                 cmd,
                 environment,
                 controller.viewport(),
@@ -65,6 +61,7 @@ impl AnatomyRenderer {
                 frame,
                 volume,
                 radiance,
+                recompute,
             );
         }
     }
