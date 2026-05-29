@@ -18,6 +18,7 @@ pub struct PhysicalVolume {
     scattering_u32: Texture,
     extinction_u32: Texture,
 
+    radiance: Texture,
     gradient: Texture,
     ping: Texture,
     pong: Texture,
@@ -67,22 +68,26 @@ impl PhysicalVolume {
         let scattering_u32 = gpu.device().create_texture(&descriptor_u32);
         let extinction_u32 = gpu.device().create_texture(&descriptor_u32);
 
+        let radiance = gpu.device().create_texture(&descriptor);
         let gradient = gpu.device().create_texture(&descriptor);
 
-        let absorption_view = absorption.create_view(&TextureViewDescriptor::default());
-        let scattering_view = scattering.create_view(&TextureViewDescriptor::default());
-        let extinction_view = extinction.create_view(&TextureViewDescriptor::default());
+        let view_descriptor = &TextureViewDescriptor::default();
 
-        let absorption_u32_view = absorption_u32.create_view(&TextureViewDescriptor::default());
-        let scattering_u32_view = scattering_u32.create_view(&TextureViewDescriptor::default());
-        let extinction_u32_view = extinction_u32.create_view(&TextureViewDescriptor::default());
+        let absorption_view = absorption.create_view(view_descriptor);
+        let scattering_view = scattering.create_view(view_descriptor);
+        let extinction_view = extinction.create_view(view_descriptor);
 
-        let gradient_view = gradient.create_view(&TextureViewDescriptor::default());
+        let absorption_u32_view = absorption_u32.create_view(view_descriptor);
+        let scattering_u32_view = scattering_u32.create_view(view_descriptor);
+        let extinction_u32_view = extinction_u32.create_view(view_descriptor);
+
+        let radiance_view = radiance.create_view(view_descriptor);
+        let gradient_view = gradient.create_view(view_descriptor);
 
         let ping = gpu.device().create_texture(&descriptor);
         let pong = gpu.device().create_texture(&descriptor);
-        let ping_view = ping.create_view(&TextureViewDescriptor::default());
-        let pong_view = pong.create_view(&TextureViewDescriptor::default());
+        let ping_view = ping.create_view(view_descriptor);
+        let pong_view = pong.create_view(view_descriptor);
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -142,6 +147,10 @@ impl PhysicalVolume {
                 BindGroupEntry {
                     binding: 6,
                     resource: transform_inverse.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 7,
+                    resource: BindingResource::TextureView(&radiance_view),
                 },
             ],
         });
@@ -257,6 +266,7 @@ impl PhysicalVolume {
             absorption_u32,
             scattering_u32,
             extinction_u32,
+            radiance,
             gradient,
             transform,
             transform_inverse,
@@ -357,6 +367,12 @@ impl PhysicalVolume {
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility,
+                        ty: binding_type_read,
                         count: None,
                     },
                 ],
@@ -550,6 +566,7 @@ impl Drop for PhysicalVolume {
         self.absorption_u32.destroy();
         self.scattering_u32.destroy();
         self.extinction_u32.destroy();
+        self.radiance.destroy();
         self.gradient.destroy();
         self.transform.destroy();
         self.transform_inverse.destroy();

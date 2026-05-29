@@ -8,11 +8,11 @@ use crate::{
     surface::{color::ColorBuffer, Frame},
 };
 
-pub struct AnatomyTracePipeline {
+pub struct ExplicitTracePipeline {
     trace: RenderPipeline,
 }
 
-impl AnatomyTracePipeline {
+impl ExplicitTracePipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             trace: gpu.quad(
