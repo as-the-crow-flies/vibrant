@@ -219,7 +219,17 @@ impl Controller {
                 });
             });
 
-        let viewport = CentralPanel::no_frame().show_inside(ui, |_| {});
+        let viewport = CentralPanel::no_frame().show_inside(ui, |ui| {
+            if asset.volumes.is_empty() && asset.line.is_none() {
+                ui.painter().text(
+                    ui.max_rect().center(),
+                    egui::Align2::CENTER_CENTER,
+                    "Open your first .nii.gz or .tck file using the [📂 open] button",
+                    egui::FontId::proportional(20.0),
+                    ui.visuals().weak_text_color(),
+                );
+            }
+        });
 
         self.hovered = viewport.response.hovered();
         self.viewport = viewport.response.rect * scale;
