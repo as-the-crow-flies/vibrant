@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3, Vec4};
 
 use super::state::ControllerState;
 
@@ -62,7 +62,9 @@ impl Camera {
     }
 
     pub fn projection(&self) -> Mat4 {
-        Mat4::perspective_lh(self.fov, self.aspect, self.near, self.far) * self.view()
+        Mat4::perspective_lh(self.fov, self.aspect, self.near, self.far)
+            * self.view()
+            * Mat4::from_diagonal(Vec4::new(-1.0, 1.0, 1.0, 1.0)) // Flip Left/Right
     }
 
     pub fn rotation(&self) -> Quat {
