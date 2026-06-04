@@ -77,6 +77,13 @@ impl Gpu {
         &self.queue
     }
 
+    pub fn max_buffer_size(&self) -> u64 {
+        self.device()
+            .limits()
+            .max_storage_buffer_binding_size
+            .min(self.device().limits().max_buffer_size)
+    }
+
     pub fn shader(&self, source: &str) -> ShaderModule {
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,

@@ -39,7 +39,7 @@ impl Frame {
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
-        let culling = CullingBuffer::new(gpu, settings.volume, settings.index_size);
+        let culling = CullingBuffer::new(gpu, settings.volume, settings.index_buffer_size);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -131,14 +131,14 @@ impl Surface {
             // Update Required Index Size
 
             let required_index_size = frame.culling().get_required_index_size(gpu);
-            if required_index_size > settings.index_size {
-                settings.index_size = required_index_size.next_power_of_two()
+            if required_index_size > settings.index_buffer_size {
+                settings.index_buffer_size = required_index_size.next_power_of_two()
             }
 
             if settings.width == frame.color().width()
                 && settings.height == frame.color().height()
                 && settings.volume == frame.occupancy().resolution()
-                && settings.index_size == frame.culling().fragment_list_size()
+                && settings.index_buffer_size == frame.culling().index_buffer_size()
             {
                 self.changed = false;
                 return;

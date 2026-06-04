@@ -611,15 +611,20 @@ fn cubemap_decode(c: CubeCoordinates) -> vec3<f32> {
     return normalize(dir);
 }
 
-fn pack_rgb(src: vec3<f32>) -> vec4<f32> {
-    if (all(src == vec3<f32>(0.0))) {
-        return vec4<f32>(0.0);
-    }
+const PACK_RGB_LOG_LO:   f32 = -9.965784;  // log2(1e-3)
+const PACK_RGB_LOG_SPAN: f32 = 16.609640;  // log2(1e2) - log2(1e-3)
 
-    let norm = length(src);
-    return vec4<f32>(src / norm, norm * 0.1);
+fn pack_rgb(src: vec3<f32>) -> vec4<f32> {
+    let maxc = max(src.r, max(src.g, src.b));
+    if (maxc <= 0.0) { return vec4<f32>(0.0); }
+    let e = clamp(log2(maxc), PACK_RGB_LOG_LO, PACK_RGB_LOG_LO + PACK_RGB_LOG_SPAN);
+    // quantize the scale UP to the 8-bit grid so scale >= maxc (no clipping)
+    let a = clamp(ceil((e - PACK_RGB_LOG_LO) / PACK_RGB_LOG_SPAN * 255.0) / 255.0, 0.0, 1.0);
+    let scale = exp2(PACK_RGB_LOG_LO + a * PACK_RGB_LOG_SPAN);
+    return vec4<f32>(src / scale, a);   // mantissa in (0.956, 1] for the max channel
 }
 
 fn unpack_rgb(src: vec4<f32>) -> vec3<f32> {
-    return src.rgb * src.a * 10.0;
+    let scale = exp2(PACK_RGB_LOG_LO + src.a * PACK_RGB_LOG_SPAN);
+    return src.rgb * scale;
 }
