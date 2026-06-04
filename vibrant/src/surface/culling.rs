@@ -22,11 +22,11 @@ pub struct CullingBuffer {
     erode: Texture,
     binding_read: BindGroup,
     binding_write: BindGroup,
-    index_size: u32,
+    index_buffer_size: u32,
 }
 
 impl CullingBuffer {
-    pub fn new(gpu: &Gpu, resolution: u32, index_size: u32) -> Self {
+    pub fn new(gpu: &Gpu, resolution: u32, index_buffer_size: u32) -> Self {
         let label = Some(type_name::<Self>());
 
         let offset = gpu.device().create_buffer(&BufferDescriptor {
@@ -45,7 +45,9 @@ impl CullingBuffer {
 
         let index = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: index_size as u64 * 1024 * 1024,
+            size: gpu
+                .max_buffer_size()
+                .min((index_buffer_size as u64) * 1024 * 1024),
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -130,7 +132,7 @@ impl CullingBuffer {
             erode,
             binding_read,
             binding_write,
-            index_size,
+            index_buffer_size,
         }
     }
 
@@ -246,8 +248,8 @@ impl CullingBuffer {
             })
     }
 
-    pub fn fragment_list_size(&self) -> u32 {
-        self.index_size
+    pub fn index_buffer_size(&self) -> u32 {
+        self.index_buffer_size
     }
 
     pub fn get_required_index_size(&self, gpu: &Gpu) -> u32 {
