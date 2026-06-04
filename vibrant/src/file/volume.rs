@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use flate2::read::GzDecoder;
-use glam::{Mat4, UVec3, Vec3, Vec4};
+use glam::{Mat4, UVec3, Vec3};
 use itertools::Itertools;
 use nifti::{
     object::GenericNiftiObject, DataElement, InMemNiftiObject, InMemNiftiVolume, NiftiObject,
@@ -47,11 +47,9 @@ impl VolumeFile {
             1.0 / dim[2] as f32,
         ));
 
-        let left_right_flip = Mat4::from_diagonal(Vec4::new(-1.0, 1.0, 1.0, 1.0));
-
         let mm_to_voxel = Mat4::from_cols_array_2d(&nifti.header().affine().into()).inverse();
 
-        let transform = voxel_to_texture * mm_to_voxel * left_right_flip;
+        let transform = voxel_to_texture * mm_to_voxel;
 
         let dim = nifti
             .header()
