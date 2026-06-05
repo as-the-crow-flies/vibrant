@@ -63,7 +63,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
             for (var sub_y = 0u; sub_y < 2u; sub_y++) {
                 let octant_position = vec3<f32>(octant_in * probes_in * vec3<u32>(subdivisions_in, subdivisions_in, 1u));
                 let subdivision_position = vec3<f32>(vec3<u32>((subdivision_in + vec2<u32>(sub_x, sub_y)) * probes_in.xy, 0u));
-                let probe_position = clamp(vec3<f32>(0.5) * vec3<f32>(probe) + vec3<f32>(0.5), vec3<f32>(0.5), vec3<f32>(probes_in) - vec3<f32>(0.5));
+                let probe_position = clamp(vec3<f32>(0.5) * vec3<f32>(probe) + vec3<f32>(0.25), vec3<f32>(0.5), vec3<f32>(probes_in) - vec3<f32>(0.5));
 
                 let position = octant_position + subdivision_position + probe_position;
                 let sample = position / vec3<f32>(textureDimensions(RADIANCE_IN));
