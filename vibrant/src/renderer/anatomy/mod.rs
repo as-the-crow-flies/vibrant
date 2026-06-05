@@ -10,7 +10,7 @@ use crate::{
     gpu::Gpu,
     renderer::{
         anatomy::{
-            gradient::GradientPipeline, render::explicit::ExplicitRenderPipeline,
+            gradient::GradientPipeline, render::octahedral::OctahedralVolumeRenderer,
             transfer::AnatomyTransferPipeline,
         },
         environment::Environment,
@@ -21,7 +21,7 @@ use crate::{
 pub struct AnatomyRenderer {
     transfer: AnatomyTransferPipeline,
     gradient: GradientPipeline,
-    render: ExplicitRenderPipeline,
+    render: OctahedralVolumeRenderer,
 }
 
 impl AnatomyRenderer {
@@ -29,7 +29,7 @@ impl AnatomyRenderer {
         Self {
             transfer: AnatomyTransferPipeline::new(gpu),
             gradient: GradientPipeline::new(gpu),
-            render: ExplicitRenderPipeline::new(gpu),
+            render: OctahedralVolumeRenderer::new(gpu),
         }
     }
 
@@ -56,12 +56,11 @@ impl AnatomyRenderer {
             self.render.dispatch(
                 cmd,
                 environment,
-                controller.viewport(),
                 &asset.hdri,
                 frame,
-                volume,
                 radiance,
-                recompute,
+                volume,
+                controller.viewport(),
             );
         }
     }

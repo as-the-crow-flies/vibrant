@@ -13,7 +13,8 @@ use volume::PhysicalVolume;
 
 use crate::{
     asset::{
-        colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer, radiance::RadianceVolume,
+        colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer,
+        radiance::octahedral::OctahedralRadianceCascadesBuffer,
         volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
     },
     file::FileStage,
@@ -29,7 +30,7 @@ pub struct Asset {
     pub volumes: Vec<VolumeFractionBuffer>,
     pub masks: Vec<VolumeMaskBuffer>,
     pub physical_volume: Option<PhysicalVolume>,
-    pub radiance: Option<RadianceVolume>,
+    pub radiance: Option<OctahedralRadianceCascadesBuffer>,
 
     pub changed: bool,
 }
@@ -99,7 +100,7 @@ impl Asset {
                 self.physical_volume =
                     Some(PhysicalVolume::new(gpu, volume.size(), volume.transform()));
 
-                self.radiance = Some(RadianceVolume::new(gpu, volume.size()));
+                self.radiance = Some(OctahedralRadianceCascadesBuffer::new(gpu, volume.size()));
 
                 self.changed = true;
             }
