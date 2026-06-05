@@ -29,6 +29,7 @@ pub struct PhysicalVolume {
     binding_copy: BindGroup,
     binding_gradient_ping: BindGroup,
     binding_gradient_pong: BindGroup,
+    binding_mipmap: Vec<BindGroup>,
 }
 
 impl PhysicalVolume {
@@ -37,6 +38,8 @@ impl PhysicalVolume {
 
     pub fn new(gpu: &Gpu, size: UVec3, transform: Mat4) -> Self {
         let label = Some(type_name::<Self>());
+
+        let mip_level_count = size.min_element().ilog2().max(1);
 
         let size = Extent3d {
             width: size.x,
@@ -55,14 +58,19 @@ impl PhysicalVolume {
             view_formats: &[],
         };
 
+        let descriptor_mip = TextureDescriptor {
+            mip_level_count,
+            ..descriptor
+        };
+
         let descriptor_u32 = TextureDescriptor {
             format: Self::FORMAT_READWRITE,
             ..descriptor
         };
 
-        let absorption = gpu.device().create_texture(&descriptor);
-        let scattering = gpu.device().create_texture(&descriptor);
-        let extinction = gpu.device().create_texture(&descriptor);
+        let absorption = gpu.device().create_texture(&descriptor_mip);
+        let scattering = gpu.device().create_texture(&descriptor_mip);
+        let extinction = gpu.device().create_texture(&descriptor_mip);
 
         let absorption_u32 = gpu.device().create_texture(&descriptor_u32);
         let scattering_u32 = gpu.device().create_texture(&descriptor_u32);
@@ -71,23 +79,36 @@ impl PhysicalVolume {
         let radiance = gpu.device().create_texture(&descriptor);
         let gradient = gpu.device().create_texture(&descriptor);
 
-        let view_descriptor = &TextureViewDescriptor::default();
+        let full_view_descriptor = &TextureViewDescriptor {
+            label,
+            ..Default::default()
+        };
 
-        let absorption_view = absorption.create_view(view_descriptor);
-        let scattering_view = scattering.create_view(view_descriptor);
-        let extinction_view = extinction.create_view(view_descriptor);
+        let single_mip_view_descriptor = &TextureViewDescriptor {
+            label,
+            mip_level_count: Some(1),
+            ..Default::default()
+        };
 
-        let absorption_u32_view = absorption_u32.create_view(view_descriptor);
-        let scattering_u32_view = scattering_u32.create_view(view_descriptor);
-        let extinction_u32_view = extinction_u32.create_view(view_descriptor);
+        let absorption_view = absorption.create_view(full_view_descriptor);
+        let scattering_view = scattering.create_view(full_view_descriptor);
+        let extinction_view = extinction.create_view(full_view_descriptor);
 
-        let radiance_view = radiance.create_view(view_descriptor);
-        let gradient_view = gradient.create_view(view_descriptor);
+        let absorption_storage_view = absorption.create_view(single_mip_view_descriptor);
+        let scattering_storage_view = scattering.create_view(single_mip_view_descriptor);
+        let extinction_storage_view = extinction.create_view(single_mip_view_descriptor);
+
+        let absorption_u32_view = absorption_u32.create_view(single_mip_view_descriptor);
+        let scattering_u32_view = scattering_u32.create_view(single_mip_view_descriptor);
+        let extinction_u32_view = extinction_u32.create_view(single_mip_view_descriptor);
+
+        let radiance_view = radiance.create_view(single_mip_view_descriptor);
+        let gradient_view = gradient.create_view(single_mip_view_descriptor);
 
         let ping = gpu.device().create_texture(&descriptor);
         let pong = gpu.device().create_texture(&descriptor);
-        let ping_view = ping.create_view(view_descriptor);
-        let pong_view = pong.create_view(view_descriptor);
+        let ping_view = ping.create_view(single_mip_view_descriptor);
+        let pong_view = pong.create_view(single_mip_view_descriptor);
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -98,7 +119,7 @@ impl PhysicalVolume {
             min_filter: FilterMode::Linear,
             mipmap_filter: MipmapFilterMode::Linear,
             lod_min_clamp: 0.0,
-            lod_max_clamp: 0.0,
+            lod_max_clamp: (mip_level_count + 1) as f32,
             compare: None,
             anisotropy_clamp: 1,
             border_color: None,
@@ -192,15 +213,15 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: BindingResource::TextureView(&absorption_view),
+                    resource: BindingResource::TextureView(&absorption_storage_view),
                 },
                 BindGroupEntry {
                     binding: 4,
-                    resource: BindingResource::TextureView(&scattering_view),
+                    resource: BindingResource::TextureView(&scattering_storage_view),
                 },
                 BindGroupEntry {
                     binding: 5,
-                    resource: BindingResource::TextureView(&extinction_view),
+                    resource: BindingResource::TextureView(&extinction_storage_view),
                 },
             ],
         });
@@ -212,7 +233,7 @@ impl PhysicalVolume {
                 // Source
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&extinction_view),
+                    resource: BindingResource::TextureView(&extinction_storage_view),
                 },
                 // Gradient
                 BindGroupEntry {
@@ -239,7 +260,7 @@ impl PhysicalVolume {
                 // Source
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&extinction_view),
+                    resource: BindingResource::TextureView(&extinction_storage_view),
                 },
                 // Gradient
                 BindGroupEntry {
@@ -259,6 +280,72 @@ impl PhysicalVolume {
             ],
         });
 
+        let binding_mipmap = (0..mip_level_count - 1)
+            .into_iter()
+            .map(|level| {
+                let read_descriptor = TextureViewDescriptor {
+                    label,
+                    base_mip_level: level,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                };
+
+                let write_descriptor = TextureViewDescriptor {
+                    label,
+                    base_mip_level: level + 1,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                };
+
+                gpu.device().create_bind_group(&BindGroupDescriptor {
+                    label,
+                    layout: &Self::layout_mipmap(gpu),
+                    entries: &[
+                        BindGroupEntry {
+                            binding: 0,
+                            resource: BindingResource::TextureView(
+                                &absorption.create_view(&read_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 1,
+                            resource: BindingResource::TextureView(
+                                &scattering.create_view(&read_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 2,
+                            resource: BindingResource::TextureView(
+                                &extinction.create_view(&read_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 3,
+                            resource: BindingResource::TextureView(
+                                &absorption.create_view(&write_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 4,
+                            resource: BindingResource::TextureView(
+                                &scattering.create_view(&write_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 5,
+                            resource: BindingResource::TextureView(
+                                &extinction.create_view(&write_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 6,
+                            resource: BindingResource::Sampler(&sampler),
+                        },
+                    ],
+                })
+            })
+            .collect();
+
         Self {
             absorption,
             scattering,
@@ -277,6 +364,7 @@ impl PhysicalVolume {
             binding_copy,
             binding_gradient_ping,
             binding_gradient_pong,
+            binding_mipmap,
         }
     }
 
@@ -304,6 +392,10 @@ impl PhysicalVolume {
 
     pub fn binding_gradient_pong(&self) -> &BindGroup {
         &self.binding_gradient_pong
+    }
+
+    pub fn binding_mipmap(&self) -> &[BindGroup] {
+        &self.binding_mipmap
     }
 
     pub fn layout_read(gpu: &Gpu) -> BindGroupLayout {
@@ -531,6 +623,67 @@ impl PhysicalVolume {
                     },
                 ],
             })
+    }
+
+    pub fn layout_mipmap(gpu: &Gpu) -> BindGroupLayout {
+        let visibility = ShaderStages::COMPUTE;
+
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility,
+                        ty: Self::binding_type_sample(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility,
+                        ty: Self::binding_type_sample(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility,
+                        ty: Self::binding_type_sample(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility,
+                        ty: Self::binding_type_write(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility,
+                        ty: Self::binding_type_write(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility,
+                        ty: Self::binding_type_write(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            })
+    }
+
+    fn binding_type_sample() -> BindingType {
+        BindingType::Texture {
+            sample_type: TextureSampleType::Float { filterable: true },
+            view_dimension: TextureViewDimension::D3,
+            multisampled: false,
+        }
     }
 
     fn binding_type_read() -> BindingType {
