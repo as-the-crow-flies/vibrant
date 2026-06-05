@@ -61,8 +61,11 @@ impl OctahedralVolumeRenderer {
         radiance: &OctahedralRadianceCascadesBuffer,
         volume: &PhysicalVolume,
         viewport: Rect,
+        recompute: bool,
     ) {
-        self.radiance(cmd, environment, hdri, radiance, volume);
+        if recompute {
+            self.radiance(cmd, environment, hdri, radiance, volume);
+        }
         self.trace(cmd, environment, frame, radiance, volume, viewport);
     }
 

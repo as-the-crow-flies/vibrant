@@ -4,5 +4,19 @@
 @compute
 @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
-    textureStore(IRRADIANCE, voxel, pack_rgb(vec3<f32>(1.0)));
+    let dim = textureDimensions(IRRADIANCE);
+
+    if (any(voxel >= dim)) { return; }
+
+    let irradiance = 0.125 * (
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(0     , 0     , 0     ), 0) +
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(dim.x , 0     , 0     ), 0) +
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(0     , dim.y , 0     ), 0) +
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(0     , 0     , dim.z ), 0) +
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(dim.x , dim.y , 0     ), 0) +
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(dim.x , 0     , dim.z ), 0) +
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(0     , dim.y , dim.z ), 0) +
+        textureLoad(RADIANCE_0, voxel + vec3<u32>(dim.x , dim.y , dim.z ), 0));
+
+    textureStore(IRRADIANCE, voxel, pack_rgb(irradiance.rgb));
 }

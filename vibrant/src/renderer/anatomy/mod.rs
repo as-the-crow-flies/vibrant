@@ -61,6 +61,7 @@ impl AnatomyRenderer {
                 radiance,
                 volume,
                 controller.viewport(),
+                recompute,
             );
         }
     }

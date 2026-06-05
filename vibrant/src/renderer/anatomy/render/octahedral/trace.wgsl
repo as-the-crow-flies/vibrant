@@ -57,8 +57,6 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     var transmittance = vec3<f32>(1.0);
     var color = vec3<f32>(0.0);
 
-    let phase_function = 1.0 / (4.0 * PI);
-
     var step = 0.5;
 
     let direction_norm = normalize(direction);
@@ -82,7 +80,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
         let diffuse = sample_diffuse(sample);
-        let diffuse_sample = diffuse * material.scattering * phase_function;
+        let diffuse_sample = diffuse * material.scattering;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
         let specular = vec3<f32>(0.0);
