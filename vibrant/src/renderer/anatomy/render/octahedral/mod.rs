@@ -47,7 +47,9 @@ impl OctahedralVolumeRenderer {
                     &Environment::layout(gpu),
                 ]),
                 ColorBuffer::target_srgb(),
-                &gpu.shader(include_str!("trace.wgsl")),
+                &gpu.shader(
+                    &(include_str!("../brdf.wgsl").to_string() + include_str!("trace.wgsl")),
+                ),
             ),
         }
     }

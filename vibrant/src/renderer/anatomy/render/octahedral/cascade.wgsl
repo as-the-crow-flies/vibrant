@@ -103,38 +103,6 @@ fn trace(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32>
     return transmission;
 }
 
-fn visibility_bias(probe: vec3<f32>) -> vec3<f32> {
-    let probe_min = vec3<u32>(probe);
-
-    let mip = CASCADE + 1u + countTrailingZeros(SCALE);
-
-    let e000 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(0, 0, 0), mip)));
-    let e001 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(0, 0, 1), mip)));
-    let e010 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(0, 1, 0), mip)));
-    let e100 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(1, 0, 0), mip)));
-    let e011 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(0, 1, 1), mip)));
-    let e101 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(1, 0, 1), mip)));
-    let e110 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(1, 1, 0), mip)));
-    let e111 = length(unpack_rgb(textureLoad(EXTINCTION, probe_min + vec3<u32>(1, 1, 1), mip)));
-
-    let sum_e = e000 + e001 + e010 + e100 + e011 + e101 + e110 + e111;
-    if (sum_e == 0.0) { return probe; }
-
-    let norm = 1.0 / sum_e;
-
-    let bias =
-        vec3<f32>(-0.5, -0.5, -0.5) * (1.0 - e000 * norm) +
-        vec3<f32>(-0.5, -0.5,  0.5) * (1.0 - e001 * norm) +
-        vec3<f32>(-0.5,  0.5, -0.5) * (1.0 - e010 * norm) +
-        vec3<f32>( 0.5, -0.5, -0.5) * (1.0 - e100 * norm) +
-        vec3<f32>(-0.5,  0.5,  0.5) * (1.0 - e011 * norm) +
-        vec3<f32>( 0.5, -0.5,  0.5) * (1.0 - e101 * norm) +
-        vec3<f32>( 0.5,  0.5, -0.5) * (1.0 - e110 * norm) +
-        vec3<f32>( 0.5,  0.5,  0.5) * (1.0 - e111 * norm);
-
-    return probe + bias * ENVIRONMENT.settings.alpha;
-}
-
 fn octahedron(octant: vec3<u32>, subdivision: vec2<u32>, count: u32) -> vec3<f32> {
     var a = vec3<f32>(select(1.0, -1.0, octant.x != 0u), 0.0, 0.0);
     var b = vec3<f32>(0.0, select(1.0, -1.0, octant.y != 0u), 0.0);
