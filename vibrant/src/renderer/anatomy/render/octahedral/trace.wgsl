@@ -76,18 +76,17 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
         if (any(extinction < vec3<f32>(1E-5))) { continue; }
 
+        let transmittance_in_step = 1.0 - exp(-extinction);
+
         let gradient = sample_gradient(sample);
         let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
-        let diffuse = sample_diffuse(sample);
-        let diffuse_sample = diffuse * material.scattering;
+        let diffuse = sample_diffuse(sample) * material.scattering;
 
         let reflection = normalize(reflect(direction_norm, gradient_norm));
-        let specular = vec3<f32>(0.0);
+        let specular = gradient.a * sample_specular(sample, reflection, u32(5.0 * ENVIRONMENT.settings.alpha));
 
-        let transmittance_in_step = 1.0 - exp(-extinction);
-
-        color += transmittance * transmittance_in_step * (diffuse_sample + specular);
+        color += transmittance * transmittance_in_step * (diffuse + specular);
 
         transmittance *= exp(-extinction);
 
@@ -131,6 +130,82 @@ fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
     let alpha = 2.0 * gradient_raw.a;
     return vec4<f32>(normalize(2.0 * gradient_raw.xyz - 1.0) * alpha, alpha);
 }
+
+fn sample_specular(position: vec3<f32>, direction: vec3<f32>, n: u32) -> vec3<f32> {
+    let irr_dim = textureDimensions(IRRADIANCE);
+    let octant = vec3<u32>(u32(direction.x < 0.0), u32(direction.y < 0.0), u32(direction.z < 0.0));
+    let sub5 = octahedron_inverse(direction, 32u);
+
+    var transmission = vec3<f32>(1.0);
+    if (n > 0u) { transmission *= cascade_transmission(TRANSMISSION_0, position, octant, sub5, 0u); }
+    if (n > 1u) { transmission *= cascade_transmission(TRANSMISSION_1, position, octant, sub5, 1u); }
+    if (n > 2u) { transmission *= cascade_transmission(TRANSMISSION_2, position, octant, sub5, 2u); }
+    if (n > 3u) { transmission *= cascade_transmission(TRANSMISSION_3, position, octant, sub5, 3u); }
+    if (n > 4u) { transmission *= cascade_transmission(TRANSMISSION_4, position, octant, sub5, 4u); }
+
+    let probes = irr_dim >> vec3<u32>(n);
+    let subdivisions = 1u << n;
+    let probe = min(vec3<u32>(position * vec3<f32>(probes)), probes - vec3<u32>(1u));
+    let sub = sub5 >> vec2<u32>(5u - n);
+    let voxel = vec3<u32>(
+        octant.x * subdivisions * probes.x + sub.x * probes.x + probe.x,
+        octant.y * subdivisions * probes.y + sub.y * probes.y + probe.y,
+        octant.z * probes.z + probe.z
+    );
+    let uv = vec3<f32>(
+        (f32(voxel.x) + 0.5) / f32(2u * irr_dim.x),
+        (f32(voxel.y) + 0.5) / f32(2u * irr_dim.y),
+        (f32(voxel.z) + 0.5) / f32(2u * probes.z)
+    );
+
+    var radiance = vec3<f32>(0.0);
+    switch (n) {
+        case 0u:  { radiance = unpack_rgb(tex(RADIANCE_0, uv)); }
+        case 1u:  { radiance = unpack_rgb(tex(RADIANCE_1, uv)); }
+        case 2u:  { radiance = unpack_rgb(tex(RADIANCE_2, uv)); }
+        case 3u:  { radiance = unpack_rgb(tex(RADIANCE_3, uv)); }
+        case 4u:  { radiance = unpack_rgb(tex(RADIANCE_4, uv)); }
+        default:  { radiance = unpack_rgb(tex(RADIANCE_5, uv)); }
+    }
+
+    return transmission * radiance;
+}
+
+fn cascade_transmission(t: texture_3d<f32>, position: vec3<f32>, octant: vec3<u32>, sub5: vec2<u32>, c: u32) -> vec3<f32> {
+    let probes = textureDimensions(IRRADIANCE) >> vec3<u32>(c);
+    let subdivisions = 1u << c;
+    let probe = min(vec3<u32>(position * vec3<f32>(probes)), probes - vec3<u32>(1u));
+    let sub = sub5 >> vec2<u32>(5u - c);
+    let voxel = vec3<u32>(
+        octant.x * subdivisions * probes.x + sub.x * probes.x + probe.x,
+        octant.y * subdivisions * probes.y + sub.y * probes.y + probe.y,
+        octant.z * probes.z + probe.z
+    );
+    return unpack_rgb(tex(t, (vec3<f32>(voxel) + 0.5) / vec3<f32>(textureDimensions(t))));
+}
+
+fn octahedron_inverse(direction: vec3<f32>, count: u32) -> vec2<u32> {
+    var bary = abs(direction) / (abs(direction.x) + abs(direction.y) + abs(direction.z));
+    var sub = vec2<u32>(0u);
+
+    var half = count >> 1u;
+    while (half > 0u) {
+        let bit = countTrailingZeros(half);
+        half >>= 1u;
+
+        var tri: u32;
+        if      (bary.x > 0.5) { tri = 1u; bary = vec3<f32>(2.0*bary.x - 1.0, 2.0*bary.y,        2.0*bary.z);        }
+        else if (bary.y > 0.5) { tri = 2u; bary = vec3<f32>(2.0*bary.x,        2.0*bary.y - 1.0,  2.0*bary.z);        }
+        else if (bary.z > 0.5) { tri = 3u; bary = vec3<f32>(2.0*bary.x,        2.0*bary.y,        2.0*bary.z - 1.0);  }
+        else                   { tri = 0u; bary = vec3<f32>(1.0 - 2.0*bary.z,  1.0 - 2.0*bary.x,  1.0 - 2.0*bary.y); }
+
+        sub.x |= ((tri & 1u) << bit);
+        sub.y |= (((tri >> 1u) & 1u) << bit);
+    }
+
+    return sub;
+}
+
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);
