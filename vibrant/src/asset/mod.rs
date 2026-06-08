@@ -8,6 +8,8 @@ pub mod volume;
 pub mod volume_fraction;
 pub mod volume_mask;
 
+use std::ops::Div;
+
 use line::LineBuffer;
 use volume::PhysicalVolume;
 
@@ -17,6 +19,7 @@ use crate::{
         radiance::octahedral::OctahedralRadianceCascadesBuffer,
         volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
     },
+    controller::Controller,
     file::FileStage,
     gpu::Gpu,
 };
@@ -51,7 +54,7 @@ impl Asset {
         }
     }
 
-    pub fn update(&mut self, gpu: &Gpu) {
+    pub fn update(&mut self, gpu: &Gpu, controller: &Controller) {
         self.changed = false;
 
         FileStage::on_lines(|lines| {
@@ -78,6 +81,8 @@ impl Asset {
             }
         });
 
+        let mut radiance_should_update = controller.settings_widget().radiance_resolution_changed();
+
         FileStage::on_volumes(|volumes| {
             for volume in &volumes {
                 if volume.name().contains("mask") {
@@ -100,11 +105,24 @@ impl Asset {
                 self.physical_volume =
                     Some(PhysicalVolume::new(gpu, volume.size(), volume.transform()));
 
-                self.radiance = Some(OctahedralRadianceCascadesBuffer::new(gpu, volume.size()));
-
                 self.changed = true;
+
+                radiance_should_update = true;
             }
         });
+
+        if let Some(volume) = self
+            .volumes
+            .iter()
+            .max_by_key(|volume| volume.size().element_product())
+        {
+            if radiance_should_update {
+                self.radiance = Some(OctahedralRadianceCascadesBuffer::new(
+                    gpu,
+                    volume.size().div(controller.settings().radiance_resolution),
+                ));
+            }
+        }
 
         FileStage::on_hdris(|hdris| {
             for hdri in hdris {

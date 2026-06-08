@@ -75,7 +75,7 @@ impl Renderer {
             .handle_platform_output(&window, output.platform_output.clone());
 
         self.environment.update(gpu, &controller);
-        self.asset.update(gpu);
+        self.asset.update(gpu, &controller);
 
         if let Some(frame) = self.surface.frame() {
             let mut cmd = gpu.cmd();

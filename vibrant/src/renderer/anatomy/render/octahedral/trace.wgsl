@@ -109,7 +109,7 @@ fn aces(x: vec3<f32>) -> vec3<f32> {
 }
 
 fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {
-return unpack_rgb(tex(IRRADIANCE, uv));
+    return unpack_rgb(tex(IRRADIANCE, uv));
 }
 
 struct Material {

@@ -54,7 +54,7 @@ impl OctahedralRadianceCascadesBuffer {
             .map(|cascade| Extent3d {
                 width: size.width * 2,
                 height: size.height * 2,
-                depth_or_array_layers: (size.depth_or_array_layers >> cascade) * 2,
+                depth_or_array_layers: ((size.depth_or_array_layers >> cascade).max(1)) * 2,
             })
             .collect_vec();
 
@@ -104,8 +104,7 @@ impl OctahedralRadianceCascadesBuffer {
                         BindGroupEntry {
                             binding: 3,
                             resource: BindingResource::TextureView(
-                                &transmission[(index + 1) % Self::N_CASCADES]
-                                    .create_view(&TextureViewDescriptor::default()),
+                                &irradiance.create_view(&TextureViewDescriptor::default()),
                             ),
                         },
                         BindGroupEntry {
@@ -332,7 +331,7 @@ impl OctahedralRadianceCascadesBuffer {
                         },
                         count: None,
                     },
-                    // Transmission 1
+                    // Irradiance
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility,

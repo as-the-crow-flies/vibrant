@@ -1,7 +1,7 @@
 @group(0) @binding(0) var RADIANCE_OUT: texture_storage_3d<rgba8unorm, write>;
 @group(0) @binding(1) var TRANSMISSION_OUT: texture_storage_3d<rgba8unorm, write>;
 @group(0) @binding(2) var RADIANCE_IN: texture_3d<f32>;
-@group(0) @binding(3) var TRANSMISSION_IN: texture_3d<f32>;
+@group(0) @binding(3) var IRRADIANCE: texture_3d<f32>;
 @group(0) @binding(4) var<uniform> CASCADE: u32;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
@@ -22,14 +22,10 @@ const STEP_SIZE: f32 = 0.5;
 
 const INTERVAL = array<f32, 7>(0.0, 1.0, 3.0, 7.0, 15.0, 31.0, 63.0);
 
-var<private> DIM_INV: vec3<f32>;
-
 @compute
 @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
-    DIM_INV = 1.0 / vec3<f32>(textureDimensions(EXTINCTION));
-
-    let probes = textureDimensions(EXTINCTION) >> vec3<u32>(CASCADE);
+    let probes = textureDimensions(IRRADIANCE) >> vec3<u32>(CASCADE);
     let subdivisions = 1u << CASCADE; // Sqrt of subdivisions
     let subdivisions_2 = subdivisions * subdivisions;
 
@@ -82,13 +78,19 @@ fn trace(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32>
 
     if (HDRI_SETTINGS.specular < 0.5) { return transmission; }
 
-    for (var t=t0; t<t1; t+=STEP_SIZE) {
-        let position_voxel_space = origin + direction * t;
-        let sample = position_voxel_space * DIM_INV;
+    let dim = vec3<f32>(textureDimensions(IRRADIANCE));
+    let origin_sample = origin / dim;
+    let direction_sample = direction / dim;
+
+    let scale = length(TRANSFORM[0].xyz) * dim.x; // voxels/mm
+    let step_size = STEP_SIZE / f32(textureDimensions(EXTINCTION).x / textureDimensions(IRRADIANCE).x);
+
+    for (var t=t0; t<t1; t+=step_size) {
+        let sample = origin_sample + direction_sample * t;
 
         let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
 
-        transmission *= exp(-STEP_SIZE * extinction); // TODO: should be in mm
+        transmission *= exp(-extinction * step_size / scale);
     }
 
     return transmission;
