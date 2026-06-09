@@ -20,7 +20,7 @@ pub struct HdriBufferSettings {
     pub rotation: f32,
     pub strength: f32,
     pub specular: f32,
-    pub show: u32,
+    pub roughness: f32,
 }
 
 pub struct HdriTexture {
@@ -152,8 +152,8 @@ impl HdriBuffer {
         let settings = HdriBufferSettings {
             rotation: 0.0,
             strength: 1.0,
-            specular: 0.5,
-            show: 0,
+            specular: 0.25,
+            roughness: 0.5,
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {

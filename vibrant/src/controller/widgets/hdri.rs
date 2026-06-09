@@ -55,8 +55,13 @@ impl HdriWidget {
                         .track(self);
                     ui.end_row();
 
-                    ui.label("Roughness");
+                    ui.label("Specular");
                     ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                        .track(self);
+                    ui.end_row();
+
+                    ui.label("Roughness");
+                    ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0)
                         .track(self);
                     ui.end_row();
 

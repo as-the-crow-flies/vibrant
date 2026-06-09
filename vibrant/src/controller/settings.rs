@@ -63,7 +63,7 @@ impl Settings {
             height: 1080,
             volume: 256,
             index_buffer_size: 64,
-            radiance_resolution: 2,
+            radiance_resolution: 4,
             radius: 0.3,
             lighting: 0.85,
             ambient_light: 1.0,

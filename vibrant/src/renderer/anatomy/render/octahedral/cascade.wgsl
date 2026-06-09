@@ -49,7 +49,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     var radiance = vec3<f32>(0.0);
 
     if (CASCADE == 5) { // Final Cascade
-        radiance = hdri(direction, subdivisions_2);
+        radiance = hdri(direction, 8u * subdivisions_2);
     } else { // Other Cascades
         let probes_in = probes >> vec3<u32>(1u);
         let subdivisions_in = subdivisions << 1u;
@@ -96,6 +96,7 @@ fn trace(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32>
         let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
 
         transmission *= exp(-extinction * step_size / scale);
+        if (all(transmission < vec3<f32>(1e-3))) { break; }
     }
 
     return transmission;

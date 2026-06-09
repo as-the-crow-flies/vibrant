@@ -64,6 +64,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     var step = 0.5;
 
     let direction_norm = normalize(direction);
+    let view = -direction_norm;
 
     while (t0 < t1) {
         let sample = origin + direction * (t0 + 2.0);
@@ -85,17 +86,18 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let gradient = sample_gradient(sample);
         let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
-        let view = -direction_norm;
+        let sample_light = sample - 0.05 * gradient.xyz;
 
         let n_dot_v  = max(dot(gradient_norm, view), 0.0001);
-        let roughness = HDRI_SETTINGS.specular;
+        let roughness = HDRI_SETTINGS.roughness;
         let f0        = vec3<f32>(0.04);
 
-        let F = gradient.a * F_Schlick(n_dot_v, f0);
-        let sample_light = sample - 0.1 * gradient.xyz;
+        let F = gradient.a * F_Schlick(n_dot_v, f0) * HDRI_SETTINGS.specular;
 
-        let diffuse  = (vec3<f32>(1.0) - F) * material.scattering * sample_diffuse(sample_light);
-        let specular = F * sample_specular(sample_light, gradient_norm, view, roughness);
+        let albedo = material.scattering; // / max(material.extinction, vec3<f32>(0.001));
+
+        let diffuse  = (vec3<f32>(1.0) - F) * albedo * sample_diffuse(sample_light);
+        let specular = F *  sample_specular(sample_light, gradient_norm, view, roughness);
 
         color += transmittance * transmittance_in_step * (diffuse + specular);
 

@@ -5,10 +5,12 @@ use glam::UVec3;
 use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, BufferBindingType, BufferUsages, Extent3d,
-    ShaderStages, StorageTextureAccess, Texture, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
+    BufferBindingType, BufferUsages, Extent3d, FilterMode, MipmapFilterMode, SamplerBindingType,
+    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
+    TextureViewDimension,
 };
 
 use crate::gpu::Gpu;
@@ -49,6 +51,21 @@ impl OctahedralRadianceCascadesBuffer {
         };
 
         let irradiance = gpu.device().create_texture(&descriptor);
+
+        let sampler = gpu.device().create_sampler(&SamplerDescriptor {
+            label,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: None,
+        });
 
         let size_cascade = (0..Self::N_CASCADES)
             .map(|cascade| Extent3d {
@@ -224,6 +241,10 @@ impl OctahedralRadianceCascadesBuffer {
                         &radiance[0].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Sampler(&sampler),
+                },
             ],
         });
 
@@ -285,6 +306,13 @@ impl OctahedralRadianceCascadesBuffer {
                             view_dimension: TextureViewDimension::D3,
                             multisampled: false,
                         },
+                        count: None,
+                    },
+                    // Sampler
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
