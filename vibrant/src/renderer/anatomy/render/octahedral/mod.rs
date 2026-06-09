@@ -23,6 +23,8 @@ pub struct OctahedralVolumeRenderer {
 
 impl OctahedralVolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
+        let common = include_str!("common.wgsl");
+
         Self {
             cascade: gpu.compute(
                 "OctahedralVolumeCascade",
@@ -32,7 +34,7 @@ impl OctahedralVolumeRenderer {
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
                 ]),
-                &gpu.shader(include_str!("cascade.wgsl")),
+                &gpu.shader(&(common.to_string() + include_str!("cascade.wgsl"))),
             ),
             copy: gpu.compute(
                 "OctahedralVolumeCopy",
@@ -45,11 +47,10 @@ impl OctahedralVolumeRenderer {
                     &OctahedralRadianceCascadesBuffer::layout_read(gpu),
                     &PhysicalVolume::layout_read(gpu),
                     &Environment::layout(gpu),
+                    &HdriBuffer::layout(gpu),
                 ]),
                 ColorBuffer::target_srgb(),
-                &gpu.shader(
-                    &(include_str!("../brdf.wgsl").to_string() + include_str!("trace.wgsl")),
-                ),
+                &gpu.shader(&(common.to_string() + include_str!("trace.wgsl"))),
             ),
         }
     }
@@ -68,7 +69,7 @@ impl OctahedralVolumeRenderer {
         if recompute {
             self.radiance(cmd, environment, hdri, radiance, volume);
         }
-        self.trace(cmd, environment, frame, radiance, volume, viewport);
+        self.trace(cmd, environment, hdri, frame, radiance, volume, viewport);
     }
 
     fn radiance(
@@ -108,6 +109,7 @@ impl OctahedralVolumeRenderer {
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
+        hdri: &HdriBuffer,
         frame: &Frame,
         radiance: &OctahedralRadianceCascadesBuffer,
         volume: &PhysicalVolume,
@@ -132,6 +134,7 @@ impl OctahedralVolumeRenderer {
         pass.set_bind_group(0, radiance.binding_read(), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(3, hdri.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

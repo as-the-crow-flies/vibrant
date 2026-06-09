@@ -22,6 +22,10 @@
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+@group(3) @binding(0) var HDRI: texture_2d<f32>;
+@group(3) @binding(1) var HDRI_SAMPLER: sampler;
+@group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
+
 struct Fragment {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>
@@ -82,16 +86,16 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
         let view = -direction_norm;
-        let reflection = normalize(reflect(direction_norm, gradient_norm));
 
         let n_dot_v  = max(dot(gradient_norm, view), 0.0001);
-        let roughness = 0.33;
+        let roughness = HDRI_SETTINGS.specular;
         let f0        = vec3<f32>(0.04);
 
         let F = gradient.a * F_Schlick(n_dot_v, f0);
+        let sample_light = sample - 0.1 * gradient.xyz;
 
-        let diffuse  = (vec3<f32>(1.0) - F) * material.scattering * sample_diffuse(sample);
-        let specular = F * sample_specular(sample, reflection, roughness);
+        let diffuse  = (vec3<f32>(1.0) - F) * material.scattering * sample_diffuse(sample_light);
+        let specular = F * sample_specular(sample_light, gradient_norm, view, roughness);
 
         color += transmittance * transmittance_in_step * (diffuse + specular);
 
@@ -164,37 +168,25 @@ fn sample_radiance_cascade(position: vec3<f32>, octant: vec3<u32>, sub5: vec2<u3
     }
 }
 
-fn sample_specular(position: vec3<f32>, direction: vec3<f32>, roughness: f32) -> vec3<f32> {
-    let octant = vec3<u32>(u32(direction.x < 0.0), u32(direction.y < 0.0), u32(direction.z < 0.0));
-    let sub5 = octahedron_inverse(direction, 32u);
+fn sample_specular(position: vec3<f32>, normal: vec3<f32>, view: vec3<f32>, roughness: f32) -> vec3<f32> {
+    if (dot(normal, normal) < 0.5) { return vec3<f32>(0.0); }
 
-    // roughness 0 (smooth) → cascade 5 (finest angular), roughness 1 (rough) → cascade 0 (coarsest)
-    let n_f   = clamp(1.0 - roughness, 0.0, 1.0) * 5.0;
-    let n0    = min(u32(n_f), 4u);
-    let n1    = n0 + 1u;
-    let blend = n_f - f32(n0);
+    let n     = min(u32(clamp(1.0 - roughness, 0.0, 1.0) * 5.0), 5u);
+    let count = 1u << n;
+    let shift = 5u - n;  // sub5 → level-n sub index
 
-    // Accumulate transmission through intervals 0..n0-1 (shared by both cascade samples)
+    let mirror = normalize(reflect(-view, normal));
+    let oct    = vec3<u32>(u32(mirror.x < 0.0), u32(mirror.y < 0.0), u32(mirror.z < 0.0));
+    let sub5   = octahedron_inverse(mirror, 32u);
+
     var transmission = vec3<f32>(1.0);
-    if (n0 > 0u) { transmission *= cascade_transmission(TRANSMISSION_0, position, octant, sub5, 0u); }
-    if (n0 > 1u) { transmission *= cascade_transmission(TRANSMISSION_1, position, octant, sub5, 1u); }
-    if (n0 > 2u) { transmission *= cascade_transmission(TRANSMISSION_2, position, octant, sub5, 2u); }
-    if (n0 > 3u) { transmission *= cascade_transmission(TRANSMISSION_3, position, octant, sub5, 3u); }
+    if (n > 0u) { transmission *= cascade_transmission(TRANSMISSION_0, position, oct, sub5, 0u); }
+    if (n > 1u) { transmission *= cascade_transmission(TRANSMISSION_1, position, oct, sub5, 1u); }
+    if (n > 2u) { transmission *= cascade_transmission(TRANSMISSION_2, position, oct, sub5, 2u); }
+    if (n > 3u) { transmission *= cascade_transmission(TRANSMISSION_3, position, oct, sub5, 3u); }
+    if (n > 4u) { transmission *= cascade_transmission(TRANSMISSION_4, position, oct, sub5, 4u); }
 
-    let r0 = transmission * sample_radiance_cascade(position, octant, sub5, n0);
-
-    // Add one more transmission step (interval n0) for the upper cascade
-    var transmission1 = transmission;
-    switch (n0) {
-        case 0u:  { transmission1 *= cascade_transmission(TRANSMISSION_0, position, octant, sub5, 0u); }
-        case 1u:  { transmission1 *= cascade_transmission(TRANSMISSION_1, position, octant, sub5, 1u); }
-        case 2u:  { transmission1 *= cascade_transmission(TRANSMISSION_2, position, octant, sub5, 2u); }
-        case 3u:  { transmission1 *= cascade_transmission(TRANSMISSION_3, position, octant, sub5, 3u); }
-        default:  { transmission1 *= cascade_transmission(TRANSMISSION_4, position, octant, sub5, 4u); }
-    }
-    let r1 = transmission1 * sample_radiance_cascade(position, octant, sub5, n1);
-
-    return mix(r0, r1, blend);
+    return transmission * sample_radiance_cascade(position, oct, sub5, n);
 }
 
 fn cascade_transmission(t: texture_3d<f32>, position: vec3<f32>, octant: vec3<u32>, sub5: vec2<u32>, c: u32) -> vec3<f32> {
@@ -209,29 +201,6 @@ fn cascade_transmission(t: texture_3d<f32>, position: vec3<f32>, octant: vec3<u3
     );
     return unpack_rgb(tex(t, (vec3<f32>(voxel) + 0.5) / vec3<f32>(textureDimensions(t))));
 }
-
-fn octahedron_inverse(direction: vec3<f32>, count: u32) -> vec2<u32> {
-    var bary = abs(direction) / (abs(direction.x) + abs(direction.y) + abs(direction.z));
-    var sub = vec2<u32>(0u);
-
-    var half = count >> 1u;
-    while (half > 0u) {
-        let bit = countTrailingZeros(half);
-        half >>= 1u;
-
-        var tri: u32;
-        if      (bary.x > 0.5) { tri = 1u; bary = vec3<f32>(2.0*bary.x - 1.0, 2.0*bary.y,        2.0*bary.z);        }
-        else if (bary.y > 0.5) { tri = 2u; bary = vec3<f32>(2.0*bary.x,        2.0*bary.y - 1.0,  2.0*bary.z);        }
-        else if (bary.z > 0.5) { tri = 3u; bary = vec3<f32>(2.0*bary.x,        2.0*bary.y,        2.0*bary.z - 1.0);  }
-        else                   { tri = 0u; bary = vec3<f32>(1.0 - 2.0*bary.z,  1.0 - 2.0*bary.x,  1.0 - 2.0*bary.y); }
-
-        sub.x |= ((tri & 1u) << bit);
-        sub.y |= (((tri >> 1u) & 1u) << bit);
-    }
-
-    return sub;
-}
-
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
     let t = ENVIRONMENT.camera.projection_inverse * vec4<f32>(v, 1.0);

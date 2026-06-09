@@ -55,6 +55,11 @@ impl HdriWidget {
                         .track(self);
                     ui.end_row();
 
+                    ui.label("Roughness");
+                    ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                        .track(self);
+                    ui.end_row();
+
                     ui.label("Rotation");
                     ui.slider(&mut hdri.settings_mut().rotation, 0.0..=1.0)
                         .track(self);

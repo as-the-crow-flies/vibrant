@@ -55,3 +55,48 @@ fn GGX_Specular(b: BRDFInput) -> vec3<f32> {
     let denom = 4.0 * n_dot_v * n_dot_l;
     return (D * G * F) / max(denom, 0.0001);
 }
+
+fn octahedron_inverse(direction: vec3<f32>, count: u32) -> vec2<u32> {
+    var bary = abs(direction) / (abs(direction.x) + abs(direction.y) + abs(direction.z));
+    var sub = vec2<u32>(0u);
+
+    var half = count >> 1u;
+    while (half > 0u) {
+        let bit = countTrailingZeros(half);
+        half >>= 1u;
+
+        var tri: u32;
+        if      (bary.x > 0.5) { tri = 1u; bary = vec3<f32>(2.0*bary.x - 1.0, 2.0*bary.y,        2.0*bary.z);        }
+        else if (bary.y > 0.5) { tri = 2u; bary = vec3<f32>(2.0*bary.x,        2.0*bary.y - 1.0,  2.0*bary.z);        }
+        else if (bary.z > 0.5) { tri = 3u; bary = vec3<f32>(2.0*bary.x,        2.0*bary.y,        2.0*bary.z - 1.0);  }
+        else                   { tri = 0u; bary = vec3<f32>(1.0 - 2.0*bary.z,  1.0 - 2.0*bary.x,  1.0 - 2.0*bary.y); }
+
+        sub.x |= ((tri & 1u) << bit);
+        sub.y |= (((tri >> 1u) & 1u) << bit);
+    }
+
+    return sub;
+}
+
+fn octahedron(octant: vec3<u32>, subdivision: vec2<u32>, count: u32) -> vec3<f32> {
+    var a = vec3<f32>(select(1.0, -1.0, octant.x != 0u), 0.0, 0.0);
+    var b = vec3<f32>(0.0, select(1.0, -1.0, octant.y != 0u), 0.0);
+    var c = vec3<f32>(0.0, 0.0, select(1.0, -1.0, octant.z != 0u));
+
+    var half = count >> 1u;
+    while (half > 0u) {
+        let bit = countTrailingZeros(half);
+        let tri = ((subdivision.x >> bit) & 1u) | (((subdivision.y >> bit) & 1u) << 1u);
+        half >>= 1u;
+
+        let mab = 0.5 * (a + b);
+        let mbc = 0.5 * (b + c);
+        let mca = 0.5 * (c + a);
+
+        a = select(select(mab, a,   tri == 1u), mca, tri == 3u);
+        b = select(select(mbc, mab, tri == 1u), b,   tri == 2u);
+        c = select(select(mca, mbc, tri == 2u), c,   tri == 3u);
+    }
+
+    return normalize(a + b + c);
+}

@@ -83,8 +83,6 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 fn trace(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {
     var transmission = vec3<f32>(1.0);
 
-    if (HDRI_SETTINGS.specular < 0.5) { return transmission; }
-
     let dim = vec3<f32>(textureDimensions(IRRADIANCE));
     let origin_sample = origin / dim;
     let direction_sample = direction / dim;
@@ -101,29 +99,6 @@ fn trace(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32>
     }
 
     return transmission;
-}
-
-fn octahedron(octant: vec3<u32>, subdivision: vec2<u32>, count: u32) -> vec3<f32> {
-    var a = vec3<f32>(select(1.0, -1.0, octant.x != 0u), 0.0, 0.0);
-    var b = vec3<f32>(0.0, select(1.0, -1.0, octant.y != 0u), 0.0);
-    var c = vec3<f32>(0.0, 0.0, select(1.0, -1.0, octant.z != 0u));
-
-    var half = count >> 1u;
-    while (half > 0u) {
-        let bit = countTrailingZeros(half);
-        let tri = ((subdivision.x >> bit) & 1u) | (((subdivision.y >> bit) & 1u) << 1u);
-        half >>= 1u;
-
-        let mab = 0.5 * (a + b);
-        let mbc = 0.5 * (b + c);
-        let mca = 0.5 * (c + a);
-
-        a = select(select(mab, a,   tri == 1u), mca, tri == 3u);
-        b = select(select(mbc, mab, tri == 1u), b,   tri == 2u);
-        c = select(select(mca, mbc, tri == 2u), c,   tri == 3u);
-    }
-
-    return normalize(a + b + c);
 }
 
 fn hdri(direction: vec3<f32>, N: u32) -> vec3<f32> {
