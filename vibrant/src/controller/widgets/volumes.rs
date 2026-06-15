@@ -133,7 +133,7 @@ impl VolumesWidget {
                 ui.end_row();
 
                 ui.label("Opacity").on_hover_text("Adjust volume opacity");
-                ui.slider(&mut volume.opacity, 0.0..=9.99).track(self);
+                ui.slider(&mut volume.opacity, 0.0..=2.0).track(self);
                 ui.end_row();
 
                 ui.label("Material").on_hover_text("Adjust volume appearance");

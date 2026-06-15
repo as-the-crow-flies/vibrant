@@ -285,4 +285,8 @@ impl Controller {
             || self.tractography().changed()
             || self.hdri().changed()
     }
+
+    pub fn settings_widget(&self) -> &SettingsWidget {
+        &self.settings_widget
+    }
 }

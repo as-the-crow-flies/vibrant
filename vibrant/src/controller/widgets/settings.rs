@@ -8,6 +8,7 @@ use crate::{
 #[derive(Debug)]
 pub struct SettingsWidget {
     changed: bool,
+    radiance_resolution_changed: bool,
 }
 
 impl Tracked for SettingsWidget {
@@ -18,13 +19,16 @@ impl Tracked for SettingsWidget {
 
 impl SettingsWidget {
     pub fn new() -> Self {
-        Self { changed: false }
+        Self {
+            changed: false,
+            radiance_resolution_changed: false,
+        }
     }
 
     pub fn show(&mut self, ui: &mut Ui, settings: &mut Settings, camera: &mut Camera) {
         self.changed = false;
 
-        ui.collapse("Camera", false, |ui| {
+        ui.collapsing("Camera", |ui| {
             Grid::new("CameraSettings").num_columns(2).show(ui, |ui| {
                 ui.label("Field of View")
                     .on_hover_text("Camera Field of View");
@@ -89,9 +93,37 @@ impl SettingsWidget {
                     ui.end_row();
                 });
         });
+
+        self.radiance_resolution_changed = false;
+
+        ui.collapsing("Volume", |ui| {
+            Grid::new("VolumeSettings").num_columns(2).show(ui, |ui| {
+                ui.label("Resolution Reduction");
+                ComboBox::from_id_salt("Memory")
+                    .selected_text(format!("{:?}", settings.radiance_resolution))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for setting in [1, 2, 4, 8] {
+                            self.radiance_resolution_changed |= ui
+                                .selectable_value(
+                                    &mut settings.radiance_resolution,
+                                    setting,
+                                    format!("{}", setting),
+                                )
+                                .track(self)
+                                .changed();
+                        }
+                    });
+                ui.end_row();
+            });
+        });
     }
 
     pub fn changed(&self) -> bool {
         self.changed
+    }
+
+    pub fn radiance_resolution_changed(&self) -> bool {
+        self.radiance_resolution_changed
     }
 }

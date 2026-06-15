@@ -14,6 +14,7 @@ pub struct AnatomyTransferPipeline {
     clear: ComputePipeline,
     transfer: ComputePipeline,
     copy: ComputePipeline,
+    mipmap: ComputePipeline,
 }
 
 impl AnatomyTransferPipeline {
@@ -38,6 +39,11 @@ impl AnatomyTransferPipeline {
                 "AnatomyCopyPipeline",
                 &gpu.pipeline_layout(&[&PhysicalVolume::layout_copy(gpu)]),
                 &gpu.shader(include_str!("copy.wgsl")),
+            ),
+            mipmap: gpu.compute(
+                "AnatomyMipMapPipeline",
+                &gpu.pipeline_layout(&[&PhysicalVolume::layout_mipmap(gpu)]),
+                &gpu.shader(include_str!("mipmap.wgsl")),
             ),
         }
     }
@@ -71,5 +77,16 @@ impl AnatomyTransferPipeline {
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, volume.binding_copy(), &[]);
         pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
+
+        pass.set_pipeline(&self.mipmap);
+
+        let mut mipmap = volume.size().add(3).div(4);
+
+        for binding in volume.binding_mipmap() {
+            pass.set_bind_group(0, binding, &[]);
+            pass.dispatch_workgroups(mipmap.x, mipmap.y, mipmap.z);
+
+            mipmap = mipmap.add(1).div(2);
+        }
     }
 }

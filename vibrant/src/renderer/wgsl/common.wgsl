@@ -56,7 +56,7 @@ struct HdriSettings {
     rotation: f32,
     strength: f32,
     specular: f32,
-    show: u32,
+    roughness: f32,
 }
 
 struct CropSettings {
