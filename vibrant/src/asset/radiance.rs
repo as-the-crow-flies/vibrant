@@ -1,7 +1,7 @@
-use std::any::type_name;
+use std::{any::type_name, ops::Neg};
 
 use bytemuck::bytes_of;
-use glam::UVec3;
+use glam::{IVec3, UVec3};
 use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -15,7 +15,7 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
-pub struct OctahedralRadianceCascadesBuffer {
+pub struct RadianceCascadesBuffer {
     irradiance: Texture,
     radiance: Vec<Texture>,
     transmission: Vec<Texture>,
@@ -26,11 +26,15 @@ pub struct OctahedralRadianceCascadesBuffer {
     size_cascade: Vec<Extent3d>,
 }
 
-impl OctahedralRadianceCascadesBuffer {
+impl RadianceCascadesBuffer {
     pub const N_CASCADES: usize = 6;
     pub const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
-    pub fn new(gpu: &Gpu, size: UVec3) -> Self {
+    pub fn new_octahedral(gpu: &Gpu, size: UVec3) -> Self {
+        Self::new(gpu, size, size * 2, IVec3::new(1, 1, -2))
+    }
+
+    pub fn new(gpu: &Gpu, size: UVec3, base: UVec3, multiplier: IVec3) -> Self {
         let label = Some(type_name::<Self>());
 
         let size = Extent3d {
@@ -67,11 +71,20 @@ impl OctahedralRadianceCascadesBuffer {
             border_color: None,
         });
 
+        let mut base = base;
+
         let size_cascade = (0..Self::N_CASCADES)
-            .map(|cascade| Extent3d {
-                width: size.width * 2,
-                height: size.height * 2,
-                depth_or_array_layers: ((size.depth_or_array_layers >> cascade).max(1)) * 2,
+            .map(|_| {
+                let extend = Extent3d {
+                    width: base.x.max(1),
+                    height: base.y.max(1),
+                    depth_or_array_layers: base.z.max(1),
+                };
+
+                base = base * multiplier.max(IVec3::ONE).as_uvec3()
+                    / multiplier.neg().max(IVec3::ONE).as_uvec3();
+
+                extend
             })
             .collect_vec();
 
@@ -405,7 +418,7 @@ impl OctahedralRadianceCascadesBuffer {
     }
 }
 
-impl Drop for OctahedralRadianceCascadesBuffer {
+impl Drop for RadianceCascadesBuffer {
     fn drop(&mut self) {
         self.irradiance.destroy();
 
