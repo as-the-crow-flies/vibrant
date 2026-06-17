@@ -3,7 +3,6 @@ pub mod cull;
 pub mod occlusion;
 pub mod occupancy;
 pub mod populate;
-pub mod post;
 pub mod render;
 pub mod transform;
 
@@ -16,7 +15,7 @@ use crate::{
     gpu::Gpu,
     renderer::line::{
         crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
-        populate::LinePopulatePipeline, post::PostProcessingPipeline, render::LineRenderPipeline,
+        populate::LinePopulatePipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
     surface::Surface,
@@ -32,7 +31,6 @@ pub struct LineRenderer {
     occlusion: LineOcclusionPipeline,
     populate: LinePopulatePipeline,
     render: LineRenderPipeline,
-    post: PostProcessingPipeline,
 }
 
 impl LineRenderer {
@@ -45,7 +43,6 @@ impl LineRenderer {
             cull: LineCullPipeline::new(gpu),
             populate: LinePopulatePipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
-            post: PostProcessingPipeline::new(gpu),
         }
     }
 
@@ -90,8 +87,6 @@ impl LineRenderer {
                 controller.viewport(),
                 line,
             );
-
-            self.post.dispatch(cmd, environment, frame);
         }
     }
 }

@@ -29,7 +29,7 @@ impl LineRenderPipeline {
                     &LineBuffer::layout_render(gpu),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target(),
+                ColorBuffer::target_blend(),
                 &gpu.shader(&(trace.to_string() + include_str!("opaque.wgsl"))),
             ),
             transparent: gpu.quad(
@@ -40,7 +40,7 @@ impl LineRenderPipeline {
                     &LineBuffer::layout_render(gpu),
                     &CullingBuffer::layout_read(gpu),
                 ]),
-                ColorBuffer::target(),
+                ColorBuffer::target_blend(),
                 &gpu.shader(&(trace.to_string() + include_str!("transparent.wgsl"))),
             ),
         }
@@ -56,7 +56,7 @@ impl LineRenderPipeline {
         line: &LineBuffer,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.color().attachment_clear())],
+            color_attachments: &[Some(frame.color().attachment())],
             label: Some("Ray"),
             ..Default::default()
         });

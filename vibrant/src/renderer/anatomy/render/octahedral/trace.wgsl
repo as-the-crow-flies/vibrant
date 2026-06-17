@@ -108,16 +108,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     let alpha = 1.0 - dot(transmittance, vec3<f32>(1.0 / 3.0));
 
-    return vec4<f32>(color.rgb, alpha);
-}
-
-fn aces(x: vec3<f32>) -> vec3<f32> {
-    let a = 2.51;
-    let b = 0.03;
-    let c = 2.43;
-    let d = 0.59;
-    let e = 0.14;
-    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+    return vec4<f32>(linear_to_srgb(aces(color.rgb)), alpha);
 }
 
 fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {

@@ -80,7 +80,7 @@ impl Renderer {
         if let Some(frame) = self.surface.frame() {
             let mut cmd = gpu.cmd();
 
-            self.clear.dispatch(&mut cmd, frame.post());
+            self.clear.dispatch(&mut cmd, frame.color());
 
             self.anatomy.render(
                 &mut cmd,
@@ -105,7 +105,7 @@ impl Renderer {
 
             self.surface.present(gpu, cmd);
 
-            FileStage::on_save(|path| gpu.save(path, frame.post().texture()).block_on());
+            FileStage::on_save(|path| gpu.save(path, frame.color().texture()).block_on());
         }
     }
 }

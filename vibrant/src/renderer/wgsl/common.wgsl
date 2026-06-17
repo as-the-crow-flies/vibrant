@@ -464,24 +464,21 @@ fn insertion_sort_insertion_index(hits: ptr<function, array<u32, INSERTION_SORT_
     return lo;
 }
 
-fn linear_to_srgb(c: f32) -> f32 {
+fn linear_to_srgb(linear: vec3<f32>) -> vec3<f32> {
     return select(
-        c * 12.92,
-        1.055 * pow(c, 1.0 / 2.4) - 0.055,
-        c > 0.0031308
+        1.055 * pow(linear, vec3<f32>(1.0 / 2.4)) - 0.055,
+        linear * 12.92,
+        linear < vec3<f32>(0.0031308)
     );
 }
 
-fn linear_to_srgb_vec3(c: vec3<f32>) -> vec3<f32> {
-    return vec3<f32>(
-        linear_to_srgb(c.r),
-        linear_to_srgb(c.g),
-        linear_to_srgb(c.b)
-    );
-}
-
-fn linear_to_srgb_rgba(c: vec4<f32>) -> vec4<f32> {
-    return vec4<f32>(linear_to_srgb_vec3(c.rgb), c.a);
+fn aces(x: vec3<f32>) -> vec3<f32> {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
 fn pack_normal(n: vec3<f32>) -> u32 {

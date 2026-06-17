@@ -46,7 +46,7 @@ impl OctahedralVolumeRenderer {
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
                 ]),
-                ColorBuffer::target_srgb(),
+                ColorBuffer::target(),
                 &gpu.shader(&(common.to_string() + include_str!("trace.wgsl"))),
             ),
         }
@@ -113,7 +113,7 @@ impl OctahedralVolumeRenderer {
         viewport: Rect,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.post().attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment())],
             ..Default::default()
         });
 
