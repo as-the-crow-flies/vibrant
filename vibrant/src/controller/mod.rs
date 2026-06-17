@@ -17,6 +17,7 @@ use state::ControllerState;
 use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
+use crate::controller::widgets::radiance::RadianceWidget;
 use crate::controller::widgets::{
     crop::CropWidget, hdri::HdriWidget, masks::MasksWidget, settings::SettingsWidget,
     tractography::TractographyWidget, volumes::VolumesWidget,
@@ -38,6 +39,7 @@ pub struct Controller {
     tractography_widget: TractographyWidget,
     crop_widget: CropWidget,
     hdri_widget: HdriWidget,
+    radiance_widget: RadianceWidget,
 
     show_left_side_panel: bool,
     show_right_side_panel: bool,
@@ -62,6 +64,7 @@ impl Controller {
             tractography_widget: TractographyWidget::new(),
             crop_widget: CropWidget::new(),
             hdri_widget: HdriWidget::new(),
+            radiance_widget: RadianceWidget::new(),
 
             show_left_side_panel: false,
             show_right_side_panel: true,
@@ -89,6 +92,10 @@ impl Controller {
 
     pub fn masks(&self) -> &MasksWidget {
         &self.mask_widget
+    }
+
+    pub fn radiance(&self) -> &RadianceWidget {
+        &self.radiance_widget
     }
 
     pub fn event(&mut self, event: Event) {
@@ -151,6 +158,8 @@ impl Controller {
                 .show_inside(ui, |ui| {
                     self.settings_widget
                         .show(ui, &mut self.settings, &mut self.camera);
+
+                    self.radiance_widget.show(ui);
                 });
 
             Panel::bottom("bottom_panel")
@@ -284,6 +293,7 @@ impl Controller {
             || self.masks().changed()
             || self.tractography().changed()
             || self.hdri().changed()
+            || self.radiance().changed()
     }
 
     pub fn settings_widget(&self) -> &SettingsWidget {

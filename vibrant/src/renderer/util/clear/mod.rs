@@ -14,7 +14,7 @@ impl ClearPipeline {
             pipeline: gpu.quad(
                 type_name::<Self>(),
                 &gpu.pipeline_layout(&[]),
-                ColorBuffer::target_srgb(),
+                ColorBuffer::target(),
                 &gpu.shader(include_str!("clear.wgsl")),
             ),
         }
@@ -22,7 +22,7 @@ impl ClearPipeline {
 
     pub fn dispatch(&self, cmd: &mut CommandEncoder, color: &ColorBuffer) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(color.attachment_srgb_clear())],
+            color_attachments: &[Some(color.attachment_clear())],
             ..Default::default()
         });
 

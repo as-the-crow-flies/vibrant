@@ -14,13 +14,11 @@ use crate::gpu::Gpu;
 pub struct ColorBuffer {
     texture: Texture,
     view: TextureView,
-    view_srgb: TextureView,
     binding: BindGroup,
 }
 
 impl ColorBuffer {
-    pub const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
-    pub const FORMAT_SRGB: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+    pub const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         let label = Some(type_name::<Self>());
@@ -38,19 +36,14 @@ impl ColorBuffer {
             format: Self::FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT
                 | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::STORAGE_BINDING
                 | TextureUsages::COPY_SRC,
-            view_formats: &[Self::FORMAT, Self::FORMAT_SRGB],
+            view_formats: &[],
         });
 
         let view = texture.create_view(&TextureViewDescriptor {
             label,
             format: Some(Self::FORMAT),
-            ..Default::default()
-        });
-
-        let view_srgb = texture.create_view(&TextureViewDescriptor {
-            label,
-            format: Some(Self::FORMAT_SRGB),
             ..Default::default()
         });
 
@@ -83,7 +76,6 @@ impl ColorBuffer {
         Self {
             texture,
             view,
-            view_srgb,
             binding,
         }
     }
@@ -112,9 +104,9 @@ impl ColorBuffer {
         }
     }
 
-    pub fn target_srgb() -> ColorTargetState {
+    pub fn target_blend() -> ColorTargetState {
         ColorTargetState {
-            format: Self::FORMAT_SRGB,
+            format: Self::FORMAT,
             blend: Some(BlendState::ALPHA_BLENDING),
             write_mask: ColorWrites::all(),
         }
@@ -135,30 +127,6 @@ impl ColorBuffer {
     pub fn attachment_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Clear(Color::TRANSPARENT),
-                store: StoreOp::Store,
-            },
-        }
-    }
-
-    pub fn attachment_srgb<'a>(&'a self) -> RenderPassColorAttachment<'a> {
-        RenderPassColorAttachment {
-            view: &self.view_srgb,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Load,
-                store: StoreOp::Store,
-            },
-        }
-    }
-
-    pub fn attachment_srgb_clear<'a>(&'a self) -> RenderPassColorAttachment<'a> {
-        RenderPassColorAttachment {
-            view: &self.view_srgb,
             depth_slice: None,
             resolve_target: None,
             ops: Operations {

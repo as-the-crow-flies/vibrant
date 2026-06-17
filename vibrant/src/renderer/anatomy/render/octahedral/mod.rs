@@ -6,10 +6,7 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{
-        hdri::HdriBuffer, radiance::octahedral::OctahedralRadianceCascadesBuffer,
-        volume::PhysicalVolume,
-    },
+    asset::{hdri::HdriBuffer, radiance::RadianceCascadesBuffer, volume::PhysicalVolume},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::ColorBuffer, Frame},
@@ -29,7 +26,7 @@ impl OctahedralVolumeRenderer {
             cascade: gpu.compute(
                 "OctahedralVolumeCascade",
                 &gpu.pipeline_layout(&[
-                    &OctahedralRadianceCascadesBuffer::layout_cascade(gpu),
+                    &RadianceCascadesBuffer::layout_cascade(gpu),
                     &PhysicalVolume::layout_read(gpu),
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
@@ -38,18 +35,18 @@ impl OctahedralVolumeRenderer {
             ),
             copy: gpu.compute(
                 "OctahedralVolumeCopy",
-                &gpu.pipeline_layout(&[&OctahedralRadianceCascadesBuffer::layout_copy(gpu)]),
+                &gpu.pipeline_layout(&[&RadianceCascadesBuffer::layout_copy(gpu)]),
                 &gpu.shader(include_str!("copy.wgsl")),
             ),
             trace: gpu.quad(
                 "OctahedralVolumeTrace",
                 &gpu.pipeline_layout(&[
-                    &OctahedralRadianceCascadesBuffer::layout_read(gpu),
+                    &RadianceCascadesBuffer::layout_read(gpu),
                     &PhysicalVolume::layout_read(gpu),
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
                 ]),
-                ColorBuffer::target_srgb(),
+                ColorBuffer::target(),
                 &gpu.shader(&(common.to_string() + include_str!("trace.wgsl"))),
             ),
         }
@@ -61,7 +58,7 @@ impl OctahedralVolumeRenderer {
         environment: &Environment,
         hdri: &HdriBuffer,
         frame: &Frame,
-        radiance: &OctahedralRadianceCascadesBuffer,
+        radiance: &RadianceCascadesBuffer,
         volume: &PhysicalVolume,
         viewport: Rect,
         recompute: bool,
@@ -77,7 +74,7 @@ impl OctahedralVolumeRenderer {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         hdri: &HdriBuffer,
-        radiance: &OctahedralRadianceCascadesBuffer,
+        radiance: &RadianceCascadesBuffer,
         volume: &PhysicalVolume,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
@@ -111,12 +108,12 @@ impl OctahedralVolumeRenderer {
         environment: &Environment,
         hdri: &HdriBuffer,
         frame: &Frame,
-        radiance: &OctahedralRadianceCascadesBuffer,
+        radiance: &RadianceCascadesBuffer,
         volume: &PhysicalVolume,
         viewport: Rect,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            color_attachments: &[Some(frame.post().attachment_srgb())],
+            color_attachments: &[Some(frame.color().attachment())],
             ..Default::default()
         });
 

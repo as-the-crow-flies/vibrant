@@ -54,7 +54,7 @@ impl UiRenderer {
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
                 label: Some(type_name::<Self>()),
-                color_attachments: &[Some(frame.post().attachment())],
+                color_attachments: &[Some(frame.color().attachment())],
                 ..Default::default()
             })
             .forget_lifetime();

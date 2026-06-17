@@ -9,15 +9,15 @@ use color::ColorBuffer;
 use occlusion::OcclusionBuffer;
 use occupancy::OccupancyBuffer;
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, CommandEncoder,
-    CompositeAlphaMode, CurrentSurfaceTexture, Extent3d, Origin3d, PresentMode,
-    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, TexelCopyTextureInfo, TextureAspect,
-    TextureFormat, TextureUsages,
+    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, ColorTargetState,
+    ColorWrites, CommandEncoder, CompositeAlphaMode, CurrentSurfaceTexture, PresentMode,
+    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, TextureFormat, TextureUsages,
 };
 
 use crate::{
     asset::texture::{MipTexture3D, R32Float, R32Uint},
     controller::settings::Settings,
+    renderer::util::copy::CopyPipeline,
     surface::culling::CullingBuffer,
 };
 
@@ -25,7 +25,6 @@ use super::gpu::Gpu;
 
 pub struct Frame {
     color: ColorBuffer,
-    post: ColorBuffer,
     occupancy: OccupancyBuffer,
     occlusion: OcclusionBuffer,
     culling: CullingBuffer,
@@ -35,7 +34,6 @@ pub struct Frame {
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         let color = ColorBuffer::new(gpu, settings.width, settings.height);
-        let post = ColorBuffer::new(gpu, settings.width, settings.height);
 
         let occupancy = OccupancyBuffer::new(gpu, settings.volume);
         let occlusion = OcclusionBuffer::new(gpu, settings.volume);
@@ -55,7 +53,6 @@ impl Frame {
 
         Self {
             color,
-            post,
             occupancy,
             occlusion,
             culling,
@@ -65,10 +62,6 @@ impl Frame {
 
     pub fn color(&self) -> &ColorBuffer {
         &self.color
-    }
-
-    pub fn post(&self) -> &ColorBuffer {
-        &self.post
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {
@@ -105,6 +98,7 @@ impl Frame {
 pub struct Surface {
     surface: wgpu::Surface<'static>,
     frame: Option<Frame>,
+    copy: CopyPipeline,
     changed: bool,
 }
 
@@ -123,6 +117,7 @@ impl Surface {
             surface,
             frame: None,
             changed: true,
+            copy: CopyPipeline::new(gpu),
         }
     }
 
@@ -164,25 +159,8 @@ impl Surface {
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
         if let (Some(frame), Some(surface)) = (&self.frame, self.get_current_texture()) {
-            cmd.copy_texture_to_texture(
-                TexelCopyTextureInfo {
-                    texture: frame.post().texture(),
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: TextureAspect::All,
-                },
-                TexelCopyTextureInfo {
-                    texture: &surface.texture,
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: TextureAspect::All,
-                },
-                Extent3d {
-                    width: surface.texture.width(),
-                    height: surface.texture.height(),
-                    depth_or_array_layers: 1,
-                },
-            );
+            self.copy
+                .dispatch(&mut cmd, frame.color(), &surface.texture);
 
             gpu.submit(cmd);
             surface.present();
@@ -191,7 +169,7 @@ impl Surface {
 
     fn config(width: u32, height: u32) -> SurfaceConfiguration {
         SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST,
+            usage: TextureUsages::RENDER_ATTACHMENT,
             format: Self::FORMAT,
             width,
             height,
@@ -199,6 +177,14 @@ impl Surface {
             desired_maximum_frame_latency: 2,
             alpha_mode: CompositeAlphaMode::Auto,
             view_formats: vec![Self::FORMAT],
+        }
+    }
+
+    pub fn target() -> ColorTargetState {
+        ColorTargetState {
+            format: Self::FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
         }
     }
 

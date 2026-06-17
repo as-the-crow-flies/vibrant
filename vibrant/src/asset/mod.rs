@@ -15,8 +15,7 @@ use volume::PhysicalVolume;
 
 use crate::{
     asset::{
-        colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer,
-        radiance::octahedral::OctahedralRadianceCascadesBuffer,
+        colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer, radiance::RadianceCascadesBuffer,
         volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
     },
     controller::Controller,
@@ -33,7 +32,7 @@ pub struct Asset {
     pub volumes: Vec<VolumeFractionBuffer>,
     pub masks: Vec<VolumeMaskBuffer>,
     pub physical_volume: Option<PhysicalVolume>,
-    pub radiance: Option<OctahedralRadianceCascadesBuffer>,
+    pub radiance: Option<RadianceCascadesBuffer>,
 
     pub changed: bool,
 }
@@ -81,7 +80,7 @@ impl Asset {
             }
         });
 
-        let mut radiance_should_update = controller.settings_widget().radiance_resolution_changed();
+        let mut radiance_should_update = controller.radiance().changed();
 
         FileStage::on_volumes(|volumes| {
             for volume in &volumes {
@@ -117,10 +116,13 @@ impl Asset {
             .max_by_key(|volume| volume.size().element_product())
         {
             if radiance_should_update {
-                self.radiance = Some(OctahedralRadianceCascadesBuffer::new(
-                    gpu,
-                    volume.size().div(controller.settings().radiance_resolution),
-                ));
+                let resolution = volume.size().div(controller.radiance().resolution());
+
+                dbg!("Update Radiance: {:?}", resolution);
+
+                self.radiance = Some(RadianceCascadesBuffer::new_octahedral(gpu, resolution));
+
+                self.changed = true;
             }
         }
 
