@@ -20,8 +20,6 @@ pub struct OctahedralVolumeRenderer {
 
 impl OctahedralVolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
-        let common = include_str!("common.wgsl");
-
         Self {
             cascade: gpu.compute(
                 "OctahedralVolumeCascade",
@@ -31,7 +29,7 @@ impl OctahedralVolumeRenderer {
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
                 ]),
-                &gpu.shader(&(common.to_string() + include_str!("cascade.wgsl"))),
+                &gpu.shader(include_str!("cascade.wgsl")),
             ),
             copy: gpu.compute(
                 "OctahedralVolumeCopy",
@@ -47,7 +45,7 @@ impl OctahedralVolumeRenderer {
                     &HdriBuffer::layout(gpu),
                 ]),
                 ColorBuffer::target(),
-                &gpu.shader(&(common.to_string() + include_str!("trace.wgsl"))),
+                &gpu.shader(include_str!("trace.wgsl")),
             ),
         }
     }

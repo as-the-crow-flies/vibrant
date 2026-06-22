@@ -1,7 +1,7 @@
-use std::{any::type_name, ops::Neg};
+use std::any::type_name;
 
 use bytemuck::bytes_of;
-use glam::{IVec3, UVec3};
+use glam::UVec3;
 use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -27,20 +27,16 @@ pub struct RadianceCascadesBuffer {
 }
 
 impl RadianceCascadesBuffer {
-    pub const N_CASCADES: usize = 6;
+    pub const N_CASCADES: usize = 10;
     pub const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
-    pub fn new_octahedral(gpu: &Gpu, size: UVec3) -> Self {
-        Self::new(gpu, size, size * 2, IVec3::new(1, 1, -2))
-    }
-
-    pub fn new(gpu: &Gpu, size: UVec3, base: UVec3, multiplier: IVec3) -> Self {
+    pub fn new(gpu: &Gpu, volume: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
         let size = Extent3d {
-            width: size.x,
-            height: size.y,
-            depth_or_array_layers: size.z,
+            width: volume.x,
+            height: volume.y,
+            depth_or_array_layers: volume.z,
         };
 
         let descriptor = TextureDescriptor {
@@ -71,18 +67,19 @@ impl RadianceCascadesBuffer {
             border_color: None,
         });
 
-        let mut base = base;
+        let mut probes = volume;
+        let mut samples = 3;
 
         let size_cascade = (0..Self::N_CASCADES)
             .map(|_| {
                 let extend = Extent3d {
-                    width: base.x.max(1),
-                    height: base.y.max(1),
-                    depth_or_array_layers: base.z.max(1),
+                    width: probes.x.max(1) * samples,
+                    height: probes.y.max(1) * samples,
+                    depth_or_array_layers: probes.z.max(1),
                 };
 
-                base = base * multiplier.max(IVec3::ONE).as_uvec3()
-                    / multiplier.neg().max(IVec3::ONE).as_uvec3();
+                probes /= 2;
+                samples *= 2;
 
                 extend
             })
@@ -202,37 +199,85 @@ impl RadianceCascadesBuffer {
                 BindGroupEntry {
                     binding: 7,
                     resource: BindingResource::TextureView(
-                        &transmission[0].create_view(&TextureViewDescriptor::default()),
+                        &radiance[6].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 8,
                     resource: BindingResource::TextureView(
-                        &transmission[1].create_view(&TextureViewDescriptor::default()),
+                        &radiance[7].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 9,
                     resource: BindingResource::TextureView(
-                        &transmission[2].create_view(&TextureViewDescriptor::default()),
+                        &radiance[8].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 10,
                     resource: BindingResource::TextureView(
-                        &transmission[3].create_view(&TextureViewDescriptor::default()),
+                        &radiance[9].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 11,
                     resource: BindingResource::TextureView(
-                        &transmission[4].create_view(&TextureViewDescriptor::default()),
+                        &transmission[0].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 12,
                     resource: BindingResource::TextureView(
+                        &transmission[1].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 13,
+                    resource: BindingResource::TextureView(
+                        &transmission[2].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 14,
+                    resource: BindingResource::TextureView(
+                        &transmission[3].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 15,
+                    resource: BindingResource::TextureView(
+                        &transmission[4].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 16,
+                    resource: BindingResource::TextureView(
                         &transmission[5].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 17,
+                    resource: BindingResource::TextureView(
+                        &transmission[6].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 18,
+                    resource: BindingResource::TextureView(
+                        &transmission[7].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 19,
+                    resource: BindingResource::TextureView(
+                        &transmission[8].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 20,
+                    resource: BindingResource::TextureView(
+                        &transmission[9].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
             ],
@@ -277,7 +322,7 @@ impl RadianceCascadesBuffer {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
-                entries: &(0..13)
+                entries: &(0..21)
                     .map(|binding| BindGroupLayoutEntry {
                         binding,
                         visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,

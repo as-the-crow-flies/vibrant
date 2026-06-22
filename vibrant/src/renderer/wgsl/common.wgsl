@@ -625,3 +625,20 @@ fn unpack_rgb(src: vec4<f32>) -> vec3<f32> {
     let scale = exp2(PACK_RGB_LOG_LO + src.a * PACK_RGB_LOG_SPAN);
     return src.rgb * scale;
 }
+
+fn signNotZero(v: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
+}
+
+fn octahedron_encode(v: vec3<f32>) -> vec2<f32> {
+    let l1norm = abs(v.x) + abs(v.y) + abs(v.z);
+    var result = v.xy * (1.0 / l1norm);
+    if v.z < 0.0 { result = (1.0 - abs(result.yx)) * signNotZero(result.xy); }
+    return result;
+}
+
+fn octahedron_decode(o: vec2<f32>) -> vec3<f32> {
+    var v = vec3f(o.x, o.y, 1.0 - abs(o.x) - abs(o.y));
+    if v.z < 0.0 { v = vec3f((1.0 - abs(v.yx)) * signNotZero(v.xy), v.z); }
+    return normalize(v);
+}

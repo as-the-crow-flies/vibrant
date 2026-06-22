@@ -2,35 +2,31 @@
 @group(0) @binding(1) var RADIANCE_0: texture_3d<f32>;
 @group(0) @binding(2) var SAMPLER: sampler;
 
-fn sample_octant(voxel: vec3<f32>, octant: vec3<f32>, rad_dim: vec3<f32>) -> vec4<f32> {
-    let uv = (voxel + octant) / rad_dim;
-    let d  = 0.5 / rad_dim;
-    return 0.5 * (textureSampleLevel(RADIANCE_0, SAMPLER, uv + d, 0.0) +
-                  textureSampleLevel(RADIANCE_0, SAMPLER, uv - d, 0.0));
-}
-
 @compute
 @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
+    if (any(voxel >= textureDimensions(IRRADIANCE))) { return; }
+
     let dim = textureDimensions(IRRADIANCE);
+    let dim_inv = 1.0 / vec3<f32>(textureDimensions(RADIANCE_0));
 
-    if (any(voxel >= dim)) { return; }
+    var irradiance = vec3<f32>(0.0);
 
-    let rad_dim = vec3<f32>(textureDimensions(RADIANCE_0));
-    let vf      = vec3<f32>(voxel) + 0.5;
-    let ox      = vec3<f32>(f32(dim.x), 0.0,         0.0        );
-    let oy      = vec3<f32>(0.0,         f32(dim.y), 0.0        );
-    let oz      = vec3<f32>(0.0,         0.0,         f32(dim.z));
+    for (var dx=0u; dx<3u; dx++) {
+        for (var dy=0u; dy<3u; dy++) {
+            for (var jx=-1; jx<=1; jx+=2) {
+                for (var jy=-1; jy<=1; jy+=2) {
+                    for (var jz=-1; jz<=1; jz+=2) {
+                        let direction = dim * vec3<u32>(dx, dy, 0);
+                        let jitter = vec3<i32>(jx, jy, jz);
 
-    let irradiance = 0.125 * (
-        sample_octant(vf, vec3(0.0)     , rad_dim) +
-        sample_octant(vf, ox            , rad_dim) +
-        sample_octant(vf, oy            , rad_dim) +
-        sample_octant(vf, oz            , rad_dim) +
-        sample_octant(vf, ox + oy       , rad_dim) +
-        sample_octant(vf, ox + oz       , rad_dim) +
-        sample_octant(vf, oy + oz       , rad_dim) +
-        sample_octant(vf, ox + oy + oz  , rad_dim));
+                        let sample = dim_inv * (vec3<f32>(voxel + direction) + 0.5 + vec3<f32>(jitter));
+                        irradiance += unpack_rgb(textureSampleLevel(RADIANCE_0, SAMPLER, sample, 0.0));
+                    }
+                }
+            }
+        }
+    }
 
-    textureStore(IRRADIANCE, voxel, pack_rgb(irradiance.rgb));
+    textureStore(IRRADIANCE, voxel, pack_rgb(irradiance / 8.0));
 }

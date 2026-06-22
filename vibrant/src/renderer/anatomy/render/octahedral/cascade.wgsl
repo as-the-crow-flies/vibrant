@@ -20,7 +20,7 @@
 
 const STEP_SIZE: f32 = 0.5;
 
-const INTERVAL = array<f32, 7>(0.0, 1.0, 3.0, 7.0, 15.0, 31.0, 63.0);
+const INTERVAL = array<f32, 11>(0.0, 1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0, 255.0, 511.0, 1023.0);
 
 var<private> SCALE: u32;
 
@@ -29,36 +29,34 @@ var<private> SCALE: u32;
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     SCALE = textureDimensions(EXTINCTION).x / textureDimensions(IRRADIANCE).x;
 
-    let probes = textureDimensions(IRRADIANCE) >> vec3<u32>(CASCADE);
-    let subdivisions = 1u << CASCADE; // Sqrt of subdivisions
-    let subdivisions_2 = subdivisions * subdivisions;
+    if (any(voxel >= textureDimensions(TRANSMISSION_OUT))) { return; }
 
-    // Cascade Index: Octant -> Subdivision -> Probe
-    let octant = voxel / (probes * vec3<u32>(subdivisions, subdivisions, 1u));
-    let subdivision = (voxel.xy / probes.xy) % subdivisions;
+    // Cascade Dimensions
+    let probes = max(textureDimensions(IRRADIANCE) >> vec3<u32>(CASCADE), vec3<u32>(1u));
+    let samples = 3u << CASCADE; // Sqrt of samples
+    let samples_2 = samples * samples;
+
+    // Thread Index
     let probe = voxel % probes;
-
-    if (any(octant > vec3<u32>(1u))) { return; }
+    let sample = (voxel.xy / probes.xy) % samples;
 
     // Index to Ray
-    let origin = vec3<f32>(probe * (1u << CASCADE)) + 0.5 * vec3<f32>(f32(1u << CASCADE));
-    let direction = octahedron(octant, subdivision, subdivisions);
+    let origin = (vec3<f32>(probe) + 0.5) * f32(1u << CASCADE);
+    let uv = 2.0 * (vec2<f32>(sample)) / f32(samples) - 1.0;
+    let direction = octahedron_decode(uv);
 
     // Ray to Radiance
     let transmission = trace(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
     var radiance = vec3<f32>(0.0);
 
-    if (CASCADE == 5) { // Final Cascade
-        radiance = hdri(direction, 8u * subdivisions_2);
+    if (CASCADE == 9) { // Final Cascade
+        radiance = hdri(direction, samples_2);
     } else { // Other Cascades
-        let probes_in = probes >> vec3<u32>(1u);
-        let subdivisions_in = subdivisions << 1u;
+        let probes_in = max(probes >> vec3<u32>(1u), vec3<u32>(1u));
+        let samples_in = samples << 1u;
 
-        let dim_in = vec3<f32>(2u * probes_in * vec3<u32>(subdivisions_in, subdivisions_in, 1u));
+        let sample_in = sample << vec2<u32>(1u);
 
-        let subdivision_in = subdivision << vec2<u32>(1u);
-
-        let octant_position = vec3<f32>(octant * probes_in * vec3<u32>(subdivisions_in, subdivisions_in, 1u));
         let probe_position = clamp(
             vec3<f32>(0.5) * (vec3<f32>(probe) + vec3<f32>(0.5)),
             vec3<f32>(0.5),
@@ -66,12 +64,10 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
         for (var sub_x = 0u; sub_x < 2u; sub_x++) {
             for (var sub_y = 0u; sub_y < 2u; sub_y++) {
-                let subdivision_position = vec3<f32>(vec3<u32>((subdivision_in + vec2<u32>(sub_x, sub_y)) * probes_in.xy, 0u));
+                let sample_position = vec3<f32>(vec3<u32>((sample_in + vec2<u32>(sub_x, sub_y)) * probes_in.xy, 0u));
+                let position = (sample_position + probe_position) / vec3<f32>(textureDimensions(RADIANCE_IN));
 
-                let position = octant_position + subdivision_position + probe_position;
-                let sample = position / vec3<f32>(textureDimensions(RADIANCE_IN));
-
-                radiance += 0.25 * unpack_rgb(textureSampleLevel(RADIANCE_IN, SAMPLER, sample, 0.0));
+                radiance += 0.25 * unpack_rgb(textureSampleLevel(RADIANCE_IN, SAMPLER, position, 0.0));
             }
         }
     }
@@ -96,7 +92,7 @@ fn trace(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32>
         let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
 
         transmission *= exp(-extinction * step_size / scale);
-        if (all(transmission < vec3<f32>(1e-3))) { break; }
+        if (all(transmission < vec3<f32>(1e-3)) || any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
     }
 
     return transmission;

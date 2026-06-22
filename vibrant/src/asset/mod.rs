@@ -118,9 +118,7 @@ impl Asset {
             if radiance_should_update {
                 let resolution = volume.size().div(controller.radiance().resolution());
 
-                dbg!("Update Radiance: {:?}", resolution);
-
-                self.radiance = Some(RadianceCascadesBuffer::new_octahedral(gpu, resolution));
+                self.radiance = Some(RadianceCascadesBuffer::new(gpu, resolution));
 
                 self.changed = true;
             }
