@@ -31,8 +31,10 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     if (any(voxel >= textureDimensions(TRANSMISSION_OUT))) { return; }
 
+    let dim = textureDimensions(IRRADIANCE) >> vec3<u32>(CASCADE);
+
     // Cascade Dimensions
-    let probes = max(textureDimensions(IRRADIANCE) >> vec3<u32>(CASCADE), vec3<u32>(1u));
+    let probes = max(dim, vec3<u32>(1u));
     let samples = 3u << CASCADE; // Sqrt of samples
     let samples_2 = samples * samples;
 
@@ -42,8 +44,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     // Index to Ray
     let origin = (vec3<f32>(probe) + 0.5) * f32(1u << CASCADE);
-    let uv = 2.0 * (vec2<f32>(sample)) / f32(samples) - 1.0;
-    let direction = octahedron_decode(uv);
+    let uv = 2.0 * (vec2<f32>(sample) + 0.5) / f32(samples) - 1.0;
+    let direction = clarberg_equal_area_sphere(uv);
 
     // Ray to Radiance
     let transmission = trace(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);

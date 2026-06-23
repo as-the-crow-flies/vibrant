@@ -12,25 +12,6 @@ fn hammersley(i: u32, N: u32) -> vec2<f32> {
     return vec2<f32>(f32(i) / f32(N), van_der_corput(i));
 }
 
-fn importance_sample_ggx(Xi: vec2<f32>, N: vec3<f32>, roughness: f32) -> vec3<f32> {
-    let a = roughness*roughness;
-
-    let phi = 2.0 * PI * Xi.x;
-    let cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
-    let sinTheta = sqrt(1.0 - cosTheta*cosTheta);
-
-    // from spherical coordinates to cartesian coordinates
-    let H = vec3<f32>(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-
-    // from tangent-space vector to world-space sample vector
-    let up        = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(N.z) < 0.999);
-    let tangent   = normalize(cross(up, N));
-    let bitangent = cross(N, tangent);
-
-    let sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
-    return normalize(sampleVec);
-}
-
 // ── GGX Normal Distribution Function ──────────────────────────────────────
 // α = roughness², n = surface normal, h = half-vector
 fn D_GGX(n_dot_h: f32, alpha: f32) -> f32 {

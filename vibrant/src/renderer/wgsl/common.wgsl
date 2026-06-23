@@ -548,66 +548,6 @@ fn rotation_z(angle: f32) -> mat3x3<f32> {
     );
 }
 
-struct CubeCoordinates {
-    face: u32,
-    uv: vec2<f32>,
-};
-
-fn cubemap_encode(direction: vec3<f32>) -> CubeCoordinates {
-    let d = normalize(direction);
-    let ad = abs(d);
-
-    var face: u32;
-    var uv: vec2<f32>;
-
-    if (ad.x >= ad.y && ad.x >= ad.z) {
-        if (d.x > 0.0) {
-            face = 0u; // +X
-            uv = vec2(-d.z, -d.y) / ad.x;
-        } else {
-            face = 3u; // -X
-            uv = vec2(d.z, -d.y) / ad.x;
-        }
-    } else if (ad.y >= ad.x && ad.y >= ad.z) {
-        if (d.y > 0.0) {
-            face = 1u; // +Y
-            uv = vec2(d.x, d.z) / ad.y;
-        } else {
-            face = 4u; // -Y
-            uv = vec2(d.x, -d.z) / ad.y;
-        }
-    } else {
-        if (d.z > 0.0) {
-            face = 2u; // +Z
-            uv = vec2(d.x, -d.y) / ad.z;
-        } else {
-            face = 5u; // -Z
-            uv = vec2(-d.x, -d.y) / ad.z;
-        }
-    }
-
-    uv = uv * 0.5 + 0.5;
-
-    return CubeCoordinates(face, uv);
-}
-
-fn cubemap_decode(c: CubeCoordinates) -> vec3<f32> {
-    let uv = c.uv * 2.0 - 1.0;
-
-    var dir: vec3<f32>;
-
-    switch (c.face) {
-        case 0u: { dir = vec3( 1.0, -uv.y, -uv.x); } // +X
-        case 3u: { dir = vec3(-1.0, -uv.y,  uv.x); } // -X
-        case 1u: { dir = vec3( uv.x,  1.0,  uv.y); } // +Y
-        case 4u: { dir = vec3( uv.x, -1.0, -uv.y); } // -Y
-        case 2u: { dir = vec3( uv.x, -uv.y,  1.0); } // +Z
-        default: { dir = vec3(-uv.x, -uv.y, -1.0); } // -Z
-    }
-
-    return normalize(dir);
-}
-
 const PACK_RGB_LOG_LO:   f32 = -9.965784;  // log2(1e-3)
 const PACK_RGB_LOG_SPAN: f32 = 16.609640;  // log2(1e2) - log2(1e-3)
 
@@ -626,19 +566,45 @@ fn unpack_rgb(src: vec4<f32>) -> vec3<f32> {
     return src.rgb * scale;
 }
 
-fn signNotZero(v: vec2<f32>) -> vec2<f32> {
+fn sign_not_zero(v: f32) -> f32 {
+  return select(-1.0, 1.0, v >= 0.0);
+}
+
+fn sign_not_zero_2(v: vec2<f32>) -> vec2<f32> {
   return vec2<f32>(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
 }
 
 fn octahedron_encode(v: vec3<f32>) -> vec2<f32> {
     let l1norm = abs(v.x) + abs(v.y) + abs(v.z);
     var result = v.xy * (1.0 / l1norm);
-    if v.z < 0.0 { result = (1.0 - abs(result.yx)) * signNotZero(result.xy); }
+    if v.z < 0.0 { result = (1.0 - abs(result.yx)) * sign_not_zero_2(result.xy); }
     return result;
 }
 
 fn octahedron_decode(o: vec2<f32>) -> vec3<f32> {
     var v = vec3f(o.x, o.y, 1.0 - abs(o.x) - abs(o.y));
-    if v.z < 0.0 { v = vec3f((1.0 - abs(v.yx)) * signNotZero(v.xy), v.z); }
+    if v.z < 0.0 { v = vec3f((1.0 - abs(v.yx)) * sign_not_zero_2(v.xy), v.z); }
     return normalize(v);
+}
+
+fn clarberg_equal_area_sphere(uv: vec2<f32>) -> vec3<f32> {
+    let au = abs(uv.x);
+    let av = abs(uv.y);
+
+    // Branchless octahedral fold
+    let d = 1.0 - (au + av);
+    let r = 1.0 - abs(d);
+
+    // Avoid division by zero at poles
+    let inv_r = select(0.0, 1.0 / r, r > 0.0);
+    let phi0 = 0.25 * PI * ((av - au) * inv_r + 1.0);
+
+    let xy_scale = r * sqrt(max(0.0, 2.0 - r * r));
+
+    let xy = sign_not_zero_2(uv) * vec2<f32>(cos(phi0), sin(phi0)) * xy_scale;
+
+    let z_mag = 1.0 - r * r;
+    let z = sign_not_zero(d) * z_mag;
+
+    return vec3<f32>(xy, z);
 }
