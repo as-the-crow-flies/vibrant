@@ -1,15 +1,26 @@
-fn van_der_corput(b: u32) -> f32 {
-    var bits = b;
-    bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    return f32(bits) * 2.3283064365386963e-10; // / 0x100000000
+fn van_der_corput(i: u32) -> f32 {
+    return f32(reverseBits(i)) * 2.3283064365386963e-10; // 1 / 2^32
 }
 
 fn hammersley(i: u32, N: u32) -> vec2<f32> {
     return vec2<f32>(f32(i) / f32(N), van_der_corput(i));
+}
+
+fn hammersley_rotated(i: u32, N: u32, offset: vec2<f32>) -> vec2<f32> {
+    return fract(hammersley(i, N) + offset);
+}
+
+fn hash22(p: vec2<u32>) -> vec2<f32> {
+    var v = p * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v.x ^= v.x >> 16u;
+    v.y ^= v.y >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v.x ^= v.x >> 16u;
+    v.y ^= v.y >> 16u;
+    return vec2<f32>(v) * 2.3283064365386963e-10;
 }
 
 // ── GGX Normal Distribution Function ──────────────────────────────────────

@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     // Cascade Dimensions
     let probes = max(dim, vec3<u32>(1u));
-    let samples = 3u << CASCADE; // Sqrt of samples
+    let samples = 2u << CASCADE; // Sqrt of samples
     let samples_2 = samples * samples;
 
     // Thread Index

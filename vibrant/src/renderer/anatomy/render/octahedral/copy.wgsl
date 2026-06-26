@@ -12,8 +12,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     var irradiance = vec3<f32>(0.0);
 
-    for (var dx=0u; dx<3u; dx++) {
-        for (var dy=0u; dy<3u; dy++) {
+    for (var dx=0u; dx<2u; dx++) {
+        for (var dy=0u; dy<2u; dy++) {
             for (var jx=-1; jx<=1; jx+=2) {
                 for (var jy=-1; jy<=1; jy+=2) {
                     for (var jz=-1; jz<=1; jz+=2) {

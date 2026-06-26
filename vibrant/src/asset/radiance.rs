@@ -68,7 +68,7 @@ impl RadianceCascadesBuffer {
         });
 
         let mut probes = volume;
-        let mut samples = 3;
+        let mut samples = 2;
 
         let size_cascade = (0..Self::N_CASCADES)
             .map(|_| {
