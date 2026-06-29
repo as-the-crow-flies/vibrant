@@ -51,7 +51,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let transmission = trace(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
     var radiance = vec3<f32>(0.0);
 
-    if (CASCADE == 9) { // Final Cascade
+    if (CASCADE == 8) { // Final Cascade
         radiance = hdri(direction, samples_2);
     } else { // Other Cascades
         let probes_in = max(probes >> vec3<u32>(1u), vec3<u32>(1u));

@@ -1,24 +1,23 @@
-@group(0) @binding( 0) var IRRADIANCE: texture_3d<f32>;
-@group(0) @binding( 1) var RADIANCE_0: texture_3d<f32>;
-@group(0) @binding( 2) var RADIANCE_1: texture_3d<f32>;
-@group(0) @binding( 3) var RADIANCE_2: texture_3d<f32>;
-@group(0) @binding( 4) var RADIANCE_3: texture_3d<f32>;
-@group(0) @binding( 5) var RADIANCE_4: texture_3d<f32>;
-@group(0) @binding( 6) var RADIANCE_5: texture_3d<f32>;
-@group(0) @binding( 7) var RADIANCE_6: texture_3d<f32>;
-@group(0) @binding( 8) var RADIANCE_7: texture_3d<f32>;
-@group(0) @binding( 9) var RADIANCE_8: texture_3d<f32>;
-@group(0) @binding(10) var RADIANCE_9: texture_3d<f32>;
-@group(0) @binding(11) var TRANSMISSION_0: texture_3d<f32>;
-@group(0) @binding(12) var TRANSMISSION_1: texture_3d<f32>;
-@group(0) @binding(13) var TRANSMISSION_2: texture_3d<f32>;
-@group(0) @binding(14) var TRANSMISSION_3: texture_3d<f32>;
-@group(0) @binding(15) var TRANSMISSION_4: texture_3d<f32>;
-@group(0) @binding(16) var TRANSMISSION_5: texture_3d<f32>;
-@group(0) @binding(17) var TRANSMISSION_6: texture_3d<f32>;
-@group(0) @binding(18) var TRANSMISSION_7: texture_3d<f32>;
-@group(0) @binding(19) var TRANSMISSION_8: texture_3d<f32>;
-@group(0) @binding(20) var TRANSMISSION_9: texture_3d<f32>;
+@group(0) @binding( 1) var IRRADIANCE: texture_3d<f32>;
+@group(0) @binding( 2) var IMPORTANCE: texture_3d<f32>;
+@group(0) @binding( 3) var RADIANCE_0: texture_3d<f32>;
+@group(0) @binding( 4) var RADIANCE_1: texture_3d<f32>;
+@group(0) @binding( 5) var RADIANCE_2: texture_3d<f32>;
+@group(0) @binding( 6) var RADIANCE_3: texture_3d<f32>;
+@group(0) @binding( 7) var RADIANCE_4: texture_3d<f32>;
+@group(0) @binding( 8) var RADIANCE_5: texture_3d<f32>;
+@group(0) @binding( 9) var RADIANCE_6: texture_3d<f32>;
+@group(0) @binding(10) var RADIANCE_7: texture_3d<f32>;
+@group(0) @binding(11) var RADIANCE_8: texture_3d<f32>;
+@group(0) @binding(12) var TRANSMISSION_0: texture_3d<f32>;
+@group(0) @binding(13) var TRANSMISSION_1: texture_3d<f32>;
+@group(0) @binding(14) var TRANSMISSION_2: texture_3d<f32>;
+@group(0) @binding(15) var TRANSMISSION_3: texture_3d<f32>;
+@group(0) @binding(16) var TRANSMISSION_4: texture_3d<f32>;
+@group(0) @binding(17) var TRANSMISSION_5: texture_3d<f32>;
+@group(0) @binding(18) var TRANSMISSION_6: texture_3d<f32>;
+@group(0) @binding(19) var TRANSMISSION_7: texture_3d<f32>;
+@group(0) @binding(20) var TRANSMISSION_8: texture_3d<f32>;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
 @group(1) @binding(1) var SCATTERING: texture_3d<f32>;
@@ -226,8 +225,7 @@ fn sample_radiance_transmission(
         case  5: { return radiance_transmission(RADIANCE_5, TRANSMISSION_5, sample); }
         case  6: { return radiance_transmission(RADIANCE_6, TRANSMISSION_6, sample); }
         case  7: { return radiance_transmission(RADIANCE_7, TRANSMISSION_7, sample); }
-        case  8: { return radiance_transmission(RADIANCE_8, TRANSMISSION_8, sample); }
-        default: { return radiance_transmission(RADIANCE_9, TRANSMISSION_9, sample); }
+        default: { return radiance_transmission(RADIANCE_8, TRANSMISSION_8, sample); }
     }
 }
 

@@ -1,6 +1,7 @@
-@group(0) @binding(0) var IRRADIANCE: texture_storage_3d<rgba8unorm, write>;
-@group(0) @binding(1) var RADIANCE_0: texture_3d<f32>;
-@group(0) @binding(2) var SAMPLER: sampler;
+@group(0) @binding( 0) var SAMPLER: sampler;
+@group(0) @binding( 1) var IRRADIANCE: texture_storage_3d<rgba8unorm, write>;
+@group(0) @binding( 2) var IMPORTANCE: texture_storage_3d<rgba8unorm, write>;
+@group(0) @binding( 3) var RADIANCE_0: texture_3d<f32>;
 
 @compute
 @workgroup_size(4, 4, 4)
@@ -29,4 +30,21 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     }
 
     textureStore(IRRADIANCE, voxel, pack_rgb(irradiance / 8.0));
+}
+
+fn importance(a: vec4<f32>, b: vec4<f32>, c: vec4<f32>, d: vec4<f32>) -> vec4<f32> {
+    return normed(vec4<f32>(
+        brightness(unpack_rgb(a)),
+        brightness(unpack_rgb(b)),
+        brightness(unpack_rgb(c)),
+        brightness(unpack_rgb(d))
+    ));
+}
+
+fn normed(v: vec4<f32>) -> vec4<f32> {
+    return v / max(v.x, max(v.y, max(v.z, v.w)));
+}
+
+fn brightness(rgb: vec3<f32>) -> f32 {
+    return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
