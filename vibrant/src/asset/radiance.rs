@@ -54,7 +54,7 @@ impl RadianceCascadesBuffer {
         let irradiance = gpu.device().create_texture(&descriptor);
 
         let mut probes = volume;
-        let mut samples = 2;
+        let mut samples = 1;
 
         let size_cascade = (0..Self::N_CASCADES)
             .map(|_| {
@@ -148,6 +148,12 @@ impl RadianceCascadesBuffer {
                         },
                         BindGroupEntry {
                             binding: 4,
+                            resource: BindingResource::TextureView(
+                                &importance.create_view(&TextureViewDescriptor::default()),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 5,
                             resource: gpu
                                 .device()
                                 .create_buffer_init(&BufferInitDescriptor {
@@ -310,12 +316,6 @@ impl RadianceCascadesBuffer {
                 BindGroupEntry {
                     binding: 2,
                     resource: BindingResource::TextureView(
-                        &importance.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::TextureView(
                         &radiance[0].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
@@ -372,6 +372,7 @@ impl RadianceCascadesBuffer {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
+                    // Sampler
                     BindGroupLayoutEntry {
                         binding: 0,
                         visibility,
@@ -389,18 +390,9 @@ impl RadianceCascadesBuffer {
                         },
                         count: None,
                     },
+                    // Radiance 0
                     BindGroupLayoutEntry {
                         binding: 2,
-                        visibility,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::WriteOnly,
-                            format: Self::FORMAT,
-                            view_dimension: TextureViewDimension::D3,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
                         visibility,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Float { filterable: true },
@@ -464,8 +456,19 @@ impl RadianceCascadesBuffer {
                         },
                         count: None,
                     },
+                    // Importance
                     BindGroupLayoutEntry {
                         binding: 4,
+                        visibility,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::FORMAT,
+                            view_dimension: TextureViewDimension::D3,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 5,
                         visibility,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
