@@ -1,7 +1,7 @@
 use std::any::type_name;
 
 use bytemuck::bytes_of;
-use glam::{UVec2, UVec3, Vec3Swizzles};
+use glam::UVec3;
 use itertools::Itertools;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -17,9 +17,9 @@ use crate::gpu::Gpu;
 
 pub struct RadianceCascadesBuffer {
     irradiance: Texture,
-    importance: Texture,
     radiance: Vec<Texture>,
     transmission: Vec<Texture>,
+    importance: Vec<Texture>,
     binding_cascade: Vec<BindGroup>,
     binding_read: BindGroup,
     binding_copy: BindGroup,
@@ -89,16 +89,14 @@ impl RadianceCascadesBuffer {
             })
             .collect_vec();
 
-        let max_size = volume.xy().max(UVec2::ONE << Self::N_CASCADES as u32);
-
-        let importance = gpu.device().create_texture(&TextureDescriptor {
-            size: Extent3d {
-                width: max_size.x * 3,
-                height: max_size.y * 3,
-                depth_or_array_layers: volume.z,
-            },
-            ..descriptor
-        });
+        let importance = (0..Self::N_CASCADES)
+            .map(|cascade| {
+                gpu.device().create_texture(&TextureDescriptor {
+                    size: size_cascade[cascade],
+                    ..descriptor
+                })
+            })
+            .collect_vec();
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -136,20 +134,20 @@ impl RadianceCascadesBuffer {
                         BindGroupEntry {
                             binding: 2,
                             resource: BindingResource::TextureView(
-                                &radiance[(index + 1) % Self::N_CASCADES]
-                                    .create_view(&TextureViewDescriptor::default()),
+                                &importance[index].create_view(&TextureViewDescriptor::default()),
                             ),
                         },
                         BindGroupEntry {
                             binding: 3,
                             resource: BindingResource::TextureView(
-                                &irradiance.create_view(&TextureViewDescriptor::default()),
+                                &radiance[(index + 1) % Self::N_CASCADES]
+                                    .create_view(&TextureViewDescriptor::default()),
                             ),
                         },
                         BindGroupEntry {
                             binding: 4,
                             resource: BindingResource::TextureView(
-                                &importance.create_view(&TextureViewDescriptor::default()),
+                                &irradiance.create_view(&TextureViewDescriptor::default()),
                             ),
                         },
                         BindGroupEntry {
@@ -185,115 +183,163 @@ impl RadianceCascadesBuffer {
                 BindGroupEntry {
                     binding: 2,
                     resource: BindingResource::TextureView(
-                        &importance.create_view(&TextureViewDescriptor::default()),
+                        &radiance[0].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 3,
                     resource: BindingResource::TextureView(
-                        &radiance[0].create_view(&TextureViewDescriptor::default()),
+                        &radiance[1].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 4,
                     resource: BindingResource::TextureView(
-                        &radiance[1].create_view(&TextureViewDescriptor::default()),
+                        &radiance[2].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 5,
                     resource: BindingResource::TextureView(
-                        &radiance[2].create_view(&TextureViewDescriptor::default()),
+                        &radiance[3].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 6,
                     resource: BindingResource::TextureView(
-                        &radiance[3].create_view(&TextureViewDescriptor::default()),
+                        &radiance[4].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 7,
                     resource: BindingResource::TextureView(
-                        &radiance[4].create_view(&TextureViewDescriptor::default()),
+                        &radiance[5].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 8,
                     resource: BindingResource::TextureView(
-                        &radiance[5].create_view(&TextureViewDescriptor::default()),
+                        &radiance[6].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 9,
                     resource: BindingResource::TextureView(
-                        &radiance[6].create_view(&TextureViewDescriptor::default()),
+                        &radiance[7].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 10,
                     resource: BindingResource::TextureView(
-                        &radiance[7].create_view(&TextureViewDescriptor::default()),
+                        &radiance[8].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 11,
                     resource: BindingResource::TextureView(
-                        &radiance[8].create_view(&TextureViewDescriptor::default()),
+                        &transmission[0].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 12,
                     resource: BindingResource::TextureView(
-                        &transmission[0].create_view(&TextureViewDescriptor::default()),
+                        &transmission[1].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 13,
                     resource: BindingResource::TextureView(
-                        &transmission[1].create_view(&TextureViewDescriptor::default()),
+                        &transmission[2].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 14,
                     resource: BindingResource::TextureView(
-                        &transmission[2].create_view(&TextureViewDescriptor::default()),
+                        &transmission[3].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 15,
                     resource: BindingResource::TextureView(
-                        &transmission[3].create_view(&TextureViewDescriptor::default()),
+                        &transmission[4].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 16,
                     resource: BindingResource::TextureView(
-                        &transmission[4].create_view(&TextureViewDescriptor::default()),
+                        &transmission[5].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 17,
                     resource: BindingResource::TextureView(
-                        &transmission[5].create_view(&TextureViewDescriptor::default()),
+                        &transmission[6].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 18,
                     resource: BindingResource::TextureView(
-                        &transmission[6].create_view(&TextureViewDescriptor::default()),
+                        &transmission[7].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 19,
                     resource: BindingResource::TextureView(
-                        &transmission[7].create_view(&TextureViewDescriptor::default()),
+                        &transmission[8].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
                 BindGroupEntry {
                     binding: 20,
                     resource: BindingResource::TextureView(
-                        &transmission[8].create_view(&TextureViewDescriptor::default()),
+                        &importance[0].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 21,
+                    resource: BindingResource::TextureView(
+                        &importance[1].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 22,
+                    resource: BindingResource::TextureView(
+                        &importance[2].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 23,
+                    resource: BindingResource::TextureView(
+                        &importance[3].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 24,
+                    resource: BindingResource::TextureView(
+                        &importance[4].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 25,
+                    resource: BindingResource::TextureView(
+                        &importance[5].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 26,
+                    resource: BindingResource::TextureView(
+                        &importance[6].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 27,
+                    resource: BindingResource::TextureView(
+                        &importance[7].create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 28,
+                    resource: BindingResource::TextureView(
+                        &importance[8].create_view(&TextureViewDescriptor::default()),
                     ),
                 },
             ],
@@ -348,7 +394,7 @@ impl RadianceCascadesBuffer {
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     }],
-                    (1..21)
+                    (1..29)
                         .map(|binding| BindGroupLayoutEntry {
                             binding,
                             visibility,
@@ -434,18 +480,18 @@ impl RadianceCascadesBuffer {
                         },
                         count: None,
                     },
-                    // Radiance 1
+                    // Importance 0
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::FORMAT,
                             view_dimension: TextureViewDimension::D3,
-                            multisampled: false,
                         },
                         count: None,
                     },
-                    // Irradiance
+                    // Radiance 1
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility,
@@ -456,17 +502,18 @@ impl RadianceCascadesBuffer {
                         },
                         count: None,
                     },
-                    // Importance
+                    // Irradiance
                     BindGroupLayoutEntry {
                         binding: 4,
                         visibility,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::WriteOnly,
-                            format: Self::FORMAT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
                             view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
                         },
                         count: None,
                     },
+                    // CASCADE
                     BindGroupLayoutEntry {
                         binding: 5,
                         visibility,
@@ -505,7 +552,6 @@ impl RadianceCascadesBuffer {
 impl Drop for RadianceCascadesBuffer {
     fn drop(&mut self) {
         self.irradiance.destroy();
-        self.importance.destroy();
 
         for radiance in &self.radiance {
             radiance.destroy();
@@ -513,6 +559,10 @@ impl Drop for RadianceCascadesBuffer {
 
         for transmission in &self.transmission {
             transmission.destroy();
+        }
+
+        for importance in &self.importance {
+            importance.destroy();
         }
     }
 }

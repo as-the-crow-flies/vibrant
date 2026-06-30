@@ -1,8 +1,8 @@
 @group(0) @binding(0) var RADIANCE_OUT: texture_storage_3d<rgba8unorm, write>;
 @group(0) @binding(1) var TRANSMISSION_OUT: texture_storage_3d<rgba8unorm, write>;
-@group(0) @binding(2) var RADIANCE_IN: texture_3d<f32>;
-@group(0) @binding(3) var IRRADIANCE: texture_3d<f32>;
-@group(0) @binding(4) var IMPORTANCE: texture_storage_3d<rgba8unorm, write>;
+@group(0) @binding(2) var IMPORTANCE_OUT: texture_storage_3d<rgba8unorm, write>;
+@group(0) @binding(3) var RADIANCE_IN: texture_3d<f32>;
+@group(0) @binding(4) var IRRADIANCE: texture_3d<f32>;
 @group(0) @binding(5) var<uniform> CASCADE: u32;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
@@ -31,9 +31,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     SCALE = textureDimensions(EXTINCTION).x / textureDimensions(IRRADIANCE).x;
 
     if (any(voxel >= textureDimensions(TRANSMISSION_OUT))) { return; }
-
-    let dim_full = textureDimensions(IRRADIANCE);
-    let dim = dim_full >> vec3<u32>(CASCADE);
+    let dim = textureDimensions(IRRADIANCE) >> vec3<u32>(CASCADE);
 
     // Cascade Dimensions
     let probes = max(dim, vec3<u32>(1u));
@@ -75,9 +73,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     textureStore(TRANSMISSION_OUT, voxel, pack_rgb(transmission_average));
     textureStore(RADIANCE_OUT, voxel, pack_rgb(radiance_average));
-
-    let importance_voxel = dim_full * vec3<u32>(CASCADE / 3, CASCADE % 3, 0) + voxel;
-    textureStore(IMPORTANCE, importance_voxel, normalize_max(importance));
+    textureStore(IMPORTANCE_OUT, voxel, normalize_max(importance));
 }
 
 fn merge(probes: vec3<u32>, probe: vec3<u32>, sample: vec2<u32>) -> vec3<f32> {
@@ -129,8 +125,4 @@ fn hdri(direction: vec3<f32>, N: u32) -> vec3<f32> {
 
 fn normalize_max(v: vec4<f32>) -> vec4<f32> {
     return v / max(max(v.x, v.y), max(v.z, v.w));
-}
-
-fn brightness(rgb: vec3<f32>) -> f32 {
-    return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
 }

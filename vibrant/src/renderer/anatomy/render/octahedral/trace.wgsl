@@ -1,23 +1,31 @@
 @group(0) @binding( 1) var IRRADIANCE: texture_3d<f32>;
-@group(0) @binding( 2) var IMPORTANCE: texture_3d<f32>;
-@group(0) @binding( 3) var RADIANCE_0: texture_3d<f32>;
-@group(0) @binding( 4) var RADIANCE_1: texture_3d<f32>;
-@group(0) @binding( 5) var RADIANCE_2: texture_3d<f32>;
-@group(0) @binding( 6) var RADIANCE_3: texture_3d<f32>;
-@group(0) @binding( 7) var RADIANCE_4: texture_3d<f32>;
-@group(0) @binding( 8) var RADIANCE_5: texture_3d<f32>;
-@group(0) @binding( 9) var RADIANCE_6: texture_3d<f32>;
-@group(0) @binding(10) var RADIANCE_7: texture_3d<f32>;
-@group(0) @binding(11) var RADIANCE_8: texture_3d<f32>;
-@group(0) @binding(12) var TRANSMISSION_0: texture_3d<f32>;
-@group(0) @binding(13) var TRANSMISSION_1: texture_3d<f32>;
-@group(0) @binding(14) var TRANSMISSION_2: texture_3d<f32>;
-@group(0) @binding(15) var TRANSMISSION_3: texture_3d<f32>;
-@group(0) @binding(16) var TRANSMISSION_4: texture_3d<f32>;
-@group(0) @binding(17) var TRANSMISSION_5: texture_3d<f32>;
-@group(0) @binding(18) var TRANSMISSION_6: texture_3d<f32>;
-@group(0) @binding(19) var TRANSMISSION_7: texture_3d<f32>;
-@group(0) @binding(20) var TRANSMISSION_8: texture_3d<f32>;
+@group(0) @binding( 2) var RADIANCE_0: texture_3d<f32>;
+@group(0) @binding( 3) var RADIANCE_1: texture_3d<f32>;
+@group(0) @binding( 4) var RADIANCE_2: texture_3d<f32>;
+@group(0) @binding( 5) var RADIANCE_3: texture_3d<f32>;
+@group(0) @binding( 6) var RADIANCE_4: texture_3d<f32>;
+@group(0) @binding( 7) var RADIANCE_5: texture_3d<f32>;
+@group(0) @binding( 8) var RADIANCE_6: texture_3d<f32>;
+@group(0) @binding( 9) var RADIANCE_7: texture_3d<f32>;
+@group(0) @binding(10) var RADIANCE_8: texture_3d<f32>;
+@group(0) @binding(11) var TRANSMISSION_0: texture_3d<f32>;
+@group(0) @binding(12) var TRANSMISSION_1: texture_3d<f32>;
+@group(0) @binding(13) var TRANSMISSION_2: texture_3d<f32>;
+@group(0) @binding(14) var TRANSMISSION_3: texture_3d<f32>;
+@group(0) @binding(15) var TRANSMISSION_4: texture_3d<f32>;
+@group(0) @binding(16) var TRANSMISSION_5: texture_3d<f32>;
+@group(0) @binding(17) var TRANSMISSION_6: texture_3d<f32>;
+@group(0) @binding(18) var TRANSMISSION_7: texture_3d<f32>;
+@group(0) @binding(19) var TRANSMISSION_8: texture_3d<f32>;
+@group(0) @binding(20) var IMPORTANCE_0: texture_3d<f32>;
+@group(0) @binding(21) var IMPORTANCE_1: texture_3d<f32>;
+@group(0) @binding(22) var IMPORTANCE_2: texture_3d<f32>;
+@group(0) @binding(23) var IMPORTANCE_3: texture_3d<f32>;
+@group(0) @binding(24) var IMPORTANCE_4: texture_3d<f32>;
+@group(0) @binding(25) var IMPORTANCE_5: texture_3d<f32>;
+@group(0) @binding(26) var IMPORTANCE_6: texture_3d<f32>;
+@group(0) @binding(27) var IMPORTANCE_7: texture_3d<f32>;
+@group(0) @binding(28) var IMPORTANCE_8: texture_3d<f32>;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
 @group(1) @binding(1) var SCATTERING: texture_3d<f32>;
@@ -93,29 +101,26 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let transmittance_in_step = 1.0 - exp(-extinction);
 
         let gradient = sample_gradient(sample);
-        let gradient_norm = select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
+        let normal = -select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
         let sample_light = sample - 0.05 * gradient.xyz;
 
-        let n_dot_v  = max(dot(gradient_norm, view), 0.0001);
+        let n_dot_v  = max(dot(normal, -view), 0.0001);
         let roughness = HDRI_SETTINGS.roughness;
         let f0        = vec3<f32>(0.04);
 
-        let F = gradient.a * F_Schlick(n_dot_v, f0) * HDRI_SETTINGS.specular;
+        let F = F_Schlick(n_dot_v, f0) * HDRI_SETTINGS.specular;
 
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
+        let diffuse  = albedo * sample_diffuse(sample_light);
+        let specular = sample_specular(pixel, sample_light, normal, view, roughness, f0);
 
+        color += transmittance * transmittance_in_step * (
+            (1.0 - F) * diffuse +
+            F * specular
+        );
 
-        let diffuse  = (vec3<f32>(1.0) - F) * albedo * sample_diffuse(sample_light);
-
-        var out_scattering = diffuse;
-
-        if (HDRI_SETTINGS.specular > 0.5) {
-            let specular = sample_specular(pixel, sample_light, gradient.xyz, view, roughness);
-            out_scattering = (vec3<f32>(1.0) - F) * albedo * specular;
-        }
-
-        color += transmittance * transmittance_in_step * out_scattering;
+        // color += transmittance * transmittance_in_step * specular;
 
         transmittance *= exp(-extinction);
 
@@ -128,7 +133,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 }
 
 fn sample_diffuse(uv: vec3<f32>) -> vec3<f32> {
-    return tex(IRRADIANCE, uv); // Incorrect, should adjust for integer division
+    return tex_rgb(IRRADIANCE, uv); // Incorrect, should adjust for integer division
 }
 
 struct Material {
@@ -138,8 +143,8 @@ struct Material {
 };
 
 fn sample_material(sample: vec3<f32>) -> Material {
-    let absorption = tex(ABSORPTION, sample);
-    let scattering = tex(SCATTERING, sample);
+    let absorption = tex_rgb(ABSORPTION, sample);
+    let scattering = tex_rgb(SCATTERING, sample);
     let extinction = absorption + scattering;
 
     return Material(absorption, scattering, extinction);
@@ -153,111 +158,117 @@ fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
 
 fn sample_specular(
     pixel: vec2<u32>,
-    position: vec3<f32>,
-    gradient: vec3<f32>,
-    view: vec3<f32>,
-    roughness: f32) -> vec3<f32> {
-    const N: u32 = 1u;
-
-    let offset = hash22(pixel);
-
-    var result = vec3<f32>(0.0);
-
-    for (var i = 0u; i < N; i++) {
-        // var xi = hammersley_rotated(i, N, offset);
-        var xi = offset;
-        var pdf = 1.0;
-        var dir = vec2<u32>(0u);
-
-        var transmission = vec3<f32>(1.0);
-        var radiance = vec3<f32>(0.0);
-
-        for (var level: u32 = 0u; level < 10u; level++) {
-            let i00 = sample_radiance_transmission(position, dir + vec2<u32>(0u, 0u), level);
-            let i10 = sample_radiance_transmission(position, dir + vec2<u32>(1u, 0u), level);
-            let i01 = sample_radiance_transmission(position, dir + vec2<u32>(0u, 1u), level);
-            let i11 = sample_radiance_transmission(position, dir + vec2<u32>(1u, 1u), level);
-
-            let cx = route(xi.x, i00.w + i01.w, i10.w + i11.w);
-            let cy = route(xi.y, select(i00.w, i10.w, cx.c), select(i01.w, i11.w, cx.c));
-
-            xi = vec2<f32>(cx.r, cy.r);
-            pdf *= cx.p * cy.p;
-            dir = 2u * (dir + vec2<u32>(u32(cx.c), u32(cy.c)));
-
-            let r = select(select(i00.radiance, i01.radiance, cy.c), select(i10.radiance, i11.radiance, cy.c), cx.c);
-            let t = select(select(i00.transmission, i01.transmission, cy.c), select(i10.transmission, i11.transmission, cy.c), cx.c);
-
-            radiance += transmission * r;
-            transmission *= t;
-        }
-
-        result += radiance;
-    }
-
-    return result / f32(N);
-}
-
-struct RadianceTransmission {
-    radiance: vec3<f32>,
-    transmission: vec3<f32>,
-    w: f32
-}
-
-fn sample_radiance_transmission(
     uv: vec3<f32>,
-    offset: vec2<u32>,
-    level: u32
-) -> RadianceTransmission {
-    let probes = max(textureDimensions(IRRADIANCE) >> vec3<u32>(level), vec3<u32>(1u));
+    normal: vec3<f32>,
+    view: vec3<f32>,
+    roughness: f32,
+    f0: vec3<f32>) -> vec3<f32> {
 
-    let voxel = uv * vec3<f32>(textureDimensions(IRRADIANCE)) / f32(1u << level);
+    let random = hash22(pixel);
+    let importance = sample_importance(random, uv);
+    let radiance = sample_radiance(uv, importance.uv);
 
-    let sample = vec3<f32>(vec3<u32>(offset, 0u) * probes) +
-        clamp(voxel, vec3<f32>(0.5), vec3<f32>(probes) - 0.5);
+    let light = clarberg_equal_area_sphere(2.0 * importance.uv - 1.0);
 
-    switch level {
-        case  0: { return radiance_transmission(RADIANCE_0, TRANSMISSION_0, sample); }
-        case  1: { return radiance_transmission(RADIANCE_1, TRANSMISSION_1, sample); }
-        case  2: { return radiance_transmission(RADIANCE_2, TRANSMISSION_2, sample); }
-        case  3: { return radiance_transmission(RADIANCE_3, TRANSMISSION_3, sample); }
-        case  4: { return radiance_transmission(RADIANCE_4, TRANSMISSION_4, sample); }
-        case  5: { return radiance_transmission(RADIANCE_5, TRANSMISSION_5, sample); }
-        case  6: { return radiance_transmission(RADIANCE_6, TRANSMISSION_6, sample); }
-        case  7: { return radiance_transmission(RADIANCE_7, TRANSMISSION_7, sample); }
-        default: { return radiance_transmission(RADIANCE_8, TRANSMISSION_8, sample); }
-    }
+    let n_dot_l = max(dot(normal, light), 0.0);
+    let brdf = GGX(normal, view, light, roughness, f0);
+
+    return radiance * brdf * n_dot_l * 4.0 * PI / importance.pdf;
 }
 
-fn radiance_transmission(radiance: texture_3d<f32>, transmission: texture_3d<f32>, sample: vec3<f32>) -> RadianceTransmission {
-    let s = sample / vec3<f32>(textureDimensions(radiance));
-
-    let r = tex(radiance, s);
-    let t = tex(transmission, s);
-
-    return RadianceTransmission(r, t, brightness(r));
+struct ImportanceSample {
+    uv: vec2<f32>,
+    pdf: f32
 }
 
-fn brightness(rgb: vec3<f32>) -> f32 {
-    return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+fn sample_importance(r: vec2<f32>, uv: vec3<f32>) -> ImportanceSample {
+    var w = Warp(vec2<u32>(0u), r, f32(512 * 512));
+
+    w = warp(w, tex(IMPORTANCE_0, cascade_sample(0, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_1, cascade_sample(1, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_2, cascade_sample(2, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_3, cascade_sample(3, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_4, cascade_sample(4, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_5, cascade_sample(5, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_6, cascade_sample(6, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_7, cascade_sample(7, uv, w.route)));
+    w = warp(w, tex(IMPORTANCE_8, cascade_sample(8, uv, w.route)));
+
+    return ImportanceSample(
+        (vec2<f32>(w.route) + w.random) / 512.0, // 2^9
+        w.probability
+    );
+}
+
+fn sample_radiance(uv: vec3<f32>, direction: vec2<f32>) -> vec3<f32> {
+    let transmission = vec3<f32>(1.0) *
+        tex_rgb(TRANSMISSION_0, cascade_sample(0, uv, vec2<u32>(direction *   1.0))) *
+        tex_rgb(TRANSMISSION_1, cascade_sample(1, uv, vec2<u32>(direction *   2.0))) *
+        tex_rgb(TRANSMISSION_2, cascade_sample(2, uv, vec2<u32>(direction *   4.0))) *
+        tex_rgb(TRANSMISSION_3, cascade_sample(3, uv, vec2<u32>(direction *   8.0))) *
+        tex_rgb(TRANSMISSION_4, cascade_sample(4, uv, vec2<u32>(direction *  16.0))) *
+        tex_rgb(TRANSMISSION_5, cascade_sample(5, uv, vec2<u32>(direction *  32.0))) *
+        tex_rgb(TRANSMISSION_6, cascade_sample(6, uv, vec2<u32>(direction *  64.0))) *
+        tex_rgb(TRANSMISSION_7, cascade_sample(7, uv, vec2<u32>(direction * 128.0)));
+
+    let radiance = tex_rgb(RADIANCE_8, cascade_sample(8, uv, vec2<u32>(direction * 256.0)));
+
+    return transmission * radiance;
+}
+
+fn cascade_sample(level: u32, uv: vec3<f32>, offset: vec2<u32>) -> vec3<f32> {
+    let probes = vec3<f32>(max(textureDimensions(IRRADIANCE) >> vec3<u32>(level), vec3<u32>(1u)));
+    let samples = vec3<f32>(vec3<u32>(vec2<u32>(1u << level), 1u));
+
+    let probe = uv * vec3<f32>(textureDimensions(IRRADIANCE)) / f32(1u << level);
+    let probe_clamped = clamp(probe, vec3<f32>(0.5), vec3<f32>(probes) - 0.5);
+
+    let sample = vec3<f32>(vec3<u32>(offset, 0u));
+
+    return (sample * probes + probe_clamped) / (probes * samples);
+}
+
+struct Warp {
+    route: vec2<u32>,
+    random: vec2<f32>,
+    probability: f32
 }
 
 struct Split {
-  c: bool,   // 0 -> first child, 1 -> second child
-  r: f32,   // the random number rescaled back into [0,1)
-  p: f32,   // probability of the branch taken (for the pdf product)
+    route: bool,
+    random: f32,
+    probability: f32,
 }
 
-// Pick between two masses a, b using r in [0,1); rescale r into the chosen half.
-fn route(r: f32, a: f32, b: f32) -> Split {
-    let total = a + b;
+fn warp(warp: Warp, i: vec4<f32>) -> Warp {
+    let sx = route(
+        warp.random.x,
+        i.x + i.z, // Left
+        i.y + i.w  // Right
+    );
 
-    if (total <= 0.0) { return Split(false, 0.0, 1.0); }
+    let sy = route(
+        warp.random.y,
+        select(i.x, i.y, sx.route), // Top
+        select(i.z, i.w, sx.route) // Bottom
+    );
 
-    let pa = select(a / total, 0.5, HDRI_SETTINGS.specular > 0.7);
+    return Warp(
+        2u * warp.route + vec2<u32>(u32(sx.route), u32(sy.route)),
+        vec2<f32>(sx.random, sy.random) / vec2<f32>(sx.probability, sy.probability),
+        warp.probability * sx.probability * sy.probability
+    );
+}
 
-    if (r < pa) { return Split(false, r / pa, pa); }
-    else { return Split(true, (r - pa) / (1.0 - pa), 1.0 - pa); }
+fn route(random: f32, a: f32, b: f32) -> Split {
+    let pa = a / max(a + b, 1E-5);
+    let route = random >= pa;
+
+    return Split(
+        route,
+        select(random, random - pa, route),
+        select(pa, 1.0 - pa, route)
+    );
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
@@ -283,7 +294,11 @@ fn intersectAABB(origin: vec3<f32>, direction: vec3<f32>) -> vec2<f32> {
     return vec2<f32>(tMin, tMax);
 }
 
-fn tex(tex: texture_3d<f32>, uv: vec3<f32>) -> vec3<f32> {
+fn tex(tex: texture_3d<f32>, uv: vec3<f32>) -> vec4<f32> {
+    return textureSampleLevel(tex, SAMPLER, uv, 0.0);
+}
+
+fn tex_rgb(tex: texture_3d<f32>, uv: vec3<f32>) -> vec3<f32> {
     return unpack_rgb(textureSampleLevel(tex, SAMPLER, uv, 0.0));
 }
 

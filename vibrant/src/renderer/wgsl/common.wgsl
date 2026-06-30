@@ -608,3 +608,7 @@ fn clarberg_equal_area_sphere(uv: vec2<f32>) -> vec3<f32> {
 
     return vec3<f32>(xy, z);
 }
+
+fn brightness(rgb: vec3<f32>) -> f32 {
+    return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+}

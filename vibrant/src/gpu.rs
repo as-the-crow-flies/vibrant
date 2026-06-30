@@ -43,7 +43,7 @@ impl Gpu {
                     max_buffer_size: limits.max_buffer_size,
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                     max_storage_buffers_per_shader_stage: 10,
-                    max_sampled_textures_per_shader_stage: 32,
+                    max_sampled_textures_per_shader_stage: 64,
                     max_storage_textures_per_shader_stage: 6,
                     ..Default::default()
                 },
