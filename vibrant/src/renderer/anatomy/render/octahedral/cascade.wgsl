@@ -54,7 +54,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
             let smp = 2 * sample + vec2<u32>(sx, sy);
 
             let uv = 2.0 * (vec2<f32>(smp) + 0.5) / f32(2 * samples) - 1.0;
-            let direction = clarberg_equal_area_sphere(uv);
+            let direction = octahedron_decode(uv);
 
             let transmission = trace(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
             transmission_average += 0.25 * transmission;

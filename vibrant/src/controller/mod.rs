@@ -105,7 +105,7 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, scale: f32, _dt: f32) {
+    pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, scale: f32, dt: f32) {
         Panel::top("TopBottomPanel").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -139,6 +139,8 @@ impl Controller {
                     {
                         FileStage::load();
                     }
+
+                    ui.label(format!("{:3.0} fps", 1.0 / dt));
                 });
             });
         });

@@ -78,3 +78,17 @@ fn GGX(
     let denom = 4.0 * n_dot_v * n_dot_l;
     return (D * G * F) / max(denom, 0.0001);
 }
+
+fn ggx_weight(normal: vec3<f32>, view: vec3<f32>, light: vec3<f32>, a2: f32) -> f32 {
+    let n_dot_l = max(dot(normal, light), 0.0);
+    let h = normalize(view + light);
+    let n_dot_h = max(dot(normal, h), 0.0);
+    let v_dot_h = max(dot(view, h), 0.0);
+
+    let d = n_dot_h * n_dot_h * (a2 - 1.0) + 1.0;
+    let D = a2 / max(d * d, 1e-7);
+
+    let F = 0.04 + 0.96 * pow(1.0 - v_dot_h, 5.0);
+
+    return n_dot_l * D * F;
+}

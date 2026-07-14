@@ -70,9 +70,9 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     if (hit.x > hit.y) { return vec4<f32>(0.0); }
 
-    let pixel = vec2<u32>(fragment.position.xy + 1000.00 * ENVIRONMENT.time);
+    let pixel = vec2<u32>(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
 
-    var t0 = max(hit.x, 0.0) + hash(fragment.position.xy + fract(ENVIRONMENT.time));
+    var t0 = max(hit.x, 0.0) + hash(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
     let t1 = hit.y;
 
     var transmittance = vec3<f32>(1.0);
@@ -164,16 +164,26 @@ fn sample_specular(
     roughness: f32,
     f0: vec3<f32>) -> vec3<f32> {
 
-    let random = hash22(pixel);
-    let importance = sample_importance(random, uv);
-    let radiance = sample_radiance(uv, importance.uv);
+    let N = 1u;
 
-    let light = clarberg_equal_area_sphere(2.0 * importance.uv - 1.0);
+    var result = vec3<f32>(0.0);
 
-    let n_dot_l = max(dot(normal, light), 0.0);
-    let brdf = GGX(normal, view, light, roughness, f0);
+    let hash = hash22(pixel);
 
-    return radiance * brdf * n_dot_l * 4.0 * PI / importance.pdf;
+    for (var i=0u; i<N; i++) {
+        let random = hammersley_rotated(i, N, hash);
+        let importance = sample_importance(random, uv, normal, view, roughness);
+        let radiance = sample_radiance(uv, importance.uv, roughness);
+
+        let light = octahedron_decode(2.0 * importance.uv - 1.0);
+
+        let n_dot_l = max(dot(normal, light), 0.0);
+        let brdf = GGX(normal, view, light, roughness, f0);
+
+        result += radiance * brdf * n_dot_l * 4.0 * PI / importance.pdf;
+    }
+
+    return result / f32(N);
 }
 
 struct ImportanceSample {
@@ -181,18 +191,24 @@ struct ImportanceSample {
     pdf: f32
 }
 
-fn sample_importance(r: vec2<f32>, uv: vec3<f32>) -> ImportanceSample {
-    var w = Warp(vec2<u32>(0u), r, f32(512 * 512));
+fn sample_importance(
+    random: vec2<f32>,
+    uv: vec3<f32>,
+    normal: vec3<f32>,
+    view: vec3<f32>,
+    roughness: f32
+    ) -> ImportanceSample {
+    var w = Warp(vec2<u32>(0u), random, f32(512 * 512));
 
-    w = warp(w, tex(IMPORTANCE_0, cascade_sample(0, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_1, cascade_sample(1, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_2, cascade_sample(2, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_3, cascade_sample(3, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_4, cascade_sample(4, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_5, cascade_sample(5, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_6, cascade_sample(6, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_7, cascade_sample(7, uv, w.route)));
-    w = warp(w, tex(IMPORTANCE_8, cascade_sample(8, uv, w.route)));
+    w = warp(w, importance(IMPORTANCE_0, 0, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_1, 1, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_2, 2, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_3, 3, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_4, 4, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_5, 5, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_6, 6, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_7, 7, uv, w.route, normal, view, roughness));
+    w = warp(w, importance(IMPORTANCE_8, 8, uv, w.route, normal, view, roughness));
 
     return ImportanceSample(
         (vec2<f32>(w.route) + w.random) / 512.0, // 2^9
@@ -200,7 +216,48 @@ fn sample_importance(r: vec2<f32>, uv: vec3<f32>) -> ImportanceSample {
     );
 }
 
-fn sample_radiance(uv: vec3<f32>, direction: vec2<f32>) -> vec3<f32> {
+fn importance(
+    importance_tex: texture_3d<f32>,
+    level: u32,
+    uv: vec3<f32>,
+    route: vec2<u32>,
+    normal: vec3<f32>,
+    view: vec3<f32>,
+    roughness: f32
+) -> vec4<f32> {
+    let cascade = tex(importance_tex, cascade_sample(0, uv, route));
+    let brdf = brdf_importance(level, route, normal, view, roughness);
+    return cascade * brdf;
+}
+
+fn brdf_importance(
+    level: u32,
+    route: vec2<u32>,
+    normal: vec3<f32>,
+    view: vec3<f32>,
+    roughness: f32
+) -> vec4<f32> {
+    if (ENVIRONMENT.settings.alpha < 0.5) { return vec4<f32>(1.0); }
+
+    let inv_res = 1.0 / f32(1u << (level + 1u));
+    let base = vec2<f32>(2u * route);
+
+    let uv00 = (base + vec2<f32>(0.5, 0.5)) * inv_res;
+    let uv10 = (base + vec2<f32>(1.5, 0.5)) * inv_res;
+    let uv01 = (base + vec2<f32>(0.5, 1.5)) * inv_res;
+    let uv11 = (base + vec2<f32>(1.5, 1.5)) * inv_res;
+
+    let a2 = roughness * roughness;
+
+    return vec4<f32>(
+        ggx_weight(normal, view, octahedron_decode(2.0 * uv00 - 1.0), a2),
+        ggx_weight(normal, view, octahedron_decode(2.0 * uv10 - 1.0), a2),
+        ggx_weight(normal, view, octahedron_decode(2.0 * uv01 - 1.0), a2),
+        ggx_weight(normal, view, octahedron_decode(2.0 * uv11 - 1.0), a2)
+    );
+}
+
+fn sample_radiance(uv: vec3<f32>, direction: vec2<f32>, roughness: f32) -> vec3<f32> {
     let transmission = vec3<f32>(1.0) *
         tex_rgb(TRANSMISSION_0, cascade_sample(0, uv, vec2<u32>(direction *   1.0))) *
         tex_rgb(TRANSMISSION_1, cascade_sample(1, uv, vec2<u32>(direction *   2.0))) *

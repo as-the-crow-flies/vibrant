@@ -18,7 +18,6 @@ pub trait MipTextureFormat {
 }
 
 pub struct Rgba16Float {}
-pub struct Rgba8Unorm {}
 pub struct R32Float {}
 pub struct R32Uint {}
 
@@ -43,24 +42,6 @@ impl MipTextureFormat for R32Float {
 impl MipTextureFormat for Rgba16Float {
     fn format() -> TextureFormat {
         TextureFormat::Rgba16Float
-    }
-
-    fn sample_type() -> TextureSampleType {
-        TextureSampleType::Float { filterable: true }
-    }
-
-    fn filter() -> FilterMode {
-        FilterMode::Linear
-    }
-
-    fn mipmap_filter() -> MipmapFilterMode {
-        MipmapFilterMode::Linear
-    }
-}
-
-impl MipTextureFormat for Rgba8Unorm {
-    fn format() -> TextureFormat {
-        TextureFormat::Rgba8Unorm
     }
 
     fn sample_type() -> TextureSampleType {
