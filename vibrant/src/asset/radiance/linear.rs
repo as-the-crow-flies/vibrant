@@ -15,7 +15,7 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
-pub struct RadianceCascadesBuffer {
+pub struct LinearRadianceBuffer {
     irradiance: Texture,
     radiance: Vec<Texture>,
     transmission: Vec<Texture>,
@@ -27,7 +27,7 @@ pub struct RadianceCascadesBuffer {
     size_cascade: Vec<Extent3d>,
 }
 
-impl RadianceCascadesBuffer {
+impl LinearRadianceBuffer {
     pub const N_CASCADES: usize = 9;
     pub const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
@@ -549,7 +549,7 @@ impl RadianceCascadesBuffer {
     }
 }
 
-impl Drop for RadianceCascadesBuffer {
+impl Drop for LinearRadianceBuffer {
     fn drop(&mut self) {
         self.irradiance.destroy();
 

@@ -5,8 +5,8 @@ use crate::util::{ResponseExtentions, Tracked};
 
 #[derive(Debug, Clone, Copy, PartialEq, EnumIter)]
 pub enum RadianceMethod {
-    Octahedral,
-    Holographic,
+    Linear,
+    Gaussian,
 }
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl RadianceWidget {
     pub fn new() -> Self {
         Self {
             changed: false,
-            method: RadianceMethod::Octahedral,
+            method: RadianceMethod::Gaussian,
             resolution: 4,
         }
     }

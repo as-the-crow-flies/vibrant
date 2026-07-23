@@ -10,7 +10,7 @@ use crate::{
     gpu::Gpu,
     renderer::{
         anatomy::{
-            gradient::GradientPipeline, render::octahedral::OctahedralVolumeRenderer,
+            gradient::GradientPipeline, render::AnatomyVolumeRenderer,
             transfer::AnatomyTransferPipeline,
         },
         environment::Environment,
@@ -21,7 +21,7 @@ use crate::{
 pub struct AnatomyRenderer {
     transfer: AnatomyTransferPipeline,
     gradient: GradientPipeline,
-    render: OctahedralVolumeRenderer,
+    render: AnatomyVolumeRenderer,
 }
 
 impl AnatomyRenderer {
@@ -29,7 +29,7 @@ impl AnatomyRenderer {
         Self {
             transfer: AnatomyTransferPipeline::new(gpu),
             gradient: GradientPipeline::new(gpu),
-            render: OctahedralVolumeRenderer::new(gpu),
+            render: AnatomyVolumeRenderer::new(gpu),
         }
     }
 
@@ -41,9 +41,7 @@ impl AnatomyRenderer {
         surface: &Surface,
         asset: &Asset,
     ) {
-        if let (Some(frame), Some(volume), Some(radiance)) =
-            (surface.frame(), &asset.physical_volume, &asset.radiance)
-        {
+        if let (Some(frame), Some(volume)) = (surface.frame(), &asset.physical_volume) {
             let recompute = surface.changed() | asset.changed() | controller.changed();
 
             if recompute {
@@ -58,7 +56,7 @@ impl AnatomyRenderer {
                 environment,
                 &asset.hdri,
                 frame,
-                radiance,
+                &asset.radiance,
                 volume,
                 controller.viewport(),
                 recompute,

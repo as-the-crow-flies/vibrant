@@ -40,6 +40,8 @@ impl Gpu {
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some(type_name::<Self>()),
                 required_limits: Limits {
+                    max_compute_invocations_per_workgroup: 1024,
+                    max_compute_workgroup_size_x: 1024,
                     max_buffer_size: limits.max_buffer_size,
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
                     max_storage_buffers_per_shader_stage: 10,
@@ -47,7 +49,7 @@ impl Gpu {
                     max_storage_textures_per_shader_stage: 6,
                     ..Default::default()
                 },
-                required_features: Features::FLOAT32_FILTERABLE,
+                required_features: Features::FLOAT32_FILTERABLE | Features::SUBGROUP,
                 ..Default::default()
             })
             .await

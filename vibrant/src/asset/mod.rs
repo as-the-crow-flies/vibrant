@@ -15,10 +15,16 @@ use volume::PhysicalVolume;
 
 use crate::{
     asset::{
-        colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer, radiance::RadianceCascadesBuffer,
-        volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
+        colormap::Colormap,
+        crop::CropBuffer,
+        hdri::HdriBuffer,
+        radiance::{
+            gaussian::GaussianRadianceBuffer, linear::LinearRadianceBuffer, RadianceBuffer,
+        },
+        volume_fraction::VolumeFractionBuffer,
+        volume_mask::VolumeMaskBuffer,
     },
-    controller::Controller,
+    controller::{widgets::radiance::RadianceMethod, Controller},
     file::FileStage,
     gpu::Gpu,
 };
@@ -32,7 +38,7 @@ pub struct Asset {
     pub volumes: Vec<VolumeFractionBuffer>,
     pub masks: Vec<VolumeMaskBuffer>,
     pub physical_volume: Option<PhysicalVolume>,
-    pub radiance: Option<RadianceCascadesBuffer>,
+    pub radiance: RadianceBuffer,
 
     pub changed: bool,
 }
@@ -48,7 +54,7 @@ impl Asset {
             line: None,
             volumes: Vec::new(),
             physical_volume: None,
-            radiance: None,
+            radiance: RadianceBuffer::None,
             changed: false,
         }
     }
@@ -118,7 +124,14 @@ impl Asset {
             if radiance_should_update {
                 let resolution = volume.size().div(controller.radiance().resolution());
 
-                self.radiance = Some(RadianceCascadesBuffer::new(gpu, resolution));
+                self.radiance = match controller.radiance().method() {
+                    RadianceMethod::Linear => {
+                        RadianceBuffer::Linear(LinearRadianceBuffer::new(gpu, resolution))
+                    }
+                    RadianceMethod::Gaussian => {
+                        RadianceBuffer::Gaussian(GaussianRadianceBuffer::new(gpu, resolution))
+                    }
+                };
 
                 self.changed = true;
             }

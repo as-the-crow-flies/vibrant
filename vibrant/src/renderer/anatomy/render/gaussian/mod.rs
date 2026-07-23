@@ -1,45 +1,48 @@
-use std::iter::zip;
+use std::ops::Shr;
 
 use egui::Rect;
+use glam::UVec3;
 use wgpu::{
     CommandEncoder, ComputePassDescriptor, ComputePipeline, RenderPassDescriptor, RenderPipeline,
 };
 
 use crate::{
-    asset::{hdri::HdriBuffer, radiance::RadianceCascadesBuffer, volume::PhysicalVolume},
+    asset::{hdri::HdriBuffer, radiance::gaussian::GaussianRadianceBuffer, volume::PhysicalVolume},
     gpu::Gpu,
     renderer::environment::Environment,
     surface::{color::ColorBuffer, Frame},
 };
 
-pub struct OctahedralVolumeRenderer {
-    cascade: ComputePipeline,
-    copy: ComputePipeline,
+pub struct GaussianVolumeRenderer {
+    cascade: Vec<ComputePipeline>,
     trace: RenderPipeline,
 }
 
-impl OctahedralVolumeRenderer {
+impl GaussianVolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
+        let layout = gpu.pipeline_layout(&[
+            &GaussianRadianceBuffer::layout_mipmap(gpu),
+            &PhysicalVolume::layout_read(gpu),
+            &Environment::layout(gpu),
+            &HdriBuffer::layout(gpu),
+        ]);
+
+        let src = include_str!("cascade.wgsl");
+
         Self {
-            cascade: gpu.compute(
-                "OctahedralVolumeCascade",
-                &gpu.pipeline_layout(&[
-                    &RadianceCascadesBuffer::layout_cascade(gpu),
-                    &PhysicalVolume::layout_read(gpu),
-                    &Environment::layout(gpu),
-                    &HdriBuffer::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("cascade.wgsl")),
-            ),
-            copy: gpu.compute(
-                "OctahedralVolumeCopy",
-                &gpu.pipeline_layout(&[&RadianceCascadesBuffer::layout_copy(gpu)]),
-                &gpu.shader(include_str!("copy.wgsl")),
-            ),
+            cascade: (0..7)
+                .map(|cascade| {
+                    gpu.compute(
+                        "GaussianVolumeCascade",
+                        &layout,
+                        &gpu.shader(&cascade_template(src, cascade)),
+                    )
+                })
+                .collect(),
             trace: gpu.quad(
-                "OctahedralVolumeTrace",
+                "GaussianVolumeTrace",
                 &gpu.pipeline_layout(&[
-                    &RadianceCascadesBuffer::layout_read(gpu),
+                    &GaussianRadianceBuffer::layout(gpu),
                     &PhysicalVolume::layout_read(gpu),
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
@@ -56,7 +59,7 @@ impl OctahedralVolumeRenderer {
         environment: &Environment,
         hdri: &HdriBuffer,
         frame: &Frame,
-        radiance: &RadianceCascadesBuffer,
+        radiance: &GaussianRadianceBuffer,
         volume: &PhysicalVolume,
         viewport: Rect,
         recompute: bool,
@@ -72,32 +75,26 @@ impl OctahedralVolumeRenderer {
         cmd: &mut CommandEncoder,
         environment: &Environment,
         hdri: &HdriBuffer,
-        radiance: &RadianceCascadesBuffer,
+        radiance: &GaussianRadianceBuffer,
         volume: &PhysicalVolume,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
-        pass.set_pipeline(&self.cascade);
+        let cascade = 5;
+
+        let probes = radiance
+            .size()
+            .shr(UVec3::ONE * cascade as u32)
+            .max(UVec3::ONE);
+
+        pass.set_pipeline(&self.cascade[cascade]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.set_bind_group(3, hdri.binding(), &[]);
 
-        for (cascade, dim) in zip(radiance.binding_cascade(), radiance.size_cascade()).rev() {
-            pass.set_bind_group(0, cascade, &[]);
-            pass.dispatch_workgroups(
-                dim.width.div_ceil(4),
-                dim.height.div_ceil(4),
-                dim.depth_or_array_layers.div_ceil(4),
-            );
-        }
+        pass.set_bind_group(0, &radiance.bindings_mipmap()[cascade], &[]);
 
-        pass.set_pipeline(&self.copy);
-        pass.set_bind_group(0, radiance.binding_copy(), &[]);
-        pass.dispatch_workgroups(
-            radiance.size().width.div_ceil(4),
-            radiance.size().height.div_ceil(4),
-            radiance.size().depth_or_array_layers.div_ceil(4),
-        );
+        pass.dispatch_workgroups(probes.x, probes.y, probes.z);
     }
 
     fn trace(
@@ -106,7 +103,7 @@ impl OctahedralVolumeRenderer {
         environment: &Environment,
         hdri: &HdriBuffer,
         frame: &Frame,
-        radiance: &RadianceCascadesBuffer,
+        radiance: &GaussianRadianceBuffer,
         volume: &PhysicalVolume,
         viewport: Rect,
     ) {
@@ -126,10 +123,30 @@ impl OctahedralVolumeRenderer {
 
         pass.set_pipeline(&self.trace);
 
-        pass.set_bind_group(0, radiance.binding_read(), &[]);
+        pass.set_bind_group(0, radiance.binding(), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.set_bind_group(3, hdri.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
+}
+
+fn cascade_template(src: &str, cascade: usize) -> String {
+    src.replace("#CASCADE", &cascade.to_string())
+        .as_str()
+        .replace(
+            "#WORKGROUP_SIZE_SQRT",
+            &match cascade {
+                _ => 32,
+            }
+            .to_string(),
+        )
+        .as_str()
+        .replace(
+            "#WORKGROUP_SIZE",
+            &match cascade {
+                _ => 1024,
+            }
+            .to_string(),
+        )
 }
