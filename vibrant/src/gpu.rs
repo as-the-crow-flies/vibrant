@@ -44,6 +44,7 @@ impl Gpu {
                     max_compute_workgroup_size_x: 1024,
                     max_buffer_size: limits.max_buffer_size,
                     max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
+                    max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size,
                     max_storage_buffers_per_shader_stage: 10,
                     max_sampled_textures_per_shader_stage: 64,
                     max_storage_textures_per_shader_stage: 6,

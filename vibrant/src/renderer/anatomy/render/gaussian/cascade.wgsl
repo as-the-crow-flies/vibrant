@@ -47,13 +47,8 @@ fn main(
     @builtin(num_subgroups) num_subgroups: u32,
 ) {
     if (local < VMM_SIZE) {
-        let corner = normalize(vec3<f32>(
-            select(-1.0, 1.0, (local & 1u) != 0u),
-            select(-1.0, 1.0, (local & 2u) != 0u),
-            select(-1.0, 1.0, (local & 4u) != 0u)
-        ));
-
-        VMM[local * SUBGROUP_SIZE] = vec4<f32>(corner / f32(VMM_SIZE), 1.0 / f32(VMM_SIZE));
+        let omega = octahedron_decode(hammersley(local, VMM_SIZE));
+        VMM[local * SUBGROUP_SIZE] = vec4<f32>(omega / f32(VMM_SIZE), 1.0 / f32(VMM_SIZE));
     }
 
     let sample = vec2<u32>(local / WORKGROUP_SIZE_SQRT, local % WORKGROUP_SIZE_SQRT);
@@ -76,7 +71,7 @@ fn main(
 
         for (var k=0u; k<VMM_SIZE; k++) {
             let index = k * SUBGROUP_SIZE;
-            expectation[k] = vmf(VMM[index], omega) * max(dot(normalize(PHI[index]), normalize(radiance)), EPSILON);
+            expectation[k] = vmf(VMM[index], omega);
             expectation_sum += expectation[k];
         }
 
@@ -119,17 +114,15 @@ fn main(
     }
 
     if (local < VMM_SIZE) {
-        let offset = probe + probes * vec3<u32>(
-            u32((local & 1u) != 0u),
-            u32((local & 2u) != 0u),
-            u32((local & 4u) != 0u));
+        let offset = probe + probes * vec3<u32>(local & 3, (local >> 2) & 3, (local >> 4) & 1);
 
         let index = local * SUBGROUP_SIZE;
 
-        let weight_total = max(VMM[index].w, EPSILON);
+        let gaussian = VMM[index];
+        let radiance = vec4<f32>(PHI[index] / max(gaussian.w, EPSILON), 1.0);
 
-        textureStore(GAUSSIAN_OUT, offset, VMM[index]);
-        textureStore(RADIANCE_OUT, offset, vec4<f32>(PHI[index] / weight_total, 1.0));
+        textureStore(GAUSSIAN_OUT, offset, gaussian);
+        textureStore(RADIANCE_OUT, offset, radiance);
     }
 }
 

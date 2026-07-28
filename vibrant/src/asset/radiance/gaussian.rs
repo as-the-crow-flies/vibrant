@@ -24,8 +24,8 @@ impl GaussianRadianceBuffer {
         let descriptor = TextureDescriptor {
             label,
             size: Extent3d {
-                width: size.x * 2,
-                height: size.y * 2,
+                width: size.x * 4,
+                height: size.y * 4,
                 depth_or_array_layers: size.z * 2,
             },
             mip_level_count,
