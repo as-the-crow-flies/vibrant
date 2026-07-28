@@ -15,8 +15,6 @@
 @group(3) @binding(1) var HDRI_SAMPLER: sampler;
 @group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
 
-const VMM_SIZE: u32 = 8u;
-
 struct Fragment {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>
@@ -81,7 +79,9 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
         let sample_light = sample - 0.05 * gradient.xyz;
 
-        color += transmittance * transmittance_in_step * sample_radiance(sample_light, normal, 5u);
+        let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
+
+        color += 0.1 * transmittance * transmittance_in_step * albedo * sample_irradiance(sample_light, normal, 5u);
 
         transmittance *= exp(-extinction);
 
@@ -116,24 +116,45 @@ fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
 fn sample_radiance(uv: vec3<f32>, direction: vec3<f32>, level: u32) -> vec3<f32> {
     var radiance = vec3<f32>(0.0);
     let lod = f32(level);
+    var pi = 0.0;
 
     for (var k = 0u; k < VMM_SIZE; k++) {
         let octant = vec3<u32>(u32((k & 1u) != 0u), u32((k & 2u) != 0u), u32((k & 4u) != 0u));
-        let lobe_uv = (uv + vec3<f32>(octant)) * 0.5;
+        let octant_min = vec3<f32>(octant) * 0.5;
 
-        let gaussian = textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, lod);
-        let amplitude = textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, lod).rgb;
+        let texel = 0.5 / vec3<f32>(textureDimensions(GAUSSIAN, i32(lod)));
 
-        let pi = length(gaussian.xyz);
-        let mu = gaussian.xyz / max(pi, 1E-6);
-        let kappa = gaussian.w;
+        let lobe_uv = clamp((uv + vec3<f32>(octant)) * 0.5, octant_min + texel, octant_min + 0.5 - texel);
 
-        let density = kappa / (2.0 * PI * (1.0 - exp(-2.0 * kappa))) * exp(kappa * (dot(mu, direction) - 1.0));
+        let vmm = vmf(textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, lod), direction);
+        let phi = textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, lod).rgb;
 
-        radiance += amplitude * density;
+        radiance += phi * vmm;
+        pi += vmm;
     }
 
-    return radiance;
+    return radiance / max(pi, EPSILON);
+}
+
+fn sample_irradiance(uv: vec3<f32>, normal: vec3<f32>, level: u32) -> vec3<f32> {
+    var irradiance = vec3<f32>(0.0);
+    let lod = f32(level);
+
+    for (var k = 0u; k < VMM_SIZE; k++) {
+        let octant = vec3<u32>(u32((k & 1u) != 0u), u32((k & 2u) != 0u), u32((k & 4u) != 0u));
+        let octant_min = vec3<f32>(octant) * 0.5;
+
+        let texel = 0.5 / vec3<f32>(textureDimensions(GAUSSIAN, i32(lod)));
+
+        let lobe_uv = clamp((uv + vec3<f32>(octant)) * 0.5, octant_min + texel, octant_min + 0.5 - texel);
+
+        let v = textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, lod);
+        let phi = textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, lod).rgb;
+
+        irradiance += sg_irradiance_fitted(phi, v, normal);
+    }
+
+    return irradiance / PI;
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
