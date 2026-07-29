@@ -139,14 +139,6 @@ fn cascade_template(src: &str, cascade: usize) -> String {
     src.replace("#CASCADE", &cascade.to_string())
         .as_str()
         .replace(
-            "#WORKGROUP_SIZE_SQRT",
-            &match cascade {
-                _ => 32,
-            }
-            .to_string(),
-        )
-        .as_str()
-        .replace(
             "#WORKGROUP_SIZE",
             &match cascade {
                 _ => 1024,
