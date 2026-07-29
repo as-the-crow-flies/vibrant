@@ -45,6 +45,15 @@ fn G_Smith(n_dot_v: f32, n_dot_l: f32, alpha: f32) -> f32 {
     return ggx_v * ggx_l;
 }
 
+// ── GGX Visibility (Heitz) ─────────────────────────────────────────────────
+// Folds the Cook-Torrance denominator directly into the (separable) Smith
+// masking-shadowing term, so V(NoL)*V(NoV) = G/(4*NoL*NoV). Used by the SG
+// light-source specular fit - see
+// https://therealmjp.github.io/posts/sg-series-part-4-specular-lighting-from-an-sg-light-source/
+fn GGX_V1(n_dot_x: f32, alpha2: f32) -> f32 {
+    return 1.0 / (n_dot_x + sqrt(alpha2 + (1.0 - alpha2) * n_dot_x * n_dot_x));
+}
+
 // ── Schlick Fresnel ────────────────────────────────────────────────────────
 // f0 = base reflectance (vec3 for colored metals)
 fn F_Schlick(v_dot_h: f32, f0: vec3<f32>) -> vec3<f32> {

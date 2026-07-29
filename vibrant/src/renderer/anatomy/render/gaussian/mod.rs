@@ -1,4 +1,4 @@
-use std::ops::Shr;
+use std::ops::{Div, Shr};
 
 use egui::Rect;
 use glam::UVec3;
@@ -86,7 +86,9 @@ impl GaussianVolumeRenderer {
 
         let probes = radiance
             .size()
-            .shr(UVec3::ONE * cascade as u32)
+            .shr(UVec3::splat(cascade as u32))
+            .max(UVec3::ONE)
+            .div(UVec3::new(4, 4, 2))
             .max(UVec3::ONE);
 
         pass.set_pipeline(&self.cascade[cascade]);

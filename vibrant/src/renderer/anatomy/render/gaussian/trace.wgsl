@@ -133,15 +133,14 @@ fn sample_lighting(uv: vec3<f32>, normal: vec3<f32>, view: vec3<f32>, roughness:
     var specular = vec3<f32>(0.0);
     let lod = f32(level);
 
-    let tile_size = vec3<f32>(1.0 / 4.0, 1.0 / 4.0, 1.0 / 2.0);
+    let dims = vec3<f32>(textureDimensions(GAUSSIAN, i32(lod)));
+    let probes = max(floor(dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
 
     for (var k = 0u; k < VMM_SIZE; k++) {
-        let tile = vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1);
-        let tile_min = vec3<f32>(tile) * tile_size;
+        let tile = vec3<f32>(vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1));
 
-        let texel = 0.5 / vec3<f32>(textureDimensions(GAUSSIAN, i32(lod)));
-
-        let lobe_uv = clamp((uv + vec3<f32>(tile)) * tile_size, tile_min + texel, tile_min + tile_size - texel);
+        let local = clamp(uv * probes, vec3<f32>(0.5), probes - 0.5);
+        let lobe_uv = (tile * probes + local) / dims;
 
         let v = textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, lod);
         let phi = textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, lod).rgb;

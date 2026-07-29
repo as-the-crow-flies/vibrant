@@ -6,7 +6,6 @@ use wgpu::*;
 use crate::gpu::Gpu;
 
 pub struct GaussianRadianceBuffer {
-    size: UVec3,
     gaussian: Texture,
     radiance: Texture,
     binding: BindGroup,
@@ -144,7 +143,6 @@ impl GaussianRadianceBuffer {
             .collect();
 
         Self {
-            size,
             radiance,
             gaussian,
             binding,
@@ -153,7 +151,8 @@ impl GaussianRadianceBuffer {
     }
 
     pub fn size(&self) -> UVec3 {
-        self.size
+        let s = self.gaussian().size();
+        UVec3::new(s.width, s.height, s.depth_or_array_layers)
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -254,6 +253,14 @@ impl GaussianRadianceBuffer {
 
     pub fn bindings_mipmap(&self) -> &[BindGroup] {
         &self.bindings_mipmap
+    }
+
+    pub fn gaussian(&self) -> &Texture {
+        &self.gaussian
+    }
+
+    pub fn radiance(&self) -> &Texture {
+        &self.radiance
     }
 }
 

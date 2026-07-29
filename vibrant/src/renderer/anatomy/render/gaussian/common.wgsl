@@ -67,20 +67,27 @@ fn sg_irradiance_fitted(phi: vec3<f32>, v: vec4<f32>, normal: vec3<f32>) -> vec3
     return mix(PI * phi, fitted, clamp(kappa, 0.0, 1.0));
 }
 
-// Approximates ∫ L(ω) f_GGX(ω, V, N) (N·ω) dω for a single SG/vMF light lobe
-// L(ω) = phi·exp(κ·(μ·ω − 1)) (same sufficient statistic `v` as vmf() and
-// sg_irradiance_fitted()) against the full Cook-Torrance GGX specular BRDF.
+// Approximates the outgoing specular radiance from a single SG/vMF light
+// lobe L(ω) = phi·exp(κ·(μ·ω − 1)) (same sufficient statistic `v` as vmf()
+// and sg_irradiance_fitted()) reflected by a GGX surface, following the
+// SG-light-source technique from
+// https://therealmjp.github.io/posts/sg-series-part-4-specular-lighting-from-an-sg-light-source/
+// (itself building on Wang et al., "All-Frequency Rendering with Dynamic,
+// Spatially Varying Reflectance"):
 //
-// The GGX NDF is itself represented as an SG lobe: in half-vector space it is
-// centered on N with sharpness λ_ndf = 2/α² and amplitude 1/(πα²) (the
-// standard SG fit to D_GGX, see Wang et al. "All-Frequency Rendering with
-// Dynamic, Spatially Varying Reflectance"). It is then warped into light-
-// vector space — centered on the reflection vector R = reflect(-V,N), with
-// sharpness divided by 4·(N·V) to account for the half-vector→light-vector
-// Jacobian — which turns the light-integral into a product of two SGs, and
-// that product has the same closed-form sphere integral used above. F and G
-// are treated as constant over the lobe and evaluated at its peak (L=R, so
-// H=N and V·H reduces to N·V).
+//  - The GGX NDF is represented as an SG in half-vector space, centered on N
+//    with sharpness λ_ndf = 2/α² and amplitude 1/(πα²) (matches D_GGX at its
+//    peak, H=N).
+//  - It's warped into light-vector space by re-centering on the reflection
+//    vector R = reflect(-V,N) and dividing its sharpness by 4|N·V| (the
+//    half-vector→light-vector Jacobian; amplitude is unchanged). That turns
+//    "integrate the NDF against the light lobe" into a product of two SGs,
+//    which has the same closed-form sphere integral used above
+//    (SGInnerProduct).
+//  - Visibility (Heitz, folding G/(4·NoL·NoV) into one term) and Fresnel are
+//    then applied at the lobe's peak direction, where N·L = N·V and the
+//    half-vector reduces to N — matching the reference's assumption that
+//    both terms are ~constant across the BRDF lobe.
 fn sg_specular_fitted(phi: vec3<f32>, v: vec4<f32>, view: vec3<f32>, normal: vec3<f32>, roughness: f32, f0: vec3<f32>) -> vec3<f32> {
     let q     = inverseSqrt(dot(v.xyz, v.xyz) + 1e-24);
     let u     = clamp((v.w + 1e-8) * q, U_MIN, U_MAX);
@@ -88,23 +95,21 @@ fn sg_specular_fitted(phi: vec3<f32>, v: vec4<f32>, view: vec3<f32>, normal: vec
     let kappa = (3.0 * u2 - 1.0) / (u2 * u - u);
     let mu    = v.xyz * q;
 
-    let n_dot_v      = max(dot(normal, view), EPSILON);
-    let reflection   = reflect(-view, normal);
+    let n_dot_v    = max(dot(normal, view), EPSILON);
+    let reflection = reflect(-view, normal); // warped NDF axis
 
-    let alpha = roughness * roughness;
-    let a2    = max(alpha * alpha, 1e-8);
+    let alpha  = roughness * roughness;
+    let alpha2 = max(alpha * alpha, 1e-8);
 
-    // amplitude_ndf = 1/(π·α²) and λ_r = 1/(2·α²·n_dot_v) both blow up as
-    // roughness → 0, and the closed-form integral wants amplitude_ndf/λ3 —
-    // computing that as (huge amplitude) × (1/huge λ3) loses almost all f32
-    // precision right where the lobe gets sharp, which is exactly what showed
-    // up as whiteout/noise at low roughness. Substituting
+    // amplitude_ndf = 1/(π·α²) and λ_r = (2/α²)/(4·n_dot_v) both blow up as
+    // roughness → 0, and SGInnerProduct wants amplitude_ndf/λ3 — computing
+    // that as (huge amplitude) × (1/huge λ3) loses almost all f32 precision
+    // right where the lobe gets sharp, which is exactly what showed up as
+    // whiteout/noise at low roughness. Substituting
     // amplitude_ndf = 4·n_dot_v·λ_r/(2π) (exact, from the α² definitions
     // above) turns that product into 4·n_dot_v·(λ_r/λ3), a ratio of two
-    // same-magnitude quantities — and the 4·n_dot_v then cancels the
-    // Cook-Torrance denominator's 4·n_dot_v below, so it never needs to be
-    // formed at all.
-    let lambda_r = 0.5 / (a2 * n_dot_v); // = (2/a2) / (4·n_dot_v)
+    // same-magnitude quantities, so amplitude_ndf never needs to be formed.
+    let lambda_r = 0.5 / (alpha2 * n_dot_v); // = (2/α²) / (4·n_dot_v)
 
     let d       = kappa * mu + lambda_r * reflection;
     let lambda3 = max(length(d), EPSILON);
@@ -113,10 +118,12 @@ fn sg_specular_fitted(phi: vec3<f32>, v: vec4<f32>, view: vec3<f32>, normal: vec
     let scale = exp2((lambda3 - kappa - lambda_r) * LOG2_E);
     let em2l3 = exp2(-2.0 * lambda3 * LOG2_E);
 
-    let shape = ratio * scale * (1.0 - em2l3);
+    // SGInnerProduct(warpedNDF, light) = 2π·a_ndf·phi·exp(λ3-κ-λ_r)·(1-e^-2λ3)/λ3,
+    // with a_ndf = 4·n_dot_v·λ_r/(2π) substituted in (see above), leaving:
+    let inner_product = phi * (4.0 * n_dot_v) * ratio * scale * (1.0 - em2l3);
 
-    let G = G_Smith(n_dot_v, n_dot_v, alpha); // N·L = N·V at the lobe peak
-    let F = F_Schlick(n_dot_v, f0);
+    let visibility = GGX_V1(n_dot_v, alpha2) * GGX_V1(n_dot_v, alpha2); // N·L = N·V at the peak
+    let F = F_Schlick(n_dot_v, f0); // V·H = N·V at the peak (H = N)
 
-    return phi * shape * G * F;
+    return inner_product * visibility * F * n_dot_v; // cosine term, N·L = n_dot_v
 }
