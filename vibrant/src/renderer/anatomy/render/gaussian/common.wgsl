@@ -101,25 +101,18 @@ fn sg_specular_fitted(phi: vec3<f32>, v: vec4<f32>, view: vec3<f32>, normal: vec
     let alpha  = roughness * roughness;
     let alpha2 = max(alpha * alpha, 1e-8);
 
-    // amplitude_ndf = 1/(π·α²) and λ_r = (2/α²)/(4·n_dot_v) both blow up as
-    // roughness → 0, and SGInnerProduct wants amplitude_ndf/λ3 — computing
-    // that as (huge amplitude) × (1/huge λ3) loses almost all f32 precision
-    // right where the lobe gets sharp, which is exactly what showed up as
-    // whiteout/noise at low roughness. Substituting
-    // amplitude_ndf = 4·n_dot_v·λ_r/(2π) (exact, from the α² definitions
-    // above) turns that product into 4·n_dot_v·(λ_r/λ3), a ratio of two
-    // same-magnitude quantities, so amplitude_ndf never needs to be formed.
     let lambda_r = 0.5 / (alpha2 * n_dot_v); // = (2/α²) / (4·n_dot_v)
 
-    let d       = kappa * mu + lambda_r * reflection;
-    let lambda3 = max(length(d), EPSILON);
+    let cos_mu_r = dot(mu, reflection);
+    let delta    = kappa * kappa + 2.0 * kappa * lambda_r * cos_mu_r; // λ3² - λ_r², exact
+    let lambda3  = sqrt(delta + lambda_r * lambda_r);
 
-    let ratio = lambda_r / lambda3; // both O(λ_r): stable, bounded in (0,1]
-    let scale = exp2((lambda3 - kappa - lambda_r) * LOG2_E);
+    let exponent = delta / (lambda3 + lambda_r) - kappa;
+
+    let ratio = lambda_r / lambda3;
+    let scale = exp2(exponent * LOG2_E);
     let em2l3 = exp2(-2.0 * lambda3 * LOG2_E);
 
-    // SGInnerProduct(warpedNDF, light) = 2π·a_ndf·phi·exp(λ3-κ-λ_r)·(1-e^-2λ3)/λ3,
-    // with a_ndf = 4·n_dot_v·λ_r/(2π) substituted in (see above), leaving:
     let inner_product = phi * (4.0 * n_dot_v) * ratio * scale * (1.0 - em2l3);
 
     let visibility = GGX_V1(n_dot_v, alpha2) * GGX_V1(n_dot_v, alpha2); // N·L = N·V at the peak
