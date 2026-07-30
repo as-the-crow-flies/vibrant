@@ -19,29 +19,30 @@
 
 const INTERVAL = array<f32, 11>(0.0, 1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0, 255.0, 511.0, 1023.0);
 
-var<workgroup> VMM: array<vec4<f32>, VMM_SIZE * 32u>; // Sufficient (w * omega, w)
-var<workgroup> PHI: array<vec3<f32>, VMM_SIZE * 32u>; // Radiance & Distance (w * radiance, 1/d?)
-
-// Cascade  Samples Subgroups   Workgroup Size  Probes per Workgroup
-// 0        4       1           32              32
-// 1        16      1           32              8
-// 2        64      1           32              2
-// 3        256     2           64              1
-// 4        1024    8           256             1
-// 5        4096    32          1024            1
-
 const CASCADE: u32 = #CASCADE;
 const WORKGROUP_SIZE: u32 = #WORKGROUP_SIZE;
 const SUBGROUPS: u32 = #SUBGROUPS;
-const PROBES_PER_WORKGROUP: u32 = #PROBES_PER_WORKGROUP;
-const SAMPLES_PER_PROBE: u32 = #SAMPLES_PER_PROBE;
+const SAMPLES: u32 = #SAMPLES;
+
+var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>; // Final per-lobe (w * omega, w)
+var<workgroup> PHI: array<vec3<f32>, VMM_SIZE>; // Final per-lobe (w * radiance, 1/d?)
+
+var<workgroup> VMM_PARTIAL: array<vec4<f32>, SUBGROUPS * VMM_SIZE>;
+var<workgroup> PHI_PARTIAL: array<vec3<f32>, SUBGROUPS * VMM_SIZE>;
+
+// Cascade  Samples Subgroups   Workgroup Size
+// 0        128     1           32
+// 1        128     1           32
+// 2        128     1           32
+// 3        256     2           64
+// 4        1024    8           256
+// 5        4096    32          1024
 
 @compute
 @workgroup_size(WORKGROUP_SIZE)
 fn main(
-    @builtin(subgroup_size) SUBGROUP_SIZE: u32,
+    @builtin(subgroup_size) subgroup_size: u32,
     @builtin(num_workgroups) num_workgroups: vec3<u32>,
-    @builtin(num_subgroups) num_subgroups: u32,
     @builtin(workgroup_id) workgroup: vec3<u32>,
     @builtin(subgroup_id) subgroup: u32,
     @builtin(local_invocation_index) workgroup_index: u32,
@@ -50,23 +51,23 @@ fn main(
     // TODO: Read from last frame! (and from previous cascade, obviously)
     if (workgroup_index < VMM_SIZE) {
         let omega = get_direction(workgroup_index, VMM_SIZE);
-        VMM[workgroup_index * SUBGROUP_SIZE] = vec4<f32>(omega / f32(VMM_SIZE), 1.0 / f32(VMM_SIZE));
+        VMM[workgroup_index] = vec4<f32>(omega / f32(VMM_SIZE), 1.0 / f32(VMM_SIZE));
     }
 
     let origin = (vec3<f32>(workgroup) + 0.5) * f32(1u << CASCADE);
 
     let omega = mat4x3<f32>(
-        get_direction(4u * workgroup_index + 0, SAMPLES_PER_PROBE),
-        get_direction(4u * workgroup_index + 1, SAMPLES_PER_PROBE),
-        get_direction(4u * workgroup_index + 2, SAMPLES_PER_PROBE),
-        get_direction(4u * workgroup_index + 3, SAMPLES_PER_PROBE)
+        get_direction(4u * workgroup_index + 0, SAMPLES),
+        get_direction(4u * workgroup_index + 1, SAMPLES),
+        get_direction(4u * workgroup_index + 2, SAMPLES),
+        get_direction(4u * workgroup_index + 3, SAMPLES)
     );
 
     let radiance = mat4x3<f32>(
-        hdri(omega[0], SAMPLES_PER_PROBE),
-        hdri(omega[1], SAMPLES_PER_PROBE),
-        hdri(omega[2], SAMPLES_PER_PROBE),
-        hdri(omega[3], SAMPLES_PER_PROBE),
+        hdri(omega[0], SAMPLES),
+        hdri(omega[1], SAMPLES),
+        hdri(omega[2], SAMPLES),
+        hdri(omega[3], SAMPLES),
     );
 
     let weight = vec4<f32>(
@@ -80,12 +81,13 @@ fn main(
 
     var expectation = array<vec4<f32>, VMM_SIZE>();
 
-    for (var i=0u; i<30u; i++) {
+    for (var i=0u; i<50u; i++) {
+
         // Expectation
         var expectation_sum = vec4<f32>(0.0);
 
         for (var k=0u; k<VMM_SIZE; k++) {
-            let gamma = vmf(VMM[k * SUBGROUP_SIZE], omega);
+            let gamma = vmf(VMM[k], omega);
 
             expectation[k] = weight * gamma;
             expectation_sum += gamma;
@@ -96,36 +98,34 @@ fn main(
         workgroupBarrier();
 
         // Maximization
-        // Compute Lobe Statistics
         for (var k=0u; k<VMM_SIZE; k++) {
             let sample_weight = expectation[k] * expectation_sum_inv;
 
             let vmm_thread = vec4<f32>(omega * sample_weight, sum(sample_weight));
             let phi_thread = radiance * sample_weight;
 
+            // Reduce Subgroup
             let vmm = subgroupAdd(vmm_thread);
             let phi = subgroupAdd(phi_thread);
 
             if (subgroup_index == 0) {
-                let index = num_subgroups * k + subgroup;
-                VMM[index] = vmm;
-                PHI[index] = phi;
+                let index = SUBGROUPS * k + subgroup;
+                VMM_PARTIAL[index] = vmm;
+                PHI_PARTIAL[index] = phi;
             }
         }
 
         workgroupBarrier();
 
-        // Reduce Lobe Statistics
-        if (subgroup < VMM_SIZE) {
-            let index = num_subgroups * subgroup + subgroup_index;
+        for (var k=subgroup; k<VMM_SIZE; k+=SUBGROUPS) {
+            let index = SUBGROUPS * k + subgroup_index;
 
-            let vmm = subgroupAdd(VMM[index]);
-            let phi = subgroupAdd(PHI[index]);
+            let vmm = subgroupAdd(select(vec4<f32>(0.0), VMM_PARTIAL[index], subgroup_index < SUBGROUPS));
+            let phi = subgroupAdd(select(vec3<f32>(0.0), PHI_PARTIAL[index], subgroup_index < SUBGROUPS));
 
             if (subgroup_index == 0) {
-                let index = subgroup * SUBGROUP_SIZE;
-                VMM[index] = vmm;
-                PHI[index] = phi;
+                VMM[k] = vmm;
+                PHI[k] = phi;
             }
         }
 
@@ -135,10 +135,8 @@ fn main(
     if (workgroup_index < VMM_SIZE) {
         let offset = workgroup + num_workgroups * vec3<u32>(workgroup_index & 3, (workgroup_index >> 2) & 3, (workgroup_index >> 4) & 1);
 
-        let index = workgroup_index * SUBGROUP_SIZE;
-
-        let gaussian = VMM[index];
-        let radiance = vec4<f32>(PHI[index] / max(gaussian.w, EPSILON), 1.0);
+        let gaussian = VMM[workgroup_index];
+        let radiance = vec4<f32>(PHI[workgroup_index] / max(gaussian.w, EPSILON), 1.0);
 
         textureStore(GAUSSIAN_OUT, offset, gaussian);
         textureStore(RADIANCE_OUT, offset, radiance);
@@ -167,14 +165,4 @@ fn get_direction(i: u32, N: u32) -> vec3<f32> {
 
 fn sum(v: vec4<f32>) -> f32 {
     return v.x + v.y + v.z + v.w;
-}
-
-fn subgroupSum(v: vec4<f32>, n: u32) -> vec4<f32> {
-    var sum = v;
-
-    for (var offset = 1u; offset < n; offset <<= 1u) {
-        sum += subgroupShuffleXor(sum, offset);
-    }
-
-    return sum;
 }
