@@ -137,12 +137,54 @@ impl GaussianVolumeRenderer {
 
 fn cascade_template(src: &str, cascade: usize) -> String {
     src.replace("#CASCADE", &cascade.to_string())
-        .as_str()
+        .to_string()
         .replace(
             "#WORKGROUP_SIZE",
             &match cascade {
+                0 => 32,
+                1 => 32,
+                2 => 32,
+                3 => 64,
+                4 => 256,
                 _ => 1024,
             }
             .to_string(),
         )
+        .replace(
+            "#SUBGROUPS",
+            &match cascade {
+                0 => 1,
+                1 => 1,
+                2 => 1,
+                3 => 2,
+                4 => 8,
+                _ => 32,
+            }
+            .to_string(),
+        )
+        .replace(
+            "#PROBES_PER_WORKGROUP",
+            &match cascade {
+                0 => 32,
+                1 => 8,
+                2 => 2,
+                3 => 1,
+                4 => 1,
+                _ => 1,
+            }
+            .to_string(),
+        )
+        .replace(
+            "#SAMPLES_PER_PROBE",
+            &match cascade {
+                0 => 4,
+                1 => 16,
+                2 => 64,
+                3 => 256,
+                4 => 1024,
+                _ => 4096,
+            }
+            .to_string(),
+        )
+        .to_string()
 }

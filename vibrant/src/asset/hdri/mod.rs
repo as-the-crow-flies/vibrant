@@ -276,8 +276,8 @@ impl HdriBuffer {
         let settings = HdriBufferSettings {
             rotation: 0.0,
             strength: 1.0,
-            specular: 0.25,
-            roughness: 0.5,
+            specular: 0.5,
+            roughness: 0.2,
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {

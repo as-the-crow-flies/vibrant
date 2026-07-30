@@ -5,7 +5,7 @@ const LOG2_E     : f32 = 1.4426950408889634;
 const U_MIN      : f32 = 1.001;    // κ_max ≈ 1000
 const U_MAX      : f32 = 100.0;    // κ_min ≈ 0.03 — indistinguishable from uniform
 
-fn vmf(v: vec4<f32>, omega: vec3<f32>) -> f32 {
+fn vmf(v: vec4<f32>, omega: mat4x3<f32>) -> vec4<f32> {
     let q  = inverseSqrt(dot(v.xyz, v.xyz) + 1e-24);   // 1/|s|
     let u  = clamp((v.w + 1e-8) * q, U_MIN, U_MAX);    // w/|s| ∈ [1, ∞)
     let u2 = u * u;
@@ -13,7 +13,8 @@ fn vmf(v: vec4<f32>, omega: vec3<f32>) -> f32 {
     let k  = (3.0 * u2 - 1.0) / (u2 * u - u);          // Banerjee, reparameterized
     let kl = k * LOG2_E;
 
-    let e = exp2(fma(kl * q, dot(v.xyz, omega), -kl)); // e^{κ(μ·ω − 1)}
+    let dots = transpose(omega) * v.xyz;                       // dot(v.xyz, omega[i]) per column
+    let e = exp2(fma(vec4<f32>(kl * q), dots, vec4<f32>(-kl))); // e^{κ(μ·ωᵢ − 1)}
     return INV_TWO_PI * k * e / (1.0 - exp2(-2.0 * kl));
 }
 
