@@ -29,7 +29,8 @@ impl GaussianVolumeRenderer {
 
         let common = include_str!("common.wgsl").to_string();
 
-        let src = common.clone() + include_str!("cascade.wgsl");
+        let cascade_src = include_str!("cascade.wgsl").to_string() + &common;
+        let trace_src = include_str!("trace.wgsl").to_string() + &common;
 
         Self {
             cascade: (0..7)
@@ -37,7 +38,7 @@ impl GaussianVolumeRenderer {
                     gpu.compute(
                         "GaussianVolumeCascade",
                         &layout,
-                        &gpu.shader(&cascade_template(&src, cascade)),
+                        &gpu.shader(&cascade_template(&cascade_src, cascade)),
                     )
                 })
                 .collect(),
@@ -50,7 +51,7 @@ impl GaussianVolumeRenderer {
                     &HdriBuffer::layout(gpu),
                 ]),
                 ColorBuffer::target(),
-                &gpu.shader(&(common + include_str!("trace.wgsl"))),
+                &gpu.shader(&trace_src),
             ),
         }
     }

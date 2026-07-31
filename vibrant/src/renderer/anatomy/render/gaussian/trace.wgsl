@@ -77,6 +77,8 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let gradient = sample_gradient(sample);
         let normal = -select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
 
+        let reflection = reflect(-view, normal); // warped NDF axis
+
         let sample_light = sample - 0.05 * gradient.xyz;
 
         let n_dot_v = max(dot(normal, -view), 0.0001);
@@ -88,10 +90,10 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
         let lighting = sample_lighting(sample_light, normal, view, roughness, f0, 5u);
 
-        color += 0.1 * transmittance * transmittance_in_step * (
-            (1.0 - F) * albedo * lighting.diffuse +
-            F * lighting.specular
-        );
+        let irradiance = (1.0 - F) * albedo * lighting.diffuse + F * lighting.specular;
+
+        color += transmittance * transmittance_in_step
+               * mix(hdri(reflection, 4096), irradiance, ENVIRONMENT.settings.alpha);
 
         transmittance *= exp(-extinction);
 

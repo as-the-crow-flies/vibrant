@@ -1,4 +1,4 @@
-const VMM_SIZE   : u32 = 16u;
+const VMM_SIZE   : u32 = 32u;
 const EPSILON    : f32 = 1e-6;
 const INV_TWO_PI : f32 = 0.15915494309189535;
 const LOG2_E     : f32 = 1.4426950408889634;
@@ -120,4 +120,15 @@ fn sg_specular_fitted(phi: vec3<f32>, v: vec4<f32>, view: vec3<f32>, normal: vec
     let F = F_Schlick(n_dot_v, f0); // V·H = N·V at the peak (H = N)
 
     return inner_product * visibility * F * n_dot_v; // cosine term, N·L = n_dot_v
+}
+
+fn hdri(direction: vec3<f32>, N: u32) -> vec3<f32> {
+    let hdri_dim = vec2<f32>(textureDimensions(HDRI));
+    let lod = 0.5 * log2(hdri_dim.x * hdri_dim.y / f32(N)) + ENVIRONMENT.settings.direct_light;
+
+    let direction_world = normalize((TRANSFORM_INVERSE * vec4<f32>(direction, 0.0)).xyz);
+    let sample = equirectangular(direction_world.xzy, HDRI_SETTINGS.rotation);
+    let radiance = HDRI_SETTINGS.strength * textureSampleLevel(HDRI, HDRI_SAMPLER, sample, lod).rgb;
+
+    return radiance;
 }
