@@ -93,7 +93,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let irradiance = (1.0 - F) * albedo * lighting.diffuse + F * lighting.specular;
 
         color += transmittance * transmittance_in_step
-               * mix(hdri(reflection, 4096), irradiance, ENVIRONMENT.settings.alpha);
+               * mix(0.05 * hdri(reflection, 4096), irradiance, ENVIRONMENT.settings.alpha);
 
         transmittance *= exp(-extinction);
 

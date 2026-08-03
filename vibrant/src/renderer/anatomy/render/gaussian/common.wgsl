@@ -1,4 +1,4 @@
-const VMM_SIZE   : u32 = 32u;
+const VMM_SIZE   : u32 = 16u;
 const EPSILON    : f32 = 1e-6;
 const INV_TWO_PI : f32 = 0.15915494309189535;
 const LOG2_E     : f32 = 1.4426950408889634;
@@ -13,8 +13,7 @@ fn vmf(v: vec4<f32>, omega: mat4x3<f32>) -> vec4<f32> {
     let k  = (3.0 * u2 - 1.0) / (u2 * u - u);          // Banerjee, reparameterized
     let kl = k * LOG2_E;
 
-    let dots = transpose(omega) * v.xyz;                       // dot(v.xyz, omega[i]) per column
-    let e = exp2(fma(vec4<f32>(kl * q), dots, vec4<f32>(-kl))); // e^{κ(μ·ωᵢ − 1)}
+    let e = exp2(fma(vec4<f32>(kl * q), transpose(omega) * v.xyz, vec4<f32>(-kl))); // e^{κ(μ·ωᵢ − 1)}
     return INV_TWO_PI * k * e / (1.0 - exp2(-2.0 * kl));
 }
 
@@ -124,7 +123,7 @@ fn sg_specular_fitted(phi: vec3<f32>, v: vec4<f32>, view: vec3<f32>, normal: vec
 
 fn hdri(direction: vec3<f32>, N: u32) -> vec3<f32> {
     let hdri_dim = vec2<f32>(textureDimensions(HDRI));
-    let lod = 0.5 * log2(hdri_dim.x * hdri_dim.y / f32(N)) + ENVIRONMENT.settings.direct_light;
+    let lod = 0.5 * log2(hdri_dim.x * hdri_dim.y / f32(N));
 
     let direction_world = normalize((TRANSFORM_INVERSE * vec4<f32>(direction, 0.0)).xyz);
     let sample = equirectangular(direction_world.xzy, HDRI_SETTINGS.rotation);
