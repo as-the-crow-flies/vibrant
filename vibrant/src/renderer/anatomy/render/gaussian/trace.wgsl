@@ -88,7 +88,9 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let F = F_Schlick(n_dot_v, f0) * HDRI_SETTINGS.specular;
 
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
-        let lighting = sample_lighting(sample_light, normal, view, roughness, f0, 5u);
+
+        let level = u32(ENVIRONMENT.settings.direct_light * 5.0);
+        let lighting = sample_lighting(sample_light, normal, view, roughness, f0, level);
 
         let irradiance = (1.0 - F) * albedo * lighting.diffuse + F * lighting.specular;
 

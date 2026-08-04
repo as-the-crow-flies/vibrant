@@ -1,7 +1,4 @@
-use std::ops::{Div, Shr};
-
 use egui::Rect;
-use glam::UVec3;
 use wgpu::{
     CommandEncoder, ComputePassDescriptor, ComputePipeline, RenderPassDescriptor, RenderPipeline,
 };
@@ -33,7 +30,7 @@ impl GaussianVolumeRenderer {
         let trace_src = include_str!("trace.wgsl").to_string() + &common;
 
         Self {
-            cascade: (0..7)
+            cascade: (0..GaussianRadianceBuffer::LEVELS)
                 .map(|cascade| {
                     gpu.compute(
                         "GaussianVolumeCascade",
@@ -83,23 +80,18 @@ impl GaussianVolumeRenderer {
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
-        let cascade = 5;
-
-        let probes = radiance
-            .size()
-            .shr(UVec3::splat(cascade as u32))
-            .max(UVec3::ONE)
-            .div(UVec3::new(4, 4, 2))
-            .max(UVec3::ONE);
-
-        pass.set_pipeline(&self.cascade[cascade]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.set_bind_group(3, hdri.binding(), &[]);
 
-        pass.set_bind_group(0, &radiance.bindings_mipmap()[cascade], &[]);
+        for cascade in (0..GaussianRadianceBuffer::LEVELS as usize).rev() {
+            let probes = radiance.probes(cascade);
+            let batch = probes_per_workgroup(cascade as u32);
 
-        pass.dispatch_workgroups(probes.x, probes.y, probes.z);
+            pass.set_pipeline(&self.cascade[cascade]);
+            pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
+            pass.dispatch_workgroups(probes.x / batch, probes.y, probes.z);
+        }
     }
 
     fn trace(
@@ -136,7 +128,18 @@ impl GaussianVolumeRenderer {
     }
 }
 
-fn cascade_template(src: &str, cascade: usize) -> String {
+// Probes packed into one workgroup along x at dispatch time — must match
+// WORKGROUP_SIZE / THREADS in `cascade_template` for each cascade.
+fn probes_per_workgroup(cascade: u32) -> u32 {
+    match cascade {
+        2 => 4,
+        1 => 16,
+        0 => 64,
+        _ => 1,
+    }
+}
+
+fn cascade_template(src: &str, cascade: u32) -> String {
     src.replace("#CASCADE", &cascade.to_string())
         .to_string()
         .replace(
@@ -144,8 +147,7 @@ fn cascade_template(src: &str, cascade: usize) -> String {
             &match cascade {
                 5 => 1024,
                 4 => 256,
-                3 => 64,
-                _ => 32,
+                _ => 64,
             }
             .to_string(),
         )
@@ -160,12 +162,26 @@ fn cascade_template(src: &str, cascade: usize) -> String {
             .to_string(),
         )
         .replace(
+            "#THREADS",
+            &match cascade {
+                5 => 1024,
+                4 => 256,
+                3 => 64,
+                2 => 16,
+                1 => 4,
+                _ => 1,
+            }
+            .to_string(),
+        )
+        .replace(
             "#SAMPLES",
             &match cascade {
                 5 => 4096,
                 4 => 1024,
                 3 => 256,
-                _ => 128,
+                2 => 64,
+                1 => 16,
+                _ => 4,
             }
             .to_string(),
         )

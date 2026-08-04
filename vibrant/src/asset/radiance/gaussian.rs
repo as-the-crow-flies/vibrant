@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, ops::Shr};
 
 use glam::UVec3;
 use wgpu::*;
@@ -10,15 +10,19 @@ pub struct GaussianRadianceBuffer {
     radiance: Texture,
     binding: BindGroup,
     bindings_mipmap: Vec<BindGroup>,
+    probes: Vec<UVec3>,
 }
 
 impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    pub const LEVELS: u32 = 6;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mip_level_count = 8;
+        let probes = (0..Self::LEVELS)
+            .map(|cascade| size.shr(UVec3::splat(cascade)).max(UVec3::ONE))
+            .collect();
 
         let descriptor = TextureDescriptor {
             label,
@@ -27,7 +31,7 @@ impl GaussianRadianceBuffer {
                 height: size.y * 4,
                 depth_or_array_layers: size.z * 2,
             },
-            mip_level_count,
+            mip_level_count: Self::LEVELS + 1,
             sample_count: 1,
             dimension: TextureDimension::D3,
             format: Self::FORMAT,
@@ -82,7 +86,7 @@ impl GaussianRadianceBuffer {
             ],
         });
 
-        let bindings_mipmap = (0..mip_level_count - 1)
+        let bindings_mipmap = (0..Self::LEVELS)
             .into_iter()
             .map(|level| {
                 gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -147,6 +151,7 @@ impl GaussianRadianceBuffer {
             gaussian,
             binding,
             bindings_mipmap,
+            probes,
         }
     }
 
@@ -251,8 +256,8 @@ impl GaussianRadianceBuffer {
         &self.binding
     }
 
-    pub fn bindings_mipmap(&self) -> &[BindGroup] {
-        &self.bindings_mipmap
+    pub fn binding_mipmap(&self, cascade: usize) -> &BindGroup {
+        &self.bindings_mipmap[cascade]
     }
 
     pub fn gaussian(&self) -> &Texture {
@@ -261,6 +266,10 @@ impl GaussianRadianceBuffer {
 
     pub fn radiance(&self) -> &Texture {
         &self.radiance
+    }
+
+    pub fn probes(&self, cascade: usize) -> UVec3 {
+        self.probes[cascade]
     }
 }
 
