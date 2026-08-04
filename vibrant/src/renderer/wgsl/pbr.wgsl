@@ -23,6 +23,22 @@ fn hash22(p: vec2<u32>) -> vec2<f32> {
     return vec2<f32>(v) * 2.3283064365386963e-10;
 }
 
+fn hash32(p: vec3<u32>) -> vec2<f32> {
+    var v = p * 1664525u + 1013904223u;
+
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+
+    v ^= v >> vec3<u32>(16u);
+
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+
+    return vec2<f32>(v.xy) * 2.3283064365386963e-10;
+}
+
 // ── GGX Normal Distribution Function ──────────────────────────────────────
 // α = roughness², n = surface normal, h = half-vector
 fn D_GGX(n_dot_h: f32, alpha: f32) -> f32 {
