@@ -78,6 +78,7 @@ fn main(
             PHI_PRIOR[i] = textureSampleLevel(RADIANCE_IN, SAMPLER, parent_uv, 0.0);
 
             VMM[i] = VMM_PRIOR[i];
+            PHI[i] = PHI_PRIOR[i];
         }
     }
 
@@ -98,11 +99,48 @@ fn main(
         get_direction(probe, 4u * thread + 3, SAMPLES),
     );
 
-    let radiance = mat4x3<f32>(
-        hdri(omega[0], SAMPLES),
-        hdri(omega[1], SAMPLES),
-        hdri(omega[2], SAMPLES),
-        hdri(omega[3], SAMPLES),
+    var radiance = mat4x3<f32>();
+
+    if (CASCADE == 5u) { // Parent Radiance is Environment Map
+        radiance = mat4x3<f32>(
+            hdri(omega[0], SAMPLES),
+            hdri(omega[1], SAMPLES),
+            hdri(omega[2], SAMPLES),
+            hdri(omega[3], SAMPLES),
+        );
+    } else { // Parent Radiance is Spherical Gaussians
+
+        var expectation_sum = vec4<f32>(0.0);
+
+        for (var k=0u; k<VMM_SIZE; k++) {
+            let expectation = vmf(VMM[base + k], omega);
+                expectation_sum += expectation;
+
+            let phi = PHI[base + k];
+
+            radiance += mat4x3<f32>(
+                expectation[0] * phi.rgb / phi.w,
+                expectation[1] * phi.rgb / phi.w,
+                expectation[2] * phi.rgb / phi.w,
+                expectation[3] * phi.rgb / phi.w,
+            );
+        }
+
+        let expectation_sum_inv = 1.0 / expectation_sum;
+        radiance = mat4x3<f32>(
+            radiance[0] * expectation_sum_inv[0],
+            radiance[1] * expectation_sum_inv[1],
+            radiance[2] * expectation_sum_inv[2],
+            radiance[3] * expectation_sum_inv[3],
+        );
+    }
+
+    // Apply Transmission
+    radiance = mat4x3<f32>(
+        radiance[0] * transmission(origin, omega[0], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+        radiance[1] * transmission(origin, omega[1], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+        radiance[2] * transmission(origin, omega[2], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+        radiance[3] * transmission(origin, omega[3], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
     );
 
     let weight = vec4<f32>(
@@ -187,6 +225,31 @@ fn main(
         textureStore(GAUSSIAN_OUT, offset, VMM[i]);
         textureStore(RADIANCE_OUT, offset, norm(PHI[i]));
     }
+}
+
+fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {
+    var transmission = vec3<f32>(1.0);
+
+    let grid = vec3<u32>(textureDimensions(GAUSSIAN_OUT)) / vec3<u32>(4u, 4u, 2u);
+    let dim = vec3<f32>(grid) * f32(1u << CASCADE);
+    let origin_sample = origin / dim;
+    let direction_sample = direction / dim;
+
+    let radiance_scale = f32(textureDimensions(EXTINCTION).x) / dim.x * 4.0;
+
+    let scale = length(TRANSFORM[0].xyz) * dim.x; // voxels/mm
+    let step_size = 1.0 / radiance_scale;
+
+    for (var t=t0; t<t1; t+=step_size) {
+        let sample = origin_sample + direction_sample * t;
+
+        let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
+
+        transmission *= exp(-extinction * step_size / scale);
+        if (all(transmission < vec3<f32>(1e-3)) || any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
+    }
+
+    return transmission;
 }
 
 fn store_lobe(k: u32, vmm: vec4<f32>, phi: vec4<f32>) {

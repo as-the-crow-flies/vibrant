@@ -24,5 +24,5 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         }
     }
 
-    textureStore(IRRADIANCE, voxel, pack_rgb(irradiance / 8.0));
+    textureStore(IRRADIANCE, voxel, pack_rgb(irradiance / 2.0));
 }
