@@ -1,4 +1,4 @@
-const VMM_SIZE   : u32 = 8u;
+const VMM_SIZE   : u32 = #VMM_SIZEu;
 const EPSILON    : f32 = 1e-6;
 const INV_TWO_PI : f32 = 0.15915494309189535;
 const LOG2_E     : f32 = 1.4426950408889634;

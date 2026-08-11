@@ -89,8 +89,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
 
-        let level = u32(ENVIRONMENT.settings.direct_light * 5.0);
-        let lighting = sample_lighting(sample_light, normal, view, roughness, f0, level);
+        let lighting = sample_lighting(sample_light, normal, view, roughness, f0);
 
         let irradiance = (1.0 - F) * albedo * lighting.diffuse + F * lighting.specular;
 
@@ -132,12 +131,11 @@ struct Lighting {
     specular: vec3<f32>,
 }
 
-fn sample_lighting(uv: vec3<f32>, normal: vec3<f32>, view: vec3<f32>, roughness: f32, f0: vec3<f32>, level: u32) -> Lighting {
+fn sample_lighting(uv: vec3<f32>, normal: vec3<f32>, view: vec3<f32>, roughness: f32, f0: vec3<f32>) -> Lighting {
     var diffuse = vec3<f32>(0.0);
-    var specular = vec3<f32>(0.0);
-    let lod = f32(level);
+    var specular = vec3<f32>(0.0);;
 
-    let dims = vec3<f32>(textureDimensions(GAUSSIAN, i32(lod)));
+    let dims = vec3<f32>(textureDimensions(GAUSSIAN));
     let probes = max(floor(dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
 
     for (var k = 0u; k < VMM_SIZE; k++) {
@@ -146,8 +144,8 @@ fn sample_lighting(uv: vec3<f32>, normal: vec3<f32>, view: vec3<f32>, roughness:
         let local = clamp(uv * probes, vec3<f32>(0.5), probes - 0.5);
         let lobe_uv = (tile * probes + local) / dims;
 
-        let v = textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, lod);
-        let phi = textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, lod).rgb;
+        let v = textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, 0.0);
+        let phi = textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, 0.0).rgb;
 
         diffuse += sg_irradiance_fitted(phi, v, normal);
         specular += sg_specular_fitted(phi, v, view, normal, roughness, f0);
