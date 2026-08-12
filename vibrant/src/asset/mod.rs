@@ -2,6 +2,7 @@ pub mod colormap;
 pub mod crop;
 pub mod hdri;
 pub mod line;
+pub mod material;
 pub mod radiance;
 pub mod texture;
 pub mod volume;

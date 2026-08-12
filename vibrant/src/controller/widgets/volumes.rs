@@ -1,22 +1,24 @@
 use std::iter::zip;
 
 use egui::{ComboBox, Grid, RichText, Ui};
-use egui_double_slider::DoubleSlider;
 use itertools::Itertools;
 use strum::IntoEnumIterator;
 
 use crate::{
     asset::{
         colormap::ColormapSelection,
-        volume_fraction::{MaterialPreset, VolumeFractionBuffer, VolumeFractionSettings},
+        volume_fraction::{VolumeFractionBuffer, VolumeFractionSettings},
         volume_mask::VolumeMaskBuffer,
     },
-    controller::{components::UIComponents, widgets::util::UiResponseExtensions},
+    controller::{
+        components::{transfer::TransferFunctionEditor, UIComponents},
+        widgets::util::UiResponseExtensions,
+    },
     util::{ResponseExtentions, Tracked},
 };
 
-#[derive(Debug)]
 pub struct VolumesWidget {
+    transfer: TransferFunctionEditor,
     changed: bool,
 }
 
@@ -28,7 +30,10 @@ impl Tracked for VolumesWidget {
 
 impl VolumesWidget {
     pub fn new() -> Self {
-        Self { changed: false }
+        Self {
+            transfer: TransferFunctionEditor::new(),
+            changed: false,
+        }
     }
 
     pub fn show(
@@ -63,7 +68,6 @@ impl VolumesWidget {
                             if ui.delete().track(self).clicked() {
                                 index_to_remove = Some(index);
                             }
-                            ui.toggle_inverted(&mut volume.inverted).track(self);
                             ui.toggle_visible(&mut volume.visible).track(self);
                         });
                     });
@@ -91,6 +95,11 @@ impl VolumesWidget {
         volume: &mut VolumeFractionSettings,
         masks: &[VolumeMaskBuffer],
     ) {
+        self.transfer.show(ui, volume);
+        self.changed |= self.transfer.changed();
+
+        ui.separator();
+
         Grid::new("VolumeSettingsGrid")
             .num_columns(2)
             .show(ui, |ui| {
@@ -116,71 +125,6 @@ impl VolumesWidget {
                             "Mask from the 'Masks' section to apply to this volume.\nChoose 'None' to disable masking.",
                         );
                 });
-                ui.end_row();
-
-                ui.label("Contrast").on_hover_text("Adjust mapping from volume min/max to display min/max values");
-                ui.add(
-                    DoubleSlider::new(
-                        &mut volume.min,
-                        &mut volume.max,
-                        0.0..=1.0,
-                    )
-                    .width(ui.available_width())
-                    .separation_distance(0.01),
-                )
-                .track(self);
-
-                ui.end_row();
-
-                ui.label("Opacity").on_hover_text("Adjust volume opacity");
-                ui.slider(&mut volume.opacity, 0.0..=2.0).track(self);
-                ui.end_row();
-
-                ui.label("Material").on_hover_text("Adjust volume appearance");
-                ui.horizontal(|ui| {
-                    let mut material_changed = false;
-
-                    material_changed |= ui
-                        .color_edit_button_rgb(&mut volume.absorption)
-                        .on_hover_text("Volume Absorption.\nHow much light is absorbed by the volume.")
-                        .track(self)
-                        .changed();
-
-                    material_changed |= ui
-                        .color_edit_button_rgb(&mut volume.scattering)
-                        .on_hover_text("Volume Scattering.\nHow much light is scattered by the volume.")
-                        .track(self)
-                        .changed();
-
-                    if material_changed {
-                        volume.preset = MaterialPreset::Custom;
-                    }
-
-                    let mut preset_changed = false;
-
-                    ComboBox::from_id_salt("MaterialPreset")
-                        .selected_text(format!("{:?}", volume.preset))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for value in MaterialPreset::iter() {
-                                let label = format!("{:?}", value);
-                                preset_changed |= ui
-                                    .selectable_value(
-                                        &mut volume.preset,
-                                        value,
-                                        label,
-                                    )
-                                    .track(self)
-                                    .changed();
-                            }
-                        }).response.on_hover_text("Material Preset");
-
-                    if preset_changed {
-                        (volume.absorption, volume.scattering) =
-                            volume.preset.into();
-                    }
-                });
-
                 ui.end_row();
 
                 ui.label("Colormap").on_hover_text("Colormap to apply to volume. The colormap is applied after contrast and material settings are applied.");

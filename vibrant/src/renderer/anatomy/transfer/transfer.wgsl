@@ -1,13 +1,22 @@
+struct MaterialNode {
+    absorption: vec3<f32>,
+    position: f32,
+    scattering: vec3<f32>,
+    ior: f32,
+}
+
+struct MaterialSample {
+    absorption: vec3<f32>,
+    scattering: vec3<f32>,
+}
+
 struct Material {
-    absorption: vec4<f32>,
-    scattering: vec4<f32>,
-    min: f32,
-    max: f32,
     inverted: u32,
     masked: u32,
     use_colormap: u32,
     colormap: u32,
-};
+    nodes: array<MaterialNode, 8>,
+}
 
 struct MaskSettings {
     visible: u32,
@@ -58,27 +67,27 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     var fraction = textureSampleLevel(FRACTION, SAMPLER, uv, 0.0).x;
     if (bool(MATERIAL.inverted) && fraction != 0.0) { fraction = 1.0 - fraction; }
 
-    var color = vec3<f32>(fraction);
+    // Absorption/scattering for this voxel's intensity, interpolated across the
+    // material transfer function nodes (sorted by position, unused trailing slots
+    // zeroed with ior == 0.0). This replaces the old fixed per-volume tint.
+    let material = sample_material(fraction);
 
-    if (bool(MATERIAL.use_colormap) && all(color != vec3<f32>(0.0))) {
-        color = textureLoad(COLORMAP, vec2<u32>(u32(fraction * 255.0), MATERIAL.colormap), 0).rgb;
+    var absorption = material.absorption;
+    var scattering = material.scattering;
+
+    // Recolor by the colormap, same asymmetric hue trick as before (absorption
+    // takes the inverted hue so it doesn't cancel out the scattered color).
+    // Note: intensity is already baked into `material` via the node lookup above,
+    // so this only retints it - it must not also scale by fraction/color again.
+    if (bool(MATERIAL.use_colormap) && fraction != 0.0) {
+        let tint = textureLoad(COLORMAP, vec2<u32>(u32(fraction * 255.0), MATERIAL.colormap), 0).rgb;
+        absorption *= invert_hue_approx(tint);
+        scattering *= tint;
     }
 
-    color = (color - MATERIAL.min) / (MATERIAL.max - MATERIAL.min);
-
-    color *= get_mask(uv) * voxel_distance_transform;
-    color = saturate(color);
-
-    var absorption = MATERIAL.absorption.rgb * MATERIAL.absorption.a;
-    var scattering = MATERIAL.scattering.rgb * MATERIAL.scattering.a;
-
-    if (bool(MATERIAL.use_colormap)) {
-        absorption *= invert_hue_approx(color);
-        scattering *= color;
-    } else {
-        absorption *= color;
-        scattering *= color;
-    }
+    let attenuation = get_mask(uv) * voxel_distance_transform;
+    absorption *= attenuation;
+    scattering *= attenuation;
 
     absorption = unpack_rgb(unpack4x8unorm(textureLoad(ABSORPTION, voxel).x)) + absorption;
     scattering = unpack_rgb(unpack4x8unorm(textureLoad(SCATTERING, voxel).x)) + scattering;
@@ -86,6 +95,53 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     textureStore(ABSORPTION, voxel, vec4<u32>(pack4x8unorm(pack_rgb(absorption))));
     textureStore(SCATTERING, voxel, vec4<u32>(pack4x8unorm(pack_rgb(scattering))));
     textureStore(EXTINCTION, voxel, vec4<u32>(pack4x8unorm(pack_rgb(absorption + scattering))));
+}
+
+// Piecewise-linear lookup across MATERIAL.nodes at transfer-function position `t`,
+// mirroring TransferFunctionEditor::gradient() on the Rust side.
+fn sample_material(t: f32) -> MaterialSample {
+    var count = 0u;
+
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        if (MATERIAL.nodes[i].ior <= 0.0) { break; }
+        count = count + 1u;
+    }
+
+    if (count == 0u) {
+        return MaterialSample(vec3<f32>(0.0), vec3<f32>(0.0));
+    }
+
+    if (count == 1u) {
+        return MaterialSample(MATERIAL.nodes[0].absorption, MATERIAL.nodes[0].scattering);
+    }
+
+    var index = count;
+
+    for (var i = 0u; i < count; i = i + 1u) {
+        if (MATERIAL.nodes[i].position >= t) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == 0u) {
+        return MaterialSample(MATERIAL.nodes[0].absorption, MATERIAL.nodes[0].scattering);
+    }
+
+    if (index == count) {
+        let node = MATERIAL.nodes[count - 1u];
+        return MaterialSample(node.absorption, node.scattering);
+    }
+
+    let a = MATERIAL.nodes[index - 1u];
+    let b = MATERIAL.nodes[index];
+    let span = max(b.position - a.position, 0.00001);
+    let factor = saturate((t - a.position) / span);
+
+    return MaterialSample(
+        mix(a.absorption, b.absorption, factor),
+        mix(a.scattering, b.scattering, factor)
+    );
 }
 
 fn get_mask(uv: vec3<f32>) -> f32 {

@@ -24,7 +24,6 @@ use crate::controller::widgets::{
 };
 use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
 
-#[derive(Debug)]
 pub struct Controller {
     state: ControllerState,
     camera: Camera,

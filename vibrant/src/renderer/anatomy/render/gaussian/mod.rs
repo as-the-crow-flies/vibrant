@@ -10,6 +10,8 @@ use crate::{
     surface::{color::ColorBuffer, Frame},
 };
 
+const VMM_SIZE: u32 = 8;
+
 pub struct GaussianVolumeRenderer {
     cascade: Vec<ComputePipeline>,
     trace: RenderPipeline,
@@ -127,8 +129,6 @@ impl GaussianVolumeRenderer {
         pass.draw(0..4, 0..1);
     }
 }
-
-const VMM_SIZE: u32 = 16;
 
 fn threads_per_probe(cascade: u32) -> u32 {
     match cascade {
