@@ -6,15 +6,13 @@ fn load(vi: vec3<i32>) -> f32 {
     let dims = vec3<i32>(textureDimensions(PING));
     let texel = textureLoad(PING, clamp(vi, vec3<i32>(0), dims - vec3<i32>(1)));
 
-    // texel.a alone is only the shared exponent from pack_rgb's HDR encoding
-    // (~256 log-spaced steps over a 1e-3..1e2 range) - reading it directly
-    // discards the 8-bit-per-channel mantissa, turning the density field into
-    // a coarse staircase that finite-differences into blocky, noisy normals.
-    // Reconstructing the full value and bounding it with the same 1-e^-x
-    // saturating transform used for transmittance elsewhere keeps the signal
-    // smooth and inside the unorm-storable [0,1) range no matter how large
-    // the underlying extinction coefficient is.
-    return 1.0 - exp(-brightness(unpack_rgb(texel)));
+    // texel.a alone is only the shared exponent from pack_rgb's HDR encoding -
+    // reading it directly discards the 8-bit-per-channel mantissa, turning the
+    // IOR field into a coarse staircase that finite-differences into blocky,
+    // noisy normals. Reconstruct the full vec3 and take the IOR channel (x);
+    // the other two channels carry the unrelated presence mask, so including
+    // them (e.g. via brightness) would bake mask edges into the IOR gradient.
+    return unpack_rgb(texel).x;
 }
 
 @compute

@@ -33,6 +33,26 @@ impl Material {
             }
         })
     }
+
+    /// Equality tolerant of UI rounding (e.g. the IOR slider's 2-decimal display),
+    /// so a preset whose values only differ from its canonical ones by display
+    /// rounding still reads as that preset rather than "Custom".
+    pub fn approx_eq(&self, other: &Self) -> bool {
+        const EPSILON: f32 = 0.005;
+
+        let close = |a: f32, b: f32| (a - b).abs() <= EPSILON;
+
+        self.absorption
+            .iter()
+            .zip(&other.absorption)
+            .all(|(&a, &b)| close(a, b))
+            && self
+                .scattering
+                .iter()
+                .zip(&other.scattering)
+                .all(|(&a, &b)| close(a, b))
+            && close(self.ior, other.ior)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]

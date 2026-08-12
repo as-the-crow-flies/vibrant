@@ -1,6 +1,6 @@
 use egui::{
     Align, Align2, Button, CollapsingHeader, Color32, ComboBox, FontId, Frame, Grid, Id,
-    InnerResponse, Layout, Pos2, Rect, Sense, Shape, Stroke, Ui, UiBuilder, Vec2,
+    InnerResponse, Layout, Pos2, Rect, Sense, Shape, Stroke, TextStyle, Ui, UiBuilder, Vec2,
 };
 use strum::IntoEnumIterator;
 
@@ -333,8 +333,6 @@ impl TransferFunctionEditor {
                 let header = CollapsingHeader::new(format!("{rank}"))
                     .id_salt("material")
                     .show(ui, |ui| {
-                        let mut changed = false;
-
                         Grid::new("grid")
                             .num_columns(2)
                             .spacing(spacing)
@@ -342,23 +340,19 @@ impl TransferFunctionEditor {
                                 ui.label("Absorption").on_hover_text(
                                     "Volume Absorption per millimeter.\nHow much light is absorbed by the volume.",
                                 );
-                                changed |= ui.hdr_color_edit(&mut node.material.absorption).track(self).changed();
+                                ui.hdr_color_edit(&mut node.material.absorption).track(self);
                                 ui.end_row();
 
                                 ui.label("Scattering").on_hover_text(
                                     "Volume Scattering per millimeter.\nHow much light is scattered by the volume.",
                                 );
-                                changed |= ui.hdr_color_edit(&mut node.material.scattering).track(self).changed();
+                                ui.hdr_color_edit(&mut node.material.scattering).track(self);
                                 ui.end_row();
 
                                 ui.label("IOR").on_hover_text("Adjust Index Of Refraction");
-                                changed |= ui.slider(&mut node.material.ior, 1.0..=5.0).track(self).changed();
+                                ui.slider(&mut node.material.ior, 1.0..=5.0).track(self);
                                 ui.end_row();
                             });
-
-                        if changed {
-                            node.preset = MaterialPreset::Custom;
-                        }
                     });
 
                 ui.inline(&header.header_response, |ui| {
@@ -369,8 +363,27 @@ impl TransferFunctionEditor {
                         (albedo[2] * 255.0).round() as u8,
                     );
 
+                    // Fixed width (fitting the widest option) so the row doesn't
+                    // resize as different presets - with different label lengths -
+                    // get selected.
+                    let font_id = TextStyle::Button.resolve(ui.style());
+                    let text_color = ui.visuals().text_color();
+
+                    let label_width = MaterialPreset::iter()
+                        .map(|preset| {
+                            ui.painter()
+                                .layout_no_wrap(preset.label().to_string(), font_id.clone(), text_color)
+                                .size()
+                                .x
+                        })
+                        .fold(0.0_f32, f32::max);
+
+                    let combo_width =
+                        label_width + ui.spacing().button_padding.x * 2.0 + ui.spacing().icon_width;
+
                     ComboBox::from_id_salt("preset")
                         .selected_text(node.preset.label())
+                        .width(combo_width)
                         .show_ui(ui, |ui| {
                             for preset in MaterialPreset::iter() {
                                 let changed = ui
@@ -393,6 +406,22 @@ impl TransferFunctionEditor {
                     ui.painter().rect_filled(rect, 2.0, swatch_color);
                 });
             });
+
+            // A preset only stays accurate as long as the material matches its
+            // canonical values; any drift downgrades it to Custom. Checking this
+            // directly (instead of reacting to a "did some widget report changed
+            // this frame" flag) is immune to widgets reporting a change for reasons
+            // other than a deliberate edit - e.g. `egui::Slider` rounds and writes
+            // back its bound value to its `fixed_decimals` count on every render.
+            // `approx_eq` tolerates that rounding (the IOR slider only displays 2
+            // decimals) so it doesn't itself look like an edit.
+            if node
+                .preset
+                .material()
+                .is_some_and(|material| !material.approx_eq(&node.material))
+            {
+                node.preset = MaterialPreset::Custom;
+            }
 
             frame_response.response.contains_pointer() && ui.input(|i| i.pointer.primary_clicked())
             },

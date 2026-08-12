@@ -8,6 +8,7 @@ struct MaterialNode {
 struct MaterialSample {
     absorption: vec3<f32>,
     scattering: vec3<f32>,
+    ior: f32,
 }
 
 struct Material {
@@ -28,7 +29,7 @@ struct MaskSettings {
 
 @group(0) @binding(0) var ABSORPTION: texture_storage_3d<r32uint, read_write>;
 @group(0) @binding(1) var SCATTERING: texture_storage_3d<r32uint, read_write>;
-@group(0) @binding(2) var EXTINCTION: texture_storage_3d<r32uint, read_write>;
+@group(0) @binding(2) var PROPERTIES: texture_storage_3d<r32uint, read_write>;
 
 @group(1) @binding(0) var FRACTION: texture_3d<f32>;
 @group(1) @binding(1) var SAMPLER: sampler;
@@ -74,6 +75,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     var absorption = material.absorption;
     var scattering = material.scattering;
+    var properties = vec3<f32>(material.ior, 1.0, 0.0);
 
     // Recolor by the colormap, same asymmetric hue trick as before (absorption
     // takes the inverted hue so it doesn't cancel out the scattered color).
@@ -88,13 +90,15 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let attenuation = get_mask(uv) * voxel_distance_transform;
     absorption *= attenuation;
     scattering *= attenuation;
+    properties *= attenuation;
 
     absorption = unpack_rgb(unpack4x8unorm(textureLoad(ABSORPTION, voxel).x)) + absorption;
     scattering = unpack_rgb(unpack4x8unorm(textureLoad(SCATTERING, voxel).x)) + scattering;
+    properties = unpack_rgb(unpack4x8unorm(textureLoad(PROPERTIES, voxel).x)) + properties;
 
     textureStore(ABSORPTION, voxel, vec4<u32>(pack4x8unorm(pack_rgb(absorption))));
     textureStore(SCATTERING, voxel, vec4<u32>(pack4x8unorm(pack_rgb(scattering))));
-    textureStore(EXTINCTION, voxel, vec4<u32>(pack4x8unorm(pack_rgb(absorption + scattering))));
+    textureStore(PROPERTIES, voxel, vec4<u32>(pack4x8unorm(pack_rgb(properties))));
 }
 
 // Piecewise-linear lookup across MATERIAL.nodes at transfer-function position `t`,
@@ -108,11 +112,11 @@ fn sample_material(t: f32) -> MaterialSample {
     }
 
     if (count == 0u) {
-        return MaterialSample(vec3<f32>(0.0), vec3<f32>(0.0));
+        return MaterialSample(vec3<f32>(0.0), vec3<f32>(0.0), 0.0);
     }
 
     if (count == 1u) {
-        return MaterialSample(MATERIAL.nodes[0].absorption, MATERIAL.nodes[0].scattering);
+        return MaterialSample(MATERIAL.nodes[0].absorption, MATERIAL.nodes[0].scattering, MATERIAL.nodes[0].ior);
     }
 
     var index = count;
@@ -125,12 +129,12 @@ fn sample_material(t: f32) -> MaterialSample {
     }
 
     if (index == 0u) {
-        return MaterialSample(MATERIAL.nodes[0].absorption, MATERIAL.nodes[0].scattering);
+        return MaterialSample(MATERIAL.nodes[0].absorption, MATERIAL.nodes[0].scattering, MATERIAL.nodes[0].ior);
     }
 
     if (index == count) {
         let node = MATERIAL.nodes[count - 1u];
-        return MaterialSample(node.absorption, node.scattering);
+        return MaterialSample(node.absorption, node.scattering, node.ior);
     }
 
     let a = MATERIAL.nodes[index - 1u];
@@ -140,7 +144,8 @@ fn sample_material(t: f32) -> MaterialSample {
 
     return MaterialSample(
         mix(a.absorption, b.absorption, factor),
-        mix(a.scattering, b.scattering, factor)
+        mix(a.scattering, b.scattering, factor),
+        mix(a.ior, b.ior, factor)
     );
 }
 

@@ -12,11 +12,11 @@ use crate::gpu::Gpu;
 pub struct PhysicalVolume {
     absorption: Texture,
     scattering: Texture,
-    extinction: Texture,
+    properties: Texture,
 
     absorption_u32: Texture,
     scattering_u32: Texture,
-    extinction_u32: Texture,
+    properties_u32: Texture,
 
     radiance: Texture,
     gradient: Texture,
@@ -70,11 +70,11 @@ impl PhysicalVolume {
 
         let absorption = gpu.device().create_texture(&descriptor_mip);
         let scattering = gpu.device().create_texture(&descriptor_mip);
-        let extinction = gpu.device().create_texture(&descriptor_mip);
+        let properties = gpu.device().create_texture(&descriptor_mip);
 
         let absorption_u32 = gpu.device().create_texture(&descriptor_u32);
         let scattering_u32 = gpu.device().create_texture(&descriptor_u32);
-        let extinction_u32 = gpu.device().create_texture(&descriptor_u32);
+        let properties_u32 = gpu.device().create_texture(&descriptor_u32);
 
         let radiance = gpu.device().create_texture(&descriptor);
         let gradient = gpu.device().create_texture(&descriptor);
@@ -92,15 +92,15 @@ impl PhysicalVolume {
 
         let absorption_view = absorption.create_view(full_view_descriptor);
         let scattering_view = scattering.create_view(full_view_descriptor);
-        let extinction_view = extinction.create_view(full_view_descriptor);
+        let properties_view = properties.create_view(full_view_descriptor);
 
         let absorption_storage_view = absorption.create_view(single_mip_view_descriptor);
         let scattering_storage_view = scattering.create_view(single_mip_view_descriptor);
-        let extinction_storage_view = extinction.create_view(single_mip_view_descriptor);
+        let properties_storage_view = properties.create_view(single_mip_view_descriptor);
 
         let absorption_u32_view = absorption_u32.create_view(single_mip_view_descriptor);
         let scattering_u32_view = scattering_u32.create_view(single_mip_view_descriptor);
-        let extinction_u32_view = extinction_u32.create_view(single_mip_view_descriptor);
+        let properties_u32_view = properties_u32.create_view(single_mip_view_descriptor);
 
         let radiance_view = radiance.create_view(single_mip_view_descriptor);
         let gradient_view = gradient.create_view(single_mip_view_descriptor);
@@ -151,7 +151,7 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::TextureView(&extinction_view),
+                    resource: BindingResource::TextureView(&properties_view),
                 },
                 BindGroupEntry {
                     binding: 3,
@@ -190,7 +190,7 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::TextureView(&extinction_u32_view),
+                    resource: BindingResource::TextureView(&properties_u32_view),
                 },
             ],
         });
@@ -209,7 +209,7 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::TextureView(&extinction_u32_view),
+                    resource: BindingResource::TextureView(&properties_u32_view),
                 },
                 BindGroupEntry {
                     binding: 3,
@@ -221,7 +221,7 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 5,
-                    resource: BindingResource::TextureView(&extinction_storage_view),
+                    resource: BindingResource::TextureView(&properties_storage_view),
                 },
             ],
         });
@@ -233,7 +233,7 @@ impl PhysicalVolume {
                 // Source
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&extinction_storage_view),
+                    resource: BindingResource::TextureView(&properties_storage_view),
                 },
                 // Gradient
                 BindGroupEntry {
@@ -260,7 +260,7 @@ impl PhysicalVolume {
                 // Source
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&extinction_storage_view),
+                    resource: BindingResource::TextureView(&properties_storage_view),
                 },
                 // Gradient
                 BindGroupEntry {
@@ -316,7 +316,7 @@ impl PhysicalVolume {
                         BindGroupEntry {
                             binding: 2,
                             resource: BindingResource::TextureView(
-                                &extinction.create_view(&read_descriptor),
+                                &properties.create_view(&read_descriptor),
                             ),
                         },
                         BindGroupEntry {
@@ -334,7 +334,7 @@ impl PhysicalVolume {
                         BindGroupEntry {
                             binding: 5,
                             resource: BindingResource::TextureView(
-                                &extinction.create_view(&write_descriptor),
+                                &properties.create_view(&write_descriptor),
                             ),
                         },
                         BindGroupEntry {
@@ -349,10 +349,10 @@ impl PhysicalVolume {
         Self {
             absorption,
             scattering,
-            extinction,
+            properties,
             absorption_u32,
             scattering_u32,
-            extinction_u32,
+            properties_u32,
             radiance,
             gradient,
             transform,
@@ -715,10 +715,10 @@ impl Drop for PhysicalVolume {
     fn drop(&mut self) {
         self.absorption.destroy();
         self.scattering.destroy();
-        self.extinction.destroy();
+        self.properties.destroy();
         self.absorption_u32.destroy();
         self.scattering_u32.destroy();
-        self.extinction_u32.destroy();
+        self.properties_u32.destroy();
         self.radiance.destroy();
         self.gradient.destroy();
         self.transform.destroy();

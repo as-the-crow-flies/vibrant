@@ -5,7 +5,7 @@
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
 @group(1) @binding(1) var SCATTERING: texture_3d<f32>;
-@group(1) @binding(2) var EXTINCTION: texture_3d<f32>;
+@group(1) @binding(2) var PROPERTIES: texture_3d<f32>;
 @group(1) @binding(3) var GRADIENT: texture_3d<f32>;
 @group(1) @binding(4) var SAMPLER: sampler;
 @group(1) @binding(5) var<uniform> TRANSFORM: mat4x4<f32>;
@@ -235,7 +235,7 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     let origin_sample = origin / dim;
     let direction_sample = direction / dim;
 
-    let radiance_scale = f32(textureDimensions(EXTINCTION).x) / dim.x * 4.0;
+    let radiance_scale = f32(textureDimensions(ABSORPTION).x) / dim.x * 4.0;
 
     let scale = length(TRANSFORM[0].xyz) * dim.x; // voxels/mm
     let step_size = 1.0 / radiance_scale;
@@ -243,7 +243,9 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     for (var t=t0; t<t1; t+=step_size) {
         let sample = origin_sample + direction_sample * t;
 
-        let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
+        let extinction =
+            unpack_rgb(textureSampleLevel(ABSORPTION, SAMPLER, sample, 0.0)) +
+            unpack_rgb(textureSampleLevel(SCATTERING, SAMPLER, sample, 0.0));
 
         transmission *= exp(-extinction * step_size / scale);
         if (all(transmission < vec3<f32>(1e-3)) || any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
