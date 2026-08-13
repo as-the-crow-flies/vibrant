@@ -1,6 +1,6 @@
 use egui::{
-    Align, Align2, Button, CollapsingHeader, Color32, ComboBox, FontId, Frame, Grid, Id,
-    InnerResponse, Layout, Pos2, Rect, Sense, Shape, Stroke, TextStyle, Ui, UiBuilder, Vec2,
+    Align, Align2, CollapsingHeader, Color32, ComboBox, FontId, Frame, Grid, Id, InnerResponse,
+    Layout, Pos2, Rect, Sense, Shape, Stroke, TextStyle, Ui, UiBuilder, Vec2,
 };
 use strum::IntoEnumIterator;
 
@@ -78,9 +78,10 @@ impl TransferFunctionEditor {
     fn toolbar(&mut self, ui: &mut Ui, volume: &mut VolumeFractionSettings) {
         ui.with_layout(Layout::top_down(Align::Max), |ui| {
             if ui
-                .add_enabled(
+                .icon_button(
+                    "➕",
                     volume.nodes.len() < MaterialNodeBuffer::MAX_NODES,
-                    Button::new("➕"),
+                    false,
                 )
                 .on_hover_text("Add color stop")
                 .track(self)
@@ -109,7 +110,7 @@ impl TransferFunctionEditor {
             let selected = volume.nodes.iter().position(|node| node.selected);
 
             if ui
-                .add_enabled(selected.is_some(), Button::new("➖"))
+                .icon_button("➖", selected.is_some(), false)
                 .on_hover_text("Remove selected color stop")
                 .track(self)
                 .clicked()
@@ -379,7 +380,7 @@ impl TransferFunctionEditor {
                         .fold(0.0_f32, f32::max);
 
                     let combo_width =
-                        label_width + ui.spacing().button_padding.x * 2.0 + ui.spacing().icon_width;
+                        label_width + ui.spacing().button_padding.x * 4.0 + ui.spacing().icon_width;
 
                     ComboBox::from_id_salt("preset")
                         .selected_text(node.preset.label())

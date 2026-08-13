@@ -2,7 +2,7 @@ pub mod transfer;
 
 use egui::{
     emath::Numeric, pos2, Align, CollapsingHeader, Color32, DragValue, Frame, Id, Layout, Rect,
-    Response, Sense, Slider, Ui, Vec2, Widget, WidgetText,
+    Response, Sense, Slider, StrokeKind, TextStyle, Ui, Vec2, Widget, WidgetText,
 };
 use std::ops::{RangeInclusive, Sub};
 
@@ -12,6 +12,12 @@ pub trait UIComponents {
     fn toggle_inverted(&mut self, selected: &mut bool) -> Response;
     fn delete(&mut self) -> Response;
     fn frame(&mut self, contents: impl FnOnce(&mut Ui));
+
+    /// A fixed-size square icon button (e.g. a single emoji glyph). Hand-painted
+    /// instead of built from `egui::Button`, whose size is content-driven - a
+    /// `min_size` floor can't shrink a glyph that already renders wider than it,
+    /// so different icons (e.g. "➕" vs "🗑") end up different widths.
+    fn icon_button(&mut self, icon: &str, enabled: bool, selected: bool) -> Response;
     fn slider<'a, Num>(&mut self, value: &'a mut Num, range: RangeInclusive<Num>) -> Response
     where
         Num: Numeric;
@@ -33,7 +39,14 @@ pub trait UIComponents {
 
 impl UIComponents for Ui {
     fn toggle(&mut self, icon: &str, tooltip: &str, selected: &mut bool) -> Response {
-        self.toggle_value(selected, icon).on_hover_text(tooltip)
+        let mut response = self.icon_button(icon, true, *selected);
+
+        if response.clicked() {
+            *selected = !*selected;
+            response.mark_changed();
+        }
+
+        response.on_hover_text(tooltip)
     }
 
     fn toggle_visible(&mut self, selected: &mut bool) -> Response {
@@ -45,7 +58,50 @@ impl UIComponents for Ui {
     }
 
     fn delete(&mut self) -> Response {
-        self.button("🗑").on_hover_text("Delete")
+        self.icon_button("🗑", true, false).on_hover_text("Delete")
+    }
+
+    fn icon_button(&mut self, icon: &str, enabled: bool, selected: bool) -> Response {
+        let size = Vec2::splat(self.spacing().interact_size.y);
+        let sense = if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let (rect, response) = self.allocate_exact_size(size, sense);
+
+        if self.is_rect_visible(rect) {
+            let visuals = self.style().interact_selectable(&response, selected);
+
+            self.painter().rect(
+                rect.expand(visuals.expansion),
+                visuals.corner_radius,
+                visuals.weak_bg_fill,
+                visuals.bg_stroke,
+                StrokeKind::Inside,
+            );
+
+            // `Painter::text`'s CENTER_CENTER anchors on the galley's line-height
+            // box, not the glyph's visible ink - fine for latin text, but many
+            // emoji glyphs (e.g. "🗑", "👁") sit asymmetrically within that box, so
+            // it visibly off-centers them. Center on `mesh_bounds` (the glyph's
+            // actual rendered bounds) instead.
+            let font_id = TextStyle::Button.resolve(self.style());
+            let galley =
+                self.painter()
+                    .layout_no_wrap(icon.to_string(), font_id, visuals.text_color());
+
+            let paint_pos = if galley.mesh_bounds.is_positive() {
+                rect.center() - (galley.mesh_bounds.center() - galley.rect.min)
+            } else {
+                rect.center() - galley.size() / 2.0
+            };
+
+            self.painter()
+                .galley(paint_pos, galley, visuals.text_color());
+        }
+
+        response
     }
 
     fn frame(&mut self, contents: impl FnOnce(&mut Ui)) {
