@@ -44,8 +44,6 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     if (hit.x > hit.y) { return vec4<f32>(0.0); }
 
-    let pixel = vec2<u32>(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
-
     var t0 = max(hit.x, 0.0) + hash(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
     let t1 = hit.y;
 
@@ -64,37 +62,27 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         else { t0 += 2.0; }
     }
 
-    for (var t = t0; t < t1; t += step) {
-        let sample = origin + direction * t;
+    var ior = 1.0;
 
-        let material = sample_material(sample);
+    for (var t = t0; t < t1; t += step) {
+        let uv = origin + direction * t;
+
+        let material = sample_material(uv);
+        let gradient = sample_gradient(uv);
+
+        let F0 = 10.0 * pow((ior - material.ior) / (ior + material.ior), 2.0);
+        ior = material.ior;
+
         let extinction = step * material.extinction;
 
         if (all(extinction < vec3<f32>(1E-5))) { continue; }
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
-        let gradient = sample_gradient(sample);
-        let normal = -select(vec3<f32>(0.0), gradient.xyz / gradient.a, gradient.a > 0.01);
-
-        let reflection = reflect(-view, normal); // warped NDF axis
-
-        let sample_light = sample - 0.05 * gradient.xyz;
-
-        let n_dot_v = max(dot(normal, -view), 0.0001);
-        let roughness = HDRI_SETTINGS.roughness;
-        let f0 = vec3<f32>(0.04);
-
-        let F = F_Schlick(n_dot_v, f0) * HDRI_SETTINGS.specular;
-
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
+        let outgoing_radiance = sample_outgoing_radiance(uv, gradient.xyz, view, albedo, F0);
 
-        let lighting = sample_lighting(sample_light, normal, view, roughness, f0);
-
-        let irradiance = (1.0 - F) * albedo * lighting.diffuse + F * lighting.specular;
-
-        color += transmittance * transmittance_in_step
-               * mix(0.05 * hdri(reflection, 4096), irradiance, ENVIRONMENT.settings.alpha);
+        color += transmittance * transmittance_in_step * outgoing_radiance;
 
         transmittance *= exp(-extinction);
 
@@ -110,48 +98,64 @@ struct Material {
     absorption: vec3<f32>,
     scattering: vec3<f32>,
     extinction: vec3<f32>,
+    ior: f32
 };
 
-fn sample_material(sample: vec3<f32>) -> Material {
-    let absorption = tex_rgb(ABSORPTION, sample);
-    let scattering = tex_rgb(SCATTERING, sample);
-    let extinction = absorption + scattering;
+fn sample_material(uv: vec3<f32>) -> Material {
+    let absorption = tex_rgb(ABSORPTION, uv);
+    let reduced_scattering = tex_rgb(SCATTERING, uv);
+    let properties = tex_rgb(PROPERTIES, uv);
 
-    return Material(absorption, scattering, extinction);
+    let scattering = reduced_scattering / (1.0 - HDRI_SETTINGS.anisotropy);
+
+    let extinction = absorption + scattering;
+    let ior = select(1.0, properties.x / properties.y, properties.y > 0.0);
+
+    return Material(absorption, scattering, extinction, ior);
 }
 
 fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
-    let gradient_raw = textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0);
-    let alpha = 2.0 * gradient_raw.a;
-    return vec4<f32>(normalize(2.0 * gradient_raw.xyz - 1.0) * alpha, alpha);
+    let gradient = textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0);
+    return vec4<f32>(-(2.0 * gradient.xyz - 1.0), gradient.a);
 }
 
-struct Lighting {
-    diffuse: vec3<f32>,
-    specular: vec3<f32>,
-}
-
-fn sample_lighting(uv: vec3<f32>, normal: vec3<f32>, view: vec3<f32>, roughness: f32, f0: vec3<f32>) -> Lighting {
-    var diffuse = vec3<f32>(0.0);
-    var specular = vec3<f32>(0.0);;
+fn sample_outgoing_radiance(
+    uv: vec3<f32>,
+    normal: vec3<f32>,
+    view: vec3<f32>,
+    albedo: vec3<f32>,
+    F0: f32) -> vec3<f32>
+{
+    var outgoing_radiance = vec3<f32>(0.0);
 
     let dims = vec3<f32>(textureDimensions(GAUSSIAN));
     let probes = max(floor(dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
+    let local = clamp(uv * probes, vec3<f32>(0.5), probes - 0.5);
+
+    let roughness = HDRI_SETTINGS.roughness;
+    let anisotropy = HDRI_SETTINGS.anisotropy;
+
+    let light = reflect(-view, normal);
+    let half = normalize(view + light);
+
+    let F = HDRI_SETTINGS.specular * (F0 + (1.0 - F0) * pow(1.0 - dot(view, half), 5.0));
 
     for (var k = 0u; k < VMM_SIZE; k++) {
         let tile = vec3<f32>(vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1));
 
-        let local = clamp(uv * probes, vec3<f32>(0.5), probes - 0.5);
         let lobe_uv = (tile * probes + local) / dims;
 
-        let v = textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, 0.0);
-        let phi = textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, 0.0).rgb;
+        let sg = SG(
+            textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, 0.0),
+            textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, 0.0).rgb
+        );
 
-        diffuse += sg_irradiance_fitted(phi, v, normal);
-        specular += sg_specular_fitted(phi, v, view, normal, roughness, f0);
+        outgoing_radiance +=
+            sg_specular(sg, normal, view, roughness) * F +
+            sg_phase(sg, view, anisotropy) * albedo * (1.0 - F);
     }
 
-    return Lighting(diffuse / PI, specular);
+    return outgoing_radiance;
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {

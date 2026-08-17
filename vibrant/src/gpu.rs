@@ -13,7 +13,7 @@ use wgpu::{
     TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat, VertexState,
 };
 
-use crate::renderer::wgsl::{COMMON, PBR};
+use crate::renderer::wgsl::{COMMON, GAUSSIAN, PBR};
 
 pub struct Gpu {
     instance: wgpu::Instance,
@@ -90,7 +90,7 @@ impl Gpu {
     pub fn shader(&self, source: &str) -> ShaderModule {
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + PBR + source)),
+            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + PBR + GAUSSIAN + source)),
         })
     }
 

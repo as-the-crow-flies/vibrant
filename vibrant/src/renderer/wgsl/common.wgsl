@@ -57,6 +57,7 @@ struct HdriSettings {
     strength: f32,
     specular: f32,
     roughness: f32,
+    anisotropy: f32
 }
 
 struct CropSettings {

@@ -35,7 +35,7 @@ web-time.workspace = true
 
 env_logger = "0.11"
 
-# [target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 console_log = "1.0"

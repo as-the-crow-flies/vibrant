@@ -10,7 +10,7 @@ use crate::{
     surface::{color::ColorBuffer, Frame},
 };
 
-const VMM_SIZE: u32 = 8;
+const VMM_SIZE: u32 = 16;
 
 pub struct GaussianVolumeRenderer {
     cascade: Vec<ComputePipeline>,
