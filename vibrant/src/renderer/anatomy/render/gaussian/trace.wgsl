@@ -68,10 +68,16 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let uv = origin + direction * t;
 
         let material = sample_material(uv);
-        let gradient = sample_gradient(uv);
+        let normal = sample_gradient(uv).xyz;
+        let light = reflect(-view, normal);
+        let half = normalize(view + light);
 
-        let F0 = 10.0 * pow((ior - material.ior) / (ior + material.ior), 2.0);
+        let eta = material.ior / ior;
         ior = material.ior;
+
+        let eta_boosted = mix(1.0, (eta - 1.0) * 5.0 + 1.0, HDRI_SETTINGS.specular);
+
+        let F = fresnel(dot(view, half), eta_boosted);
 
         let extinction = step * material.extinction;
 
@@ -80,7 +86,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let transmittance_in_step = 1.0 - exp(-extinction);
 
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
-        let outgoing_radiance = sample_outgoing_radiance(uv, gradient.xyz, view, albedo, F0);
+        let outgoing_radiance = sample_outgoing_radiance(uv, normal, view, albedo, F);
 
         color += transmittance * transmittance_in_step * outgoing_radiance;
 
@@ -124,7 +130,7 @@ fn sample_outgoing_radiance(
     normal: vec3<f32>,
     view: vec3<f32>,
     albedo: vec3<f32>,
-    F0: f32) -> vec3<f32>
+    F: f32) -> vec3<f32>
 {
     var outgoing_radiance = vec3<f32>(0.0);
 
@@ -134,11 +140,6 @@ fn sample_outgoing_radiance(
 
     let roughness = HDRI_SETTINGS.roughness;
     let anisotropy = HDRI_SETTINGS.anisotropy;
-
-    let light = reflect(-view, normal);
-    let half = normalize(view + light);
-
-    let F = HDRI_SETTINGS.specular * (F0 + (1.0 - F0) * pow(1.0 - dot(view, half), 5.0));
 
     for (var k = 0u; k < VMM_SIZE; k++) {
         let tile = vec3<f32>(vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1));

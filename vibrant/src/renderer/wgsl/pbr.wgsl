@@ -117,3 +117,15 @@ fn ggx_weight(normal: vec3<f32>, view: vec3<f32>, light: vec3<f32>, a2: f32) -> 
 
     return n_dot_l * D * F;
 }
+
+// Cook and Torrence 1981
+fn fresnel(c: f32, eta: f32) -> f32 {
+    let g2 = eta * eta + c * c - 1.0;
+
+    if (g2 < 0.0) { return 1.0; } // total internal reflection
+
+    let g = sqrt(g2);
+
+    return pow(g - c, 2.0) / (2.0 * pow(g + c, 2.0)) *
+        (1.0 + pow(c * (g + c) - 1.0, 2.0) / pow(c * (g - c) + 1.0, 2.0));
+}
