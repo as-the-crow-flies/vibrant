@@ -68,7 +68,8 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let uv = origin + direction * t;
 
         let material = sample_material(uv);
-        let normal = sample_gradient(uv).xyz;
+
+        let normal = sample_normal(uv);
         let light = reflect(-view, normal);
         let half = normalize(view + light);
 
@@ -78,6 +79,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let eta_boosted = mix(1.0, (eta - 1.0) * 5.0 + 1.0, HDRI_SETTINGS.specular);
 
         let F = fresnel(dot(view, half), eta_boosted);
+        let Fdr = fresnel_diffuse(eta_boosted);
 
         let extinction = step * material.extinction;
 
@@ -86,7 +88,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let transmittance_in_step = 1.0 - exp(-extinction);
 
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
-        let outgoing_radiance = sample_outgoing_radiance(uv, normal, view, albedo, F);
+        let outgoing_radiance = sample_outgoing_radiance(uv, normal, view, albedo, F, Fdr);
 
         color += transmittance * transmittance_in_step * outgoing_radiance;
 
@@ -120,9 +122,10 @@ fn sample_material(uv: vec3<f32>) -> Material {
     return Material(absorption, scattering, extinction, ior);
 }
 
-fn sample_gradient(sample: vec3<f32>) -> vec4<f32> {
-    let gradient = textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0);
-    return vec4<f32>(-(2.0 * gradient.xyz - 1.0), gradient.a);
+fn sample_normal(sample: vec3<f32>) -> vec3<f32> {
+    let raw_normal = - 2.0 * textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0).xyz + 1.0;
+    let normal_len = length(raw_normal);
+    return select(vec3<f32>(0.0), raw_normal / normal_len, normal_len > 1E-4);
 }
 
 fn sample_outgoing_radiance(
@@ -130,7 +133,8 @@ fn sample_outgoing_radiance(
     normal: vec3<f32>,
     view: vec3<f32>,
     albedo: vec3<f32>,
-    F: f32) -> vec3<f32>
+    F: f32,
+    Fdr: f32) -> vec3<f32>
 {
     var outgoing_radiance = vec3<f32>(0.0);
 
@@ -153,7 +157,7 @@ fn sample_outgoing_radiance(
 
         outgoing_radiance +=
             sg_specular(sg, normal, view, roughness) * F +
-            sg_phase(sg, view, anisotropy) * albedo * (1.0 - F);
+            sg_phase(sg, view, anisotropy) * albedo * (1.0 - Fdr);
     }
 
     return outgoing_radiance;
