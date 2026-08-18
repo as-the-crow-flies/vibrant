@@ -220,6 +220,8 @@ fn main(
 
         let voxel = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
 
+        if (voxel.x >= grid.x) { continue; }
+
         let offset = voxel + grid * lobe(k);
 
         textureStore(GAUSSIAN_OUT, offset, VMM[i]);

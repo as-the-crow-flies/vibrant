@@ -92,7 +92,7 @@ impl GaussianVolumeRenderer {
 
             pass.set_pipeline(&self.cascade[cascade]);
             pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
-            pass.dispatch_workgroups(probes.x / batch, probes.y, probes.z);
+            pass.dispatch_workgroups(probes.x.div_ceil(batch), probes.y, probes.z);
         }
     }
 
