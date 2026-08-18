@@ -17,7 +17,7 @@
 @group(3) @binding(1) var HDRI_SAMPLER: sampler;
 @group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
 
-const INTERVAL = array<f32, 7>(0.0, 1.0, 3.0, 7.0, 15.0, 31.0, 63.0);
+const INTERVAL = array<f32, 7>(1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0);
 
 // LEVEL SAMPLES  THREADS  WORKGROUP
 //     0       4        1         64
@@ -54,39 +54,11 @@ fn main(
     @builtin(local_invocation_index) workgroup_index: u32,
     @builtin(subgroup_invocation_id) subgroup_index: u32,
 ) {
-    // Initialize VMM
-    for (var i = workgroup_index; i < PROBES * VMM_SIZE; i += WORKGROUP_SIZE) {
-        let p = i / VMM_SIZE;
-        let k = i % VMM_SIZE;
-
-        let probe = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
-
-        let parent_dims = vec3<f32>(textureDimensions(GAUSSIAN_IN));
-        let parent_grid = max(floor(parent_dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
-
-        let parent_probe = clamp(
-            0.5 * (vec3<f32>(probe) + 0.5),
-            vec3<f32>(0.5),
-            parent_grid - vec3<f32>(0.5));
-
-        let parent_uv = (parent_probe + parent_grid * vec3<f32>(lobe(k))) / parent_dims;
-
-        if (CASCADE == 5u) {
-            VMM[i] = seed(probe, k);
-        } else {
-            VMM_PRIOR[i] = textureSampleLevel(GAUSSIAN_IN, SAMPLER, parent_uv, 0.0);
-            PHI_PRIOR[i] = textureSampleLevel(RADIANCE_IN, SAMPLER, parent_uv, 0.0);
-
-            VMM[i] = VMM_PRIOR[i];
-            PHI[i] = PHI_PRIOR[i];
-        }
-    }
-
+    initialize_vmm(workgroup, workgroup_index);
     workgroupBarrier();
 
-    let grid = vec3<u32>(textureDimensions(GAUSSIAN_OUT)) / vec3<u32>(4u, 4u, 2u);
-    let p = workgroup_index / THREADS;
     let thread = workgroup_index % THREADS;
+    let p = workgroup_index / THREADS;
     let base = p * VMM_SIZE;
 
     let probe = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
@@ -101,15 +73,14 @@ fn main(
 
     var radiance = mat4x3<f32>();
 
-    if (CASCADE == 5u) { // Parent Radiance is Environment Map
+    if (CASCADE == 5u) { // Radiance from Environment Map
         radiance = mat4x3<f32>(
             hdri(omega[0], SAMPLES),
             hdri(omega[1], SAMPLES),
             hdri(omega[2], SAMPLES),
             hdri(omega[3], SAMPLES),
         );
-    } else { // Parent Radiance is Spherical Gaussians
-
+    } else { // Radiance from parent Von Mises-Fisher Mixture Model
         var expectation_sum = vec4<f32>(0.0);
 
         for (var k=0u; k<VMM_SIZE; k++) {
@@ -150,9 +121,65 @@ fn main(
         log2(1.0 + brightness(radiance[3])),
     );
 
+    expectation_maximization(subgroup, subgroup_index, thread, base, omega, radiance, weight);
+
+    let grid = vec3<u32>(textureDimensions(GAUSSIAN_OUT)) / vec3<u32>(4u, 4u, 2u);
+    for (var i = workgroup_index; i < PROBES * VMM_SIZE; i += WORKGROUP_SIZE) {
+        let p = i / VMM_SIZE;
+        let k = i % VMM_SIZE;
+
+        let voxel = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
+
+        if (voxel.x >= grid.x) { continue; }
+
+        let offset = voxel + grid * lobe(k);
+
+        textureStore(GAUSSIAN_OUT, offset, VMM[i]);
+        textureStore(RADIANCE_OUT, offset, norm(PHI[i]));
+    }
+}
+
+fn initialize_vmm(workgroup: vec3<u32>, workgroup_index: u32) {
+    for (var i = workgroup_index; i < PROBES * VMM_SIZE; i += WORKGROUP_SIZE) {
+        let p = i / VMM_SIZE;
+        let k = i % VMM_SIZE;
+
+        let probe = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
+
+        let parent_dims = vec3<f32>(textureDimensions(GAUSSIAN_IN));
+        let parent_grid = max(floor(parent_dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
+
+        let parent_probe = clamp(
+            0.5 * (vec3<f32>(probe) + 0.5),
+            vec3<f32>(0.5),
+            parent_grid - vec3<f32>(0.5));
+
+        let parent_uv = (parent_probe + parent_grid * vec3<f32>(lobe(k))) / parent_dims;
+
+        if (CASCADE == 5u) {
+            VMM[i] = seed(probe, k);
+            PHI[i] = vec4<f32>(1.0);
+        } else {
+            VMM_PRIOR[i] = textureSampleLevel(GAUSSIAN_IN, SAMPLER, parent_uv, 0.0);
+            PHI_PRIOR[i] = textureSampleLevel(RADIANCE_IN, SAMPLER, parent_uv, 0.0);
+
+            VMM[i] = VMM_PRIOR[i];
+            PHI[i] = PHI_PRIOR[i];
+        }
+    }
+}
+
+fn expectation_maximization(
+    subgroup: u32,
+    subgroup_index: u32,
+    thread: u32,
+    base: u32,
+    omega: mat4x3<f32>,
+    radiance: mat4x3<f32>,
+    weight: vec4<f32>)
+{
     var expectation = array<vec4<f32>, VMM_SIZE>();
 
-    // Expectation Maximization
     for (var i=0u; i<20u; i++) {
 
         // Expectation
@@ -212,20 +239,6 @@ fn main(
 
             workgroupBarrier();
         }
-    }
-
-    for (var i = workgroup_index; i < PROBES * VMM_SIZE; i += WORKGROUP_SIZE) {
-        let p = i / VMM_SIZE;
-        let k = i % VMM_SIZE;
-
-        let voxel = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
-
-        if (voxel.x >= grid.x) { continue; }
-
-        let offset = voxel + grid * lobe(k);
-
-        textureStore(GAUSSIAN_OUT, offset, VMM[i]);
-        textureStore(RADIANCE_OUT, offset, norm(PHI[i]));
     }
 }
 
