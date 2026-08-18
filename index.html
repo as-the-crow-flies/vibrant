@@ -30,6 +30,25 @@
     <body>
         <canvas id="canvas"></canvas>
         <script type="module">
+            // wgpu-rs's WebGPU backend doesn't forward the "subgroups"
+            // feature to GPUAdapter.requestDevice() (it's still treated as
+            // native-only, see gfx-rs/wgpu#5555), even though browsers that
+            // support it accept it fine. Patch it back in here so devices
+            // whose adapter actually advertises "subgroups" get it enabled.
+            if (typeof GPUAdapter !== "undefined") {
+                const requestDevice = GPUAdapter.prototype.requestDevice;
+                GPUAdapter.prototype.requestDevice = function (descriptor = {}) {
+                    const requiredFeatures = new Set(descriptor.requiredFeatures ?? []);
+                    if (this.features.has("subgroups")) {
+                        requiredFeatures.add("subgroups");
+                    }
+                    return requestDevice.call(this, {
+                        ...descriptor,
+                        requiredFeatures: [...requiredFeatures],
+                    });
+                };
+            }
+
             import init from "./pkg/vibrant_app_web.js";
             init();
         </script>

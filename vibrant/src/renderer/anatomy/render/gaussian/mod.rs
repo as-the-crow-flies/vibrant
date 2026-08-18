@@ -37,7 +37,7 @@ impl GaussianVolumeRenderer {
                     gpu.compute(
                         "GaussianVolumeCascade",
                         &layout,
-                        &gpu.shader(&cascade_template(&cascade_src, cascade)),
+                        &gpu.shader_subgroups(&cascade_template(&cascade_src, cascade)),
                     )
                 })
                 .collect(),
