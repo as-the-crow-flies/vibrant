@@ -76,7 +76,17 @@ fn main(
 }
 
 fn cull(origin: vec3<f32>) -> bool {
-    return false;
+    let dim = vec3<f32>(grid(textureDimensions(VMM_OUT))) * f32(1u << CASCADE);
+    let origin_sample = origin / dim;
+
+    let radiance_scale = f32(textureDimensions(ABSORPTION).x) / dim.x;
+    let mip = f32(CASCADE) + log2(radiance_scale) + 1.0;
+
+    let extinction =
+        unpack_rgb(textureSampleLevel(ABSORPTION, SAMPLER, origin_sample, mip)) +
+        unpack_rgb(textureSampleLevel(SCATTERING, SAMPLER, origin_sample, mip));
+
+    return all(extinction <= vec3<f32>(EPSILON));
 }
 
 fn initialize(probe: vec3<u32>, index: u32) {
@@ -118,29 +128,15 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
             let gamma = expectation[k] * expectation_sum_inv;
             let gamma_weight = gamma * weight;
 
-            let vmm = subgroupAdd(vec4<f32>(omega * gamma_weight, sum(gamma_weight)));
-            let phi = subgroupAdd(vec4<f32>(radiance * gamma, sum(gamma)));
+            let vmm = vec4<f32>(omega * gamma_weight, sum(gamma_weight));
+            let phi = vec4<f32>(radiance * gamma, sum(gamma));
 
-            if (subgroup_index == 0u) {
-                let i = SUBGROUPS * k + subgroup;
-                VMM_PARTIAL[i] = vmm;
-                PHI_PARTIAL[i] = phi;
-            }
+            scatter_partial(k, subgroup, subgroup_index, vmm, phi);
         }
 
         workgroupBarrier();
 
-        for (var k = subgroup; k < VMM_SIZE; k += SUBGROUPS) {
-            let i = SUBGROUPS * k + subgroup_index;
-
-            let vmm = subgroupAdd(select(vec4<f32>(0.0), VMM_PARTIAL[i], subgroup_index < SUBGROUPS));
-            let phi = subgroupAdd(select(vec4<f32>(0.0), PHI_PARTIAL[i], subgroup_index < SUBGROUPS));
-
-            if (subgroup_index == 0u) {
-                VMM[k] = vmm + 0.33 * VMM_PRIOR[k];
-                PHI[k] = phi + 0.33 * PHI_PRIOR[k];
-            }
-        }
+        gather_partial(subgroup, subgroup_index);
 
         workgroupBarrier();
     }
@@ -233,6 +229,37 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     }
 
     return transmission;
+}
+
+fn scatter_partial(k: u32, subgroup: u32, subgroup_index: u32, vmm: vec4<f32>, phi: vec4<f32>) {
+    let vmm_sum = subgroupAdd(vmm);
+    let phi_sum = subgroupAdd(phi);
+
+    if (subgroup_index == 0u) {
+        let i = SUBGROUPS * k + subgroup;
+        VMM_PARTIAL[i] = vmm_sum;
+        PHI_PARTIAL[i] = phi_sum;
+    }
+}
+
+fn gather_partial(subgroup: u32, subgroup_index: u32) {
+    let m = subgroup_index / SUBGROUPS;
+    let s = subgroup_index % SUBGROUPS;
+    let k = subgroup + m * SUBGROUPS;
+    let i = SUBGROUPS * k + s;
+
+    var vmm = VMM_PARTIAL[i];
+    var phi = PHI_PARTIAL[i];
+
+    for (var offset = 1u; offset < SUBGROUPS; offset *= 2u) {
+        vmm += subgroupShuffleXor(vmm, offset);
+        phi += subgroupShuffleXor(phi, offset);
+    }
+
+    if (s == 0u) {
+        VMM[k] = vmm + 0.33 * VMM_PRIOR[k];
+        PHI[k] = phi + 0.33 * PHI_PRIOR[k];
+    }
 }
 
 fn parent_uv(dim: vec3<u32>, probe: vec3<u32>, index: u32) -> vec3<f32> {
