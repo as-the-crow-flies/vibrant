@@ -274,7 +274,7 @@ impl TransferFunctionEditor {
             Color32::from_gray(180)
         };
 
-        let stroke = Stroke::new(if node.selected { 1.5 } else { 1.0 }, fill);
+        let stroke = Stroke::new(if node.selected { 1.5_f32 } else { 1.0 }, fill);
 
         ui.painter().line_segment(
             [
@@ -325,7 +325,7 @@ impl TransferFunctionEditor {
             let mut frame = Frame::group(&ui.style()).outer_margin(0.0);
 
             if node.selected {
-                frame = frame.stroke(Stroke::new(1.0, Color32::WHITE));
+                frame = frame.stroke(Stroke::new(1.0_f32, Color32::WHITE));
             }
 
             let frame_response = frame.show(ui, |ui| {

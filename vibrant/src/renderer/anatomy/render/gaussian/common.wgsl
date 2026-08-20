@@ -1,4 +1,5 @@
-const VMM_SIZE   : u32 = #VMM_SIZEu;
+const VMM_SIZE   : u32 = 32u;
+const INTERVAL = array<f32, 7>(1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0);
 
 fn vmf(v: vec4<f32>, omega: mat4x3<f32>) -> vec4<f32> {
     let q  = inverseSqrt(dot(v.xyz, v.xyz) + 1e-24);   // 1/|s|
@@ -21,4 +22,24 @@ fn hdri(direction: vec3<f32>, N: u32) -> vec3<f32> {
     let radiance = HDRI_SETTINGS.strength * textureSampleLevel(HDRI, HDRI_SAMPLER, sample, lod).rgb;
 
     return radiance;
+}
+
+fn grid(dim: vec3<u32>) -> vec3<u32> {
+    return max(dim / vec3<u32>(4, 4, 2), vec3<u32>(1));
+}
+
+fn lobe(k: u32) -> vec3<u32> {
+    return vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1);
+}
+
+fn get_direction(i: u32, N: u32) -> vec3<f32> {
+    return octahedron_decode(2.0 * hammersley(i, N) - 1.0);
+}
+
+fn max_norm(v: vec4<f32>) -> vec4<f32> {
+    return vec4<f32>(v.rgb / max(v.w, EPSILON), 1.0);
+}
+
+fn sum(v: vec4<f32>) -> f32 {
+    return v.x + v.y + v.z + v.w;
 }

@@ -1,7 +1,7 @@
-@group(0) @binding(0) var RADIANCE_OUT: texture_storage_3d<rgba16float, write>;
-@group(0) @binding(1) var GAUSSIAN_OUT: texture_storage_3d<rgba16float, write>;
-@group(0) @binding(3) var RADIANCE_IN: texture_3d<f32>;
-@group(0) @binding(4) var GAUSSIAN_IN: texture_3d<f32>;
+@group(0) @binding(0) var PHI_OUT: texture_storage_3d<rgba16float, write>;
+@group(0) @binding(1) var VMM_OUT: texture_storage_3d<rgba16float, write>;
+@group(0) @binding(3) var PHI_IN: texture_3d<f32>;
+@group(0) @binding(4) var VMM_IN: texture_3d<f32>;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
 @group(1) @binding(1) var SCATTERING: texture_3d<f32>;
@@ -17,167 +17,86 @@
 @group(3) @binding(1) var HDRI_SAMPLER: sampler;
 @group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
 
-const INTERVAL = array<f32, 7>(1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0);
+// LEVEL SAMPLES  WORKGROUP  SUBGROUPS
+//     0     128         32          1
+//     1     128         32          1
+//     2     128         32          1
+//     3     256         64          2
+//     4    1024        256          8
+//     5    4096       1024         32
 
-// LEVEL SAMPLES  THREADS  WORKGROUP
-//     0       4        1         64
-//     1      16        4         64
-//     2      64       16         64
-//     3     256       64         64
-//     4    1024      256        256
-//     5    4096     1024       1024
-
+const CASCADE_MAX: u32 = 5u;
 const CASCADE: u32 = #CASCADE;
-const WORKGROUP_SIZE: u32 = #WORKGROUP_SIZE;
+const WORKGROUP: u32 = #WORKGROUP;
 const SUBGROUPS: u32 = #SUBGROUPS;
-const THREADS: u32 = #THREADS;
 const SAMPLES: u32 = #SAMPLES;
 
-const PROBES: u32 = WORKGROUP_SIZE / THREADS;
+var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
+var<workgroup> PHI: array<vec4<f32>, VMM_SIZE>;
 
-var<workgroup> VMM: array<vec4<f32>, PROBES * VMM_SIZE>;
-var<workgroup> PHI: array<vec4<f32>, PROBES * VMM_SIZE>;
+var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_SIZE>;
+var<workgroup> PHI_PRIOR: array<vec4<f32>, VMM_SIZE>;
 
-var<workgroup> VMM_PRIOR: array<vec4<f32>, PROBES * VMM_SIZE>;
-var<workgroup> PHI_PRIOR: array<vec4<f32>, PROBES * VMM_SIZE>;
-
-var<workgroup> VMM_PARTIAL: array<vec4<f32>, SUBGROUPS * VMM_SIZE>;
-var<workgroup> PHI_PARTIAL: array<vec4<f32>, SUBGROUPS * VMM_SIZE>;
+var<workgroup> VMM_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
+var<workgroup> PHI_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
 
 @compute
-@workgroup_size(WORKGROUP_SIZE)
+@workgroup_size(WORKGROUP)
 fn main(
-    @builtin(subgroup_size) subgroup_size: u32,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>,
-    @builtin(workgroup_id) workgroup: vec3<u32>,
-    @builtin(subgroup_id) subgroup: u32,
-    @builtin(local_invocation_index) workgroup_index: u32,
-    @builtin(subgroup_invocation_id) subgroup_index: u32,
+    @builtin(workgroup_id) probe: vec3<u32>,
+    @builtin(local_invocation_index) index: u32,
 ) {
-    initialize_vmm(workgroup, workgroup_index);
-    workgroupBarrier();
-
-    let thread = workgroup_index % THREADS;
-    let p = workgroup_index / THREADS;
-    let base = p * VMM_SIZE;
-
-    let probe = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
     let origin = (vec3<f32>(probe) + 0.5) * f32(1u << CASCADE);
 
+    if (cull(origin)) { return; }
+
+    if (index < VMM_SIZE) { initialize(probe, index); }
+
+    workgroupBarrier();
+
     let omega = mat4x3<f32>(
-        get_direction(probe, 4u * thread + 0, SAMPLES),
-        get_direction(probe, 4u * thread + 1, SAMPLES),
-        get_direction(probe, 4u * thread + 2, SAMPLES),
-        get_direction(probe, 4u * thread + 3, SAMPLES),
+        get_direction(4*index+0, SAMPLES),
+        get_direction(4*index+1, SAMPLES),
+        get_direction(4*index+2, SAMPLES),
+        get_direction(4*index+3, SAMPLES),
     );
 
-    var radiance = mat4x3<f32>();
-
-    if (CASCADE == 5u) { // Radiance from Environment Map
-        radiance = mat4x3<f32>(
-            hdri(omega[0], SAMPLES),
-            hdri(omega[1], SAMPLES),
-            hdri(omega[2], SAMPLES),
-            hdri(omega[3], SAMPLES),
-        );
-    } else { // Radiance from parent Von Mises-Fisher Mixture Model
-        var expectation_sum = vec4<f32>(0.0);
-
-        for (var k=0u; k<VMM_SIZE; k++) {
-            let expectation = vmf(VMM[base + k], omega);
-                expectation_sum += expectation;
-
-            let phi = PHI[base + k];
-
-            radiance += mat4x3<f32>(
-                expectation[0] * phi.rgb / phi.w,
-                expectation[1] * phi.rgb / phi.w,
-                expectation[2] * phi.rgb / phi.w,
-                expectation[3] * phi.rgb / phi.w,
-            );
-        }
-
-        let expectation_sum_inv = 1.0 / expectation_sum;
-        radiance = mat4x3<f32>(
-            radiance[0] * expectation_sum_inv[0],
-            radiance[1] * expectation_sum_inv[1],
-            radiance[2] * expectation_sum_inv[2],
-            radiance[3] * expectation_sum_inv[3],
-        );
-    }
-
-    // Apply Transmission
-    radiance = mat4x3<f32>(
-        radiance[0] * transmission(origin, omega[0], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-        radiance[1] * transmission(origin, omega[1], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-        radiance[2] * transmission(origin, omega[2], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-        radiance[3] * transmission(origin, omega[3], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-    );
+    var radiance = get_incident_radiance(origin, omega);
 
     let weight = vec4<f32>(
-        log2(1.0 + brightness(radiance[0])),
-        log2(1.0 + brightness(radiance[1])),
-        log2(1.0 + brightness(radiance[2])),
-        log2(1.0 + brightness(radiance[3])),
+        brightness(radiance[0]),
+        brightness(radiance[1]),
+        brightness(radiance[2]),
+        brightness(radiance[3]),
     );
 
-    expectation_maximization(subgroup, subgroup_index, thread, base, omega, radiance, weight);
+    expectation_maximization(omega, radiance, weight, index);
 
-    let grid = vec3<u32>(textureDimensions(GAUSSIAN_OUT)) / vec3<u32>(4u, 4u, 2u);
-    for (var i = workgroup_index; i < PROBES * VMM_SIZE; i += WORKGROUP_SIZE) {
-        let p = i / VMM_SIZE;
-        let k = i % VMM_SIZE;
+    if (index < VMM_SIZE) { store(probe, index); }
+}
 
-        let voxel = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
+fn cull(origin: vec3<f32>) -> bool {
+    return false;
+}
 
-        if (voxel.x >= grid.x) { continue; }
+fn initialize(probe: vec3<u32>, index: u32) {
+    if (CASCADE == CASCADE_MAX) {
+        VMM[index] = vec4<f32>(get_direction(index, VMM_SIZE), 1.0) / f32(VMM_SIZE);
+    } else {
+        let uv = parent_uv(textureDimensions(VMM_IN), probe, index);
 
-        let offset = voxel + grid * lobe(k);
+        VMM[index] = textureSampleLevel(VMM_IN, SAMPLER, uv, 0.0);
+        PHI[index] = textureSampleLevel(PHI_IN, SAMPLER, uv, 0.0);
 
-        textureStore(GAUSSIAN_OUT, offset, VMM[i]);
-        textureStore(RADIANCE_OUT, offset, norm(PHI[i]));
+        VMM_PRIOR[index] = VMM[index];
+        PHI_PRIOR[index] = PHI[index];
     }
 }
 
-fn initialize_vmm(workgroup: vec3<u32>, workgroup_index: u32) {
-    for (var i = workgroup_index; i < PROBES * VMM_SIZE; i += WORKGROUP_SIZE) {
-        let p = i / VMM_SIZE;
-        let k = i % VMM_SIZE;
+fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: vec4<f32>, index: u32) {
+    let subgroup = index >> 5u;
+    let subgroup_index = index & 31;
 
-        let probe = vec3<u32>(workgroup.x * PROBES + p, workgroup.y, workgroup.z);
-
-        let parent_dims = vec3<f32>(textureDimensions(GAUSSIAN_IN));
-        let parent_grid = max(floor(parent_dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
-
-        let parent_probe = clamp(
-            0.5 * (vec3<f32>(probe) + 0.5),
-            vec3<f32>(0.5),
-            parent_grid - vec3<f32>(0.5));
-
-        let parent_uv = (parent_probe + parent_grid * vec3<f32>(lobe(k))) / parent_dims;
-
-        if (CASCADE == 5u) {
-            VMM[i] = seed(probe, k);
-            PHI[i] = vec4<f32>(1.0);
-        } else {
-            VMM_PRIOR[i] = textureSampleLevel(GAUSSIAN_IN, SAMPLER, parent_uv, 0.0);
-            PHI_PRIOR[i] = textureSampleLevel(RADIANCE_IN, SAMPLER, parent_uv, 0.0);
-
-            VMM[i] = VMM_PRIOR[i];
-            PHI[i] = PHI_PRIOR[i];
-        }
-    }
-}
-
-fn expectation_maximization(
-    subgroup: u32,
-    subgroup_index: u32,
-    thread: u32,
-    base: u32,
-    omega: mat4x3<f32>,
-    radiance: mat4x3<f32>,
-    weight: vec4<f32>)
-{
     var expectation = array<vec4<f32>, VMM_SIZE>();
 
     for (var i=0u; i<20u; i++) {
@@ -186,7 +105,7 @@ fn expectation_maximization(
         var expectation_sum = vec4<f32>(0.0);
 
         for (var k=0u; k<VMM_SIZE; k++) {
-            expectation[k] = vmf(VMM[base + k], omega);
+            expectation[k] = vmf(VMM[k], omega);
             expectation_sum += expectation[k];
         }
 
@@ -199,58 +118,105 @@ fn expectation_maximization(
             let gamma = expectation[k] * expectation_sum_inv;
             let gamma_weight = gamma * weight;
 
-            var vmm = vec4<f32>(omega * gamma_weight, sum(gamma_weight));
-            var phi = vec4<f32>(radiance * gamma, sum(gamma));
+            let vmm = subgroupAdd(vec4<f32>(omega * gamma_weight, sum(gamma_weight)));
+            let phi = subgroupAdd(vec4<f32>(radiance * gamma, sum(gamma)));
 
-            if (PROBES > 1u) {
-                for (var offset = 1u; offset < THREADS; offset *= 2u) {
-                    vmm += subgroupShuffleXor(vmm, offset);
-                    phi += subgroupShuffleXor(phi, offset);
-                }
-
-                if (thread == 0u) {
-                    store_lobe(base + k, vmm, phi);
-                }
-            } else {
-                vmm = subgroupAdd(vmm);
-                phi = subgroupAdd(phi);
-
-                if (subgroup_index == 0) {
-                    let index = SUBGROUPS * k + subgroup;
-                    VMM_PARTIAL[index] = vmm;
-                    PHI_PARTIAL[index] = phi;
-                }
+            if (subgroup_index == 0u) {
+                let i = SUBGROUPS * k + subgroup;
+                VMM_PARTIAL[i] = vmm;
+                PHI_PARTIAL[i] = phi;
             }
         }
 
         workgroupBarrier();
 
-        if (PROBES == 1u) {
-            for (var k=subgroup; k<VMM_SIZE; k+=SUBGROUPS) {
-                let index = SUBGROUPS * k + subgroup_index;
+        for (var k = subgroup; k < VMM_SIZE; k += SUBGROUPS) {
+            let i = SUBGROUPS * k + subgroup_index;
 
-                let vmm = subgroupAdd(select(vec4<f32>(0.0), VMM_PARTIAL[index], subgroup_index < SUBGROUPS));
-                let phi = subgroupAdd(select(vec4<f32>(0.0), PHI_PARTIAL[index], subgroup_index < SUBGROUPS));
+            let vmm = subgroupAdd(select(vec4<f32>(0.0), VMM_PARTIAL[i], subgroup_index < SUBGROUPS));
+            let phi = subgroupAdd(select(vec4<f32>(0.0), PHI_PARTIAL[i], subgroup_index < SUBGROUPS));
 
-                if (subgroup_index == 0) {
-                    store_lobe(k, vmm, phi);
-                }
+            if (subgroup_index == 0u) {
+                VMM[k] = vmm + 0.33 * VMM_PRIOR[k];
+                PHI[k] = phi + 0.33 * PHI_PRIOR[k];
             }
-
-            workgroupBarrier();
         }
+
+        workgroupBarrier();
     }
+}
+
+fn store(probe: vec3<u32>, index: u32) {
+    let texel = probe + grid(textureDimensions(VMM_OUT)) * lobe(index);
+
+    let vmm = VMM[index];
+    let phi = max_norm(PHI[index]);
+
+    textureStore(VMM_OUT, texel, vmm);
+    textureStore(PHI_OUT, texel, phi);
+}
+
+fn get_incident_radiance(origin: vec3<f32>, omega: mat4x3<f32>) -> mat4x3<f32> {
+    var radiance = mat4x3<f32>();
+
+    if (CASCADE == CASCADE_MAX) {
+        radiance = get_incident_radiance_hdri(omega);
+    } else {
+        radiance = get_incident_radiance_parent(omega);
+    }
+
+    return mat4x3<f32>(
+        radiance[0] * transmission(origin, omega[0], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+        radiance[1] * transmission(origin, omega[1], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+        radiance[2] * transmission(origin, omega[2], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+        radiance[3] * transmission(origin, omega[3], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+    );
+}
+
+fn get_incident_radiance_hdri(omega: mat4x3<f32>) -> mat4x3<f32> {
+    return mat4x3<f32>(
+        hdri(omega[0], SAMPLES),
+        hdri(omega[1], SAMPLES),
+        hdri(omega[2], SAMPLES),
+        hdri(omega[3], SAMPLES),
+    );
+}
+
+fn get_incident_radiance_parent(omega: mat4x3<f32>) -> mat4x3<f32> {
+    var radiance = mat4x3<f32>();
+    var expectation_sum = vec4<f32>(0.0);
+
+    for (var k=0u; k<VMM_SIZE; k++) {
+        let expectation = vmf(VMM[k], omega);
+            expectation_sum += expectation;
+
+        let phi = PHI[k];
+
+        radiance += mat4x3<f32>(
+            expectation[0] * phi.rgb / phi.w,
+            expectation[1] * phi.rgb / phi.w,
+            expectation[2] * phi.rgb / phi.w,
+            expectation[3] * phi.rgb / phi.w,
+        );
+    }
+
+    let expectation_sum_inv = 1.0 / expectation_sum;
+    return mat4x3<f32>(
+        radiance[0] * expectation_sum_inv[0],
+        radiance[1] * expectation_sum_inv[1],
+        radiance[2] * expectation_sum_inv[2],
+        radiance[3] * expectation_sum_inv[3],
+    );
 }
 
 fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {
     var transmission = vec3<f32>(1.0);
 
-    let grid = vec3<u32>(textureDimensions(GAUSSIAN_OUT)) / vec3<u32>(4u, 4u, 2u);
-    let dim = vec3<f32>(grid) * f32(1u << CASCADE);
+    let dim = vec3<f32>(grid(textureDimensions(VMM_OUT))) * f32(1u << CASCADE);
     let origin_sample = origin / dim;
     let direction_sample = direction / dim;
 
-    let radiance_scale = f32(textureDimensions(ABSORPTION).x) / dim.x * 4.0;
+    let radiance_scale = f32(textureDimensions(ABSORPTION).x) / dim.x;
 
     let scale = length(TRANSFORM[0].xyz) * dim.x; // voxels/mm
     let step_size = 1.0 / radiance_scale;
@@ -269,37 +235,9 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     return transmission;
 }
 
-fn store_lobe(k: u32, vmm: vec4<f32>, phi: vec4<f32>) {
-    let factor = ENVIRONMENT.settings.ambient_light;
-
-    VMM[k] = vmm + factor * VMM_PRIOR[k];
-    PHI[k] = phi + factor * PHI_PRIOR[k];
-}
-
-fn get_radiance(direction: vec3<f32>, N: u32) -> vec4<f32> {
-    let radiance = hdri(direction, N);
-    return vec4<f32>(radiance, length(radiance));
-}
-
-fn get_direction(probe: vec3<u32>, i: u32, N: u32) -> vec3<f32> {
-    let uv = fract(hammersley(i, N));
-    return octahedron_decode(2.0 * uv - 1.0);
-}
-
-fn seed(probe: vec3<u32>, k: u32) -> vec4<f32> {
-    let rotation = rotation_y(-HDRI_SETTINGS.rotation * 2.0 * PI);
-    let omega = rotation * get_direction(probe, k, VMM_SIZE);
-    return vec4<f32>(omega, 1.0) / f32(VMM_SIZE);
-}
-
-fn sum(v: vec4<f32>) -> f32 {
-    return v.x + v.y + v.z + v.w;
-}
-
-fn norm(v: vec4<f32>) -> vec4<f32> {
-    return vec4<f32>(v.rgb / max(v.w, EPSILON), 1.0);
-}
-
-fn lobe(k: u32) -> vec3<u32> {
-    return vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1);
+fn parent_uv(dim: vec3<u32>, probe: vec3<u32>, index: u32) -> vec3<f32> {
+    let half = vec3<f32>(0.5);
+    let parent_grid = vec3<f32>(grid(dim));
+    let parent_probe = clamp(half * (vec3<f32>(probe) + half), half, parent_grid - half);
+    return (parent_probe + parent_grid * vec3<f32>(lobe(index))) / vec3<f32>(dim);
 }
