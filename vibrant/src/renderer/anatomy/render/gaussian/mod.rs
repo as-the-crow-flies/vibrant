@@ -70,7 +70,9 @@ impl GaussianVolumeRenderer {
         self.trace(cmd, environment, hdri, frame, radiance, volume, viewport);
     }
 
-    fn radiance(
+    // pub so benchmarks can time the cascade compute pass in isolation,
+    // without also paying for the trace() render pass that dispatch() bundles it with.
+    pub fn radiance(
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
@@ -91,6 +93,32 @@ impl GaussianVolumeRenderer {
             pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
             pass.dispatch_workgroups(probes.x, probes.y, probes.z);
         }
+    }
+
+    /// Dispatches a single cascade level on its own compute pass, for
+    /// per-level benchmark breakdowns. `radiance()` above is what production
+    /// rendering uses (all levels share one pass); this trades that pass-reuse
+    /// for isolation.
+    pub fn dispatch_cascade(
+        &self,
+        cmd: &mut CommandEncoder,
+        environment: &Environment,
+        hdri: &HdriBuffer,
+        radiance: &GaussianRadianceBuffer,
+        volume: &PhysicalVolume,
+        cascade: usize,
+    ) {
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+
+        pass.set_bind_group(1, volume.binding_read(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(3, hdri.binding(), &[]);
+
+        let probes = radiance.probes(cascade);
+
+        pass.set_pipeline(&self.cascade[cascade]);
+        pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
+        pass.dispatch_workgroups(probes.x, probes.y, probes.z);
     }
 
     fn trace(

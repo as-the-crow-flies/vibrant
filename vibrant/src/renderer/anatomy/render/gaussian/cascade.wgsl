@@ -31,6 +31,10 @@ const WORKGROUP: u32 = #WORKGROUP;
 const SUBGROUPS: u32 = #SUBGROUPS;
 const SAMPLES: u32 = #SAMPLES;
 
+const EM_ITERATIONS_MAX: u32 = 20u;
+const EM_ITERATIONS_MIN: u32 = 2u;
+const EM_CONVERGENCE: f32 = 0.02;
+
 var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
 var<workgroup> PHI: array<vec4<f32>, VMM_SIZE>;
 
@@ -39,6 +43,8 @@ var<workgroup> PHI_PRIOR: array<vec4<f32>, VMM_SIZE>;
 
 var<workgroup> VMM_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
 var<workgroup> PHI_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
+
+var<workgroup> VMM_DELTA: atomic<u32>;
 
 @compute
 @workgroup_size(WORKGROUP)
@@ -109,7 +115,10 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
 
     var expectation = array<vec4<f32>, VMM_SIZE>();
 
-    for (var i=0u; i<20u; i++) {
+    for (var i=0u; i<EM_ITERATIONS_MAX; i++) {
+        if (index == 0u) { atomicStore(&VMM_DELTA, 0u); }
+
+        workgroupBarrier();
 
         // Expectation
         var expectation_sum = vec4<f32>(0.0);
@@ -139,6 +148,13 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
         gather_partial(subgroup, subgroup_index);
 
         workgroupBarrier();
+
+        // gather_partial() published the largest relative change across all VMM/PHI
+        // components this iteration; every thread reads the same VMM_DELTA, so this
+        // decision is uniform across the workgroup.
+        if (i + 1u >= EM_ITERATIONS_MIN && bitcast<f32>(atomicLoad(&VMM_DELTA)) < EM_CONVERGENCE) {
+            break;
+        }
     }
 }
 
@@ -257,8 +273,15 @@ fn gather_partial(subgroup: u32, subgroup_index: u32) {
     }
 
     if (s == 0u) {
-        VMM[k] = vmm + 0.33 * VMM_PRIOR[k];
-        PHI[k] = phi + 0.33 * PHI_PRIOR[k];
+        let vmm_new = vmm + 0.33 * VMM_PRIOR[k];
+        let phi_new = phi + 0.33 * PHI_PRIOR[k];
+
+        let change = length(vmm_new - VMM[k]) + length(phi_new - PHI[k]);
+        let scale = length(vmm_new) + length(phi_new) + EPSILON;
+        atomicMax(&VMM_DELTA, bitcast<u32>(change / scale));
+
+        VMM[k] = vmm_new;
+        PHI[k] = phi_new;
     }
 }
 
