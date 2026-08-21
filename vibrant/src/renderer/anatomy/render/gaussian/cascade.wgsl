@@ -2,6 +2,8 @@
 @group(0) @binding(1) var VMM_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(3) var PHI_IN: texture_3d<f32>;
 @group(0) @binding(4) var VMM_IN: texture_3d<f32>;
+@group(0) @binding(5) var IRRADIANCE_OUT: texture_storage_3d<rgba16float, write>;
+@group(0) @binding(6) var IRRADIANCE_IN: texture_3d<f32>;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
 @group(1) @binding(1) var SCATTERING: texture_3d<f32>;
@@ -35,6 +37,8 @@ const EM_ITERATIONS_MAX: u32 = 20u;
 const EM_ITERATIONS_MIN: u32 = 2u;
 const EM_CONVERGENCE: f32 = 0.02;
 
+const IRRADIANCE_CULL: f32 = 1.0;
+
 var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
 var<workgroup> PHI: array<vec4<f32>, VMM_SIZE>;
 
@@ -54,11 +58,15 @@ fn main(
 ) {
     let origin = (vec3<f32>(probe) + 0.5) * f32(1u << CASCADE);
 
-    if (cull(origin)) { return; }
-
     if (index < VMM_SIZE) { initialize(probe, index); }
 
     workgroupBarrier();
+
+    if (cull(origin)) {
+        if (index < VMM_SIZE) { store(probe, index); }
+        if (index == 0u) { store_irradiance(probe); }
+        return;
+    }
 
     let omega = mat4x3<f32>(
         get_direction(4*index+0, SAMPLES),
@@ -79,6 +87,7 @@ fn main(
     expectation_maximization(omega, radiance, weight, index);
 
     if (index < VMM_SIZE) { store(probe, index); }
+    if (index == 0u) { store_irradiance(probe); }
 }
 
 fn cull(origin: vec3<f32>) -> bool {
@@ -86,13 +95,20 @@ fn cull(origin: vec3<f32>) -> bool {
     let origin_sample = origin / dim;
 
     let radiance_scale = f32(textureDimensions(ABSORPTION).x) / dim.x;
-    let mip = f32(CASCADE) + log2(radiance_scale) + 1.0;
+    let mip = f32(CASCADE) + log2(radiance_scale);
 
     let extinction =
         unpack_rgb(textureSampleLevel(ABSORPTION, SAMPLER, origin_sample, mip)) +
         unpack_rgb(textureSampleLevel(SCATTERING, SAMPLER, origin_sample, mip));
 
-    return all(extinction <= vec3<f32>(EPSILON));
+    if (all(extinction <= vec3<f32>(EPSILON))) { return true; }
+
+    if (CASCADE < CASCADE_MAX) {
+        let irradiance = unpack_rgb(textureSampleLevel(IRRADIANCE_IN, SAMPLER, origin_sample, 0.0));
+        if (brightness(irradiance) < IRRADIANCE_CULL) { return true; }
+    }
+
+    return false;
 }
 
 fn initialize(probe: vec3<u32>, index: u32) {
@@ -166,6 +182,16 @@ fn store(probe: vec3<u32>, index: u32) {
 
     textureStore(VMM_OUT, texel, vmm);
     textureStore(PHI_OUT, texel, phi);
+}
+
+fn store_irradiance(probe: vec3<u32>) {
+    var irradiance = vec3<f32>(0.0);
+
+    for (var k=0u; k<VMM_SIZE; k++) {
+        irradiance += max_norm(PHI[k]).rgb;
+    }
+
+    textureStore(IRRADIANCE_OUT, probe, pack_rgb(irradiance));
 }
 
 fn get_incident_radiance(origin: vec3<f32>, omega: mat4x3<f32>) -> mat4x3<f32> {

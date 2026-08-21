@@ -8,6 +8,7 @@ use crate::gpu::Gpu;
 pub struct GaussianRadianceBuffer {
     gaussian: Texture,
     radiance: Texture,
+    irradiance: Texture,
     binding: BindGroup,
     bindings_mipmap: Vec<BindGroup>,
     probes: Vec<UVec3>,
@@ -41,6 +42,21 @@ impl GaussianRadianceBuffer {
 
         let radiance = gpu.device().create_texture(&descriptor);
         let gaussian = gpu.device().create_texture(&descriptor);
+
+        let irradiance = gpu.device().create_texture(&TextureDescriptor {
+            label,
+            size: Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: size.z,
+            },
+            mip_level_count: Self::LEVELS + 1,
+            sample_count: 1,
+            dimension: TextureDimension::D3,
+            format: Self::FORMAT,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -141,6 +157,28 @@ impl GaussianRadianceBuffer {
                                 },
                             )),
                         },
+                        BindGroupEntry {
+                            binding: 5,
+                            resource: BindingResource::TextureView(&irradiance.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 6,
+                            resource: BindingResource::TextureView(&irradiance.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level + 1,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
                     ],
                 })
             })
@@ -149,6 +187,7 @@ impl GaussianRadianceBuffer {
         Self {
             radiance,
             gaussian,
+            irradiance,
             binding,
             bindings_mipmap,
             probes,
@@ -248,6 +287,26 @@ impl GaussianRadianceBuffer {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::FORMAT,
+                            view_dimension: TextureViewDimension::D3,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -268,6 +327,10 @@ impl GaussianRadianceBuffer {
         &self.radiance
     }
 
+    pub fn irradiance(&self) -> &Texture {
+        &self.irradiance
+    }
+
     pub fn probes(&self, cascade: usize) -> UVec3 {
         self.probes[cascade]
     }
@@ -277,5 +340,6 @@ impl Drop for GaussianRadianceBuffer {
     fn drop(&mut self) {
         self.radiance.destroy();
         self.gaussian.destroy();
+        self.irradiance.destroy();
     }
 }
