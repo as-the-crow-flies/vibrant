@@ -48,6 +48,7 @@ var<workgroup> VMM_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
 var<workgroup> PHI_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
 
 var<workgroup> VMM_DELTA: atomic<u32>;
+var<workgroup> VMM_CONVERGED: u32;
 
 @compute
 @workgroup_size(WORKGROUP)
@@ -162,13 +163,19 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
 
         workgroupBarrier();
 
-        // gather_partial() published the largest relative change across all VMM/PHI
-        // components this iteration; every thread reads the same VMM_DELTA, so this
-        // decision is uniform across the workgroup.
-        if (i + 1u >= EM_ITERATIONS_MIN && bitcast<f32>(atomicLoad(&VMM_DELTA)) < EM_CONVERGENCE) {
+        if (converged(i, index)) {
             break;
         }
     }
+}
+
+fn converged(i: u32, index: u32) -> bool {
+    if (index == 0u) {
+        let done = i + 1u >= EM_ITERATIONS_MIN && bitcast<f32>(atomicLoad(&VMM_DELTA)) < EM_CONVERGENCE;
+        VMM_CONVERGED = select(0u, 1u, done);
+    }
+
+    return workgroupUniformLoad(&VMM_CONVERGED) != 0u;
 }
 
 fn store(probe: vec3<u32>, index: u32) {
@@ -293,7 +300,7 @@ fn gather_partial(subgroup: u32, subgroup_index: u32) {
         phi += subgroupShuffleXor(phi, offset);
     }
 
-    if (s == 0u) {
+    if (s == 0u && k < VMM_SIZE) {
         let vmm_new = vmm + 0.33 * VMM_PRIOR[k];
         let phi_new = phi + 0.33 * PHI_PRIOR[k];
 
