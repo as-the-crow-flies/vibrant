@@ -13,12 +13,12 @@ pub struct PhysicalVolume {
     absorption: Texture,
     scattering: Texture,
     properties: Texture,
+    extinction: Texture,
 
     absorption_u32: Texture,
     scattering_u32: Texture,
     properties_u32: Texture,
 
-    radiance: Texture,
     gradient: Texture,
     ping: Texture,
     pong: Texture,
@@ -71,12 +71,12 @@ impl PhysicalVolume {
         let absorption = gpu.device().create_texture(&descriptor_mip);
         let scattering = gpu.device().create_texture(&descriptor_mip);
         let properties = gpu.device().create_texture(&descriptor_mip);
+        let extinction = gpu.device().create_texture(&descriptor_mip);
 
         let absorption_u32 = gpu.device().create_texture(&descriptor_u32);
         let scattering_u32 = gpu.device().create_texture(&descriptor_u32);
         let properties_u32 = gpu.device().create_texture(&descriptor_u32);
 
-        let radiance = gpu.device().create_texture(&descriptor);
         let gradient = gpu.device().create_texture(&descriptor);
 
         let full_view_descriptor = &TextureViewDescriptor {
@@ -93,16 +93,17 @@ impl PhysicalVolume {
         let absorption_view = absorption.create_view(full_view_descriptor);
         let scattering_view = scattering.create_view(full_view_descriptor);
         let properties_view = properties.create_view(full_view_descriptor);
+        let extinction_view = extinction.create_view(full_view_descriptor);
 
         let absorption_storage_view = absorption.create_view(single_mip_view_descriptor);
         let scattering_storage_view = scattering.create_view(single_mip_view_descriptor);
         let properties_storage_view = properties.create_view(single_mip_view_descriptor);
+        let extinction_storage_view = extinction.create_view(single_mip_view_descriptor);
 
         let absorption_u32_view = absorption_u32.create_view(single_mip_view_descriptor);
         let scattering_u32_view = scattering_u32.create_view(single_mip_view_descriptor);
         let properties_u32_view = properties_u32.create_view(single_mip_view_descriptor);
 
-        let radiance_view = radiance.create_view(single_mip_view_descriptor);
         let gradient_view = gradient.create_view(single_mip_view_descriptor);
 
         let ping = gpu.device().create_texture(&descriptor);
@@ -151,27 +152,27 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::TextureView(&properties_view),
+                    resource: BindingResource::TextureView(&extinction_view),
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: BindingResource::TextureView(&gradient_view),
+                    resource: BindingResource::TextureView(&properties_view),
                 },
                 BindGroupEntry {
                     binding: 4,
-                    resource: BindingResource::Sampler(&sampler),
+                    resource: BindingResource::TextureView(&gradient_view),
                 },
                 BindGroupEntry {
                     binding: 5,
-                    resource: transform.as_entire_binding(),
+                    resource: BindingResource::Sampler(&sampler),
                 },
                 BindGroupEntry {
                     binding: 6,
-                    resource: transform_inverse.as_entire_binding(),
+                    resource: transform.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 7,
-                    resource: BindingResource::TextureView(&radiance_view),
+                    resource: transform_inverse.as_entire_binding(),
                 },
             ],
         });
@@ -221,6 +222,10 @@ impl PhysicalVolume {
                 },
                 BindGroupEntry {
                     binding: 5,
+                    resource: BindingResource::TextureView(&extinction_storage_view),
+                },
+                BindGroupEntry {
+                    binding: 6,
                     resource: BindingResource::TextureView(&properties_storage_view),
                 },
             ],
@@ -316,29 +321,41 @@ impl PhysicalVolume {
                         BindGroupEntry {
                             binding: 2,
                             resource: BindingResource::TextureView(
-                                &properties.create_view(&read_descriptor),
+                                &extinction.create_view(&read_descriptor),
                             ),
                         },
                         BindGroupEntry {
                             binding: 3,
                             resource: BindingResource::TextureView(
-                                &absorption.create_view(&write_descriptor),
+                                &properties.create_view(&read_descriptor),
                             ),
                         },
                         BindGroupEntry {
                             binding: 4,
                             resource: BindingResource::TextureView(
-                                &scattering.create_view(&write_descriptor),
+                                &absorption.create_view(&write_descriptor),
                             ),
                         },
                         BindGroupEntry {
                             binding: 5,
                             resource: BindingResource::TextureView(
-                                &properties.create_view(&write_descriptor),
+                                &scattering.create_view(&write_descriptor),
                             ),
                         },
                         BindGroupEntry {
                             binding: 6,
+                            resource: BindingResource::TextureView(
+                                &extinction.create_view(&write_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 7,
+                            resource: BindingResource::TextureView(
+                                &properties.create_view(&write_descriptor),
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 8,
                             resource: BindingResource::Sampler(&sampler),
                         },
                     ],
@@ -350,10 +367,10 @@ impl PhysicalVolume {
             absorption,
             scattering,
             properties,
+            extinction,
             absorption_u32,
             scattering_u32,
             properties_u32,
-            radiance,
             gradient,
             transform,
             transform_inverse,
@@ -438,17 +455,13 @@ impl PhysicalVolume {
                     BindGroupLayoutEntry {
                         binding: 4,
                         visibility,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: binding_type_read,
                         count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 5,
                         visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                     BindGroupLayoutEntry {
@@ -464,7 +477,11 @@ impl PhysicalVolume {
                     BindGroupLayoutEntry {
                         binding: 7,
                         visibility,
-                        ty: binding_type_read,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
                         count: None,
                     },
                 ],
@@ -551,6 +568,12 @@ impl PhysicalVolume {
                     },
                     BindGroupLayoutEntry {
                         binding: 5,
+                        visibility,
+                        ty: write,
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 6,
                         visibility,
                         ty: write,
                         count: None,
@@ -653,7 +676,7 @@ impl PhysicalVolume {
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility,
-                        ty: Self::binding_type_write(),
+                        ty: Self::binding_type_sample(),
                         count: None,
                     },
                     BindGroupLayoutEntry {
@@ -670,6 +693,18 @@ impl PhysicalVolume {
                     },
                     BindGroupLayoutEntry {
                         binding: 6,
+                        visibility,
+                        ty: Self::binding_type_write(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility,
+                        ty: Self::binding_type_write(),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 8,
                         visibility,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
@@ -716,10 +751,10 @@ impl Drop for PhysicalVolume {
         self.absorption.destroy();
         self.scattering.destroy();
         self.properties.destroy();
+        self.extinction.destroy();
         self.absorption_u32.destroy();
         self.scattering_u32.destroy();
         self.properties_u32.destroy();
-        self.radiance.destroy();
         self.gradient.destroy();
         self.transform.destroy();
         self.transform_inverse.destroy();
