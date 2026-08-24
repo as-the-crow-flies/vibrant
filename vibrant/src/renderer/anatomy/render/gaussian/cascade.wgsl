@@ -36,7 +36,7 @@ const EM_ITERATIONS_MAX: u32 = 20u;
 const EM_ITERATIONS_MIN: u32 = 2u;
 const EM_CONVERGENCE: f32 = 0.02;
 
-const IRRADIANCE_CULL: f32 = 1.0;
+const IRRADIANCE_CULL: f32 = 0.1;
 
 var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
 var<workgroup> PHI: array<vec4<f32>, VMM_SIZE>;
@@ -50,6 +50,22 @@ var<workgroup> PHI_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
 var<workgroup> VMM_DELTA: atomic<u32>;
 var<workgroup> VMM_CONVERGED: u32;
 
+var<workgroup> CULL_OCCUPIED: atomic<u32>;
+
+const CULL_NEIGHBORS: u32 = 27u;
+const NEIGHBOR_OFFSET = array<vec3<f32>, 27>(
+    vec3<f32>( 0.0,  0.0,  0.0),
+    vec3<f32>(-1.0, -1.0, -1.0), vec3<f32>( 0.0, -1.0, -1.0), vec3<f32>( 1.0, -1.0, -1.0),
+    vec3<f32>(-1.0,  0.0, -1.0), vec3<f32>( 0.0,  0.0, -1.0), vec3<f32>( 1.0,  0.0, -1.0),
+    vec3<f32>(-1.0,  1.0, -1.0), vec3<f32>( 0.0,  1.0, -1.0), vec3<f32>( 1.0,  1.0, -1.0),
+    vec3<f32>(-1.0, -1.0,  0.0), vec3<f32>( 0.0, -1.0,  0.0), vec3<f32>( 1.0, -1.0,  0.0),
+    vec3<f32>(-1.0,  0.0,  0.0),                              vec3<f32>( 1.0,  0.0,  0.0),
+    vec3<f32>(-1.0,  1.0,  0.0), vec3<f32>( 0.0,  1.0,  0.0), vec3<f32>( 1.0,  1.0,  0.0),
+    vec3<f32>(-1.0, -1.0,  1.0), vec3<f32>( 0.0, -1.0,  1.0), vec3<f32>( 1.0, -1.0,  1.0),
+    vec3<f32>(-1.0,  0.0,  1.0), vec3<f32>( 0.0,  0.0,  1.0), vec3<f32>( 1.0,  0.0,  1.0),
+    vec3<f32>(-1.0,  1.0,  1.0), vec3<f32>( 0.0,  1.0,  1.0), vec3<f32>( 1.0,  1.0,  1.0),
+);
+
 @compute
 @workgroup_size(WORKGROUP)
 fn main(
@@ -62,7 +78,7 @@ fn main(
 
     workgroupBarrier();
 
-    if (cull(origin)) {
+    if (cull(origin, index)) {
         if (index < VMM_SIZE) { store(probe, index); }
         if (index == 0u) { store_irradiance(probe); }
         return;
@@ -90,16 +106,30 @@ fn main(
     if (index == 0u) { store_irradiance(probe); }
 }
 
-fn cull(origin: vec3<f32>) -> bool {
+fn cull(origin: vec3<f32>, index: u32) -> bool {
     let dim = vec3<f32>(grid(textureDimensions(VMM_OUT))) * f32(1u << CASCADE);
     let origin_sample = origin / dim;
+    let cell_sample = f32(1u << CASCADE) / dim;
 
     let radiance_scale = f32(textureDimensions(EXTINCTION).x) / dim.x;
     let mip = f32(CASCADE) + log2(radiance_scale);
 
-    let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, origin_sample, mip));
+    if (index == 0u) { atomicStore(&CULL_OCCUPIED, 0u); }
 
-    if (all(extinction <= vec3<f32>(EPSILON))) { return true; }
+    workgroupBarrier();
+
+    // Test this probe's own cell plus its full 3x3x3 neighborhood, one texel
+    // per thread, so a probe right at an empty/occupied boundary still sees
+    // the occupied neighbor and stays live instead of being hard-culled.
+    if (index < CULL_NEIGHBORS) {
+        let sample = origin_sample + NEIGHBOR_OFFSET[index] * cell_sample;
+        let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, mip));
+        if (any(extinction > vec3<f32>(EPSILON))) { atomicOr(&CULL_OCCUPIED, 1u); }
+    }
+
+    workgroupBarrier();
+
+    if (atomicLoad(&CULL_OCCUPIED) == 0u) { return true; }
 
     if (CASCADE < CASCADE_MAX) {
         let irradiance = unpack_rgb(textureSampleLevel(IRRADIANCE_IN, SAMPLER, origin_sample, 0.0));

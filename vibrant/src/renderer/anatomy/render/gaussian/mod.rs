@@ -62,9 +62,12 @@ impl GaussianVolumeRenderer {
         radiance: &GaussianRadianceBuffer,
         volume: &PhysicalVolume,
         viewport: Rect,
-        _recompute: bool,
+        recompute: bool,
     ) {
-        self.radiance(cmd, environment, hdri, radiance, volume);
+        if recompute {
+            self.radiance(cmd, environment, hdri, radiance, volume);
+        }
+
         self.trace(cmd, environment, hdri, frame, radiance, volume, viewport);
     }
 
