@@ -51,6 +51,7 @@ var<workgroup> VMM_DELTA: atomic<u32>;
 var<workgroup> VMM_CONVERGED: u32;
 
 var<workgroup> CULL_OCCUPIED: atomic<u32>;
+var<workgroup> CULL_RESULT: u32;
 
 const CULL_NEIGHBORS: u32 = 27u;
 const NEIGHBOR_OFFSET = array<vec3<f32>, 27>(
@@ -118,9 +119,6 @@ fn cull(origin: vec3<f32>, index: u32) -> bool {
 
     workgroupBarrier();
 
-    // Test this probe's own cell plus its full 3x3x3 neighborhood, one texel
-    // per thread, so a probe right at an empty/occupied boundary still sees
-    // the occupied neighbor and stays live instead of being hard-culled.
     if (index < CULL_NEIGHBORS) {
         let sample = origin_sample + NEIGHBOR_OFFSET[index] * cell_sample;
         let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, mip));
@@ -129,14 +127,15 @@ fn cull(origin: vec3<f32>, index: u32) -> bool {
 
     workgroupBarrier();
 
-    if (atomicLoad(&CULL_OCCUPIED) == 0u) { return true; }
-
-    if (CASCADE < CASCADE_MAX) {
+    var result = atomicLoad(&CULL_OCCUPIED) == 0u;
+    if (!result && CASCADE < CASCADE_MAX) {
         let irradiance = unpack_rgb(textureSampleLevel(IRRADIANCE_IN, SAMPLER, origin_sample, 0.0));
-        if (brightness(irradiance) < IRRADIANCE_CULL) { return true; }
+        result = brightness(irradiance) < IRRADIANCE_CULL;
     }
 
-    return false;
+    if (index == 0u) { CULL_RESULT = select(0u, 1u, result); }
+
+    return workgroupUniformLoad(&CULL_RESULT) != 0u;
 }
 
 fn initialize(probe: vec3<u32>, index: u32) {
@@ -161,8 +160,6 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
 
     for (var i=0u; i<EM_ITERATIONS_MAX; i++) {
         if (index == 0u) { atomicStore(&VMM_DELTA, 0u); }
-
-        workgroupBarrier();
 
         // Expectation
         var expectation_sum = vec4<f32>(0.0);
@@ -263,12 +260,13 @@ fn get_incident_radiance_parent(omega: mat4x3<f32>) -> mat4x3<f32> {
             expectation_sum += expectation;
 
         let phi = PHI[k];
+        let phi_norm = phi.rgb / phi.w;
 
         radiance += mat4x3<f32>(
-            expectation[0] * phi.rgb / phi.w,
-            expectation[1] * phi.rgb / phi.w,
-            expectation[2] * phi.rgb / phi.w,
-            expectation[3] * phi.rgb / phi.w,
+            expectation[0] * phi_norm,
+            expectation[1] * phi_norm,
+            expectation[2] * phi_norm,
+            expectation[3] * phi_norm,
         );
     }
 

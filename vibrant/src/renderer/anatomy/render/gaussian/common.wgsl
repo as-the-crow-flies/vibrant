@@ -9,8 +9,9 @@ fn vmf(v: vec4<f32>, omega: mat4x3<f32>) -> vec4<f32> {
     let k  = (3.0 * u2 - 1.0) / (u2 * u - u);          // Banerjee, reparameterized
     let kl = k * LOG2_E;
 
-    let e = exp2(fma(vec4<f32>(kl * q), transpose(omega) * v.xyz, vec4<f32>(-kl))); // e^{κ(μ·ωᵢ − 1)}
-    return INV_TWO_PI * k * e / (1.0 - exp2(-2.0 * kl));
+    let e    = exp2(fma(vec4<f32>(kl * q), v.xyz * omega, vec4<f32>(-kl))); // e^{κ(μ·ωᵢ − 1)}
+    let norm = INV_TWO_PI * k / (1.0 - exp2(-2.0 * kl));
+    return norm * e;
 }
 
 fn hdri(direction: vec3<f32>, N: u32) -> vec3<f32> {
