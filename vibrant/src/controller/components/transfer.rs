@@ -1,6 +1,6 @@
 use egui::{
     Align, Align2, CollapsingHeader, Color32, ComboBox, FontId, Frame, Grid, Id, InnerResponse,
-    Layout, Pos2, Rect, Sense, Shape, Stroke, TextStyle, Ui, UiBuilder, Vec2,
+    Layout, Mesh, Pos2, Rect, Sense, Shape, Stroke, TextStyle, Ui, UiBuilder, Vec2,
 };
 use strum::IntoEnumIterator;
 
@@ -138,34 +138,57 @@ impl TransferFunctionEditor {
 
                 let width = rect.width() / 256.0;
 
-                let histogram = volume.histogram.clone();
+                let mut mesh = Mesh::default();
 
-                for (index, value) in histogram.values().iter().enumerate() {
-                    let column_min = rect.min + Vec2::new(index as f32 * width, 0.0);
-                    let column_max = column_min + Vec2::new(width, rect.height());
+                for index in 0..=256 {
+                    let t = index as f32 / 256.0;
+                    let x = rect.min.x + t * rect.width();
+                    let color = self.gradient(volume, t);
 
-                    let color = self.gradient(volume, index as f32 / 255.0);
+                    mesh.colored_vertex(Pos2::new(x, rect.min.y), color);
+                    mesh.colored_vertex(Pos2::new(x, rect.max.y), color);
 
-                    ui.painter().rect_filled(
-                        Rect {
-                            min: column_min,
-                            max: column_max,
-                        },
-                        0.0,
-                        color,
-                    );
-
-                    let bar_min = column_max - Vec2::new(width, rect.height() * value);
-
-                    ui.painter().rect_filled(
-                        Rect {
-                            min: bar_min,
-                            max: column_max,
-                        },
-                        0.0,
-                        Color32::from_white_alpha(90),
-                    );
+                    if index > 0 {
+                        let base = (index as u32 - 1) * 2;
+                        mesh.add_triangle(base, base + 1, base + 2);
+                        mesh.add_triangle(base + 1, base + 3, base + 2);
+                    }
                 }
+
+                ui.painter().add(mesh);
+
+                let histogram = volume.histogram.clone();
+                let values = histogram.values();
+                let bar_color = Color32::from_white_alpha(90);
+
+                // Sample heights at bin centers and extend to the canvas edges, so
+                // the area fill is a continuous piecewise-linear curve through the
+                // bin values rather than a staircase of flat-topped bars.
+                let mut area = Mesh::default();
+
+                for index in 0..=257 {
+                    let (x, value) = match index {
+                        0 => (rect.min.x, values[0]),
+                        257 => (rect.max.x, values[255]),
+                        _ => {
+                            let bin = index - 1;
+                            (rect.min.x + (bin as f32 + 0.5) * width, values[bin])
+                        }
+                    };
+
+                    let y_top = rect.max.y - rect.height() * value;
+
+                    area.colored_vertex(Pos2::new(x, y_top), bar_color);
+                    area.colored_vertex(Pos2::new(x, rect.max.y), bar_color);
+
+                    if index > 0 {
+                        let base = (index as u32 - 1) * 2;
+                        area.add_triangle(base, base + 1, base + 2);
+                        area.add_triangle(base + 1, base + 3, base + 2);
+                    }
+                }
+
+                ui.painter().add(area);
 
                 rect
             })
