@@ -21,6 +21,8 @@ impl GaussianRadianceBuffer {
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
+        let size = size.max(UVec3::splat(2u32.pow(Self::LEVELS + 1)));
+
         let probes = (0..Self::LEVELS)
             .map(|cascade| size.shr(UVec3::splat(cascade)).max(UVec3::ONE))
             .collect();
