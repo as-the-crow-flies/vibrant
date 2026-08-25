@@ -21,7 +21,7 @@ impl GaussianRadianceBuffer {
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
-        let size = size.max(UVec3::splat(2u32.pow(Self::LEVELS + 1)));
+        let size = size.max(UVec3::splat(2u32.pow(Self::LEVELS)));
 
         let probes = (0..Self::LEVELS)
             .map(|cascade| size.shr(UVec3::splat(cascade)).max(UVec3::ONE))
@@ -34,7 +34,7 @@ impl GaussianRadianceBuffer {
                 height: size.y * 4,
                 depth_or_array_layers: size.z * 2,
             },
-            mip_level_count: Self::LEVELS + 1,
+            mip_level_count: Self::LEVELS,
             sample_count: 1,
             dimension: TextureDimension::D3,
             format: Self::FORMAT,
@@ -52,7 +52,7 @@ impl GaussianRadianceBuffer {
                 height: size.y,
                 depth_or_array_layers: size.z,
             },
-            mip_level_count: Self::LEVELS + 1,
+            mip_level_count: Self::LEVELS,
             sample_count: 1,
             dimension: TextureDimension::D3,
             format: Self::FORMAT,
@@ -107,6 +107,8 @@ impl GaussianRadianceBuffer {
         let bindings_mipmap = (0..Self::LEVELS)
             .into_iter()
             .map(|level| {
+                let parent = (level + 1) % Self::LEVELS;
+
                 gpu.device().create_bind_group(&BindGroupDescriptor {
                     label,
                     layout: &Self::layout_mipmap(gpu),
@@ -142,7 +144,7 @@ impl GaussianRadianceBuffer {
                             resource: BindingResource::TextureView(&radiance.create_view(
                                 &TextureViewDescriptor {
                                     label,
-                                    base_mip_level: level + 1,
+                                    base_mip_level: parent,
                                     mip_level_count: Some(1),
                                     ..Default::default()
                                 },
@@ -153,7 +155,7 @@ impl GaussianRadianceBuffer {
                             resource: BindingResource::TextureView(&gaussian.create_view(
                                 &TextureViewDescriptor {
                                     label,
-                                    base_mip_level: level + 1,
+                                    base_mip_level: parent,
                                     mip_level_count: Some(1),
                                     ..Default::default()
                                 },
@@ -175,7 +177,7 @@ impl GaussianRadianceBuffer {
                             resource: BindingResource::TextureView(&irradiance.create_view(
                                 &TextureViewDescriptor {
                                     label,
-                                    base_mip_level: level + 1,
+                                    base_mip_level: parent,
                                     mip_level_count: Some(1),
                                     ..Default::default()
                                 },
