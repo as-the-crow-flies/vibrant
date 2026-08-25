@@ -1,6 +1,6 @@
 use egui::{
-    Align, Align2, CollapsingHeader, Color32, ComboBox, FontId, Frame, Grid, Id, InnerResponse,
-    Layout, Mesh, Pos2, Rect, Sense, Shape, Stroke, TextStyle, Ui, UiBuilder, Vec2,
+    Align2, CollapsingHeader, Color32, ComboBox, FontId, Frame, Grid, Id, Mesh, Pos2, Rect, Sense,
+    Shape, Stroke, TextStyle, Ui, UiBuilder, Vec2,
 };
 use strum::IntoEnumIterator;
 
@@ -16,6 +16,21 @@ use crate::{
 pub struct TransferFunctionEditor {
     next_picker_id: u64,
     changed: bool,
+}
+
+struct SettingsResponse {
+    selected: bool,
+    deleted: bool,
+}
+
+struct HistogramResponse {
+    rect: Rect,
+    add_at: Option<f32>,
+}
+
+struct PickerResponse {
+    selected: bool,
+    deleted: bool,
 }
 
 impl Tracked for TransferFunctionEditor {
@@ -45,28 +60,56 @@ impl TransferFunctionEditor {
 
         let spacing = ui.spacing().item_spacing;
 
-        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-            self.toolbar(ui, volume);
+        volume
+            .nodes
+            .sort_by(|a, b| a.position.total_cmp(&b.position));
 
-            volume
-                .nodes
-                .sort_by(|a, b| a.position.total_cmp(&b.position));
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
 
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
+            let histogram = self.histogram(ui, volume);
+            let picker_deleted = self.pickers(ui, volume, histogram.rect);
 
-                let histogram_rect = self.histogram(ui, volume).inner;
+            if let Some(index) = picker_deleted {
+                volume.nodes.remove(index);
 
-                self.pickers(ui, volume, histogram_rect);
-            });
+                if let Some(last) = volume.nodes.last_mut() {
+                    last.selected = true;
+                }
+
+                self.changed = true;
+            } else if let Some(position) = histogram.add_at {
+                if volume.nodes.len() < MaterialNodeBuffer::MAX_NODES {
+                    for node in volume.nodes.iter_mut() {
+                        node.selected = false;
+                    }
+
+                    volume.nodes.push(MaterialNode {
+                        id: self.next_picker_id(),
+                        selected: true,
+                        position,
+                        preset: MaterialPreset::Custom,
+                        material: Material::default(),
+                    });
+
+                    self.changed = true;
+                }
+            }
         });
 
         let mut clicked = None;
+        let mut deleted = None;
         let volume_id = volume.id;
 
         for (index, node) in volume.nodes.iter_mut().enumerate() {
-            if self.settings(ui, volume_id, node, spacing, index + 1) {
+            let settings = self.settings(ui, volume_id, node, spacing, index + 1);
+
+            if settings.selected {
                 clicked = Some(index);
+            }
+
+            if settings.deleted {
+                deleted = Some(index);
             }
         }
 
@@ -75,65 +118,38 @@ impl TransferFunctionEditor {
                 node.selected = index == clicked;
             }
         }
-    }
 
-    fn toolbar(&mut self, ui: &mut Ui, volume: &mut VolumeFractionSettings) {
-        ui.with_layout(Layout::top_down(Align::Max), |ui| {
-            if ui
-                .icon_button(
-                    "➕",
-                    volume.nodes.len() < MaterialNodeBuffer::MAX_NODES,
-                    false,
-                )
-                .on_hover_text("Add color stop")
-                .track(self)
-                .clicked()
-            {
-                let position = volume
-                    .nodes
-                    .iter()
-                    .find(|node| node.selected)
-                    .map(|node| (node.position + 0.1).clamp(0.0, 1.0))
-                    .unwrap_or(0.5);
+        if let Some(index) = deleted {
+            volume.nodes.remove(index);
 
-                for node in volume.nodes.iter_mut() {
-                    node.selected = false;
-                }
-
-                volume.nodes.push(MaterialNode {
-                    id: self.next_picker_id(),
-                    selected: true,
-                    position,
-                    preset: MaterialPreset::Custom,
-                    material: Material::default(),
-                });
+            if let Some(last) = volume.nodes.last_mut() {
+                last.selected = true;
             }
 
-            let selected = volume.nodes.iter().position(|node| node.selected);
-
-            if ui
-                .icon_button("➖", selected.is_some(), false)
-                .on_hover_text("Remove selected color stop")
-                .track(self)
-                .clicked()
-            {
-                if let Some(index) = selected {
-                    volume.nodes.remove(index);
-
-                    if let Some(last) = volume.nodes.last_mut() {
-                        last.selected = true;
-                    }
-                }
-            }
-        });
+            self.changed = true;
+        }
     }
 
-    fn histogram(&self, ui: &mut Ui, volume: &mut VolumeFractionSettings) -> InnerResponse<Rect> {
+    fn histogram(&self, ui: &mut Ui, volume: &mut VolumeFractionSettings) -> HistogramResponse {
         Frame::canvas(ui.style())
             .fill(ui.visuals().extreme_bg_color)
             .show(ui, |ui| {
                 let size = Vec2::new(ui.available_width(), 4.0 * ui.spacing().interact_size.y);
                 let rect = Rect::from_min_size(ui.cursor().min, size);
+
+                let id = ui.id().with("transfer_histogram").with(volume.id);
+                let response = ui
+                    .interact(rect, id, Sense::click())
+                    .on_hover_text("Double-click to add/remove a color stop.");
+
+                let add_at = (response.double_clicked())
+                    .then(|| response.interact_pointer_pos())
+                    .flatten()
+                    .map(|pos| ((pos.x - rect.min.x) / rect.width()).clamp(0.0, 1.0));
+
+                if response.hovered() {
+                    ui.output_mut(|output| output.cursor_icon = egui::CursorIcon::Crosshair);
+                }
 
                 ui.allocate_space(size);
                 ui.set_clip_rect(rect);
@@ -192,8 +208,9 @@ impl TransferFunctionEditor {
 
                 ui.painter().add(area);
 
-                rect
+                HistogramResponse { rect, add_at }
             })
+            .inner
     }
 
     fn gradient(&self, volume: &VolumeFractionSettings, t: f32) -> Color32 {
@@ -239,25 +256,37 @@ impl TransferFunctionEditor {
         }
     }
 
-    fn pickers(&mut self, ui: &mut Ui, volume: &mut VolumeFractionSettings, histogram_rect: Rect) {
+    fn pickers(
+        &mut self,
+        ui: &mut Ui,
+        volume: &mut VolumeFractionSettings,
+        histogram_rect: Rect,
+    ) -> Option<usize> {
         let size = Vec2::new(ui.available_width(), Self::HANDLE_SIZE);
         let picker_rect = Rect::from_min_size(ui.cursor().min, size);
 
         ui.allocate_space(size);
 
         let mut clicked = None;
+        let mut deleted = None;
         let volume_id = volume.id;
 
         for (index, picker) in volume.nodes.iter_mut().enumerate() {
-            if self.picker(
+            let response = self.picker(
                 ui,
                 volume_id,
                 histogram_rect,
                 picker_rect,
                 picker,
                 index + 1,
-            ) {
+            );
+
+            if response.selected {
                 clicked = Some(index);
+            }
+
+            if response.deleted {
+                deleted = Some(index);
             }
         }
 
@@ -266,6 +295,8 @@ impl TransferFunctionEditor {
                 picker.selected = index == clicked;
             }
         }
+
+        deleted
     }
 
     fn picker(
@@ -276,7 +307,7 @@ impl TransferFunctionEditor {
         picker_rect: Rect,
         node: &mut MaterialNode,
         rank: usize,
-    ) -> bool {
+    ) -> PickerResponse {
         let handle_size = Self::HANDLE_SIZE;
         let line_width = 6.0;
 
@@ -342,7 +373,10 @@ impl TransferFunctionEditor {
             ui.output_mut(|output| output.cursor_icon = egui::CursorIcon::ResizeHorizontal);
         }
 
-        response.clicked() || response.drag_started()
+        PickerResponse {
+            selected: response.clicked() || response.drag_started(),
+            deleted: response.double_clicked(),
+        }
     }
 
     fn settings(
@@ -352,7 +386,7 @@ impl TransferFunctionEditor {
         node: &mut MaterialNode,
         spacing: Vec2,
         rank: usize,
-    ) -> bool {
+    ) -> SettingsResponse {
         let response = ui.scope_builder(
             UiBuilder::new().id(Id::new(("transfer_settings", volume_id, node.id))),
             |ui| {
@@ -361,6 +395,8 @@ impl TransferFunctionEditor {
             if node.selected {
                 frame = frame.stroke(Stroke::new(1.0_f32, Color32::WHITE));
             }
+
+            let mut deleted = false;
 
             let frame_response = frame.show(ui, |ui| {
                 ui.take_available_width();
@@ -391,10 +427,39 @@ impl TransferFunctionEditor {
                     });
 
                 ui.inline(&header.header_response, |ui| {
-                    let reserved_left = ui.spacing().indent + 4.0 * ui.spacing().button_padding.x;
+                    if ui.delete().track(self).clicked() {
+                        deleted = true;
+                    }
+
+                    let swatch_width =
+                        ui.spacing().interact_size.x + ui.spacing().item_spacing.x;
+                    let reserved_left =
+                        ui.spacing().indent + 4.0 * ui.spacing().button_padding.x + swatch_width;
                     let combo_width = (ui.available_width() - reserved_left).max(0.0);
 
                     self.preset_combo(ui, node, combo_width);
+
+                    let density = node
+                        .material
+                        .absorption
+                        .iter()
+                        .zip(&node.material.scattering)
+                        .map(|(a, s)| a + s)
+                        .fold(0.0_f32, f32::max)
+                        .clamp(0.0, 1.0);
+                    let mut color = node.material.albedo().map(|channel| channel * density);
+
+                    if ui
+                        .color_edit_button_rgb(&mut color)
+                        .on_hover_text("Volume color")
+                        .track(self)
+                        .changed()
+                    {
+                        let density = color.iter().cloned().fold(0.0_f32, f32::max);
+
+                        node.material.scattering = color;
+                        node.material.absorption = color.map(|channel| density - channel);
+                    }
                 });
             });
 
@@ -406,7 +471,11 @@ impl TransferFunctionEditor {
                 node.preset = MaterialPreset::Custom;
             }
 
-            frame_response.response.contains_pointer() && ui.input(|i| i.pointer.primary_clicked())
+            SettingsResponse {
+                selected: frame_response.response.contains_pointer()
+                    && ui.input(|i| i.pointer.primary_clicked()),
+                deleted,
+            }
             },
         );
 

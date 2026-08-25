@@ -127,7 +127,7 @@ impl Controller {
                 ui.take_available_width();
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("☰ layers").clicked() {
+                    if ui.button("☰ data").clicked() {
                         self.show_right_side_panel = !self.show_right_side_panel
                     }
 

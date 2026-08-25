@@ -201,12 +201,8 @@ impl VolumeFractionBuffer {
                     id: 0,
                     selected: false,
                     position: 0.0,
-                    preset: MaterialPreset::Custom,
-                    material: Material {
-                        absorption: [0.0, 0.0, 0.0],
-                        scattering: [0.0, 0.0, 0.0],
-                        ior: 1.0,
-                    },
+                    preset: MaterialPreset::Air,
+                    material: MaterialPreset::Air.material().unwrap(),
                 },
                 MaterialNode {
                     id: 1,
