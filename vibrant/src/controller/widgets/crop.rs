@@ -78,6 +78,7 @@ impl CropWidget {
 
         ui.add(
             DoubleSlider::new(min, max, -0.5..=0.5)
+                .control_point_radius(4.0)
                 .width(ui.available_width())
                 .separation_distance(0.001),
         )
