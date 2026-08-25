@@ -105,7 +105,7 @@ impl Controller {
     }
 
     pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, scale: f32, dt: f32) {
-        Panel::top("TopBottomPanel").show_inside(ui, |ui| {
+        Panel::top("TopBottomPanel").show(ui, |ui| {
             ui.horizontal(|ui| {
                 if ui
                     .button("⚙ settings")
@@ -144,7 +144,7 @@ impl Controller {
             });
         });
 
-        Panel::left("SidePanelLeft").show_animated_inside(ui, self.show_left_side_panel, |ui| {
+        Panel::left("SidePanelLeft").show_collapsible(ui, &mut self.show_left_side_panel, |ui| {
             Panel::top("top_panel")
                 .frame(Frame {
                     outer_margin: Margin {
@@ -156,7 +156,7 @@ impl Controller {
                     inner_margin: Margin::ZERO,
                     ..Default::default()
                 })
-                .show_inside(ui, |ui| {
+                .show(ui, |ui| {
                     self.settings_widget
                         .show(ui, &mut self.settings, &mut self.camera);
 
@@ -174,7 +174,7 @@ impl Controller {
                     inner_margin: Margin::ZERO,
                     ..Default::default()
                 })
-                .show_inside(ui, |ui| {
+                .show(ui, |ui| {
                     ui.heading("Controls");
                     ui.separator();
 
@@ -214,7 +214,7 @@ impl Controller {
         Panel::right("SidePanelRight")
             .min_size(400.0)
             .max_size(800.0)
-            .show_animated_inside(ui, self.show_right_side_panel, |ui| {
+            .show_collapsible(ui, &mut self.show_right_side_panel, |ui| {
                 ScrollArea::new([false, true]).show(ui, |ui| {
                     self.crop_widget.show(ui, &mut asset.crop);
 
@@ -229,7 +229,7 @@ impl Controller {
                 });
             });
 
-        let viewport = CentralPanel::no_frame().show_inside(ui, |ui| {
+        let viewport = CentralPanel::no_frame().show(ui, |ui| {
             if asset.volumes.is_empty() && asset.line.is_none() {
                 ui.painter().text(
                     ui.max_rect().center(),

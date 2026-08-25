@@ -11,12 +11,12 @@ name = "vibrant_app_web"
 crate-type = ["cdylib"]
 
 [workspace.dependencies]
-wgpu = "29"
-winit = "0.30.12"
+wgpu = "30"
+winit = "0.30"
 
-egui = { version = "0.34" }
-egui-wgpu = { version = "0.34", features = ["winit"] }
-egui-winit = { version = "0.34", default-features = false, features=["links"] }
+egui = { version = "0.36" }
+egui-wgpu = { version = "0.36", features = ["winit"] }
+egui-winit = { version = "0.36", default-features = false, features=["links"] }
 log = "0.4.28"
 pollster = "0.3"
 web-time = "1.1"
@@ -46,3 +46,9 @@ web-sys = { version = "0.3", features = [
     "Element",
     "HtmlCanvasElement",
 ] }
+
+# egui-winit 0.36.1 fails to compile for wasm32: its `NativeFile` only implements
+# `DroppedFile::bytes`, but the trait requires `bytes_async` on wasm32.
+# https://github.com/emilk/egui/issues/7052 (unfixed upstream as of 2026-08-25).
+[patch.crates-io]
+egui-winit = { path = "vendor/egui-winit-0.36.1" }

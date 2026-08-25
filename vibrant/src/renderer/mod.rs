@@ -68,7 +68,7 @@ impl Renderer {
         self.surface.maybe_resize(gpu, controller.settings_mut());
 
         let input = self.egui.take_egui_input(window);
-        let output = self.egui.egui_ctx().run_ui(input, |ui| {
+        let mut output = self.egui.egui_ctx().run_ui(input, |ui| {
             controller.ui(ui, &mut self.asset, window.scale_factor() as f32, dt)
         });
         self.egui
@@ -76,6 +76,10 @@ impl Renderer {
 
         self.environment.update(gpu, &controller);
         self.asset.update(gpu, &controller);
+
+        // Texture updates/frees must be applied regardless of whether we end up painting
+        // this frame, otherwise egui's `TexturesDelta` is dropped unhandled.
+        self.ui.update_textures(gpu, &output.textures_delta);
 
         if let Some(frame) = self.surface.frame() {
             let mut cmd = gpu.cmd();
@@ -100,12 +104,21 @@ impl Renderer {
 
             if !FileStage::about_to_save() {
                 let ctx = self.egui.egui_ctx();
-                self.ui.render(gpu, &mut cmd, frame, ctx, output);
+                self.ui.paint(
+                    gpu,
+                    &mut cmd,
+                    frame,
+                    ctx,
+                    output.shapes,
+                    output.pixels_per_point,
+                );
             }
 
             self.surface.present(gpu, cmd);
 
             FileStage::on_save(|path| gpu.save(path, frame.color().texture()).block_on());
         }
+
+        output.textures_delta.clear();
     }
 }

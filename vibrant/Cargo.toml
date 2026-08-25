@@ -26,7 +26,7 @@ random_color = "1.1.0"
 exr = "1.74"
 half = { version = "2.7", features = ["bytemuck"] }
 ordered-float = "5.3"
-egui_double_slider = "1.1.0"
+egui_double_slider = "4"
 num = "0.4.3"
 strum = { version = "0.27", features = ["derive"] }
 

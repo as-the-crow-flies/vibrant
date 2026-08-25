@@ -163,7 +163,7 @@ impl Surface {
                 .dispatch(&mut cmd, frame.color(), &surface.texture);
 
             gpu.submit(cmd);
-            surface.present();
+            gpu.queue().present(surface);
         }
     }
 
@@ -177,6 +177,7 @@ impl Surface {
             desired_maximum_frame_latency: 2,
             alpha_mode: CompositeAlphaMode::Auto,
             view_formats: vec![Self::FORMAT],
+            color_space: wgpu::SurfaceColorSpace::Auto,
         }
     }
 

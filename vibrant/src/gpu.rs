@@ -243,7 +243,7 @@ impl Gpu {
             .expect("communication failed")
             .expect("buffer reading failed");
 
-        let view = buffer.slice(..).get_mapped_range();
+        let view = buffer.slice(..).get_mapped_range().unwrap();
         return bytemuck::cast_slice(&view).to_owned();
     }
 
