@@ -25,6 +25,8 @@ impl Tracked for TransferFunctionEditor {
 }
 
 impl TransferFunctionEditor {
+    const HANDLE_SIZE: f32 = 10.0;
+
     pub fn new() -> Self {
         Self {
             next_picker_id: 2,
@@ -63,7 +65,7 @@ impl TransferFunctionEditor {
         let volume_id = volume.id;
 
         for (index, node) in volume.nodes.iter_mut().enumerate() {
-            if Self::settings(self, ui, volume_id, node, spacing, index + 1) {
+            if self.settings(ui, volume_id, node, spacing, index + 1) {
                 clicked = Some(index);
             }
         }
@@ -127,7 +129,7 @@ impl TransferFunctionEditor {
     }
 
     fn histogram(&self, ui: &mut Ui, volume: &mut VolumeFractionSettings) -> InnerResponse<Rect> {
-        Frame::canvas(&ui.style())
+        Frame::canvas(ui.style())
             .fill(ui.visuals().extreme_bg_color)
             .show(ui, |ui| {
                 let size = Vec2::new(ui.available_width(), 4.0 * ui.spacing().interact_size.y);
@@ -216,29 +218,38 @@ impl TransferFunctionEditor {
             }
         };
 
+        Self::albedo_color32(color)
+    }
+
+    fn albedo_color32(albedo: [f32; 3]) -> Color32 {
         Color32::from_rgb(
-            (color[0] * 255.0).round() as u8,
-            (color[1] * 255.0).round() as u8,
-            (color[2] * 255.0).round() as u8,
+            (albedo[0] * 255.0).round() as u8,
+            (albedo[1] * 255.0).round() as u8,
+            (albedo[2] * 255.0).round() as u8,
         )
     }
 
+    fn contrasting_text_color(bg: Color32) -> Color32 {
+        let luminance = 0.299 * bg.r() as f32 + 0.587 * bg.g() as f32 + 0.114 * bg.b() as f32;
+
+        if luminance > 140.0 {
+            Color32::BLACK
+        } else {
+            Color32::WHITE
+        }
+    }
+
     fn pickers(&mut self, ui: &mut Ui, volume: &mut VolumeFractionSettings, histogram_rect: Rect) {
-        let handle_size = 10.0;
+        let size = Vec2::new(ui.available_width(), Self::HANDLE_SIZE);
+        let picker_rect = Rect::from_min_size(ui.cursor().min, size);
 
-        let picker_rect = Rect::from_min_size(
-            ui.cursor().min,
-            Vec2::new(ui.available_width(), handle_size),
-        );
-
-        ui.allocate_space(Vec2::new(ui.available_width(), handle_size));
+        ui.allocate_space(size);
 
         let mut clicked = None;
         let volume_id = volume.id;
 
         for (index, picker) in volume.nodes.iter_mut().enumerate() {
-            if Self::picker(
-                self,
+            if self.picker(
                 ui,
                 volume_id,
                 histogram_rect,
@@ -266,7 +277,7 @@ impl TransferFunctionEditor {
         node: &mut MaterialNode,
         rank: usize,
     ) -> bool {
-        let handle_size = 10.0;
+        let handle_size = Self::HANDLE_SIZE;
         let line_width = 6.0;
 
         let x = histogram_rect.min.x + node.position * histogram_rect.width();
@@ -342,10 +353,10 @@ impl TransferFunctionEditor {
         spacing: Vec2,
         rank: usize,
     ) -> bool {
-        ui.scope_builder(
+        let response = ui.scope_builder(
             UiBuilder::new().id(Id::new(("transfer_settings", volume_id, node.id))),
             |ui| {
-            let mut frame = Frame::group(&ui.style()).outer_margin(0.0);
+            let mut frame = Frame::group(ui.style()).outer_margin(0.0);
 
             if node.selected {
                 frame = frame.stroke(Stroke::new(1.0_f32, Color32::WHITE));
@@ -380,65 +391,13 @@ impl TransferFunctionEditor {
                     });
 
                 ui.inline(&header.header_response, |ui| {
-                    let albedo = node.material.albedo();
-                    let swatch_color = Color32::from_rgb(
-                        (albedo[0] * 255.0).round() as u8,
-                        (albedo[1] * 255.0).round() as u8,
-                        (albedo[2] * 255.0).round() as u8,
-                    );
+                    let reserved_left = ui.spacing().indent + 4.0 * ui.spacing().button_padding.x;
+                    let combo_width = (ui.available_width() - reserved_left).max(0.0);
 
-                    // Fixed width (fitting the widest option) so the row doesn't
-                    // resize as different presets - with different label lengths -
-                    // get selected.
-                    let font_id = TextStyle::Button.resolve(ui.style());
-                    let text_color = ui.visuals().text_color();
-
-                    let label_width = MaterialPreset::iter()
-                        .map(|preset| {
-                            ui.painter()
-                                .layout_no_wrap(preset.label().to_string(), font_id.clone(), text_color)
-                                .size()
-                                .x
-                        })
-                        .fold(0.0_f32, f32::max);
-
-                    let combo_width =
-                        label_width + ui.spacing().button_padding.x * 4.0 + ui.spacing().icon_width;
-
-                    ComboBox::from_id_salt("preset")
-                        .selected_text(node.preset.label())
-                        .width(combo_width)
-                        .show_ui(ui, |ui| {
-                            for preset in MaterialPreset::iter() {
-                                let changed = ui
-                                    .selectable_value(&mut node.preset, preset, preset.label())
-                                    .track(self)
-                                    .changed();
-
-                                if changed {
-                                    if let Some(material) = preset.material() {
-                                        node.material = material
-                                    }
-                                }
-                            }
-                        })
-                        .response
-                        .on_hover_text("Material preset for this transfer function stop.");
-
-                    let size = Vec2::splat(ui.spacing().interact_size.y);
-                    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-                    ui.painter().rect_filled(rect, 2.0, swatch_color);
+                    self.preset_combo(ui, node, combo_width);
                 });
             });
 
-            // A preset only stays accurate as long as the material matches its
-            // canonical values; any drift downgrades it to Custom. Checking this
-            // directly (instead of reacting to a "did some widget report changed
-            // this frame" flag) is immune to widgets reporting a change for reasons
-            // other than a deliberate edit - e.g. `egui::Slider` rounds and writes
-            // back its bound value to its `fixed_decimals` count on every render.
-            // `approx_eq` tolerates that rounding (the IOR slider only displays 2
-            // decimals) so it doesn't itself look like an edit.
             if node
                 .preset
                 .material()
@@ -449,8 +408,81 @@ impl TransferFunctionEditor {
 
             frame_response.response.contains_pointer() && ui.input(|i| i.pointer.primary_clicked())
             },
-        )
-        .inner
+        );
+
+        response.inner
+    }
+
+    fn preset_combo(&mut self, ui: &mut Ui, node: &mut MaterialNode, combo_width: f32) {
+        let bg = Self::albedo_color32(node.material.albedo());
+        let fg = Self::contrasting_text_color(bg);
+
+        ui.scope(|ui| {
+            let widgets = &mut ui.visuals_mut().widgets;
+            widgets.inactive.weak_bg_fill = bg;
+            widgets.inactive.fg_stroke.color = fg;
+            widgets.hovered.weak_bg_fill = bg;
+            widgets.hovered.fg_stroke.color = fg;
+            widgets.open.weak_bg_fill = bg;
+            widgets.open.fg_stroke.color = fg;
+
+            ComboBox::from_id_salt("preset")
+                .selected_text(node.preset.label())
+                .width(combo_width)
+                .show_ui(ui, |ui| {
+                    for preset in MaterialPreset::iter().skip(1) {
+                        self.preset_row(ui, node, preset);
+                    }
+                })
+                .response
+                .on_hover_text("Material preset for this transfer function stop.");
+        });
+    }
+
+    fn preset_row(&mut self, ui: &mut Ui, node: &mut MaterialNode, preset: MaterialPreset) {
+        let selected = node.preset == preset;
+
+        let albedo = preset
+            .material()
+            .unwrap_or_else(|| node.material.clone())
+            .albedo();
+        let row_bg = Self::albedo_color32(albedo);
+        let row_fg = Self::contrasting_text_color(row_bg);
+
+        let padding = ui.spacing().button_padding;
+        let font_id = TextStyle::Button.resolve(ui.style());
+        let galley = ui
+            .painter()
+            .layout_no_wrap(preset.label().to_string(), font_id, row_fg);
+
+        let row_size = Vec2::new(ui.available_width(), galley.size().y + 2.0 * padding.y);
+        let (row_rect, response) = ui.allocate_exact_size(row_size, Sense::click());
+
+        if response.hovered() {
+            ui.output_mut(|output| output.cursor_icon = egui::CursorIcon::PointingHand);
+        }
+
+        ui.painter().rect_filled(row_rect, 2.0, row_bg);
+
+        if selected || response.hovered() {
+            ui.painter().rect_stroke(
+                row_rect,
+                2.0,
+                Stroke::new(1.5_f32, Color32::WHITE),
+                egui::StrokeKind::Inside,
+            );
+        }
+
+        ui.painter().galley(row_rect.min + padding, galley, row_fg);
+
+        if response.clicked() && !selected {
+            node.preset = preset;
+            self.track();
+
+            if let Some(material) = preset.material() {
+                node.material = material
+            }
+        }
     }
 
     pub fn changed(&self) -> bool {

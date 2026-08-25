@@ -59,16 +59,16 @@ impl Material {
 pub enum MaterialPreset {
     Custom,
     Air,
+    CSF,
     GreyMatter,
     WhiteMatter,
-    Brainstem,
-    Optic,
-    CSF,
     BloodArterial,
     BloodVenous,
+    Brainstem,
+    Optic,
     DuraMater,
-    Skull,
     Scalp,
+    Skull,
 }
 
 #[derive(Debug, Clone, PartialEq)]
