@@ -32,7 +32,7 @@ const WORKGROUP: u32 = #WORKGROUP;
 const SUBGROUPS: u32 = #SUBGROUPS;
 const SAMPLES: u32 = #SAMPLES;
 
-const EM_ITERATIONS_MAX: u32 = 20u;
+const EM_ITERATIONS_MAX: u32 = 10u;
 const EM_ITERATIONS_MIN: u32 = 2u;
 const EM_CONVERGENCE: f32 = 0.02;
 
@@ -329,15 +329,14 @@ fn gather_partial(subgroup: u32, subgroup_index: u32) {
     }
 
     if (s == 0u && k < VMM_SIZE) {
-        let vmm_new = vmm + 0.33 * VMM_PRIOR[k];
-        let phi_new = phi + 0.33 * PHI_PRIOR[k];
+        let vmm_prior = vmm + 0.33 * VMM_PRIOR[k];
 
-        let change = length(vmm_new - VMM[k]) + length(phi_new - PHI[k]);
-        let scale = length(vmm_new) + length(phi_new) + EPSILON;
+        let change = length(vmm_prior - VMM[k]);
+        let scale = length(vmm_prior) + EPSILON;
         atomicMax(&VMM_DELTA, bitcast<u32>(change / scale));
 
-        VMM[k] = vmm_new;
-        PHI[k] = phi_new;
+        VMM[k] = vmm_prior;
+        PHI[k] = phi;
     }
 }
 

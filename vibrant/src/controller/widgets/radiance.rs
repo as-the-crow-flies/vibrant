@@ -27,7 +27,7 @@ impl RadianceWidget {
         Self {
             changed: false,
             method: RadianceMethod::Gaussian,
-            resolution: 4,
+            resolution: 8,
         }
     }
 
@@ -58,7 +58,7 @@ impl RadianceWidget {
                     .selected_text(format!("{:?}", self.resolution))
                     .width(ui.available_width())
                     .show_ui(ui, |ui| {
-                        for setting in [1, 2, 4, 8] {
+                        for setting in [1, 2, 4, 8, 16] {
                             ui.selectable_value(
                                 &mut self.resolution,
                                 setting,
