@@ -1,4 +1,4 @@
-use std::{any::type_name, ops::Shr};
+use std::{any::type_name, mem::size_of, ops::Shr};
 
 use glam::UVec3;
 use wgpu::*;
@@ -9,6 +9,7 @@ pub struct GaussianRadianceBuffer {
     gaussian: Texture,
     radiance: Texture,
     irradiance: Texture,
+    em_iterations: Buffer,
     binding: BindGroup,
     bindings_mipmap: Vec<BindGroup>,
     probes: Vec<UVec3>,
@@ -17,6 +18,11 @@ pub struct GaussianRadianceBuffer {
 impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     pub const LEVELS: u32 = 6;
+
+    // Must match EM_ITERATIONS_MAX in cascade.wgsl: one bucket per possible
+    // iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0 (unused).
+    pub const EM_ITERATIONS_MAX: u32 = 100;
+    pub const EM_HISTOGRAM_BUCKETS: u32 = Self::EM_ITERATIONS_MAX + 1;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
@@ -58,6 +64,13 @@ impl GaussianRadianceBuffer {
             format: Self::FORMAT,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
             view_formats: &[],
+        });
+
+        let em_iterations = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: (Self::LEVELS * Self::EM_HISTOGRAM_BUCKETS) as u64 * size_of::<u32>() as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
@@ -183,6 +196,10 @@ impl GaussianRadianceBuffer {
                                 },
                             )),
                         },
+                        BindGroupEntry {
+                            binding: 7,
+                            resource: em_iterations.as_entire_binding(),
+                        },
                     ],
                 })
             })
@@ -192,6 +209,7 @@ impl GaussianRadianceBuffer {
             radiance,
             gaussian,
             irradiance,
+            em_iterations,
             binding,
             bindings_mipmap,
             probes,
@@ -311,6 +329,16 @@ impl GaussianRadianceBuffer {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -338,10 +366,19 @@ impl GaussianRadianceBuffer {
     pub fn probes(&self, cascade: usize) -> UVec3 {
         self.probes[cascade]
     }
+
+    /// Diagnostic histogram buffer: `LEVELS * EM_HISTOGRAM_BUCKETS` u32 counts,
+    /// laid out as `[cascade][iterations]`, incremented by cascade.wgsl each time
+    /// a probe's EM loop converges. Not cleared automatically -- callers reading
+    /// it (e.g. the cascade benchmark) are responsible for zeroing it first.
+    pub fn em_iterations(&self) -> &Buffer {
+        &self.em_iterations
+    }
 }
 
 impl Drop for GaussianRadianceBuffer {
     fn drop(&mut self) {
+        self.em_iterations.destroy();
         self.radiance.destroy();
         self.gaussian.destroy();
         self.irradiance.destroy();

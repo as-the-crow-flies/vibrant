@@ -5,6 +5,11 @@
 @group(0) @binding(5) var IRRADIANCE_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(6) var IRRADIANCE_IN: texture_3d<f32>;
 
+// Diagnostic: one bucket per (cascade, iterations-to-converge) pair, incremented
+// in expectation_maximization(). Read back and cleared from the bench harness --
+// see benches/cascade.rs -- to see how many EM iterations probes actually need.
+@group(0) @binding(7) var<storage, read_write> EM_ITERATIONS: array<atomic<u32>>;
+
 @group(1) @binding(2) var EXTINCTION: texture_3d<f32>;
 @group(1) @binding(3) var PROPERTIES: texture_3d<f32>;
 @group(1) @binding(4) var GRADIENT: texture_3d<f32>;
@@ -32,20 +37,18 @@ const WORKGROUP: u32 = #WORKGROUP;
 const SUBGROUPS: u32 = #SUBGROUPS;
 const SAMPLES: u32 = #SAMPLES;
 
-const EM_ITERATIONS_MAX: u32 = 10u;
-const EM_ITERATIONS_MIN: u32 = 2u;
-const EM_CONVERGENCE: f32 = 0.02;
+const EM_ITERATIONS_MAX: u32 = 100u;
+const EM_ITERATIONS_MIN: u32 = 1u;
+const EM_CONVERGENCE: f32 = 0.05;
 
-const IRRADIANCE_CULL: f32 = 0.1;
+const IRRADIANCE_CULL: f32 = 0.2;
 
 var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
+var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_SIZE>;
+
 var<workgroup> PHI: array<vec4<f32>, VMM_SIZE>;
 
-var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_SIZE>;
-var<workgroup> PHI_PRIOR: array<vec4<f32>, VMM_SIZE>;
-
-var<workgroup> VMM_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
-var<workgroup> PHI_PARTIAL: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
+var<workgroup> SUM: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
 
 var<workgroup> VMM_DELTA: atomic<u32>;
 var<workgroup> VMM_CONVERGED: u32;
@@ -81,7 +84,10 @@ fn main(
 
     if (cull(origin, index)) {
         if (index < VMM_SIZE) { store(probe, index); }
-        if (index == 0u) { store_irradiance(probe); }
+        if (index == 0u) {
+            store_irradiance(probe);
+            atomicAdd(&EM_ITERATIONS[CASCADE * (EM_ITERATIONS_MAX + 1u)], 1u);
+        }
         return;
     }
 
@@ -141,14 +147,14 @@ fn cull(origin: vec3<f32>, index: u32) -> bool {
 fn initialize(probe: vec3<u32>, index: u32) {
     if (CASCADE == CASCADE_MAX) {
         VMM[index] = vec4<f32>(get_direction(index, VMM_SIZE), 1.0) / f32(VMM_SIZE);
+        VMM_PRIOR[index] = vec4<f32>(0.0);
     } else {
         let uv = parent_uv(textureDimensions(VMM_IN), probe, index);
 
         VMM[index] = textureSampleLevel(VMM_IN, SAMPLER, uv, 0.0);
-        PHI[index] = textureSampleLevel(PHI_IN, SAMPLER, uv, 0.0);
-
         VMM_PRIOR[index] = VMM[index];
-        PHI_PRIOR[index] = PHI[index];
+
+        PHI[index] = textureSampleLevel(PHI_IN, SAMPLER, uv, 0.0);
     }
 }
 
@@ -157,6 +163,8 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
     let subgroup_index = index & 31;
 
     var expectation = array<vec4<f32>, VMM_SIZE>();
+    var expectation_sum_inv = vec4<f32>(0.0);
+    var iterations = EM_ITERATIONS_MAX;
 
     for (var i=0u; i<EM_ITERATIONS_MAX; i++) {
         if (index == 0u) { atomicStore(&VMM_DELTA, 0u); }
@@ -169,19 +177,15 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
             expectation_sum += expectation[k];
         }
 
-        let expectation_sum_inv = 1.0 / max(expectation_sum, vec4<f32>(EPSILON));
+        expectation_sum_inv = 1.0 / max(expectation_sum, vec4<f32>(EPSILON));
 
         workgroupBarrier();
 
         // Maximization
         for (var k=0u; k<VMM_SIZE; k++) {
-            let gamma = expectation[k] * expectation_sum_inv;
-            let gamma_weight = gamma * weight;
-
+            let gamma_weight = expectation[k] * expectation_sum_inv * weight;
             let vmm = vec4<f32>(omega * gamma_weight, sum(gamma_weight));
-            let phi = vec4<f32>(radiance * gamma, sum(gamma));
-
-            scatter_partial(k, subgroup, subgroup_index, vmm, phi);
+            scatter_partial(k, subgroup, subgroup_index, vmm);
         }
 
         workgroupBarrier();
@@ -191,9 +195,27 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
         workgroupBarrier();
 
         if (converged(i, index)) {
+            iterations = i + 1u;
             break;
         }
     }
+
+    if (index == 0u) {
+        atomicAdd(&EM_ITERATIONS[CASCADE * (EM_ITERATIONS_MAX + 1u) + iterations], 1u);
+    }
+
+    // Maximize Phi
+    for (var k=0u; k<VMM_SIZE; k++) {
+        let gamma = expectation[k] * expectation_sum_inv;
+        let phi = vec4<f32>(radiance * gamma, sum(gamma));
+        scatter_partial(k, subgroup, subgroup_index, phi);
+    }
+
+    workgroupBarrier();
+
+    gather_partial_phi(subgroup, subgroup_index);
+
+    workgroupBarrier();
 }
 
 fn converged(i: u32, index: u32) -> bool {
@@ -303,14 +325,12 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     return transmission;
 }
 
-fn scatter_partial(k: u32, subgroup: u32, subgroup_index: u32, vmm: vec4<f32>, phi: vec4<f32>) {
-    let vmm_sum = subgroupAdd(vmm);
-    let phi_sum = subgroupAdd(phi);
+fn scatter_partial(k: u32, subgroup: u32, subgroup_index: u32, item: vec4<f32>) {
+    let sum = subgroupAdd(item);
 
     if (subgroup_index == 0u) {
         let i = SUBGROUPS * k + subgroup;
-        VMM_PARTIAL[i] = vmm_sum;
-        PHI_PARTIAL[i] = phi_sum;
+        SUM[i] = sum;
     }
 }
 
@@ -320,22 +340,36 @@ fn gather_partial(subgroup: u32, subgroup_index: u32) {
     let k = subgroup + m * SUBGROUPS;
     let i = SUBGROUPS * k + s;
 
-    var vmm = VMM_PARTIAL[i];
-    var phi = PHI_PARTIAL[i];
+    var vmm = SUM[i];
 
     for (var offset = 1u; offset < SUBGROUPS; offset *= 2u) {
         vmm += subgroupShuffleXor(vmm, offset);
-        phi += subgroupShuffleXor(phi, offset);
     }
 
     if (s == 0u && k < VMM_SIZE) {
-        let vmm_prior = vmm + 0.33 * VMM_PRIOR[k];
+        let vmm_prior = vmm + VMM_PRIOR[k];
 
         let change = length(vmm_prior - VMM[k]);
         let scale = length(vmm_prior) + EPSILON;
         atomicMax(&VMM_DELTA, bitcast<u32>(change / scale));
 
         VMM[k] = vmm_prior;
+    }
+}
+
+fn gather_partial_phi(subgroup: u32, subgroup_index: u32) {
+    let m = subgroup_index / SUBGROUPS;
+    let s = subgroup_index % SUBGROUPS;
+    let k = subgroup + m * SUBGROUPS;
+    let i = SUBGROUPS * k + s;
+
+    var phi = SUM[i];
+
+    for (var offset = 1u; offset < SUBGROUPS; offset *= 2u) {
+        phi += subgroupShuffleXor(phi, offset);
+    }
+
+    if (s == 0u && k < VMM_SIZE) {
         PHI[k] = phi;
     }
 }

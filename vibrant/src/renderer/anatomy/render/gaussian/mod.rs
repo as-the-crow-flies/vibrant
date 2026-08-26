@@ -81,17 +81,19 @@ impl GaussianVolumeRenderer {
         radiance: &GaussianRadianceBuffer,
         volume: &PhysicalVolume,
     ) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
-
-        pass.set_bind_group(1, volume.binding_read(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
-        pass.set_bind_group(3, hdri.binding(), &[]);
-
         for cascade in (0..GaussianRadianceBuffer::LEVELS as usize).rev() {
-            let probes = radiance.probes(cascade);
+            let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
+                label: Some(&format!("Cascade {}", cascade)),
+                ..Default::default()
+            });
 
             pass.set_pipeline(&self.cascade[cascade]);
             pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
+            pass.set_bind_group(1, volume.binding_read(), &[]);
+            pass.set_bind_group(2, environment.binding(), &[]);
+            pass.set_bind_group(3, hdri.binding(), &[]);
+
+            let probes = radiance.probes(cascade);
             pass.dispatch_workgroups(probes.x, probes.y, probes.z);
         }
     }
@@ -109,7 +111,10 @@ impl GaussianVolumeRenderer {
         volume: &PhysicalVolume,
         cascade: usize,
     ) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
+            label: Some(&format!("cascade {cascade}")),
+            ..Default::default()
+        });
 
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
