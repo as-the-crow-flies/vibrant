@@ -1,4 +1,4 @@
-const VMM_SIZE   : u32 = 16u;
+const VMM_SIZE   : u32 = 32u;
 const INTERVAL = array<f32, 7>(1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0);
 
 const EM_ITERATIONS_MAX: u32 = 100u;
@@ -51,4 +51,8 @@ fn max_norm(v: vec4<f32>) -> vec4<f32> {
 
 fn sum(v: vec4<f32>) -> f32 {
     return v.x + v.y + v.z + v.w;
+}
+
+fn radiance_weight(radiance: vec3<f32>) -> f32 {
+    return log(1.0 + length(radiance));
 }

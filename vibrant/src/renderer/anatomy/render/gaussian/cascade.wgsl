@@ -89,10 +89,10 @@ fn main(
     let radiance = get_incident_radiance(origin, omega);
 
     let weight = vec4<f32>(
-        brightness(radiance[0]),
-        brightness(radiance[1]),
-        brightness(radiance[2]),
-        brightness(radiance[3]),
+        radiance_weight(radiance[0]),
+        radiance_weight(radiance[1]),
+        radiance_weight(radiance[2]),
+        radiance_weight(radiance[3]),
     );
 
     expectation_maximization(omega, radiance, weight, index);
