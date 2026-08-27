@@ -6,12 +6,15 @@ use wgpu::*;
 use crate::gpu::Gpu;
 
 pub struct GaussianRadianceBuffer {
-    gaussian: Texture,
-    radiance: Texture,
+    vmm: Texture,
+    phi: Texture,
     irradiance: Texture,
+    vmm_hdri: Buffer,
+    phi_hdri: Buffer,
     em_iterations: Buffer,
     binding: BindGroup,
-    bindings_mipmap: Vec<BindGroup>,
+    binding_hdri: BindGroup,
+    binding_mipmap: Vec<BindGroup>,
     probes: Vec<UVec3>,
 }
 
@@ -19,10 +22,15 @@ impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     pub const LEVELS: u32 = 6;
 
-    // Must match EM_ITERATIONS_MAX in cascade.wgsl: one bucket per possible
-    // iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0 (unused).
+    // Must match EM_ITERATIONS_MAX in cascade.wgsl/hdri.wgsl: one bucket per
+    // possible iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0
+    // (unused; cascade.wgsl reserves it for culled probes).
     pub const EM_ITERATIONS_MAX: u32 = 100;
     pub const EM_HISTOGRAM_BUCKETS: u32 = Self::EM_ITERATIONS_MAX + 1;
+
+    // One row per cascade level plus one extra row (index LEVELS) for the
+    // single hdri.wgsl fit -- see EM_ITERATIONS_HDRI_ROW in hdri.wgsl.
+    pub const EM_HISTOGRAM_ROWS: u32 = Self::LEVELS + 1;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
@@ -48,8 +56,8 @@ impl GaussianRadianceBuffer {
             view_formats: &[],
         };
 
-        let radiance = gpu.device().create_texture(&descriptor);
-        let gaussian = gpu.device().create_texture(&descriptor);
+        let phi = gpu.device().create_texture(&descriptor);
+        let vmm = gpu.device().create_texture(&descriptor);
 
         let irradiance = gpu.device().create_texture(&TextureDescriptor {
             label,
@@ -68,7 +76,22 @@ impl GaussianRadianceBuffer {
 
         let em_iterations = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: (Self::LEVELS * Self::EM_HISTOGRAM_BUCKETS) as u64 * size_of::<u32>() as u64,
+            size: (Self::EM_HISTOGRAM_ROWS * Self::EM_HISTOGRAM_BUCKETS) as u64
+                * size_of::<u32>() as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let phi_hdri = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 16 * 4 * 4, // (16 Lobes) * (4 Components) * (4 Bytes)
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let vmm_hdri = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 16 * 4 * 4, // (16 Lobes) * (4 Components) * (4 Bytes)
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -94,7 +117,7 @@ impl GaussianRadianceBuffer {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&radiance.create_view(
+                    resource: BindingResource::TextureView(&phi.create_view(
                         &TextureViewDescriptor {
                             label,
                             ..Default::default()
@@ -103,7 +126,7 @@ impl GaussianRadianceBuffer {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&gaussian.create_view(
+                    resource: BindingResource::TextureView(&vmm.create_view(
                         &TextureViewDescriptor {
                             label,
                             ..Default::default()
@@ -117,7 +140,26 @@ impl GaussianRadianceBuffer {
             ],
         });
 
-        let bindings_mipmap = (0..Self::LEVELS)
+        let binding_hdri = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &Self::layout_hdri(gpu),
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: phi_hdri.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: vmm_hdri.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: em_iterations.as_entire_binding(),
+                },
+            ],
+        });
+
+        let binding_mipmap = (0..Self::LEVELS)
             .into_iter()
             .map(|level| {
                 let parent = (level + 1) % Self::LEVELS;
@@ -128,7 +170,7 @@ impl GaussianRadianceBuffer {
                     entries: &[
                         BindGroupEntry {
                             binding: 0,
-                            resource: BindingResource::TextureView(&radiance.create_view(
+                            resource: BindingResource::TextureView(&phi.create_view(
                                 &TextureViewDescriptor {
                                     label,
                                     base_mip_level: level,
@@ -139,7 +181,7 @@ impl GaussianRadianceBuffer {
                         },
                         BindGroupEntry {
                             binding: 1,
-                            resource: BindingResource::TextureView(&gaussian.create_view(
+                            resource: BindingResource::TextureView(&vmm.create_view(
                                 &TextureViewDescriptor {
                                     label,
                                     base_mip_level: level,
@@ -154,7 +196,7 @@ impl GaussianRadianceBuffer {
                         },
                         BindGroupEntry {
                             binding: 3,
-                            resource: BindingResource::TextureView(&radiance.create_view(
+                            resource: BindingResource::TextureView(&phi.create_view(
                                 &TextureViewDescriptor {
                                     label,
                                     base_mip_level: parent,
@@ -165,7 +207,7 @@ impl GaussianRadianceBuffer {
                         },
                         BindGroupEntry {
                             binding: 4,
-                            resource: BindingResource::TextureView(&gaussian.create_view(
+                            resource: BindingResource::TextureView(&vmm.create_view(
                                 &TextureViewDescriptor {
                                     label,
                                     base_mip_level: parent,
@@ -200,18 +242,29 @@ impl GaussianRadianceBuffer {
                             binding: 7,
                             resource: em_iterations.as_entire_binding(),
                         },
+                        BindGroupEntry {
+                            binding: 8,
+                            resource: phi_hdri.as_entire_binding(),
+                        },
+                        BindGroupEntry {
+                            binding: 9,
+                            resource: vmm_hdri.as_entire_binding(),
+                        },
                     ],
                 })
             })
             .collect();
 
         Self {
-            radiance,
-            gaussian,
+            phi,
+            vmm,
             irradiance,
+            vmm_hdri,
+            phi_hdri,
             em_iterations,
             binding,
-            bindings_mipmap,
+            binding_hdri,
+            binding_mipmap,
             probes,
         }
     }
@@ -219,6 +272,38 @@ impl GaussianRadianceBuffer {
     pub fn size(&self) -> UVec3 {
         let s = self.gaussian().size();
         UVec3::new(s.width, s.height, s.depth_or_array_layers)
+    }
+
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
+    }
+
+    pub fn binding_hdri(&self) -> &BindGroup {
+        &self.binding_hdri
+    }
+
+    pub fn binding_mipmap(&self, cascade: usize) -> &BindGroup {
+        &self.binding_mipmap[cascade]
+    }
+
+    pub fn gaussian(&self) -> &Texture {
+        &self.vmm
+    }
+
+    pub fn radiance(&self) -> &Texture {
+        &self.phi
+    }
+
+    pub fn irradiance(&self) -> &Texture {
+        &self.irradiance
+    }
+
+    pub fn probes(&self, cascade: usize) -> UVec3 {
+        self.probes[cascade]
+    }
+
+    pub fn em_iterations(&self) -> &Buffer {
+        &self.em_iterations
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -252,6 +337,48 @@ impl GaussianRadianceBuffer {
                         binding: 2,
                         visibility,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            })
+    }
+
+    pub fn layout_hdri(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    // PHI_HDRI
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // VMM_HDRI
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // EM_ITERATIONS
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
                         count: None,
                     },
                 ],
@@ -339,48 +466,40 @@ impl GaussianRadianceBuffer {
                         },
                         count: None,
                     },
+                    // PHI_HDRI
+                    BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // VMM_HDRI
+                    BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
-    }
-
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
-    }
-
-    pub fn binding_mipmap(&self, cascade: usize) -> &BindGroup {
-        &self.bindings_mipmap[cascade]
-    }
-
-    pub fn gaussian(&self) -> &Texture {
-        &self.gaussian
-    }
-
-    pub fn radiance(&self) -> &Texture {
-        &self.radiance
-    }
-
-    pub fn irradiance(&self) -> &Texture {
-        &self.irradiance
-    }
-
-    pub fn probes(&self, cascade: usize) -> UVec3 {
-        self.probes[cascade]
-    }
-
-    /// Diagnostic histogram buffer: `LEVELS * EM_HISTOGRAM_BUCKETS` u32 counts,
-    /// laid out as `[cascade][iterations]`, incremented by cascade.wgsl each time
-    /// a probe's EM loop converges. Not cleared automatically -- callers reading
-    /// it (e.g. the cascade benchmark) are responsible for zeroing it first.
-    pub fn em_iterations(&self) -> &Buffer {
-        &self.em_iterations
     }
 }
 
 impl Drop for GaussianRadianceBuffer {
     fn drop(&mut self) {
         self.em_iterations.destroy();
-        self.radiance.destroy();
-        self.gaussian.destroy();
+        self.phi.destroy();
+        self.vmm.destroy();
         self.irradiance.destroy();
+        self.phi_hdri.destroy();
+        self.vmm_hdri.destroy();
     }
 }

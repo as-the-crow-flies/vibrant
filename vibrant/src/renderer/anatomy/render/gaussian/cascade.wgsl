@@ -4,6 +4,8 @@
 @group(0) @binding(4) var VMM_IN: texture_3d<f32>;
 @group(0) @binding(5) var IRRADIANCE_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(6) var IRRADIANCE_IN: texture_3d<f32>;
+@group(0) @binding(8) var<storage, read> PHI_HDRI_IN: array<vec4<f32>>;
+@group(0) @binding(9) var<storage, read> VMM_HDRI_IN: array<vec4<f32>>;
 
 // Diagnostic Histogram
 @group(0) @binding(7) var<storage, read_write> EM_ITERATIONS: array<atomic<u32>>;
@@ -35,10 +37,6 @@ const WORKGROUP: u32 = #WORKGROUP;
 const SUBGROUPS: u32 = #SUBGROUPS;
 const SAMPLES: u32 = #SAMPLES;
 
-const EM_ITERATIONS_MAX: u32 = 100u;
-const EM_ITERATIONS_MIN: u32 = 1u;
-const EM_CONVERGENCE: f32 = 0.05;
-
 const IRRADIANCE_CULL: f32 = 0.05;
 
 const TRANSMISSION_SINGLE_RAY_CASCADE: u32 = 3u;
@@ -69,9 +67,9 @@ fn main(
     @builtin(workgroup_id) probe: vec3<u32>,
     @builtin(local_invocation_index) index: u32,
 ) {
-    let origin = (vec3<f32>(probe) + 0.5) * f32(1u << CASCADE);
-
     if (index < VMM_SIZE) { initialize(probe, index); }
+
+    let origin = (vec3<f32>(probe) + 0.5) * f32(1u << CASCADE);
 
     workgroupBarrier();
 
@@ -88,7 +86,7 @@ fn main(
         get_direction(4*index+3, SAMPLES),
     );
 
-    var radiance = get_incident_radiance(origin, omega);
+    let radiance = get_incident_radiance(origin, omega);
 
     let weight = vec4<f32>(
         brightness(radiance[0]),
@@ -136,16 +134,16 @@ fn cull(origin: vec3<f32>, index: u32) -> bool {
 
 fn initialize(probe: vec3<u32>, index: u32) {
     if (CASCADE == CASCADE_MAX) {
-        VMM[index] = vec4<f32>(get_direction(index, VMM_SIZE), 1.0) / f32(VMM_SIZE);
-        VMM_PRIOR[index] = vec4<f32>(0.0);
+        VMM[index] = VMM_HDRI_IN[index];
+        PHI[index] = PHI_HDRI_IN[index];
     } else {
         let uv = parent_uv(textureDimensions(VMM_IN), probe, index);
 
         VMM[index] = textureSampleLevel(VMM_IN, SAMPLER, uv, 0.0);
-        VMM_PRIOR[index] = VMM[index];
-
         PHI[index] = textureSampleLevel(PHI_IN, SAMPLER, uv, 0.0);
     }
+
+    VMM_PRIOR[index] = VMM[index];
 }
 
 fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: vec4<f32>, index: u32) {
@@ -235,38 +233,6 @@ fn store_irradiance(probe: vec3<u32>) {
 
 fn get_incident_radiance(origin: vec3<f32>, omega: mat4x3<f32>) -> mat4x3<f32> {
     var radiance = mat4x3<f32>();
-
-    if (CASCADE == CASCADE_MAX) {
-        radiance = get_incident_radiance_hdri(omega);
-    } else {
-        radiance = get_incident_radiance_parent(omega);
-    }
-
-    if (CASCADE < TRANSMISSION_SINGLE_RAY_CASCADE) {
-        let direction = normalize(omega[0] + omega[1] + omega[2] + omega[3]);
-        let t = transmission(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
-        return mat4x3<f32>(radiance[0] * t, radiance[1] * t, radiance[2] * t, radiance[3] * t);
-    }
-
-    return mat4x3<f32>(
-        radiance[0] * transmission(origin, omega[0], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-        radiance[1] * transmission(origin, omega[1], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-        radiance[2] * transmission(origin, omega[2], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-        radiance[3] * transmission(origin, omega[3], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-    );
-}
-
-fn get_incident_radiance_hdri(omega: mat4x3<f32>) -> mat4x3<f32> {
-    return mat4x3<f32>(
-        hdri(omega[0], SAMPLES),
-        hdri(omega[1], SAMPLES),
-        hdri(omega[2], SAMPLES),
-        hdri(omega[3], SAMPLES),
-    );
-}
-
-fn get_incident_radiance_parent(omega: mat4x3<f32>) -> mat4x3<f32> {
-    var radiance = mat4x3<f32>();
     var expectation_sum = vec4<f32>(0.0);
 
     for (var k=0u; k<VMM_SIZE; k++) {
@@ -285,12 +251,25 @@ fn get_incident_radiance_parent(omega: mat4x3<f32>) -> mat4x3<f32> {
     }
 
     let expectation_sum_inv = 1.0 / expectation_sum;
-    return mat4x3<f32>(
+    radiance =  mat4x3<f32>(
         radiance[0] * expectation_sum_inv[0],
         radiance[1] * expectation_sum_inv[1],
         radiance[2] * expectation_sum_inv[2],
         radiance[3] * expectation_sum_inv[3],
     );
+
+    if (CASCADE < TRANSMISSION_SINGLE_RAY_CASCADE) {
+        let direction = normalize(omega[0] + omega[1] + omega[2] + omega[3]);
+        let t = transmission(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
+        return mat4x3<f32>(radiance[0] * t, radiance[1] * t, radiance[2] * t, radiance[3] * t);
+    } else {
+        return mat4x3<f32>(
+            radiance[0] * transmission(origin, omega[0], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+            radiance[1] * transmission(origin, omega[1], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+            radiance[2] * transmission(origin, omega[2], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+            radiance[3] * transmission(origin, omega[3], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
+        );
+    }
 }
 
 fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {

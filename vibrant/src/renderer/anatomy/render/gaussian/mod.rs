@@ -11,31 +11,41 @@ use crate::{
 };
 
 pub struct GaussianVolumeRenderer {
+    hdri: ComputePipeline,
     cascade: Vec<ComputePipeline>,
     trace: RenderPipeline,
 }
 
 impl GaussianVolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
-        let layout = gpu.pipeline_layout(&[
-            &GaussianRadianceBuffer::layout_mipmap(gpu),
-            &PhysicalVolume::layout_read(gpu),
-            &Environment::layout(gpu),
-            &HdriBuffer::layout(gpu),
-        ]);
-
         let common = include_str!("common.wgsl");
 
+        let hdri_src = include_str!("hdri.wgsl").to_string() + &common;
         let cascade_src = include_str!("cascade.wgsl").to_string() + &common;
         let trace_src = include_str!("trace.wgsl").to_string() + &common;
 
         Self {
+            hdri: gpu.compute(
+                "GaussianVolumeHdri",
+                &gpu.pipeline_layout(&[
+                    &GaussianRadianceBuffer::layout_hdri(gpu),
+                    &PhysicalVolume::layout_read(gpu),
+                    &Environment::layout(gpu),
+                    &HdriBuffer::layout(gpu),
+                ]),
+                &gpu.shader(&hdri_src),
+            ),
             cascade: (0..GaussianRadianceBuffer::LEVELS)
                 .map(|cascade| {
                     gpu.compute(
                         "GaussianVolumeCascade",
-                        &layout,
-                        &gpu.shader_subgroups(&cascade_template(&cascade_src, cascade)),
+                        &gpu.pipeline_layout(&[
+                            &GaussianRadianceBuffer::layout_mipmap(gpu),
+                            &PhysicalVolume::layout_read(gpu),
+                            &Environment::layout(gpu),
+                            &HdriBuffer::layout(gpu),
+                        ]),
+                        &gpu.shader(&cascade_template(&cascade_src, cascade)),
                     )
                 })
                 .collect(),
@@ -65,10 +75,33 @@ impl GaussianVolumeRenderer {
         recompute: bool,
     ) {
         if recompute {
+            self.hdri(cmd, environment, hdri, radiance, volume);
             self.radiance(cmd, environment, hdri, radiance, volume);
         }
 
         self.trace(cmd, environment, hdri, frame, radiance, volume, viewport);
+    }
+
+    pub fn hdri(
+        &self,
+        cmd: &mut CommandEncoder,
+        environment: &Environment,
+        hdri: &HdriBuffer,
+        radiance: &GaussianRadianceBuffer,
+        volume: &PhysicalVolume,
+    ) {
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("GaussianVolumeHdri"),
+            ..Default::default()
+        });
+
+        pass.set_pipeline(&self.hdri);
+        pass.set_bind_group(0, radiance.binding_hdri(), &[]);
+        pass.set_bind_group(1, volume.binding_read(), &[]);
+        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(3, hdri.binding(), &[]);
+
+        pass.dispatch_workgroups(1, 1, 1);
     }
 
     pub fn radiance(

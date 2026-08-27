@@ -88,17 +88,6 @@ impl Gpu {
     }
 
     pub fn shader(&self, source: &str) -> ShaderModule {
-        self.device().create_shader_module(ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(COMMON.to_string() + PBR + GAUSSIAN + source)),
-        })
-    }
-
-    // WGSL's `enable subgroups;` directive must be the first thing in the
-    // module, and naga (native targets) doesn't implement it yet — it only
-    // has meaning to the browser's WGSL compiler, which requires it before
-    // any subgroup builtin is used.
-    pub fn shader_subgroups(&self, source: &str) -> ShaderModule {
         let enable = if cfg!(target_arch = "wasm32") {
             "enable subgroups;\n"
         } else {

@@ -1,6 +1,10 @@
 const VMM_SIZE   : u32 = 16u;
 const INTERVAL = array<f32, 7>(1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0);
 
+const EM_ITERATIONS_MAX: u32 = 100u;
+const EM_ITERATIONS_MIN: u32 = 1u;
+const EM_CONVERGENCE: f32 = 0.05;
+
 fn vmf(v: vec4<f32>, omega: mat4x3<f32>) -> vec4<f32> {
     let q  = inverseSqrt(dot(v.xyz, v.xyz) + 1e-24);   // 1/|s|
     let u  = clamp((v.w + 1e-8) * q, U_MIN, U_MAX);    // w/|s| ∈ [1, ∞)
@@ -12,17 +16,6 @@ fn vmf(v: vec4<f32>, omega: mat4x3<f32>) -> vec4<f32> {
     let e    = exp2(fma(vec4<f32>(kl * q), v.xyz * omega, vec4<f32>(-kl))); // e^{κ(μ·ωᵢ − 1)}
     let norm = INV_TWO_PI * k / (1.0 - exp2(-2.0 * kl));
     return norm * e;
-}
-
-fn hdri(direction: vec3<f32>, N: u32) -> vec3<f32> {
-    let hdri_dim = vec2<f32>(textureDimensions(HDRI));
-    let lod = 0.5 * log2(hdri_dim.x * hdri_dim.y / f32(N));
-
-    let direction_world = normalize((TRANSFORM_INVERSE * vec4<f32>(direction, 0.0)).xyz);
-    let sample = equirectangular(direction_world.xzy, HDRI_SETTINGS.rotation);
-    let radiance = HDRI_SETTINGS.strength * textureSampleLevel(HDRI, HDRI_SAMPLER, sample, lod).rgb;
-
-    return radiance;
 }
 
 fn grid(dim: vec3<u32>) -> vec3<u32> {
