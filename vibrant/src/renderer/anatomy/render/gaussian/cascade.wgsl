@@ -77,10 +77,7 @@ fn main(
 
     if (cull(origin, index)) {
         if (index < VMM_SIZE) { store(probe, index); }
-        if (index == 0u) {
-            store_irradiance(probe);
-            atomicAdd(&EM_ITERATIONS[CASCADE * (EM_ITERATIONS_MAX + 1u)], 1u);
-        }
+        if (index == 0u) { debug_iteration_count(0); }
         return;
     }
 
@@ -157,9 +154,10 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
 
     var expectation = array<vec4<f32>, VMM_SIZE>();
     var expectation_sum_inv = vec4<f32>(0.0);
-    var iterations = EM_ITERATIONS_MAX;
 
-    for (var i=0u; i<EM_ITERATIONS_MAX; i++) {
+    var iteration = 1u;
+
+    for (; iteration<=EM_ITERATIONS_MAX; iteration++) {
         if (index == 0u) { atomicStore(&VMM_DELTA, 0u); }
 
         // Expectation
@@ -187,15 +185,10 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
 
         workgroupBarrier();
 
-        if (converged(i, index)) {
-            iterations = i + 1u;
-            break;
-        }
+        if (converged(iteration, index)) { break; }
     }
 
-    if (index == 0u) {
-        atomicAdd(&EM_ITERATIONS[CASCADE * (EM_ITERATIONS_MAX + 1u) + iterations], 1u);
-    }
+    if (index == 0u) { debug_iteration_count(iteration); }
 
     // Maximize Phi
     for (var k=0u; k<VMM_SIZE; k++) {
@@ -211,9 +204,9 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
     workgroupBarrier();
 }
 
-fn converged(i: u32, index: u32) -> bool {
+fn converged(iteration: u32, index: u32) -> bool {
     if (index == 0u) {
-        let done = i + 1u >= EM_ITERATIONS_MIN && bitcast<f32>(atomicLoad(&VMM_DELTA)) < EM_CONVERGENCE;
+        let done = iteration >= EM_ITERATIONS_MIN && bitcast<f32>(atomicLoad(&VMM_DELTA)) < EM_CONVERGENCE;
         VMM_CONVERGED = select(0u, 1u, done);
     }
 
@@ -378,4 +371,8 @@ fn parent_uv(dim: vec3<u32>, probe: vec3<u32>, index: u32) -> vec3<f32> {
     let parent_grid = vec3<f32>(grid(dim));
     let parent_probe = clamp(half * (vec3<f32>(probe) + half), half, parent_grid - half);
     return (parent_probe + parent_grid * vec3<f32>(lobe(index))) / vec3<f32>(dim);
+}
+
+fn debug_iteration_count(iterations: u32) {
+    atomicAdd(&EM_ITERATIONS[CASCADE * (EM_ITERATIONS_MAX + 1u) + iterations], 1u);
 }
