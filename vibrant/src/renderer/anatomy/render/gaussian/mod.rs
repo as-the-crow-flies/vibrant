@@ -71,8 +71,6 @@ impl GaussianVolumeRenderer {
         self.trace(cmd, environment, hdri, frame, radiance, volume, viewport);
     }
 
-    // pub so benchmarks can time the cascade compute pass in isolation,
-    // without also paying for the trace() render pass that dispatch() bundles it with.
     pub fn radiance(
         &self,
         cmd: &mut CommandEncoder,
@@ -82,27 +80,11 @@ impl GaussianVolumeRenderer {
         volume: &PhysicalVolume,
     ) {
         for cascade in (0..GaussianRadianceBuffer::LEVELS as usize).rev() {
-            let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-                label: Some(&format!("Cascade {}", cascade)),
-                ..Default::default()
-            });
-
-            pass.set_pipeline(&self.cascade[cascade]);
-            pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
-            pass.set_bind_group(1, volume.binding_read(), &[]);
-            pass.set_bind_group(2, environment.binding(), &[]);
-            pass.set_bind_group(3, hdri.binding(), &[]);
-
-            let probes = radiance.probes(cascade);
-            pass.dispatch_workgroups(probes.x, probes.y, probes.z);
+            self.cascade(cmd, environment, hdri, radiance, volume, cascade);
         }
     }
 
-    /// Dispatches a single cascade level on its own compute pass, for
-    /// per-level benchmark breakdowns. `radiance()` above is what production
-    /// rendering uses (all levels share one pass); this trades that pass-reuse
-    /// for isolation.
-    pub fn dispatch_cascade(
+    pub fn cascade(
         &self,
         cmd: &mut CommandEncoder,
         environment: &Environment,
@@ -112,18 +94,17 @@ impl GaussianVolumeRenderer {
         cascade: usize,
     ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some(&format!("cascade {cascade}")),
+            label: Some(&format!("Cascade {}", cascade)),
             ..Default::default()
         });
 
+        pass.set_pipeline(&self.cascade[cascade]);
+        pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
         pass.set_bind_group(3, hdri.binding(), &[]);
 
         let probes = radiance.probes(cascade);
-
-        pass.set_pipeline(&self.cascade[cascade]);
-        pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
         pass.dispatch_workgroups(probes.x, probes.y, probes.z);
     }
 

@@ -1,7 +1,6 @@
 // Times the gaussian radiance-cascade compute pass (cascade.wgsl) in isolation.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use itertools::Itertools;
 use pollster::FutureExt;
 use vibrant::{
     asset::{
@@ -116,8 +115,6 @@ fn print_em_iteration_histogram(scene: &Scene) {
             .map(|&count| 100 * count / total)
             .enumerate()
             .filter(|(_, count)| *count > 0)
-            .sorted_by_key(|(_, count)| *count)
-            .rev()
             .map(|(iterations, count)| format!("{iterations}:{:?}%", count))
             .collect::<Vec<_>>()
             .join("  ");
@@ -160,7 +157,7 @@ fn bench_cascade(c: &mut Criterion) {
             |b, &cascade| {
                 b.iter(|| {
                     let mut cmd = scene.gpu.cmd();
-                    scene.renderer.dispatch_cascade(
+                    scene.renderer.cascade(
                         &mut cmd,
                         &scene.environment,
                         &scene.hdri,
