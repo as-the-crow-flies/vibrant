@@ -5,9 +5,7 @@
 @group(0) @binding(5) var IRRADIANCE_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(6) var IRRADIANCE_IN: texture_3d<f32>;
 
-// Diagnostic: one bucket per (cascade, iterations-to-converge) pair, incremented
-// in expectation_maximization(). Read back and cleared from the bench harness --
-// see benches/cascade.rs -- to see how many EM iterations probes actually need.
+// Diagnostic Histogram
 @group(0) @binding(7) var<storage, read_write> EM_ITERATIONS: array<atomic<u32>>;
 
 @group(1) @binding(2) var EXTINCTION: texture_3d<f32>;
@@ -41,7 +39,9 @@ const EM_ITERATIONS_MAX: u32 = 100u;
 const EM_ITERATIONS_MIN: u32 = 1u;
 const EM_CONVERGENCE: f32 = 0.05;
 
-const IRRADIANCE_CULL: f32 = 0.2;
+const IRRADIANCE_CULL: f32 = 0.05;
+
+const TRANSMISSION_SINGLE_RAY_CASCADE: u32 = 3u;
 
 var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
 var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_SIZE>;
@@ -247,6 +247,12 @@ fn get_incident_radiance(origin: vec3<f32>, omega: mat4x3<f32>) -> mat4x3<f32> {
         radiance = get_incident_radiance_hdri(omega);
     } else {
         radiance = get_incident_radiance_parent(omega);
+    }
+
+    if (CASCADE < TRANSMISSION_SINGLE_RAY_CASCADE) {
+        let direction = normalize(omega[0] + omega[1] + omega[2] + omega[3]);
+        let t = transmission(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
+        return mat4x3<f32>(radiance[0] * t, radiance[1] * t, radiance[2] * t, radiance[3] * t);
     }
 
     return mat4x3<f32>(

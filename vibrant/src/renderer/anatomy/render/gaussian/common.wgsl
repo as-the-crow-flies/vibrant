@@ -33,8 +33,23 @@ fn lobe(k: u32) -> vec3<u32> {
     return vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1);
 }
 
+// Lays samples out in 2x2 blocks instead of pure Hammersley: block = i/4 is
+// placed via Hammersley (still low-discrepancy across blocks), and sub = i%4
+// picks one of 4 tightly-packed sub-positions within that block's cell. Callers
+// that request 4 consecutive i's (as cascade.wgsl's main() does per thread) get
+// back 4 directions that are close together instead of scattered across the
+// sphere -- needed wherever those 4 are later averaged into one ray.
 fn get_direction(i: u32, N: u32) -> vec3<f32> {
-    return octahedron_decode(2.0 * hammersley(i, N) - 1.0);
+    let block = i / 4u;
+    let sub = i % 4u;
+    let blocks = N / 4u;
+
+    let base = hammersley(block, blocks);
+    let cell = 1.0 / f32(blocks);
+    let sub_offset = vec2<f32>(f32(sub & 1u), f32(sub >> 1u)) - 0.5;
+
+    let uv = base + sub_offset * cell * 0.5;
+    return octahedron_decode(2.0 * uv - 1.0);
 }
 
 fn max_norm(v: vec4<f32>) -> vec4<f32> {

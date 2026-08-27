@@ -27,7 +27,7 @@ impl RadianceWidget {
         Self {
             changed: false,
             method: RadianceMethod::Gaussian,
-            resolution: 8,
+            resolution: 4,
         }
     }
 
