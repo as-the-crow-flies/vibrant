@@ -22,9 +22,11 @@ impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     pub const LEVELS: u32 = 6;
 
-    // Must match VMM_SIZE in common.wgsl -- it sizes the vmm_hdri/phi_hdri
-    // buffers below, which hdri.wgsl writes VMM_SIZE lobes into.
-    pub const VMM_SIZE: u32 = 32;
+    // Upper bound on GaussianVolumeRenderer's selectable lobe count (see
+    // RadianceWidget::lobes / VMM_SIZE in common.wgsl). Sizes the
+    // vmm_hdri/phi_hdri buffers below so they fit the largest variant
+    // regardless of which one is currently active.
+    pub const VMM_SIZE_MAX: u32 = 32;
 
     // Must match EM_ITERATIONS_MAX in cascade.wgsl/hdri.wgsl: one bucket per
     // possible iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0
@@ -88,14 +90,14 @@ impl GaussianRadianceBuffer {
 
         let phi_hdri = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: Self::VMM_SIZE as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
+            size: Self::VMM_SIZE_MAX as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let vmm_hdri = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: Self::VMM_SIZE as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
+            size: Self::VMM_SIZE_MAX as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

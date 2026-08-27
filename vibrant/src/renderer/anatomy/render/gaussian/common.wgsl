@@ -1,4 +1,4 @@
-const VMM_SIZE   : u32 = 32u;
+const VMM_SIZE   : u32 = #VMM_SIZE;
 const INTERVAL = array<f32, 7>(1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0);
 
 const EM_ITERATIONS_MAX: u32 = 100u;

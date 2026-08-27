@@ -37,6 +37,7 @@ impl AnatomyVolumeRenderer {
         volume: &PhysicalVolume,
         viewport: Rect,
         recompute: bool,
+        vmm_size: u32,
     ) {
         match radiance {
             RadianceBuffer::None => {}
@@ -59,6 +60,7 @@ impl AnatomyVolumeRenderer {
                 volume,
                 viewport,
                 recompute,
+                vmm_size,
             ),
         }
     }

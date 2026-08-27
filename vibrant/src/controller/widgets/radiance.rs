@@ -13,6 +13,7 @@ pub enum RadianceMethod {
 pub struct RadianceWidget {
     method: RadianceMethod,
     resolution: u32,
+    lobes: u32,
     changed: bool,
 }
 
@@ -28,6 +29,7 @@ impl RadianceWidget {
             changed: false,
             method: RadianceMethod::Gaussian,
             resolution: 4,
+            lobes: 16,
         }
     }
 
@@ -69,6 +71,19 @@ impl RadianceWidget {
                         }
                     });
                 ui.end_row();
+
+                ui.label("Lobes");
+                ComboBox::from_id_salt("Lobes")
+                    .selected_text(format!("{:?}", self.lobes))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for setting in [8, 16, 32] {
+                            ui.selectable_value(&mut self.lobes, setting, format!("{}", setting))
+                                .track(self)
+                                .changed();
+                        }
+                    });
+                ui.end_row();
             });
         });
     }
@@ -83,5 +98,9 @@ impl RadianceWidget {
 
     pub fn resolution(&self) -> u32 {
         self.resolution
+    }
+
+    pub fn lobes(&self) -> u32 {
+        self.lobes
     }
 }

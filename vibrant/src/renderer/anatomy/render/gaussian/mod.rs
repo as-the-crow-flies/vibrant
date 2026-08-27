@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use egui::Rect;
 use wgpu::{
     CommandEncoder, ComputePassDescriptor, ComputePipeline, RenderPassDescriptor, RenderPipeline,
@@ -10,10 +12,20 @@ use crate::{
     surface::{color::ColorBuffer, Frame},
 };
 
-pub struct GaussianVolumeRenderer {
+// Selectable lobe counts -- see RadianceWidget::lobes. Each entry gets its own
+// fully precompiled set of pipelines (below) so switching at runtime is just
+// picking which one to dispatch, no shader recompilation involved.
+const VMM_SIZE_OPTIONS: [u32; 3] = [8, 16, 32];
+
+struct GaussianVolumeVariant {
     hdri: ComputePipeline,
     cascade: Vec<ComputePipeline>,
     trace: RenderPipeline,
+}
+
+pub struct GaussianVolumeRenderer {
+    variants: [GaussianVolumeVariant; 3],
+    active: Cell<usize>,
 }
 
 impl GaussianVolumeRenderer {
@@ -24,7 +36,7 @@ impl GaussianVolumeRenderer {
         let cascade_src = include_str!("cascade.wgsl").to_string() + &common;
         let trace_src = include_str!("trace.wgsl").to_string() + &common;
 
-        Self {
+        let variants = VMM_SIZE_OPTIONS.map(|vmm_size| GaussianVolumeVariant {
             hdri: gpu.compute(
                 "GaussianVolumeHdri",
                 &gpu.pipeline_layout(&[
@@ -33,7 +45,7 @@ impl GaussianVolumeRenderer {
                     &Environment::layout(gpu),
                     &HdriBuffer::layout(gpu),
                 ]),
-                &gpu.shader(&hdri_src),
+                &gpu.shader(&vmm_template(&hdri_src, vmm_size)),
             ),
             cascade: (0..GaussianRadianceBuffer::LEVELS)
                 .map(|cascade| {
@@ -45,7 +57,10 @@ impl GaussianVolumeRenderer {
                             &Environment::layout(gpu),
                             &HdriBuffer::layout(gpu),
                         ]),
-                        &gpu.shader(&cascade_template(&cascade_src, cascade)),
+                        &gpu.shader(&vmm_template(
+                            &cascade_template(&cascade_src, cascade),
+                            vmm_size,
+                        )),
                     )
                 })
                 .collect(),
@@ -58,8 +73,31 @@ impl GaussianVolumeRenderer {
                     &HdriBuffer::layout(gpu),
                 ]),
                 ColorBuffer::target(),
-                &gpu.shader(&trace_src),
+                &gpu.shader(&vmm_template(&trace_src, vmm_size)),
             ),
+        });
+
+        // Defaults to the 32-lobe variant (index of 32 in VMM_SIZE_OPTIONS),
+        // matching the previous hardcoded behavior for callers -- like the
+        // cascade benchmark -- that dispatch hdri/cascade directly and never
+        // call dispatch() to select a variant.
+        let active = Cell::new(
+            VMM_SIZE_OPTIONS
+                .iter()
+                .position(|&size| size == 32)
+                .unwrap(),
+        );
+
+        Self { variants, active }
+    }
+
+    fn variant(&self) -> &GaussianVolumeVariant {
+        &self.variants[self.active.get()]
+    }
+
+    fn set_vmm_size(&self, vmm_size: u32) {
+        if let Some(index) = VMM_SIZE_OPTIONS.iter().position(|&size| size == vmm_size) {
+            self.active.set(index);
         }
     }
 
@@ -73,7 +111,10 @@ impl GaussianVolumeRenderer {
         volume: &PhysicalVolume,
         viewport: Rect,
         recompute: bool,
+        vmm_size: u32,
     ) {
+        self.set_vmm_size(vmm_size);
+
         if recompute {
             self.hdri(cmd, environment, hdri, radiance, volume);
             self.radiance(cmd, environment, hdri, radiance, volume);
@@ -95,7 +136,7 @@ impl GaussianVolumeRenderer {
             ..Default::default()
         });
 
-        pass.set_pipeline(&self.hdri);
+        pass.set_pipeline(&self.variant().hdri);
         pass.set_bind_group(0, radiance.binding_hdri(), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
@@ -131,7 +172,7 @@ impl GaussianVolumeRenderer {
             ..Default::default()
         });
 
-        pass.set_pipeline(&self.cascade[cascade]);
+        pass.set_pipeline(&self.variant().cascade[cascade]);
         pass.set_bind_group(0, radiance.binding_mipmap(cascade), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
         pass.set_bind_group(2, environment.binding(), &[]);
@@ -165,7 +206,7 @@ impl GaussianVolumeRenderer {
             1.0,
         );
 
-        pass.set_pipeline(&self.trace);
+        pass.set_pipeline(&self.variant().trace);
 
         pass.set_bind_group(0, radiance.binding(), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
@@ -209,4 +250,8 @@ fn cascade_template(src: &str, cascade: u32) -> String {
             .to_string(),
         )
         .to_string()
+}
+
+fn vmm_template(src: &str, vmm_size: u32) -> String {
+    src.replace("#VMM_SIZE", &vmm_size.to_string())
 }
