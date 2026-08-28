@@ -26,7 +26,7 @@ use crate::{
         volume_fraction::VolumeFractionBuffer,
         volume_mask::VolumeMaskBuffer,
     },
-    controller::{widgets::radiance::RadianceMethod, Controller},
+    controller::{widgets::rendering::RadianceMethod, Controller},
     file::FileStage,
     gpu::Gpu,
 };

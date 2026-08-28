@@ -38,37 +38,45 @@ impl CropWidget {
             RichText::new(format!("{} Slicing", icons::regular::CROP)).heading(),
             false,
             |ui| {
-                ui.collapse("Orthogonal", false, |ui| {
-                    Grid::new("CropWidgetGridOrthogonal")
-                        .num_columns(2)
-                        .show(ui, |ui| {
-                            self.slider(ui, "Axial", &mut s.min.z, &mut s.max.z);
-                            self.slider(ui, "Sagittal", &mut s.min.x, &mut s.max.x);
-                            self.slider(ui, "Coronal", &mut s.min.y, &mut s.max.y);
-                        });
-                });
+                ui.collapse(
+                    format!("{} Orthogonal", icons::regular::GRID_FOUR),
+                    false,
+                    |ui| {
+                        Grid::new("CropWidgetGridOrthogonal")
+                            .num_columns(2)
+                            .show(ui, |ui| {
+                                self.slider(ui, "Axial", &mut s.min.z, &mut s.max.z);
+                                self.slider(ui, "Sagittal", &mut s.min.x, &mut s.max.x);
+                                self.slider(ui, "Coronal", &mut s.min.y, &mut s.max.y);
+                            });
+                    },
+                );
 
-                ui.collapse("Spherical", false, |ui| {
-                    Grid::new("CropWidgetGridSpherical")
-                        .num_columns(2)
-                        .show(ui, |ui| {
-                            ui.label("Azimuth");
-                            ui.slider(&mut s.spherical.x, 0.0..=2.0 * PI).track(self);
-                            ui.end_row();
+                ui.collapse(
+                    format!("{} Spherical", icons::regular::SPHERE),
+                    false,
+                    |ui| {
+                        Grid::new("CropWidgetGridSpherical")
+                            .num_columns(2)
+                            .show(ui, |ui| {
+                                ui.label("Azimuth");
+                                ui.slider(&mut s.spherical.x, 0.0..=2.0 * PI).track(self);
+                                ui.end_row();
 
-                            ui.label("Elevation");
-                            ui.slider(&mut s.spherical.y, 0.0..=PI).track(self);
-                            ui.end_row();
+                                ui.label("Elevation");
+                                ui.slider(&mut s.spherical.y, 0.0..=PI).track(self);
+                                ui.end_row();
 
-                            ui.label("Depth");
-                            ui.slider(&mut s.spherical.z, 0.0..=1.0).track(self);
-                            ui.end_row();
+                                ui.label("Depth");
+                                ui.slider(&mut s.spherical.z, 0.0..=1.0).track(self);
+                                ui.end_row();
 
-                            ui.label("Smooth");
-                            ui.slider(&mut s.spherical.w, 0.0..=1.0).track(self);
-                            ui.end_row();
-                        });
-                });
+                                ui.label("Smooth");
+                                ui.slider(&mut s.spherical.w, 0.0..=1.0).track(self);
+                                ui.end_row();
+                            });
+                    },
+                );
             },
         )
         .help(

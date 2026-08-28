@@ -12,7 +12,7 @@ use crate::{
     surface::{color::ColorBuffer, Frame},
 };
 
-// Selectable lobe counts -- see RadianceWidget::lobes. Each entry gets its own
+// Selectable lobe counts -- see RenderingWidget::lobes. Each entry gets its own
 // fully precompiled set of pipelines (below) so switching at runtime is just
 // picking which one to dispatch, no shader recompilation involved.
 const VMM_SIZE_OPTIONS: [u32; 3] = [8, 16, 32];

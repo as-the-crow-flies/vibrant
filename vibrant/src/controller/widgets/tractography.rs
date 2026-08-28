@@ -1,4 +1,4 @@
-use egui::{Align, ComboBox, Layout, RichText, Ui};
+use egui::{Align, ComboBox, Grid, Layout, RichText, Ui};
 use itertools::Itertools;
 use strum::IntoEnumIterator;
 
@@ -7,7 +7,9 @@ use crate::{
         colormap::ColormapSelection,
         line::{LineBuffer, LineColorMode},
     },
-    controller::{components::UIComponents, icons, widgets::util::UiResponseExtensions},
+    controller::{
+        components::UIComponents, icons, settings::Settings, widgets::util::UiResponseExtensions,
+    },
     util::{ResponseExtentions, Tracked},
 };
 
@@ -37,7 +39,7 @@ Scalar: Coloring according to corresponding .tsf file
         }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, lines: &mut Option<LineBuffer>) {
+    pub fn show(&mut self, ui: &mut Ui, lines: &mut Option<LineBuffer>, settings: &mut Settings) {
         self.changed = false;
 
         let open = if let Some(lines) = lines {
@@ -107,6 +109,37 @@ Scalar: Coloring according to corresponding .tsf file
                             });
                         }
                     }
+
+                    ui.collapse(
+                        format!("{} Settings", icons::regular::LINE_SEGMENTS),
+                        false,
+                        |ui| {
+                            Grid::new("TractographySettings")
+                                .num_columns(2)
+                                .show(ui, |ui| {
+                                    ui.label("Line Radius")
+                                        .on_hover_text("Tractography Line Radius");
+                                    ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
+                                    ui.end_row();
+
+                                    ui.label("Line Opacity")
+                                        .on_hover_text("Tractography Opacity");
+                                    ui.slider(&mut settings.alpha, 0.01..=1.0).track(self);
+                                    ui.end_row();
+
+                                    ui.label("Ambient Light")
+                                        .on_hover_text("Ambient Lighting Strength");
+                                    ui.slider(&mut settings.ambient_light, 0.0..=3.0)
+                                        .track(self);
+                                    ui.end_row();
+
+                                    ui.label("Direct Light")
+                                        .on_hover_text("Directional Lighting Strength");
+                                    ui.slider(&mut settings.direct_light, 0.0..=3.0).track(self);
+                                    ui.end_row();
+                                });
+                        },
+                    );
                 },
             )
             .help(

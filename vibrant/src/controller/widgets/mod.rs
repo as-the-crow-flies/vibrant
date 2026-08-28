@@ -1,8 +1,7 @@
+pub mod controls;
 pub mod crop;
-pub mod hdri;
 pub mod masks;
-pub mod radiance;
-pub mod settings;
+pub mod rendering;
 pub mod tractography;
 pub mod util;
 pub mod volumes;

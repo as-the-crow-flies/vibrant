@@ -9,7 +9,7 @@ pub mod state;
 pub mod widgets;
 
 use camera::Camera;
-use egui::{Align, CentralPanel, Frame, Layout, Margin, RichText, ScrollArea, Ui};
+use egui::{Align, CentralPanel, Layout, ScrollArea, Ui};
 use egui::{Panel, Rect};
 use event::Event;
 use light::Light;
@@ -18,9 +18,9 @@ use state::ControllerState;
 use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
-use crate::controller::widgets::radiance::RadianceWidget;
+use crate::controller::widgets::controls::ControlsWidget;
 use crate::controller::widgets::{
-    crop::CropWidget, hdri::HdriWidget, masks::MasksWidget, settings::SettingsWidget,
+    crop::CropWidget, masks::MasksWidget, rendering::RenderingWidget,
     tractography::TractographyWidget, volumes::VolumesWidget,
 };
 use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
@@ -33,16 +33,12 @@ pub struct Controller {
     settings: Settings,
     time: Instant,
 
-    settings_widget: SettingsWidget,
     volumes_widget: VolumesWidget,
     mask_widget: MasksWidget,
     tractography_widget: TractographyWidget,
     crop_widget: CropWidget,
-    hdri_widget: HdriWidget,
-    radiance_widget: RadianceWidget,
-
-    show_left_side_panel: bool,
-    show_right_side_panel: bool,
+    rendering_widget: RenderingWidget,
+    controls_widget: ControlsWidget,
 
     viewport: Rect,
     hovered: bool,
@@ -58,24 +54,20 @@ impl Controller {
             settings: Settings::new(),
             time: Instant::now(),
 
-            settings_widget: SettingsWidget::new(),
             volumes_widget: VolumesWidget::new(),
             mask_widget: MasksWidget::new(),
             tractography_widget: TractographyWidget::new(),
             crop_widget: CropWidget::new(),
-            hdri_widget: HdriWidget::new(),
-            radiance_widget: RadianceWidget::new(),
-
-            show_left_side_panel: false,
-            show_right_side_panel: true,
+            rendering_widget: RenderingWidget::new(),
+            controls_widget: ControlsWidget::new(),
 
             viewport: Rect::ZERO,
             hovered: true,
         }
     }
 
-    pub fn hdri(&self) -> &HdriWidget {
-        &self.hdri_widget
+    pub fn rendering(&self) -> &RenderingWidget {
+        &self.rendering_widget
     }
 
     pub fn crop(&self) -> &CropWidget {
@@ -94,8 +86,8 @@ impl Controller {
         &self.mask_widget
     }
 
-    pub fn radiance(&self) -> &RadianceWidget {
-        &self.radiance_widget
+    pub fn radiance(&self) -> &RenderingWidget {
+        &self.rendering_widget
     }
 
     pub fn event(&mut self, event: Event) {
@@ -108,14 +100,6 @@ impl Controller {
     pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, scale: f32, dt: f32) {
         Panel::top("TopBottomPanel").show(ui, |ui| {
             ui.horizontal(|ui| {
-                if ui
-                    .button("⚙ settings")
-                    .on_hover_text("Open settings panel")
-                    .clicked()
-                {
-                    self.show_left_side_panel = !self.show_left_side_panel;
-                }
-
                 #[cfg(not(target_arch = "wasm32"))]
                 if ui
                     .button("📷 screenshot")
@@ -125,13 +109,19 @@ impl Controller {
                     FileStage::save();
                 }
 
+                if ui
+                    .button(format!("{} GitHub", icons::regular::GITHUB_LOGO))
+                    .on_hover_text("View on GitHub")
+                    .clicked()
+                {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(
+                        "https://github.com/as-the-crow-flies/vibrant",
+                    ));
+                }
+
                 ui.take_available_width();
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("☰ data").clicked() {
-                        self.show_right_side_panel = !self.show_right_side_panel
-                    }
-
                     if ui
                         .button("📂 open")
                         .on_hover_text("Open .nii.gz/.tck/.tsf files")
@@ -145,86 +135,43 @@ impl Controller {
             });
         });
 
-        Panel::left("SidePanelLeft").show_collapsible(ui, &mut self.show_left_side_panel, |ui| {
-            Panel::top("top_panel")
-                .frame(Frame {
-                    outer_margin: Margin {
-                        left: 5,
-                        right: 5,
-                        top: 5,
-                        bottom: 10,
-                    },
-                    inner_margin: Margin::ZERO,
-                    ..Default::default()
-                })
-                .show(ui, |ui| {
-                    self.settings_widget
-                        .show(ui, &mut self.settings, &mut self.camera);
-
-                    self.radiance_widget.show(ui);
-                });
-
-            Panel::bottom("left_bottom_panel").show(ui, |ui| {
-                ui.hyperlink_to(
-                    "\u{E624} View on GitHub",
-                    "https://github.com/as-the-crow-flies/vibrant",
-                );
-            });
-        });
-
         Panel::right("SidePanelRight")
             .min_size(400.0)
             .max_size(800.0)
-            .show_collapsible(ui, &mut self.show_right_side_panel, |ui| {
-                ScrollArea::new([false, true]).show(ui, |ui| {
-                    self.crop_widget.show(ui, &mut asset.crop);
+            .show(ui, |ui| {
+                // Without this, the ScrollArea below (h-scroll disabled) shrinks
+                // to fit its content instead of claiming the panel's width, so
+                // the panel's persisted resize state snaps back toward the
+                // content's natural size every frame instead of tracking drags.
+                ui.take_available_width();
 
-                    self.volumes_widget
-                        .show(ui, &mut asset.volumes, &mut asset.masks);
-
-                    self.mask_widget.show(ui, &mut asset.masks);
-
-                    self.tractography_widget.show(ui, &mut asset.line);
-
-                    self.hdri_widget.show(ui, &mut asset.hdri);
-                });
-
-                Panel::bottom("right_bottom_panel")
-                    .frame(Frame {
-                        outer_margin: Margin::ZERO,
-                        inner_margin: Margin::ZERO,
-                        ..Default::default()
-                    })
+                // `auto_shrink` defaults to true on both axes: with horizontal
+                // scrolling disabled that makes the scroll area's own width
+                // hug its content instead of the panel, so children never see
+                // the panel's actual (resizable) width via `available_width()`.
+                // Disabling it on the x-axis makes the scroll area (and thus
+                // everything inside it) always claim the full panel width.
+                ScrollArea::new([false, true])
+                    .auto_shrink([false, true])
                     .show(ui, |ui| {
-                        ui.collapsing(
-                            RichText::new(format!("{} Controls", icons::regular::MOUSE)).heading(),
-                            |ui| {
-                                egui::Grid::new("my_grid")
-                                    .min_col_width(100.0)
-                                    .striped(true)
-                                    .show(ui, |ui| {
-                                        ui.label("Rotate Camera");
-                                        ui.label("Left Mouse Button");
-                                        ui.end_row();
+                        self.crop_widget.show(ui, &mut asset.crop);
 
-                                        ui.label("Pan Camera");
-                                        ui.label("Right Mouse Button");
-                                        ui.end_row();
+                        self.volumes_widget
+                            .show(ui, &mut asset.volumes, &mut asset.masks);
 
-                                        ui.label("Zoom Camera");
-                                        ui.label("Mouse Wheel");
-                                        ui.end_row();
+                        self.mask_widget.show(ui, &mut asset.masks);
 
-                                        ui.label("Reset Camera");
-                                        ui.label("Backspace");
-                                        ui.end_row();
+                        self.tractography_widget
+                            .show(ui, &mut asset.line, &mut self.settings);
 
-                                        ui.label("Rotate Light / Environment");
-                                        ui.label("Shift + Left Mouse Button");
-                                        ui.end_row();
-                                    });
-                            },
+                        self.rendering_widget.show(
+                            ui,
+                            &mut asset.hdri,
+                            &mut self.camera,
+                            &mut self.settings,
                         );
+
+                        self.controls_widget.show(ui);
                     });
             });
 
@@ -287,16 +234,10 @@ impl Controller {
     }
 
     pub fn changed(&self) -> bool {
-        self.settings_widget.changed()
-            || self.crop().changed()
+        self.crop().changed()
             || self.volumes().changed()
             || self.masks().changed()
             || self.tractography().changed()
-            || self.hdri().changed()
-            || self.radiance().changed()
-    }
-
-    pub fn settings_widget(&self) -> &SettingsWidget {
-        &self.settings_widget
+            || self.rendering().changed()
     }
 }
