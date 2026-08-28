@@ -31,6 +31,10 @@ impl Light {
         }
     }
 
+    pub fn yaw(&self) -> f32 {
+        self.yaw
+    }
+
     pub fn rotation(&self) -> Quat {
         Quat::from_rotation_x(self.pitch) * Quat::from_rotation_z(self.yaw)
     }

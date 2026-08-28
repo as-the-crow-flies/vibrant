@@ -42,7 +42,7 @@ impl AnatomyRenderer {
         asset: &Asset,
     ) {
         if let (Some(frame), Some(volume)) = (surface.frame(), &asset.physical_volume) {
-            let recompute = surface.changed() | asset.changed() | controller.changed();
+            let recompute = surface.changed() | asset.changed() | controller.lighting_changed();
 
             if recompute {
                 self.transfer

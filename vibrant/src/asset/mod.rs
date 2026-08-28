@@ -9,6 +9,7 @@ pub mod volume;
 pub mod volume_fraction;
 pub mod volume_mask;
 
+use std::f32::consts::PI;
 use std::ops::Div;
 
 use line::LineBuffer;
@@ -146,6 +147,10 @@ impl Asset {
             self.changed = true;
         });
 
+        // Rotation is driven by the same shift+drag gesture as the tractography
+        // light (Light::yaw) rather than its own slider, so the environment
+        // rotates in lockstep with it.
+        self.hdri.settings_mut().rotation = controller.light().yaw() / (2.0 * PI);
         self.hdri.update_settings(gpu);
         self.crop.update_settings(gpu);
 

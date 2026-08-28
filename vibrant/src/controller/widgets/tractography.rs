@@ -7,7 +7,7 @@ use crate::{
         colormap::ColormapSelection,
         line::{LineBuffer, LineColorMode},
     },
-    controller::{components::UIComponents, widgets::util::UiResponseExtensions},
+    controller::{components::UIComponents, icons, widgets::util::UiResponseExtensions},
     util::{ResponseExtentions, Tracked},
 };
 
@@ -53,37 +53,43 @@ Scalar: Coloring according to corresponding .tsf file
         };
 
         let response = ui
-            .collapse(RichText::new("Tractography").heading(), open, |ui| {
-                if let Some(lines) = lines {
-                    for line in lines.settings_mut() {
-                        ui.frame(|ui| {
-                            let response = ui.collapse(&line.name, false, |_| {});
+            .collapse(
+                RichText::new(format!("{} Tractography", icons::regular::PATH)).heading(),
+                open,
+                |ui| {
+                    if let Some(lines) = lines {
+                        for line in lines.settings_mut() {
+                            ui.frame(|ui| {
+                                let response = ui.collapse(&line.name, false, |_| {});
 
-                            ui.inline(&response, |ui| {
-                                ui.toggle_visible(&mut line.visible).track(self);
+                                ui.inline(&response, |ui| {
+                                    ui.toggle_visible(&mut line.visible).track(self);
 
-                                ComboBox::from_id_salt(format!("{}_LineColorMode", line.name))
-                                    .selected_text(format!("{:?}", line.color_mode))
-                                    .show_ui(ui, |ui| {
-                                        for mode in LineColorMode::iter() {
-                                            ui.selectable_value(
-                                                &mut line.color_mode,
-                                                mode,
-                                                format!("{:?}", mode),
-                                            );
-                                        }
-                                    })
-                                    .response
-                                    .help("Line Color Mode", Self::LINE_COLOR_MODE_HELP);
+                                    ComboBox::from_id_salt(format!("{}_LineColorMode", line.name))
+                                        .selected_text(format!("{:?}", line.color_mode))
+                                        .show_ui(ui, |ui| {
+                                            for mode in LineColorMode::iter() {
+                                                ui.selectable_value(
+                                                    &mut line.color_mode,
+                                                    mode,
+                                                    format!("{:?}", mode),
+                                                );
+                                            }
+                                        })
+                                        .response
+                                        .help("Line Color Mode", Self::LINE_COLOR_MODE_HELP);
 
-                                if line.color_mode == LineColorMode::Color {
-                                    ui.color_edit_button_srgb(&mut line.color)
-                                        .on_hover_text("Choose Bundle Color")
-                                        .track(self);
-                                }
+                                    if line.color_mode == LineColorMode::Color {
+                                        ui.color_edit_button_srgb(&mut line.color)
+                                            .on_hover_text("Choose Bundle Color")
+                                            .track(self);
+                                    }
 
-                                if line.color_mode == LineColorMode::Scalar {
-                                    ComboBox::from_id_salt(format!("{}_LineColormap", line.name))
+                                    if line.color_mode == LineColorMode::Scalar {
+                                        ComboBox::from_id_salt(format!(
+                                            "{}_LineColormap",
+                                            line.name
+                                        ))
                                         .selected_text(format!("{:?}", line.colormap))
                                         .show_ui(ui, |ui| {
                                             for map in ColormapSelection::iter() {
@@ -96,12 +102,13 @@ Scalar: Coloring according to corresponding .tsf file
                                         })
                                         .response
                                         .on_hover_text("Choose .tsf Colormap");
-                                }
+                                    }
+                                });
                             });
-                        });
+                        }
                     }
-                }
-            })
+                },
+            )
             .help(
                 "Tractography",
                 "Open one or more .tck files to render tractograms.",

@@ -12,6 +12,7 @@ use crate::{
     },
     controller::{
         components::{transfer::TransferFunctionEditor, UIComponents},
+        icons,
         widgets::util::UiResponseExtensions,
     },
     util::{ResponseExtentions, Tracked},
@@ -52,7 +53,7 @@ impl VolumesWidget {
             .collect_vec();
 
         ui.collapse(
-            RichText::new("Volumes").heading(),
+            RichText::new(format!("{} Volumes", icons::regular::BRAIN)).heading(),
             open.iter().any(|&x| x),
             |ui| {
                 for (index, (volume, open)) in zip(volumes.iter_mut(), open).enumerate() {

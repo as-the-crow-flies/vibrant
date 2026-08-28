@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod components;
 pub mod event;
+pub mod icons;
 pub mod light;
 pub mod segment;
 pub mod settings;
@@ -8,7 +9,7 @@ pub mod state;
 pub mod widgets;
 
 use camera::Camera;
-use egui::{Align, CentralPanel, Frame, Layout, Margin, ScrollArea, Ui};
+use egui::{Align, CentralPanel, Frame, Layout, Margin, RichText, ScrollArea, Ui};
 use egui::{Panel, Rect};
 use event::Event;
 use light::Light;
@@ -163,52 +164,12 @@ impl Controller {
                     self.radiance_widget.show(ui);
                 });
 
-            Panel::bottom("bottom_panel")
-                .frame(Frame {
-                    outer_margin: Margin {
-                        left: 5,
-                        right: 5,
-                        top: 5,
-                        bottom: 10,
-                    },
-                    inner_margin: Margin::ZERO,
-                    ..Default::default()
-                })
-                .show(ui, |ui| {
-                    ui.heading("Controls");
-                    ui.separator();
-
-                    egui::Grid::new("my_grid")
-                        .min_col_width(100.0)
-                        .striped(true)
-                        .show(ui, |ui| {
-                            ui.label("Rotate Camera");
-                            ui.label("Left Mouse Button");
-                            ui.end_row();
-
-                            ui.label("Pan Camera");
-                            ui.label("Right Mouse Button");
-                            ui.end_row();
-
-                            ui.label("Zoom Camera");
-                            ui.label("Mouse Wheel");
-                            ui.end_row();
-
-                            ui.label("Reset Camera");
-                            ui.label("Backspace");
-                            ui.end_row();
-
-                            ui.label("Rotate Light");
-                            ui.label("Shift + Left Mouse Button");
-                            ui.end_row();
-                        });
-
-                    ui.separator();
-                    ui.hyperlink_to(
-                        "\u{E624} View on GitHub",
-                        "https://github.com/as-the-crow-flies/vibrant",
-                    );
-                });
+            Panel::bottom("left_bottom_panel").show(ui, |ui| {
+                ui.hyperlink_to(
+                    "\u{E624} View on GitHub",
+                    "https://github.com/as-the-crow-flies/vibrant",
+                );
+            });
         });
 
         Panel::right("SidePanelRight")
@@ -227,6 +188,44 @@ impl Controller {
 
                     self.hdri_widget.show(ui, &mut asset.hdri);
                 });
+
+                Panel::bottom("right_bottom_panel")
+                    .frame(Frame {
+                        outer_margin: Margin::ZERO,
+                        inner_margin: Margin::ZERO,
+                        ..Default::default()
+                    })
+                    .show(ui, |ui| {
+                        ui.collapsing(
+                            RichText::new(format!("{} Controls", icons::regular::MOUSE)).heading(),
+                            |ui| {
+                                egui::Grid::new("my_grid")
+                                    .min_col_width(100.0)
+                                    .striped(true)
+                                    .show(ui, |ui| {
+                                        ui.label("Rotate Camera");
+                                        ui.label("Left Mouse Button");
+                                        ui.end_row();
+
+                                        ui.label("Pan Camera");
+                                        ui.label("Right Mouse Button");
+                                        ui.end_row();
+
+                                        ui.label("Zoom Camera");
+                                        ui.label("Mouse Wheel");
+                                        ui.end_row();
+
+                                        ui.label("Reset Camera");
+                                        ui.label("Backspace");
+                                        ui.end_row();
+
+                                        ui.label("Rotate Light / Environment");
+                                        ui.label("Shift + Left Mouse Button");
+                                        ui.end_row();
+                                    });
+                            },
+                        );
+                    });
             });
 
         let viewport = CentralPanel::no_frame().show(ui, |ui| {

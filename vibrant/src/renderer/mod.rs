@@ -32,9 +32,14 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(gpu: &Gpu, window: Arc<Window>) -> Self {
+        let egui_ctx = egui::Context::default();
+        let mut fonts = egui::FontDefinitions::default();
+        crate::controller::icons::install(&mut fonts);
+        egui_ctx.set_fonts(fonts);
+
         Self {
             egui: egui_winit::State::new(
-                egui::Context::default(),
+                egui_ctx,
                 egui::viewport::ViewportId::ROOT,
                 &window,
                 Some(window.scale_factor() as f32),

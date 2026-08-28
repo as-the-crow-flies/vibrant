@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 use crate::{
     asset::volume_mask::{VolumeMaskBuffer, VolumeMaskSettings},
-    controller::{components::UIComponents, widgets::util::UiResponseExtensions},
+    controller::{components::UIComponents, icons, widgets::util::UiResponseExtensions},
     util::{ResponseExtentions, Tracked},
 };
 
@@ -39,7 +39,7 @@ impl MasksWidget {
             .collect_vec();
 
         ui.collapse(
-            RichText::new("Masks").heading(),
+            RichText::new(format!("{} Masks", icons::regular::CIRCLE_HALF)).heading(),
             open.iter().any(|&x| x),
             |ui| {
                 for (mask, open) in zip(masks.iter_mut(), open) {
