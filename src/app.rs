@@ -98,7 +98,7 @@ impl ApplicationHandler for App {
             use web_sys::{window, HtmlCanvasElement};
             use winit::platform::web::WindowAttributesExtWebSys;
 
-            let mut canvas = window()
+            let canvas = window()
                 .and_then(|window| window.document())
                 .and_then(|document| document.get_element_by_id("canvas"))
                 .expect("No Element with id 'canvas'")
@@ -223,6 +223,8 @@ fn keycode(code: KeyCode) -> Option<Key> {
 
 pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
+
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
     let mut app = App::new(Gpu::new().await);
 
     #[cfg(not(target_arch = "wasm32"))]
