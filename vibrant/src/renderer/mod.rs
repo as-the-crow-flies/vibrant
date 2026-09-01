@@ -106,24 +106,22 @@ impl Renderer {
                 &self.asset,
             );
 
-            if !FileStage::about_to_save() {
-                let ctx = self.egui.egui_ctx();
-                self.ui.paint(
-                    gpu,
-                    &mut cmd,
-                    frame,
-                    ctx,
-                    output.shapes,
-                    output.pixels_per_point,
-                );
-            }
+            self.ui.paint(
+                gpu,
+                &mut cmd,
+                frame,
+                self.egui.egui_ctx(),
+                output.shapes,
+                output.pixels_per_point,
+            );
 
             self.surface.present(gpu, cmd);
 
             FileStage::on_save(|path| {
                 let gpu = gpu.clone();
                 let texture = frame.color().texture().clone();
-                spawn_task(async move { gpu.save(path, &texture).await });
+                let viewport = controller.viewport();
+                spawn_task(async move { gpu.save(path, &texture, viewport).await });
             });
         }
 

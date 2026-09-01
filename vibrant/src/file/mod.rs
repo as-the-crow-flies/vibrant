@@ -187,10 +187,6 @@ impl FileStage {
         }
     }
 
-    pub fn about_to_save() -> bool {
-        QUEUE.lock().unwrap().save.is_some()
-    }
-
     pub fn on_save(callback: impl FnOnce(PathBuf)) {
         let mut data = QUEUE.lock().unwrap();
 

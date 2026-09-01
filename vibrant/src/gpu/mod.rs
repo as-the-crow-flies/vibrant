@@ -3,6 +3,7 @@ pub mod readback;
 use std::{any::type_name, borrow::Cow, path::PathBuf};
 
 use bytemuck::Pod;
+use egui::Rect;
 use futures::channel::oneshot::channel;
 use itertools::Itertools;
 use wgpu::{
@@ -242,12 +243,25 @@ impl Gpu {
         Some(bytemuck::cast_slice(&view).to_owned())
     }
 
-    pub async fn save(&self, path: PathBuf, texture: &Texture) {
+    /// Saves `viewport` (in `texture`'s own pixel coordinates, e.g.
+    /// `Controller::viewport`) rather than the full texture, so the exported
+    /// image matches what's actually shown in the 3D view, excluding UI
+    /// panels around it.
+    pub async fn save(&self, path: PathBuf, texture: &Texture, viewport: Rect) {
         assert!(texture.format() == TextureFormat::Rgba8Unorm);
 
         let pixel = 4;
-        let width = (texture.width() / 64) * 64;
-        let height = texture.height();
+
+        // `bytes_per_row` must be a multiple of 256, i.e. width a multiple
+        // of 64 pixels at 4 bytes/pixel - round down and re-center within
+        // the viewport rather than shifting the crop to one edge.
+        let raw_width = (viewport.width().round() as u32).min(texture.width());
+        let width = (raw_width / 64) * 64;
+        let height = (viewport.height().round() as u32).min(texture.height());
+
+        let x = (viewport.min.x.round() as u32 + (raw_width - width) / 2)
+            .min(texture.width().saturating_sub(width));
+        let y = (viewport.min.y.round() as u32).min(texture.height().saturating_sub(height));
 
         let result = self.device.create_buffer(&BufferDescriptor {
             label: Some("read.result"),
@@ -263,11 +277,7 @@ impl Gpu {
             TexelCopyTextureInfo {
                 texture,
                 mip_level: 0,
-                origin: Origin3d {
-                    x: (texture.width() - width) / 2, // Center Crop
-                    y: 0,
-                    z: 0,
-                },
+                origin: Origin3d { x, y, z: 0 },
                 aspect: TextureAspect::All,
             },
             TexelCopyBufferInfo {
