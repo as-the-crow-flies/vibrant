@@ -139,40 +139,28 @@ impl Controller {
             .min_size(400.0)
             .max_size(800.0)
             .show(ui, |ui| {
-                // Without this, the ScrollArea below (h-scroll disabled) shrinks
-                // to fit its content instead of claiming the panel's width, so
-                // the panel's persisted resize state snaps back toward the
-                // content's natural size every frame instead of tracking drags.
                 ui.take_available_width();
 
-                // `auto_shrink` defaults to true on both axes: with horizontal
-                // scrolling disabled that makes the scroll area's own width
-                // hug its content instead of the panel, so children never see
-                // the panel's actual (resizable) width via `available_width()`.
-                // Disabling it on the x-axis makes the scroll area (and thus
-                // everything inside it) always claim the full panel width.
-                ScrollArea::new([false, true])
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        self.crop_widget.show(ui, &mut asset.crop);
+                ScrollArea::new([false, true]).show(ui, |ui| {
+                    self.crop_widget.show(ui, &mut asset.crop);
 
-                        self.volumes_widget
-                            .show(ui, &mut asset.volumes, &mut asset.masks);
+                    self.volumes_widget
+                        .show(ui, &mut asset.volumes, &mut asset.masks);
 
-                        self.mask_widget.show(ui, &mut asset.masks);
+                    self.mask_widget.show(ui, &mut asset.masks);
 
-                        self.tractography_widget
-                            .show(ui, &mut asset.line, &mut self.settings);
+                    self.tractography_widget
+                        .show(ui, &mut asset.line, &mut self.settings);
 
-                        self.rendering_widget.show(
-                            ui,
-                            &mut asset.hdri,
-                            &mut self.camera,
-                            &mut self.settings,
-                        );
+                    self.rendering_widget.show(
+                        ui,
+                        &mut asset.hdri,
+                        &mut self.camera,
+                        &mut self.settings,
+                    );
 
-                        self.controls_widget.show(ui);
-                    });
+                    self.controls_widget.show(ui);
+                });
             });
 
         let viewport = CentralPanel::no_frame().show(ui, |ui| {
