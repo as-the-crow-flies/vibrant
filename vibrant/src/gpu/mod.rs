@@ -1,3 +1,5 @@
+pub mod readback;
+
 use std::{any::type_name, borrow::Cow, path::PathBuf};
 
 use bytemuck::Pod;
@@ -15,6 +17,7 @@ use wgpu::{
 
 use crate::renderer::wgsl::{COMMON, GAUSSIAN, PBR};
 
+#[derive(Clone)]
 pub struct Gpu {
     instance: wgpu::Instance,
     adapter: wgpu::Adapter,
@@ -202,7 +205,12 @@ impl Gpu {
             .is_ok()
     }
 
-    pub async fn read_buffer<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
+    /// Copies `buffer` to a staging buffer and reads it back. Returns `None`
+    /// if the buffer was destroyed before the readback could complete - e.g.
+    /// a caller tore down the owning resource while a background readback
+    /// (see [`readback::Readback`]) was still in flight. Callers should
+    /// treat that as "try again later", not an error.
+    pub async fn read_buffer<T: Pod>(&self, buffer: &Buffer) -> Option<Vec<T>> {
         let result = self.device.create_buffer(&BufferDescriptor {
             label: Some("read.result"),
             size: buffer.size(),
@@ -219,7 +227,8 @@ impl Gpu {
         return self.read(&result).await;
     }
 
-    pub async fn read<T: Pod>(&self, buffer: &Buffer) -> Vec<T> {
+    /// See [`Self::read_buffer`] for the meaning of `None`.
+    pub async fn read<T: Pod>(&self, buffer: &Buffer) -> Option<Vec<T>> {
         let (sender, receiver) = channel();
         buffer.slice(..).map_async(MapMode::Read, |x| {
             let _ = sender.send(x);
@@ -227,17 +236,14 @@ impl Gpu {
 
         self.wait();
 
-        receiver
-            .await
-            .expect("communication failed")
-            .expect("buffer reading failed");
+        receiver.await.ok()?.ok()?;
 
-        let view = buffer.slice(..).get_mapped_range().unwrap();
-        return bytemuck::cast_slice(&view).to_owned();
+        let view = buffer.slice(..).get_mapped_range().ok()?;
+        Some(bytemuck::cast_slice(&view).to_owned())
     }
 
     pub async fn save(&self, path: PathBuf, texture: &Texture) {
-        assert!(texture.format() == TextureFormat::Bgra8Unorm);
+        assert!(texture.format() == TextureFormat::Rgba8Unorm);
 
         let pixel = 4;
         let width = (texture.width() / 64) * 64;
@@ -280,26 +286,75 @@ impl Gpu {
         );
         self.queue.submit([cmd.finish()]);
 
-        let buffer = self
-            .read(&result)
-            .await
-            .into_iter()
-            .tuples()
-            .flat_map(|(b, g, r, a)| [r, g, b, a])
-            .collect_vec();
+        let Some(buffer) = self.read::<u8>(&result).await else {
+            log::warn!("screenshot: source texture was destroyed before it could be read back");
+            return;
+        };
 
-        let file = std::fs::File::create(path).unwrap();
-        let writer = &mut std::io::BufWriter::new(file);
-        let mut enc = png::Encoder::new(writer, width, height);
-        enc.set_color(png::ColorType::Rgba);
-        enc.set_depth(png::BitDepth::Eight);
-        enc.set_source_chromaticities(png::SourceChromaticities::new(
-            (0.31270, 0.32900),
-            (0.64000, 0.33000),
-            (0.30000, 0.60000),
-            (0.15000, 0.06000),
-        ));
-        let mut writer = enc.write_header().unwrap();
-        writer.write_image_data(&buffer).unwrap();
+        let mut png_bytes = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut png_bytes, width, height);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.set_source_chromaticities(png::SourceChromaticities::new(
+                (0.31270, 0.32900),
+                (0.64000, 0.33000),
+                (0.30000, 0.60000),
+                (0.15000, 0.06000),
+            ));
+            let mut writer = enc.write_header().unwrap();
+            writer.write_image_data(&buffer).unwrap();
+        }
+
+        Self::deliver(path, png_bytes);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn deliver(path: PathBuf, png_bytes: Vec<u8>) {
+        std::fs::write(path, png_bytes).expect("failed to write screenshot");
+    }
+
+    /// Browsers have no filesystem to write to, so instead we hand the
+    /// browser a `Blob` and drive a synthetic `<a download>` click - the
+    /// standard way to trigger a file download from script.
+    #[cfg(target_arch = "wasm32")]
+    fn deliver(path: PathBuf, png_bytes: Vec<u8>) {
+        use wasm_bindgen::JsCast;
+        use web_sys::{Blob, BlobPropertyBag, Url};
+
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("screenshot.png");
+
+        let array = js_sys::Uint8Array::from(png_bytes.as_slice());
+        let parts = js_sys::Array::new();
+        parts.push(&array);
+
+        let options = BlobPropertyBag::new();
+        options.set_type("image/png");
+
+        let blob = Blob::new_with_u8_array_sequence_and_options(&parts, &options)
+            .expect("failed to create screenshot blob");
+
+        let url = Url::create_object_url_with_blob(&blob).expect("failed to create object url");
+
+        let document = web_sys::window()
+            .and_then(|window| window.document())
+            .expect("no document");
+        let anchor = document
+            .create_element("a")
+            .expect("failed to create anchor")
+            .dyn_into::<web_sys::HtmlAnchorElement>()
+            .expect("created element was not an anchor");
+        anchor.set_href(&url);
+        anchor.set_download(filename);
+
+        let body = document.body().expect("no document body");
+        body.append_child(&anchor).expect("failed to attach anchor");
+        anchor.click();
+        body.remove_child(&anchor).expect("failed to detach anchor");
+
+        let _ = Url::revoke_object_url(&url);
     }
 }

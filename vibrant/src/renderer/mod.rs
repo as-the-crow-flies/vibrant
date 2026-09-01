@@ -9,11 +9,10 @@ use std::sync::Arc;
 
 use crate::renderer::{anatomy::AnatomyRenderer, line::LineRenderer, util::clear::ClearPipeline};
 use environment::Environment;
-use pollster::FutureExt;
 use ui::UiRenderer;
 use winit::window::Window;
 
-use crate::{asset::Asset, file::FileStage};
+use crate::{asset::Asset, file::FileStage, gpu::readback::spawn_task};
 
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
 
@@ -121,7 +120,11 @@ impl Renderer {
 
             self.surface.present(gpu, cmd);
 
-            FileStage::on_save(|path| gpu.save(path, frame.color().texture()).block_on());
+            FileStage::on_save(|path| {
+                let gpu = gpu.clone();
+                let texture = frame.color().texture().clone();
+                spawn_task(async move { gpu.save(path, &texture).await });
+            });
         }
 
         output.textures_delta.clear();

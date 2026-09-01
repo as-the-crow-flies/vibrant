@@ -126,7 +126,8 @@ fn print_em_iteration_histogram(scene: &Scene) {
     let counts: Vec<u32> = scene
         .gpu
         .read_buffer(scene.radiance.em_iterations())
-        .block_on();
+        .block_on()
+        .expect("em_iterations buffer should still be alive during the benchmark");
 
     let print_row = |label: &str, row: &[u32]| {
         let total: u32 = row.iter().sum();

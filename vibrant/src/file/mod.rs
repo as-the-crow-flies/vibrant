@@ -147,9 +147,12 @@ impl FileStage {
         }
     }
 
+    /// Browsers have no notion of a save-file dialog with filesystem access,
+    /// so there's no path to pick - just queue the default filename and let
+    /// `Gpu::save`'s web delivery path trigger a browser download.
     #[cfg(target_arch = "wasm32")]
     pub fn save() {
-        todo!()
+        Self::publish_save_path(PathBuf::from("screenshot.png"));
     }
 
     pub fn on_lines(callback: impl FnOnce(Vec<LineFile>)) {

@@ -125,7 +125,7 @@ impl Surface {
         if let Some(frame) = &self.frame {
             // Update Required Index Size
 
-            let required_index_size = frame.culling().get_required_index_size(gpu);
+            let required_index_size = frame.culling().required_index_size();
             if required_index_size > settings.index_buffer_size {
                 settings.index_buffer_size = required_index_size.next_power_of_two()
             }
@@ -135,6 +135,11 @@ impl Surface {
                 && settings.volume == frame.occupancy().resolution()
                 && settings.index_buffer_size == frame.culling().index_buffer_size()
             {
+                // Only safe to kick off a fresh readback here, on the path
+                // that *isn't* about to destroy this CullingBuffer below -
+                // otherwise the readback could still be in flight against an
+                // already-destroyed buffer.
+                frame.culling().refresh_required_index_size(gpu);
                 self.changed = false;
                 return;
             }

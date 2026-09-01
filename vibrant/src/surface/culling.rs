@@ -1,6 +1,5 @@
 use std::{any::type_name, ops::Mul};
 
-use pollster::FutureExt;
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
@@ -11,7 +10,7 @@ use wgpu::{
 
 use crate::{
     asset::texture::{MipTexture3D, R32Float},
-    gpu::Gpu,
+    gpu::{readback::Readback, Gpu},
 };
 
 pub struct CullingBuffer {
@@ -23,6 +22,7 @@ pub struct CullingBuffer {
     binding_read: BindGroup,
     binding_write: BindGroup,
     index_buffer_size: u32,
+    required_index_size: Readback<u32>,
 }
 
 impl CullingBuffer {
@@ -133,6 +133,7 @@ impl CullingBuffer {
             binding_read,
             binding_write,
             index_buffer_size,
+            required_index_size: Readback::new(),
         }
     }
 
@@ -252,16 +253,28 @@ impl CullingBuffer {
         self.index_buffer_size
     }
 
-    pub fn get_required_index_size(&self, gpu: &Gpu) -> u32 {
-        #[cfg(target_arch = "wasm32")]
-        {
-            return 256;
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let index_size_bytes: u32 = gpu.read_buffer(&self.offset_total).block_on()[0];
-            return index_size_bytes * 4 / (1024 * 1024);
-        }
+    /// How much index-buffer memory the current voxelization needs, as of
+    /// the most recently completed readback (see
+    /// [`Self::refresh_required_index_size`]). Returns the current buffer
+    /// size until the first readback lands.
+    pub fn required_index_size(&self) -> u32 {
+        self.required_index_size
+            .get()
+            .unwrap_or(self.index_buffer_size)
+    }
+
+    /// Kicks off a fresh readback of the required index-buffer size. Only
+    /// call this when this `CullingBuffer` isn't about to be torn down based
+    /// on the result of [`Self::required_index_size`] this frame - see
+    /// `Readback::refresh`'s caveat.
+    pub fn refresh_required_index_size(&self, gpu: &Gpu) {
+        let gpu = gpu.clone();
+        let offset_total = self.offset_total.clone();
+
+        self.required_index_size.refresh(async move {
+            let bytes: u32 = gpu.read_buffer(&offset_total).await?[0];
+            Some(bytes * 4 / (1024 * 1024))
+        });
     }
 }
 

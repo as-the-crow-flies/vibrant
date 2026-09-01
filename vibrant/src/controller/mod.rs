@@ -100,7 +100,6 @@ impl Controller {
     pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, scale: f32, dt: f32) {
         Panel::top("TopBottomPanel").show(ui, |ui| {
             ui.horizontal(|ui| {
-                #[cfg(not(target_arch = "wasm32"))]
                 if ui
                     .button("📷 screenshot")
                     .on_hover_text("Take screenshot with transparent background")

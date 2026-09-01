@@ -190,7 +190,7 @@ impl RenderingWidget {
                                 });
                             ui.end_row();
 
-                            ui.label("Memory (MB)").on_hover_text("Tractography Acceleration Structure Memory Usage.\nAutoselected on native platforms.");
+                            ui.label("Memory (MB)").on_hover_text("Tractography Acceleration Structure Memory Usage.\nAutoselected.");
                             ComboBox::from_id_salt("Memory")
                                 .selected_text(format!("{:?}", settings.index_buffer_size))
                                 .width(ui.available_width())
