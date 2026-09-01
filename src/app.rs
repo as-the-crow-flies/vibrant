@@ -116,6 +116,7 @@ impl ApplicationHandler for App {
         let renderer = Renderer::new(&self.gpu, Arc::clone(&window));
 
         window.set_visible(true);
+        window.request_redraw();
 
         self.window = Some(window);
         self.renderer = Some(renderer);
