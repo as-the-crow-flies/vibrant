@@ -59,6 +59,16 @@ pub struct Settings {
     /// Desired HDR peak, as a multiple of SDR white. Clamped to what the display
     /// actually reports it can drive at present time.
     pub hdr_headroom: f32,
+    /// Accumulate successive samples into a persistent buffer while the scene is
+    /// unchanged (progressive refinement + sub-pixel AA). When off, every frame
+    /// renders from scratch like a game loop and the app never idles.
+    pub accumulate: bool,
+    /// Hard cap on accumulated samples; accumulation stops here even if the
+    /// noise metric never drops below `noise_threshold`.
+    pub max_samples: u32,
+    /// Relative-residual threshold below which the image counts as converged and
+    /// the render loop goes idle. Larger = stop sooner (noisier).
+    pub noise_threshold: f32,
 }
 
 impl Settings {
@@ -94,6 +104,9 @@ impl Settings {
             voxelization: LineVoxelizationMode::Tube,
             hdr: false,
             hdr_headroom: 1.0,
+            accumulate: true,
+            max_samples: 512,
+            noise_threshold: 1.0e-3,
         }
     }
 }

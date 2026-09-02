@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 use vibrant::controller::event::{Key, MouseButton};
 use vibrant::file::FileStage;
 use vibrant::gpu::Gpu;
@@ -12,7 +13,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{self, WindowId},
 };
 
@@ -23,6 +24,10 @@ struct App {
     controller: Controller,
     focused: bool,
     fps: Fps<8>,
+    /// When set, `about_to_wait` schedules a redraw at this instant - used for
+    /// egui's timed repaints (tooltips, animations) once the render loop has
+    /// otherwise gone idle on a converged frame.
+    next_repaint: Option<Instant>,
 }
 
 impl App {
@@ -34,55 +39,69 @@ impl App {
             controller: Controller::new(),
             focused: true,
             fps: Fps::new(),
+            next_repaint: None,
         }
     }
 
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
-        let window = self.window.as_ref().expect("Window");
+        let window = Arc::clone(self.window.as_ref().expect("Window"));
         let renderer = self.renderer.as_mut().expect("Renderer");
 
-        let consumed = renderer.egui().on_window_event(window, &event).consumed;
+        let response = renderer.egui().on_window_event(&window, &event);
+        let consumed = response.consumed;
+
+        // Anything that changes what's on screen (input we act on, egui asking
+        // for a repaint, a resize, a dropped file) needs a fresh frame; the
+        // loop is otherwise allowed to sleep once the image has converged.
+        let mut wants_redraw = response.repaint;
 
         match &event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Focused(focused) => {
                 self.focused = *focused;
-
-                if self.focused {
-                    self.request_redraw()
-                }
+                wants_redraw |= self.focused;
             }
-            WindowEvent::Resized(size) => self.controller.resize(*size),
+            WindowEvent::Resized(size) => {
+                self.controller.resize(*size);
+                wants_redraw = true;
+            }
             WindowEvent::RedrawRequested => {
                 self.fps.tick();
 
-                renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
+                let outcome =
+                    renderer.render(&self.gpu, &window, &mut self.controller, self.fps.seconds());
 
-                if let Some(window) = self.window.clone() {
+                if outcome.accumulating {
+                    // Drive the next sample as soon as the GPU drains.
+                    let window = Arc::clone(&window);
                     self.gpu.queue().on_submitted_work_done(move || {
                         window.request_redraw();
                     });
+                } else if outcome.repaint_after < Duration::MAX {
+                    let at = Instant::now() + outcome.repaint_after;
+                    self.next_repaint =
+                        Some(self.next_repaint.map_or(at, |existing| existing.min(at)));
                 }
 
                 self.gpu.wait();
             }
-            WindowEvent::DroppedFile(path) => FileStage::load_path(path),
+            WindowEvent::DroppedFile(path) => {
+                FileStage::load_path(path);
+                wants_redraw = true;
+            }
             _ => (),
         }
 
         if let Some(vibrant_event) = vibrant_event(event) {
             if self.controller.hovered() | !consumed {
                 self.controller.event(vibrant_event);
+                wants_redraw = true;
             }
         }
-    }
 
-    fn window(&self) -> &Arc<window::Window> {
-        self.window.as_ref().expect("Window was uninitialized")
-    }
-
-    fn request_redraw(&self) {
-        self.window().request_redraw();
+        if wants_redraw {
+            window.request_redraw();
+        }
     }
 }
 
@@ -126,6 +145,23 @@ impl ApplicationHandler for App {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         self.event(event_loop, event);
+    }
+
+    /// Idle policy: sleep until the OS wakes us, unless egui asked for a timed
+    /// repaint (`next_repaint`), in which case wait exactly that long and then
+    /// request one. Active accumulation doesn't rely on this - it re-arms via
+    /// `on_submitted_work_done` in `RedrawRequested`.
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        match self.next_repaint {
+            Some(at) if Instant::now() >= at => {
+                self.next_repaint = None;
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            Some(at) => event_loop.set_control_flow(ControlFlow::WaitUntil(at)),
+            None => event_loop.set_control_flow(ControlFlow::Wait),
+        }
     }
 }
 

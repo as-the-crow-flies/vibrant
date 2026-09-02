@@ -14,6 +14,7 @@ pub struct Camera {
     pub pan: Vec3,
     pub near: f32,
     pub far: f32,
+    changed: bool,
 }
 
 impl Camera {
@@ -24,10 +25,16 @@ impl Camera {
             pitch: -0.5 * PI,
             distance: 300.0,
             pan: Vec3::ZERO,
-            fov: 0.8,
+            fov: 0.5,
             near: 1.0,
             far: 10000.0,
+            changed: false,
         }
+    }
+
+    /// Returns whether the view moved since the last call, clearing the flag.
+    pub fn take_changed(&mut self) -> bool {
+        std::mem::replace(&mut self.changed, false)
     }
 
     pub fn update(&mut self, state: &ControllerState) {
@@ -42,6 +49,7 @@ impl Camera {
             self.pitch = 0.0;
             self.distance = 0.75;
             self.pan = Vec3::ZERO;
+            self.changed = true;
         }
 
         if state.left {
@@ -81,15 +89,24 @@ impl Camera {
     }
 
     pub fn zoom(&mut self, zoom: f32) {
+        if zoom != 0.0 {
+            self.changed = true;
+        }
         self.distance = (self.distance + zoom).clamp(1.0, 10000.0);
     }
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
+        if yaw != 0.0 || pitch != 0.0 {
+            self.changed = true;
+        }
         self.yaw += yaw;
         self.pitch += pitch;
     }
 
     pub fn pan(&mut self, x: f32, y: f32) {
+        if x != 0.0 || y != 0.0 {
+            self.changed = true;
+        }
         self.pan += self.rotation().inverse().mul_vec3(Vec3::new(x, y, 0.0)) * self.distance;
     }
 

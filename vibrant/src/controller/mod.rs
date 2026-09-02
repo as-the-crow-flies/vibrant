@@ -23,7 +23,10 @@ use crate::controller::widgets::{
     crop::CropWidget, masks::MasksWidget, rendering::RenderingWidget,
     tractography::TractographyWidget, volumes::VolumesWidget,
 };
-use crate::{asset::Asset, controller::segment::Segment, file::FileStage};
+use crate::{
+    asset::Asset, controller::segment::Segment, file::FileStage,
+    surface::accumulate::AccumulationStatus,
+};
 
 pub struct Controller {
     state: ControllerState,
@@ -104,6 +107,8 @@ impl Controller {
         scale: f32,
         dt: f32,
         hdr_headroom_limit: Option<f32>,
+        // Live accumulation progress from the renderer.
+        accumulation: AccumulationStatus,
     ) {
         Panel::top("TopBottomPanel").show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -164,6 +169,7 @@ impl Controller {
                         &mut self.camera,
                         &mut self.settings,
                         hdr_headroom_limit,
+                        accumulation,
                     );
 
                     self.controls_widget.show(ui);
@@ -189,6 +195,12 @@ impl Controller {
 
     pub fn camera(&self) -> &Camera {
         &self.camera
+    }
+
+    /// Whether the view moved since the last call (rotate/pan/zoom/reset),
+    /// clearing the flag. Used by the renderer to reset frame accumulation.
+    pub fn take_camera_changed(&mut self) -> bool {
+        self.camera.take_changed()
     }
 
     pub fn light(&self) -> &Light {

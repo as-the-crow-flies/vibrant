@@ -7,6 +7,8 @@ use wgpu::{
     BufferDescriptor, BufferUsages, ShaderStages,
 };
 
+use glam::{Mat4, Vec2, Vec3};
+
 use crate::{controller::Controller, gpu::Gpu};
 
 pub struct Environment {
@@ -43,7 +45,7 @@ impl Environment {
 
     pub fn from_controller(gpu: &Gpu, controller: &Controller) -> Self {
         let environment = Environment::new(&gpu);
-        environment.update(&gpu, controller);
+        environment.update(&gpu, controller, Vec2::ZERO);
         return environment;
     }
 
@@ -51,7 +53,19 @@ impl Environment {
         &self.binding
     }
 
-    pub fn update(&self, gpu: &Gpu, controller: &Controller) {
+    /// `jitter` is a sub-pixel camera offset in pixel units (e.g. a Halton
+    /// sequence in `[-0.5, 0.5]`), baked into the uploaded projection matrix so
+    /// every view-dependent pass (volume trace, lines) gets temporal
+    /// anti-aliasing for free while frames accumulate. Pass `Vec2::ZERO` when
+    /// not accumulating.
+    pub fn update(&self, gpu: &Gpu, controller: &Controller, jitter: Vec2) {
+        let width = controller.settings().width.max(1) as f32;
+        let height = controller.settings().height.max(1) as f32;
+
+        // NDC spans [-1, 1], so one pixel is `2 / dimension`.
+        let offset = Vec3::new(jitter.x * 2.0 / width, jitter.y * 2.0 / height, 0.0);
+        let projection = Mat4::from_translation(offset) * controller.camera().projection();
+
         gpu.queue().write_buffer(
             &self.buffer,
             0,
@@ -63,8 +77,8 @@ impl Environment {
                 ]),
                 bytes_of(&controller.time()),
                 bytes_of(&controller.camera().transform()),
-                bytes_of(&controller.camera().projection()),
-                bytes_of(&controller.camera().projection().inverse()),
+                bytes_of(&projection),
+                bytes_of(&projection.inverse()),
                 bytes_of(&controller.camera().near()),
                 bytes_of(&controller.camera().far()),
                 bytes_of(&0u64),
