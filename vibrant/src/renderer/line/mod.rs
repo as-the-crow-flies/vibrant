@@ -67,16 +67,16 @@ impl LineRenderer {
                 self.crop.dispatch(cmd, line, environment, &asset.crop);
 
                 self.occupancy
-                    .dispatch(cmd, frame, environment, controller.settings(), line);
+                    .dispatch(cmd, environment, controller.settings(), line);
 
-                self.cull.dispatch(cmd, frame, environment);
+                self.cull.dispatch(cmd, line, environment);
 
                 self.populate
-                    .dispatch(cmd, frame, environment, controller.settings(), line);
+                    .dispatch(cmd, environment, controller.settings(), line);
             }
 
             if changed || controller.lighting_changed() {
-                self.occlusion.dispatch(cmd, frame, environment);
+                self.occlusion.dispatch(cmd, line, environment);
             }
 
             self.render.dispatch(

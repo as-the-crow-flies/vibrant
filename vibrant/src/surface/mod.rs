@@ -1,97 +1,28 @@
 pub mod color;
-pub mod culling;
-pub mod occlusion;
-pub mod occupancy;
-
-use std::any::type_name;
 
 use color::ColorBuffer;
-use occlusion::OcclusionBuffer;
-use occupancy::OccupancyBuffer;
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, ColorTargetState,
-    ColorWrites, CommandEncoder, CompositeAlphaMode, CurrentSurfaceTexture, PresentMode,
-    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, TextureFormat, TextureUsages,
+    ColorTargetState, ColorWrites, CommandEncoder, CompositeAlphaMode, CurrentSurfaceTexture,
+    PresentMode, SurfaceConfiguration, SurfaceTarget, SurfaceTexture, TextureFormat, TextureUsages,
 };
 
-use crate::{
-    asset::texture::{MipTexture3D, R32Float, R32Uint},
-    controller::settings::Settings,
-    renderer::util::copy::CopyPipeline,
-    surface::culling::CullingBuffer,
-};
+use crate::{controller::settings::Settings, renderer::util::copy::CopyPipeline};
 
 use super::gpu::Gpu;
 
 pub struct Frame {
     color: ColorBuffer,
-    occupancy: OccupancyBuffer,
-    occlusion: OcclusionBuffer,
-    culling: CullingBuffer,
-    binding: BindGroup,
 }
 
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
-        let color = ColorBuffer::new(gpu, settings.width, settings.height);
-
-        let occupancy = OccupancyBuffer::new(gpu, settings.volume);
-        let occlusion = OcclusionBuffer::new(gpu, settings.volume);
-        let culling = CullingBuffer::new(gpu, settings.volume, settings.index_buffer_size);
-
-        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label: Some(type_name::<Self>()),
-            layout: &Self::layout(gpu),
-            entries: &[
-                occupancy.pyramid().binding_entries(0),
-                occupancy.count().binding_entries(2),
-                occlusion.ambient().binding_entries(4),
-                occlusion.directional().binding_entries(6),
-            ]
-            .concat(),
-        });
-
         Self {
-            color,
-            occupancy,
-            occlusion,
-            culling,
-            binding,
+            color: ColorBuffer::new(gpu, settings.width, settings.height),
         }
     }
 
     pub fn color(&self) -> &ColorBuffer {
         &self.color
-    }
-
-    pub fn occupancy(&self) -> &OccupancyBuffer {
-        &self.occupancy
-    }
-
-    pub fn occlusion(&self) -> &OcclusionBuffer {
-        &self.occlusion
-    }
-
-    pub fn culling(&self) -> &CullingBuffer {
-        &self.culling
-    }
-
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
-    }
-
-    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    MipTexture3D::<R32Float>::layout_entries(0), // Occupancy - Density
-                    MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
-                    MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
-                    MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
-                ]
-                .concat(),
-            })
     }
 }
 
@@ -121,32 +52,17 @@ impl Surface {
         }
     }
 
-    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &mut Settings) {
+    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &Settings) {
         if let Some(frame) = &self.frame {
-            // Update Required Index Size
-
-            let required_index_size = frame.culling().required_index_size();
-            if required_index_size > settings.index_buffer_size {
-                settings.index_buffer_size = required_index_size.next_power_of_two()
-            }
-
-            if settings.width == frame.color().width()
-                && settings.height == frame.color().height()
-                && settings.volume == frame.occupancy().resolution()
-                && settings.index_buffer_size == frame.culling().index_buffer_size()
+            if settings.width == frame.color().width() && settings.height == frame.color().height()
             {
-                // Only safe to kick off a fresh readback here, on the path
-                // that *isn't* about to destroy this CullingBuffer below -
-                // otherwise the readback could still be in flight against an
-                // already-destroyed buffer.
-                frame.culling().refresh_required_index_size(gpu);
                 self.changed = false;
                 return;
             }
         }
 
         self.frame.take();
-        self.frame = Some(Frame::new(gpu, &settings));
+        self.frame = Some(Frame::new(gpu, settings));
 
         self.surface
             .configure(gpu.device(), &Self::config(settings.width, settings.height));

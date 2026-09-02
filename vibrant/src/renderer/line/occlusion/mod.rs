@@ -1,6 +1,7 @@
 use wgpu::CommandEncoder;
 
 use crate::{
+    asset::line::LineBuffer,
     gpu::Gpu,
     renderer::{
         environment::Environment,
@@ -8,7 +9,6 @@ use crate::{
             ambient::AmbientOcclusionPipeline, directional::DirectionalOcclusionPipeline,
         },
     },
-    surface::Frame,
 };
 
 pub mod ambient;
@@ -27,8 +27,8 @@ impl LineOcclusionPipeline {
         }
     }
 
-    pub fn dispatch(&self, cmd: &mut CommandEncoder, frame: &Frame, environment: &Environment) {
-        self.ambient.render(cmd, frame, environment);
-        self.directional.render(cmd, frame, environment);
+    pub fn dispatch(&self, cmd: &mut CommandEncoder, line: &LineBuffer, environment: &Environment) {
+        self.ambient.render(cmd, line, environment);
+        self.directional.render(cmd, line, environment);
     }
 }

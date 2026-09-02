@@ -63,6 +63,8 @@ impl App {
                         window.request_redraw();
                     });
                 }
+
+                self.gpu.wait();
             }
             WindowEvent::DroppedFile(path) => FileStage::load_path(path),
             _ => (),

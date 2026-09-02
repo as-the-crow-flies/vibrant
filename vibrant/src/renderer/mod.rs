@@ -69,7 +69,7 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
-        self.surface.maybe_resize(gpu, controller.settings_mut());
+        self.surface.maybe_resize(gpu, controller.settings());
 
         let input = self.egui.take_egui_input(window);
         let mut output = self.egui.egui_ctx().run_ui(input, |ui| {
@@ -79,7 +79,7 @@ impl Renderer {
             .handle_platform_output(&window, output.platform_output.clone());
 
         self.environment.update(gpu, &controller);
-        self.asset.update(gpu, &controller);
+        self.asset.update(gpu, controller);
 
         // Texture updates/frees must be applied regardless of whether we end up painting
         // this frame, otherwise egui's `TexturesDelta` is dropped unhandled.

@@ -42,6 +42,11 @@ pub struct Asset {
     pub physical_volume: Option<PhysicalVolume>,
     pub radiance: RadianceBuffer,
 
+    // Last `settings.volume` / `settings.index_buffer_size` baked into
+    // `line`'s acceleration structure; a mismatch triggers `LineBuffer::resize`.
+    volume: u32,
+    index_buffer_size: u32,
+
     pub changed: bool,
 }
 
@@ -57,15 +62,20 @@ impl Asset {
             volumes: Vec::new(),
             physical_volume: None,
             radiance: RadianceBuffer::None,
+            volume: 0,
+            index_buffer_size: 0,
             changed: false,
         }
     }
 
-    pub fn update(&mut self, gpu: &Gpu, controller: &Controller) {
+    pub fn update(&mut self, gpu: &Gpu, controller: &mut Controller) {
         self.changed = false;
 
         FileStage::on_lines(|lines| {
-            let line = LineBuffer::new(gpu, &lines, &self.colormap);
+            let line = LineBuffer::new(gpu, &lines, &self.colormap, controller.settings());
+
+            self.volume = controller.settings().volume;
+            self.index_buffer_size = controller.settings().index_buffer_size;
 
             if let Some(volume) = self
                 .volumes
@@ -162,6 +172,33 @@ impl Asset {
         }
         for mask in &self.masks {
             mask.update_settings(gpu);
+        }
+
+        // Rebuild the tractography acceleration structure when the voxel
+        // resolution or index-buffer budget changed (this used to rebuild the
+        // whole `Frame` in `Surface::maybe_resize`). Also grow the index
+        // buffer when the last voxelization reported it overflowed.
+        if let Some(line) = &mut self.line {
+            let required = line.culling().required_index_size();
+            if required > controller.settings().index_buffer_size {
+                controller.settings_mut().index_buffer_size = required.next_power_of_two();
+            }
+
+            let settings = controller.settings();
+
+            if settings.volume != self.volume
+                || settings.index_buffer_size != self.index_buffer_size
+            {
+                line.resize(gpu, settings);
+                self.volume = settings.volume;
+                self.index_buffer_size = settings.index_buffer_size;
+                self.changed = true;
+            } else {
+                // Only kick off a fresh readback on the path that isn't about
+                // to tear down this CullingBuffer, mirroring the old guard in
+                // `Surface::maybe_resize`.
+                line.culling().refresh_required_index_size(gpu);
+            }
         }
     }
 

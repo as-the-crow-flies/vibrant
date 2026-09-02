@@ -1,3 +1,7 @@
+pub mod culling;
+pub mod occlusion;
+pub mod occupancy;
+
 use std::{any::type_name, iter::zip};
 
 use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
@@ -11,7 +15,12 @@ use wgpu::{
 };
 
 use crate::{
-    asset::colormap::{Colormap, ColormapSelection},
+    asset::{
+        colormap::{Colormap, ColormapSelection},
+        line::{culling::CullingBuffer, occlusion::OcclusionBuffer, occupancy::OccupancyBuffer},
+        texture::{MipTexture3D, R32Float, R32Uint},
+    },
+    controller::settings::Settings,
     file::{bounds::Bounds, LineFile, TrackScalarFile},
     gpu::Gpu,
 };
@@ -94,16 +103,36 @@ pub struct LineBuffer {
 
     transform: Buffer,
 
+    // Acceleration structure for tractography ray tracing. Volume-sized, so
+    // rebuilt via `resize` when `settings.volume` / `settings.index_buffer_size`
+    // change rather than when a new line file is loaded.
+    occupancy: OccupancyBuffer,
+    occlusion: OcclusionBuffer,
+    culling: CullingBuffer,
+
+    colormap_view: TextureView,
+
     binding_transform: BindGroup,
     binding_crop: BindGroup,
     binding_render: BindGroup,
+    // The single merged group for the ray-marcher (`render/trace.wgsl`). Kept
+    // separate from `binding_render` because the voxelization compute pipelines
+    // bind `binding_render` next to `CullingBuffer::layout_write`, and folding
+    // the acceleration-structure storage buffers in there would exceed
+    // `max_storage_buffers_per_shader_stage` (10, the WebGPU/Chrome limit).
+    binding_trace: BindGroup,
 
     n_lines: u32,
 }
 
 impl LineBuffer {
-    pub fn new(gpu: &Gpu, files: &[LineFile], colormap: &Colormap) -> Self {
+    pub fn new(gpu: &Gpu, files: &[LineFile], colormap: &Colormap, settings: &Settings) -> Self {
         let label = Some(type_name::<Self>());
+
+        // Captured before the local `settings: Vec<LineSettings>` below shadows
+        // the `&Settings` parameter.
+        let volume = settings.volume;
+        let index_buffer_size = settings.index_buffer_size;
 
         let global_settings = GlobalLineSettings {
             selected: Some(false),
@@ -294,6 +323,10 @@ impl LineBuffer {
             ],
         );
 
+        let colormap_view = colormap
+            .texture()
+            .create_view(&TextureViewDescriptor::default());
+
         let binding_render = gpu.binding(
             "LineRender",
             &Self::layout_render(gpu),
@@ -306,12 +339,28 @@ impl LineBuffer {
                 settings_buffer.as_entire_binding(),
                 transform.as_entire_binding(),
                 scalar.as_entire_binding(),
-                BindingResource::TextureView(
-                    &colormap
-                        .texture()
-                        .create_view(&TextureViewDescriptor::default()),
-                ),
+                BindingResource::TextureView(&colormap_view),
             ],
+        );
+
+        let occupancy = OccupancyBuffer::new(gpu, volume);
+        let occlusion = OcclusionBuffer::new(gpu, volume);
+        let culling = CullingBuffer::new(gpu, volume, index_buffer_size);
+
+        let binding_trace = Self::trace_binding(
+            gpu,
+            &indices,
+            &vertices,
+            &length,
+            &offset,
+            &materials,
+            &settings_buffer,
+            &transform,
+            &scalar,
+            &colormap_view,
+            &occupancy,
+            &occlusion,
+            &culling,
         );
 
         Self {
@@ -330,15 +379,141 @@ impl LineBuffer {
 
             transform,
 
+            occupancy,
+            occlusion,
+            culling,
+
+            colormap_view,
+
             raw_indices,
             raw_vertices,
             raw_offsets,
             binding_transform,
             binding_crop,
             binding_render,
+            binding_trace,
 
             n_lines,
         }
+    }
+
+    /// Builds the merged ray-marcher bind group (`layout_trace`): line geometry
+    /// buffers, colormap, and the tractography acceleration structure
+    /// (occupancy / occlusion / culling). Used by `new` and `resize`.
+    #[allow(clippy::too_many_arguments)]
+    fn trace_binding(
+        gpu: &Gpu,
+        indices: &Buffer,
+        vertices: &Buffer,
+        length: &Buffer,
+        offset: &Buffer,
+        materials: &Buffer,
+        settings_buffer: &Buffer,
+        transform: &Buffer,
+        scalar: &Buffer,
+        colormap_view: &TextureView,
+        occupancy: &OccupancyBuffer,
+        occlusion: &OcclusionBuffer,
+        culling: &CullingBuffer,
+    ) -> BindGroup {
+        gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some("LineTrace"),
+            layout: &Self::layout_trace(gpu),
+            entries: &[
+                vec![
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: indices.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: vertices.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: length.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: offset.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: materials.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 5,
+                        resource: settings_buffer.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 6,
+                        resource: transform.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 7,
+                        resource: scalar.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 8,
+                        resource: BindingResource::TextureView(colormap_view),
+                    },
+                ],
+                occupancy.pyramid().binding_entries(9),
+                occupancy.count().binding_entries(11),
+                occlusion.ambient().binding_entries(13),
+                occlusion.directional().binding_entries(15),
+                vec![
+                    BindGroupEntry {
+                        binding: 17,
+                        resource: culling.offset().as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 18,
+                        resource: culling.index().as_entire_binding(),
+                    },
+                ],
+            ]
+            .concat(),
+        })
+    }
+
+    /// Rebuilds the volume-sized acceleration structure (and the ray-marcher
+    /// bind group that references it) after `settings.volume` or
+    /// `settings.index_buffer_size` changed. Leaves the line geometry buffers
+    /// (and `binding_render`, which doesn't reference the acceleration
+    /// structure) untouched.
+    pub fn resize(&mut self, gpu: &Gpu, settings: &Settings) {
+        self.occupancy = OccupancyBuffer::new(gpu, settings.volume);
+        self.occlusion = OcclusionBuffer::new(gpu, settings.volume);
+        self.culling = CullingBuffer::new(gpu, settings.volume, settings.index_buffer_size);
+
+        self.binding_trace = Self::trace_binding(
+            gpu,
+            &self.indices,
+            &self.vertices,
+            &self.length,
+            &self.offset,
+            &self.materials,
+            &self.settings_buffer,
+            &self.transform,
+            &self.scalar,
+            &self.colormap_view,
+            &self.occupancy,
+            &self.occlusion,
+            &self.culling,
+        );
+    }
+
+    pub fn occupancy(&self) -> &OccupancyBuffer {
+        &self.occupancy
+    }
+
+    pub fn occlusion(&self) -> &OcclusionBuffer {
+        &self.occlusion
+    }
+
+    pub fn culling(&self) -> &CullingBuffer {
+        &self.culling
     }
 
     pub fn settings_global_mut(&mut self) -> &mut GlobalLineSettings {
@@ -367,6 +542,10 @@ impl LineBuffer {
 
     pub fn binding_render(&self) -> &BindGroup {
         &self.binding_render
+    }
+
+    pub fn binding_trace(&self) -> &BindGroup {
+        &self.binding_trace
     }
 
     pub fn clear_offset(&self, cmd: &mut CommandEncoder) {
@@ -533,6 +712,9 @@ impl LineBuffer {
             })
     }
 
+    /// Line geometry + colormap, bound by the ray-marcher and the voxelization
+    /// compute pipelines alike. The ray-marcher additionally needs the
+    /// acceleration structure — see [`Self::layout_trace`].
     pub fn layout_render(gpu: &Gpu) -> BindGroupLayout {
         let visibility = ShaderStages::COMPUTE | ShaderStages::FRAGMENT;
 
@@ -561,65 +743,136 @@ impl LineBuffer {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
+                entries: &Self::render_layout_entries(visibility, buffer_read, buffer_readwrite),
+            })
+    }
+
+    /// The 0..8 entries shared by `layout_render` and `layout_trace`.
+    fn render_layout_entries(
+        visibility: ShaderStages,
+        buffer_read: BindGroupLayoutEntry,
+        buffer_readwrite: BindGroupLayoutEntry,
+    ) -> [BindGroupLayoutEntry; 9] {
+        [
+            // Indices
+            BindGroupLayoutEntry {
+                binding: 0,
+                ..buffer_read
+            },
+            // Vertices
+            BindGroupLayoutEntry {
+                binding: 1,
+                ..buffer_read
+            },
+            // Length
+            BindGroupLayoutEntry {
+                binding: 2,
+                ..buffer_read
+            },
+            // Offset
+            BindGroupLayoutEntry {
+                binding: 3,
+                ..buffer_readwrite
+            },
+            // Material
+            BindGroupLayoutEntry {
+                binding: 4,
+                ..buffer_read
+            },
+            // Settings
+            BindGroupLayoutEntry {
+                binding: 5,
+                ..buffer_read
+            },
+            // Transform
+            BindGroupLayoutEntry {
+                binding: 6,
+                visibility,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // Scalar
+            BindGroupLayoutEntry {
+                binding: 7,
+                ..buffer_read
+            },
+            // Colormap
+            BindGroupLayoutEntry {
+                binding: 8,
+                visibility,
+                ty: BindingType::Texture {
+                    sample_type: TextureSampleType::Float { filterable: true },
+                    view_dimension: TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+        ]
+    }
+
+    /// The single merged bind group for the tractography ray-marcher
+    /// (`render/trace.wgsl`): everything from `layout_render` (0..8) plus the
+    /// occupancy / occlusion textures (9..16) and the culling `OFFSET` /
+    /// `INDEX` buffers (17, 18), so the fragment shader needs only one group.
+    ///
+    /// Deliberately distinct from `layout_render`: the voxelization compute
+    /// pipelines bind `layout_render` alongside `CullingBuffer::layout_write`,
+    /// and folding these extra storage buffers in there would exceed
+    /// `max_storage_buffers_per_shader_stage` (10) in the compute stage.
+    pub fn layout_trace(gpu: &Gpu) -> BindGroupLayout {
+        let visibility = ShaderStages::COMPUTE | ShaderStages::FRAGMENT;
+
+        let buffer_read = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        let buffer_readwrite = BindGroupLayoutEntry {
+            binding: 0,
+            visibility,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
                 entries: &[
-                    // Indices
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        ..buffer_read
-                    },
-                    // Vertices
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        ..buffer_read
-                    },
-                    // Length
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        ..buffer_read
-                    },
-                    // Offset
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        ..buffer_readwrite
-                    },
-                    // Material
-                    BindGroupLayoutEntry {
-                        binding: 4,
-                        ..buffer_read
-                    },
-                    // Settings
-                    BindGroupLayoutEntry {
-                        binding: 5,
-                        ..buffer_read
-                    },
-                    // Transform
-                    BindGroupLayoutEntry {
-                        binding: 6,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                    Self::render_layout_entries(visibility, buffer_read, buffer_readwrite).to_vec(),
+                    // Occupancy - Density (9, 10) / Count (11, 12)
+                    MipTexture3D::<R32Float>::layout_entries(9),
+                    MipTexture3D::<R32Uint>::layout_entries(11),
+                    // Occlusion - Ambient (13, 14) / Directional (15, 16)
+                    MipTexture3D::<R32Float>::layout_entries(13),
+                    MipTexture3D::<R32Float>::layout_entries(15),
+                    vec![
+                        // Culling - Offset
+                        BindGroupLayoutEntry {
+                            binding: 17,
+                            ..buffer_read
                         },
-                        count: None,
-                    },
-                    // Scalar
-                    BindGroupLayoutEntry {
-                        binding: 7,
-                        ..buffer_read
-                    },
-                    // Colormap
-                    BindGroupLayoutEntry {
-                        binding: 8,
-                        visibility,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
+                        // Culling - Index
+                        BindGroupLayoutEntry {
+                            binding: 18,
+                            ..buffer_read
                         },
-                        count: None,
-                    },
-                ],
+                    ],
+                ]
+                .concat(),
             })
     }
 

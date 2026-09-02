@@ -1,21 +1,19 @@
-@group(0) @binding(0) var DENSITY: texture_3d<f32>;
-@group(0) @binding(1) var SAMPLER: sampler;
-@group(0) @binding(2) var COUNT: texture_3d<u32>;
-@group(0) @binding(4) var OCCLUSION_AMBIENT: texture_3d<f32>;
-@group(0) @binding(6) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
+@group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
+@group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
+@group(0) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
+@group(0) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
+@group(0) @binding(6) var<uniform> TRANSFORM: mat4x4<f32>;
+@group(0) @binding(7) var<storage> LINE_SCALAR: array<f32>;
+@group(0) @binding(8) var COLORMAP: texture_2d<f32>;
+@group(0) @binding(9) var DENSITY: texture_3d<f32>;
+@group(0) @binding(10) var SAMPLER: sampler;
+@group(0) @binding(11) var COUNT: texture_3d<u32>;
+@group(0) @binding(13) var OCCLUSION_AMBIENT: texture_3d<f32>;
+@group(0) @binding(15) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
+@group(0) @binding(17) var<storage> OFFSET: array<u32>;
+@group(0) @binding(18) var<storage> INDEX: array<u32>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
-
-@group(2) @binding(0) var<storage> LINE_INDEX: array<u32>;
-@group(2) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
-@group(2) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
-@group(2) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
-@group(2) @binding(6) var<uniform> TRANSFORM: mat4x4<f32>;
-@group(2) @binding(7) var<storage> LINE_SCALAR: array<f32>;
-@group(2) @binding(8) var COLORMAP: texture_2d<f32>;
-
-@group(3) @binding(0) var<storage> OFFSET: array<u32>;
-@group(3) @binding(2) var<storage> INDEX: array<u32>;
 
 var<private> DIM: f32;
 var<private> DIM_INV: f32;

@@ -145,6 +145,14 @@ impl CullingBuffer {
         &self.offset_total
     }
 
+    pub fn offset(&self) -> &Buffer {
+        &self.offset
+    }
+
+    pub fn index(&self) -> &Buffer {
+        &self.index
+    }
+
     pub fn pyramid(&self) -> &MipTexture3D<R32Float> {
         &self.culling
     }

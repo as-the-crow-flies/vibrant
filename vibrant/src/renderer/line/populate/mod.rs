@@ -2,13 +2,12 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{
-        line::LineBuffer,
+        line::{culling::CullingBuffer, LineBuffer},
         texture::{MipTexture3D, R32Float, R32Uint},
     },
     controller::settings::{LineVoxelizationMode, Settings},
     gpu::Gpu,
     renderer::{environment::Environment, wgsl},
-    surface::{culling::CullingBuffer, Frame},
 };
 
 pub struct LinePopulatePipeline {
@@ -61,12 +60,11 @@ impl LinePopulatePipeline {
     pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &Frame,
         environment: &Environment,
         settings: &Settings,
         line: &LineBuffer,
     ) {
-        frame.culling().clear(cmd);
+        line.culling().clear(cmd);
         line.clear_offset(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -74,12 +72,12 @@ impl LinePopulatePipeline {
             ..Default::default()
         });
 
-        let n = frame.occupancy().resolution().div_ceil(4);
+        let n = line.occupancy().resolution().div_ceil(4);
 
         pass.set_pipeline(&self.scan);
-        pass.set_bind_group(0, frame.culling().pyramid().binding_write(), &[]);
-        pass.set_bind_group(1, frame.culling().binding_write(), &[]);
-        pass.set_bind_group(2, frame.occupancy().count().binding(), &[]);
+        pass.set_bind_group(0, line.culling().pyramid().binding_write(), &[]);
+        pass.set_bind_group(1, line.culling().binding_write(), &[]);
+        pass.set_bind_group(2, line.occupancy().count().binding(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
@@ -89,8 +87,8 @@ impl LinePopulatePipeline {
             LineVoxelizationMode::Tube => &self.populate_tube,
         });
 
-        pass.set_bind_group(0, frame.culling().binding_write(), &[]);
-        pass.set_bind_group(1, frame.culling().pyramid().binding(), &[]);
+        pass.set_bind_group(0, line.culling().binding_write(), &[]);
+        pass.set_bind_group(1, line.culling().pyramid().binding(), &[]);
         pass.set_bind_group(2, line.binding_render(), &[]);
         pass.set_bind_group(3, environment.binding(), &[]);
         pass.dispatch_workgroups(settings.workgroups, 1, 1);

@@ -8,7 +8,7 @@ use crate::{
     controller::settings::Settings,
     gpu::Gpu,
     renderer::environment::Environment,
-    surface::{color::ColorBuffer, culling::CullingBuffer, Frame},
+    surface::{color::ColorBuffer, Frame},
 };
 
 pub struct LineRenderPipeline {
@@ -23,23 +23,13 @@ impl LineRenderPipeline {
         Self {
             opaque: gpu.quad(
                 type_name::<Self>(),
-                &gpu.pipeline_layout(&[
-                    &Frame::layout(gpu),
-                    &Environment::layout(gpu),
-                    &LineBuffer::layout_render(gpu),
-                    &CullingBuffer::layout_read(gpu),
-                ]),
+                &gpu.pipeline_layout(&[&LineBuffer::layout_trace(gpu), &Environment::layout(gpu)]),
                 ColorBuffer::target_blend(),
                 &gpu.shader(&(trace.to_string() + include_str!("opaque.wgsl"))),
             ),
             transparent: gpu.quad(
                 type_name::<Self>(),
-                &gpu.pipeline_layout(&[
-                    &Frame::layout(gpu),
-                    &Environment::layout(gpu),
-                    &LineBuffer::layout_render(gpu),
-                    &CullingBuffer::layout_read(gpu),
-                ]),
+                &gpu.pipeline_layout(&[&LineBuffer::layout_trace(gpu), &Environment::layout(gpu)]),
                 ColorBuffer::target_blend(),
                 &gpu.shader(&(trace.to_string() + include_str!("transparent.wgsl"))),
             ),
@@ -76,10 +66,8 @@ impl LineRenderPipeline {
             pass.set_pipeline(&self.transparent);
         }
 
-        pass.set_bind_group(0, frame.binding(), &[]);
+        pass.set_bind_group(0, line.binding_trace(), &[]);
         pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_bind_group(2, line.binding_render(), &[]);
-        pass.set_bind_group(3, frame.culling().binding_read(), &[]);
         pass.draw(0..4, 0..1);
     }
 }
