@@ -11,6 +11,17 @@ use wgpu::{
 
 use crate::gpu::Gpu;
 
+/// A sampled color target. Three flavors are used per [`crate::surface::Frame`]:
+///
+/// * the scene buffer ([`Self::new`]) is linear HDR ([`Self::FORMAT`],
+///   `rgba16float`) - every renderer writes un-tone-mapped radiance here,
+/// * the UI overlay ([`Self::overlay`]) is [`Self::LDR_FORMAT`] and receives
+///   the egui paint,
+/// * the export buffer ([`Self::export`]) is [`Self::LDR_FORMAT`] plus
+///   `COPY_SRC` for screenshot readback.
+///
+/// All three share [`Self::layout`] so the present pass can sample them the
+/// same way.
 pub struct ColorBuffer {
     texture: Texture,
     view: TextureView,
@@ -18,9 +29,50 @@ pub struct ColorBuffer {
 }
 
 impl ColorBuffer {
-    pub const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+    /// Scene buffer format: linear, high dynamic range.
+    pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    /// Overlay / export format: 8-bit, sRGB-encoded values (non-sRGB texture).
+    pub const LDR_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
+        Self::create(
+            gpu,
+            width,
+            height,
+            Self::FORMAT,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+        )
+    }
+
+    pub fn overlay(gpu: &Gpu, width: u32, height: u32) -> Self {
+        Self::create(
+            gpu,
+            width,
+            height,
+            Self::LDR_FORMAT,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+        )
+    }
+
+    pub fn export(gpu: &Gpu, width: u32, height: u32) -> Self {
+        Self::create(
+            gpu,
+            width,
+            height,
+            Self::LDR_FORMAT,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_SRC,
+        )
+    }
+
+    fn create(
+        gpu: &Gpu,
+        width: u32,
+        height: u32,
+        format: TextureFormat,
+        usage: TextureUsages,
+    ) -> Self {
         let label = Some(type_name::<Self>());
 
         let texture = gpu.device().create_texture(&TextureDescriptor {
@@ -33,17 +85,14 @@ impl ColorBuffer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: Self::FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT
-                | TextureUsages::TEXTURE_BINDING
-                | TextureUsages::STORAGE_BINDING
-                | TextureUsages::COPY_SRC,
+            format,
+            usage,
             view_formats: &[],
         });
 
         let view = texture.create_view(&TextureViewDescriptor {
             label,
-            format: Some(Self::FORMAT),
+            format: Some(format),
             ..Default::default()
         });
 
@@ -90,6 +139,10 @@ impl ColorBuffer {
 
     pub fn texture(&self) -> &Texture {
         &self.texture
+    }
+
+    pub fn view(&self) -> &TextureView {
+        &self.view
     }
 
     pub fn binding(&self) -> &BindGroup {

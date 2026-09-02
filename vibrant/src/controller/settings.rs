@@ -53,6 +53,12 @@ pub struct Settings {
     pub display: LineDisplayMode,
     pub voxelization: LineVoxelizationMode,
     pub plane: f32,
+    /// Present to an HDR (scRGB) swapchain instead of ACES-to-SDR. Ignored when
+    /// [`Surface::hdr_supported`](crate::surface::Surface::hdr_supported) is false.
+    pub hdr: bool,
+    /// Desired HDR peak, as a multiple of SDR white. Clamped to what the display
+    /// actually reports it can drive at present time.
+    pub hdr_headroom: f32,
 }
 
 impl Settings {
@@ -86,6 +92,8 @@ impl Settings {
             plane: 0.33,
             display: LineDisplayMode::Geometry,
             voxelization: LineVoxelizationMode::Tube,
+            hdr: false,
+            hdr_headroom: 1.0,
         }
     }
 }

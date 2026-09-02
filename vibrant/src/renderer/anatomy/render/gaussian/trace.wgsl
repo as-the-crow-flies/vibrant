@@ -100,7 +100,8 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     let alpha = 1.0 - brightness(transmittance);
 
-    return vec4<f32>(linear_to_srgb(aces(color.rgb)), alpha);
+    // Linear HDR radiance; tone mapping happens once in the present pass.
+    return vec4<f32>(color.rgb, alpha);
 }
 
 struct Material {

@@ -17,7 +17,10 @@ impl UiRenderer {
         Self {
             egui: egui_wgpu::Renderer::new(
                 gpu.device(),
-                ColorBuffer::FORMAT,
+                // Own texture, decoupled from the swapchain: egui paints
+                // sRGB-encoded premultiplied color that the present pass
+                // composites after tone mapping.
+                ColorBuffer::LDR_FORMAT,
                 RendererOptions {
                     msaa_samples: 1,
                     depth_stencil_format: None,
@@ -58,7 +61,7 @@ impl UiRenderer {
         let (device, queue) = (gpu.device(), gpu.queue());
 
         let screen = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [frame.color().width(), frame.color().height()],
+            size_in_pixels: [frame.overlay().width(), frame.overlay().height()],
             pixels_per_point,
         };
 
@@ -69,7 +72,7 @@ impl UiRenderer {
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
                 label: Some(type_name::<Self>()),
-                color_attachments: &[Some(frame.color().attachment())],
+                color_attachments: &[Some(frame.overlay().attachment_clear())],
                 ..Default::default()
             })
             .forget_lifetime();

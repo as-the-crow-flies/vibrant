@@ -97,7 +97,14 @@ impl Controller {
         self.light.update(&self.state);
     }
 
-    pub fn ui(&mut self, ui: &mut Ui, asset: &mut Asset, scale: f32, dt: f32) {
+    pub fn ui(
+        &mut self,
+        ui: &mut Ui,
+        asset: &mut Asset,
+        scale: f32,
+        dt: f32,
+        hdr_headroom_limit: Option<f32>,
+    ) {
         Panel::top("TopBottomPanel").show(ui, |ui| {
             ui.horizontal(|ui| {
                 if ui
@@ -156,6 +163,7 @@ impl Controller {
                         &mut asset.hdri,
                         &mut self.camera,
                         &mut self.settings,
+                        hdr_headroom_limit,
                     );
 
                     self.controls_widget.show(ui);

@@ -314,12 +314,16 @@ fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
 }
 
 fn tangent2rgb(tangent: vec3<f32>) -> vec3<f32> {
+    // Hue directions in the OkLab (a, b) plane for the three tract axes.
     let red = vec2<f32>(0.217, 0.125);
     let green = vec2<f32>(-0.217, 0.125);
     let blue = vec2<f32>(0.000, -0.250);
 
-    let oklab = vec3<f32>(0.8, tangent.r * red + tangent.g * green + tangent.b * blue);
-    return oklab2rgb(oklab);
+    let lightness = 0.8;
+    let chroma = 0.8;
+    let ab = tangent.r * red + tangent.g * green + tangent.b * blue;
+
+    return oklab2rgb(vec3<f32>(lightness, chroma * ab));
 }
 
 /*
@@ -470,6 +474,14 @@ fn linear_to_srgb(linear: vec3<f32>) -> vec3<f32> {
         1.055 * pow(linear, vec3<f32>(1.0 / 2.4)) - 0.055,
         linear * 12.92,
         linear < vec3<f32>(0.0031308)
+    );
+}
+
+fn srgb_to_linear(srgb: vec3<f32>) -> vec3<f32> {
+    return select(
+        pow((srgb + 0.055) / 1.055, vec3<f32>(2.4)),
+        srgb / 12.92,
+        srgb < vec3<f32>(0.04045)
     );
 }
 

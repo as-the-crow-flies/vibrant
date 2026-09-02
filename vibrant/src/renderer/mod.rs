@@ -1,6 +1,7 @@
 pub mod anatomy;
 pub mod environment;
 pub mod line;
+pub mod present;
 pub mod ui;
 pub mod util;
 pub mod wgsl;
@@ -69,11 +70,24 @@ impl Renderer {
         controller: &mut Controller,
         dt: f32,
     ) {
-        self.surface.maybe_resize(gpu, controller.settings());
+        self.surface.maybe_reconfigure(gpu, controller.settings());
+
+        // `Some(limit)` = HDR available, and the max peak the display can drive
+        // right now; `None` = HDR unavailable.
+        let hdr_headroom_limit = self
+            .surface
+            .hdr_supported()
+            .then(|| self.surface.hdr_headroom_limit(gpu));
 
         let input = self.egui.take_egui_input(window);
         let mut output = self.egui.egui_ctx().run_ui(input, |ui| {
-            controller.ui(ui, &mut self.asset, window.scale_factor() as f32, dt)
+            controller.ui(
+                ui,
+                &mut self.asset,
+                window.scale_factor() as f32,
+                dt,
+                hdr_headroom_limit,
+            )
         });
         self.egui
             .handle_platform_output(&window, output.platform_output.clone());
@@ -115,14 +129,25 @@ impl Renderer {
                 output.pixels_per_point,
             );
 
+            // A pending screenshot needs the SDR-composited image. Record the
+            // export pass into `cmd`, but only kick off the (blocking, on
+            // native) readback *after* `present` has submitted `cmd` - otherwise
+            // `gpu.save` copies the export texture before it has been written.
+            let mut save_path = None;
+            FileStage::on_save(|path| save_path = Some(path));
+
+            if save_path.is_some() {
+                self.surface.export(gpu, &mut cmd, frame);
+            }
+
             self.surface.present(gpu, cmd);
 
-            FileStage::on_save(|path| {
+            if let Some(path) = save_path {
                 let gpu = gpu.clone();
-                let texture = frame.color().texture().clone();
+                let texture = frame.export().texture().clone();
                 let viewport = controller.viewport();
                 spawn_task(async move { gpu.save(path, &texture, viewport).await });
-            });
+            }
         }
 
         output.textures_delta.clear();

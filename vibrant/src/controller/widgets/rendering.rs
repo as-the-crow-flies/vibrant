@@ -23,6 +23,10 @@ pub struct RenderingWidget {
     method: RadianceMethod,
     resolution: u32,
     lobes: u32,
+    /// While true, HDR strength follows the display's headroom limit. Cleared
+    /// when the user drags the slider below the max, re-set if they drag it
+    /// back up.
+    hdr_headroom_auto: bool,
 }
 
 impl Tracked for RenderingWidget {
@@ -38,6 +42,7 @@ impl RenderingWidget {
             method: RadianceMethod::Gaussian,
             resolution: 4,
             lobes: 16,
+            hdr_headroom_auto: true,
         }
     }
 
@@ -47,6 +52,8 @@ impl RenderingWidget {
         hdri: &mut HdriBuffer,
         camera: &mut Camera,
         settings: &mut Settings,
+        // `Some(limit)` = HDR available + the max peak the display can drive now.
+        hdr_headroom_limit: Option<f32>,
     ) {
         self.changed = false;
 
@@ -117,6 +124,59 @@ impl RenderingWidget {
                     "Environment Textures",
                     "Add realistic lighting by loading an environment texture.\n
                     Click open to load an .exr file (e.g. from http://polyhaven.com)",
+                );
+
+                let display_open = ui.is_new("Rendering.Display");
+                ui.collapse(
+                    format!("{} Display", icons::regular::MONITOR),
+                    display_open,
+                    |ui| {
+                        Grid::new("DisplaySettings").num_columns(2).show(ui, |ui| {
+                            ui.label("HDR Display").on_hover_text(
+                                "Present to an HDR (scRGB) display instead of tone \
+                                 mapping to SDR with ACES. Disabled when the current \
+                                 display or GPU can't present HDR.",
+                            );
+                            ui.add_enabled(
+                                hdr_headroom_limit.is_some(),
+                                egui::Checkbox::new(&mut settings.hdr, "Enabled"),
+                            )
+                            .track(self);
+                            ui.end_row();
+
+                            if let Some(limit) = hdr_headroom_limit {
+                                // Default to the display's max; keep following it
+                                // until the user drags the slider down.
+                                if self.hdr_headroom_auto {
+                                    settings.hdr_headroom = limit;
+                                }
+                                settings.hdr_headroom =
+                                    settings.hdr_headroom.clamp(1.0, limit);
+
+                                ui.label("HDR Strength").on_hover_text(
+                                    "Peak brightness as a multiple of SDR white. \
+                                     Capped at what the display reports it can \
+                                     drive.",
+                                );
+                                let changed = ui
+                                    .add_enabled(
+                                        settings.hdr,
+                                        egui::Slider::new(
+                                            &mut settings.hdr_headroom,
+                                            1.0..=limit,
+                                        )
+                                        .fixed_decimals(2),
+                                    )
+                                    .track(self)
+                                    .changed();
+                                if changed {
+                                    self.hdr_headroom_auto =
+                                        settings.hdr_headroom >= limit;
+                                }
+                                ui.end_row();
+                            }
+                        });
+                    },
                 );
 
                 ui.collapse(

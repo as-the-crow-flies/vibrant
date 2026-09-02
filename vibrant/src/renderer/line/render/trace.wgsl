@@ -51,7 +51,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     let result = raymarch(origin, direction);
 
-    if (result.a > 0.0) { return vec4<f32>(linear_to_srgb(aces(result.rgb)), result.a); }
+    if (result.a > 0.0) { return vec4<f32>(result.rgb, result.a); }
     else { return vec4<f32>(0.0); }
 }
 
