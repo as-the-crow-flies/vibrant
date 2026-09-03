@@ -21,8 +21,6 @@ use crate::{
     surface::Frame,
 };
 
-use super::environment::Environment;
-
 pub struct LineRenderer {
     transform: LineTransformPipeline,
     crop: LineCropPipeline,
@@ -50,26 +48,18 @@ impl LineRenderer {
     /// cull/populate). The occupancy density pyramid it produces is also what
     /// [`Self::deposit`] samples to bake line density into the shared
     /// [`PhysicalVolume`](crate::asset::volume::PhysicalVolume).
-    pub fn transfer(
-        &self,
-        cmd: &mut CommandEncoder,
-        controller: &Controller,
-        environment: &Environment,
-        asset: &Asset,
-    ) {
+    pub fn transfer(&self, cmd: &mut CommandEncoder, controller: &Controller, asset: &Asset) {
         if controller.tractography().visible() {
             if let Some(line) = &asset.line {
-                self.transform.dispatch(cmd, line, environment);
+                self.transform.dispatch(cmd, asset, line);
 
-                self.crop.dispatch(cmd, line, environment, &asset.crop);
+                self.crop.dispatch(cmd, asset, line);
 
-                self.occupancy
-                    .dispatch(cmd, environment, controller.settings(), line);
+                self.occupancy.dispatch(cmd, asset, controller, line);
 
-                self.cull.dispatch(cmd, line, environment);
+                self.cull.dispatch(cmd, asset, controller, line);
 
-                self.populate
-                    .dispatch(cmd, environment, controller.settings(), line);
+                self.populate.dispatch(cmd, asset, controller, line);
             }
         }
     }
@@ -77,13 +67,7 @@ impl LineRenderer {
     /// Writes neutral line density into the shared `PhysicalVolume`'s
     /// `line_extinction` side texture, so the radiance cascade(s) pick up the
     /// lines' occlusion. Never touches the marched volume textures.
-    pub fn deposit(
-        &self,
-        cmd: &mut CommandEncoder,
-        controller: &Controller,
-        environment: &Environment,
-        asset: &Asset,
-    ) {
+    pub fn deposit(&self, cmd: &mut CommandEncoder, controller: &Controller, asset: &Asset) {
         if !controller.tractography().visible() {
             return;
         }
@@ -92,14 +76,13 @@ impl LineRenderer {
             return;
         };
 
-        self.deposit.dispatch(cmd, environment, volume, line);
+        self.deposit.dispatch(cmd, volume, line);
     }
 
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
         controller: &Controller,
-        environment: &Environment,
         asset: &Asset,
         frame: &Frame,
     ) {
@@ -107,22 +90,6 @@ impl LineRenderer {
             return;
         }
 
-        // X-ray+both -> the line-only cascade; otherwise the primary one.
-        let radiance = asset.radiance_lines.as_ref().or(asset.radiance.as_ref());
-
-        let (Some(line), Some(radiance)) = (&asset.line, radiance) else {
-            return;
-        };
-
-        self.render.dispatch(
-            cmd,
-            frame,
-            environment,
-            controller.viewport(),
-            controller.radiance().lobes(),
-            controller.settings().render_mode,
-            radiance,
-            line,
-        );
+        self.render.dispatch(cmd, asset, controller, frame);
     }
 }

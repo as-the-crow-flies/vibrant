@@ -31,7 +31,7 @@ impl ControllerState {
         let default = ControllerState {
             delta: Vec2::default(),
             scroll: Vec2::default(),
-            ..self.clone()
+            ..*self
         };
 
         match event {

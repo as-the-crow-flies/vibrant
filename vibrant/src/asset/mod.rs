@@ -1,18 +1,22 @@
 pub mod colormap;
 pub mod crop;
+pub mod environment;
 pub mod hdri;
 pub mod line;
 pub mod material;
 pub mod radiance;
 pub mod texture;
+pub mod tractography;
 pub mod volume;
 pub mod volume_fraction;
 pub mod volume_mask;
 
 use std::f32::consts::PI;
 
+use environment::Environment;
 use glam::{Mat4, UVec3};
 use line::LineBuffer;
+use tractography::Tractography;
 use volume::PhysicalVolume;
 
 use crate::{
@@ -27,6 +31,8 @@ use crate::{
 
 pub struct Asset {
     pub colormap: Colormap,
+    pub environment: Environment,
+    pub tractography: Tractography,
     pub hdri: HdriBuffer,
     pub crop: CropBuffer,
 
@@ -64,6 +70,8 @@ impl Asset {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             colormap: Colormap::new(gpu),
+            environment: Environment::new(gpu),
+            tractography: Tractography::new(gpu),
             crop: CropBuffer::new(gpu),
             hdri: HdriBuffer::new(gpu),
             masks: vec![VolumeMaskBuffer::none(gpu)],
@@ -148,6 +156,7 @@ impl Asset {
         self.hdri.settings_mut().rotation = controller.light().yaw() / (2.0 * PI);
         self.hdri.update_settings(gpu);
         self.crop.update_settings(gpu);
+        self.tractography.update(gpu, controller);
 
         if let Some(line) = &self.line {
             line.update_settings(gpu);

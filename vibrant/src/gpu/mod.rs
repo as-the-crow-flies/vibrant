@@ -137,7 +137,7 @@ impl Gpu {
                 .enumerate()
                 .map(|(binding, resource)| BindGroupEntry {
                     binding: binding as u32,
-                    resource: resource,
+                    resource,
                 })
                 .collect_vec(),
         })

@@ -1,6 +1,9 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
-use crate::{asset::line::LineBuffer, gpu::Gpu, renderer::environment::Environment};
+use crate::{
+    asset::{environment::Environment, line::LineBuffer, Asset},
+    gpu::Gpu,
+};
 
 pub struct LineTransformPipeline {
     transform: ComputePipeline,
@@ -20,7 +23,7 @@ impl LineTransformPipeline {
         }
     }
 
-    pub fn dispatch(&self, cmd: &mut CommandEncoder, line: &LineBuffer, environment: &Environment) {
+    pub fn dispatch(&self, cmd: &mut CommandEncoder, asset: &Asset, line: &LineBuffer) {
         line.clear_offset(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -30,7 +33,7 @@ impl LineTransformPipeline {
 
         pass.set_pipeline(&self.transform);
         pass.set_bind_group(0, line.binding_transform(), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(1, asset.environment.binding(), &[]);
         pass.dispatch_workgroups(64, 1, 1);
     }
 }

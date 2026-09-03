@@ -1,53 +1,31 @@
-struct Settings {
-    radius: f32,
-    lighting: f32,
-    ambient_light: f32,
-    direct_light: f32,
-    tangent_color: f32,
-    shadows: f32,
-    alpha: f32,
-    level: f32,
-    smoothing: f32,
+// Tractography-only render parameters (see asset/tractography.rs). Bound by the
+// line passes; field order must match `TractographySettings`.
+struct Tractography {
+    volume: u32,
     culling: u32,
-    crop_start: f32,
-    crop_end: f32,
-    crop_x_start: f32,
-    crop_x_end: f32,
-    crop_y_start: f32,
-    crop_y_end: f32,
-    crop_z_start: f32,
-    crop_z_end: f32,
-    plane: f32,
-    line_roughness: f32,
-    line_specular: f32,
     // 0 = Combined, 1 = X-ray.
     render_mode: u32,
     // Whether the slicing / clipping planes cull tractography lines.
     line_crop: u32,
-}
-
-struct Segment {
-    position: vec3<f32>,
-    radius: f32
+    radius: f32,
+    alpha: f32,
+    ambient_light: f32,
+    direct_light: f32,
+    smoothing: f32,
+    crop_start: f32,
+    crop_end: f32,
+    line_roughness: f32,
+    line_specular: f32,
 }
 
 struct Camera {
     transform: mat4x4<f32>,
-    projection: mat4x4<f32>,
     projection_inverse: mat4x4<f32>,
-    near: f32,
-    far: f32,
 }
 
 struct Environment {
-    surface: vec2<u32>,
-    volume: u32,
-    time: f32,
     camera: Camera,
-    segment: Segment,
-    light: vec3<f32>,
-    light_: f32,
-    settings: Settings
+    time: f32,
 }
 
 struct LineSettings {

@@ -188,6 +188,12 @@ pub struct Accumulator {
     metric: Readback<[f32; 4]>,
 }
 
+impl Default for Accumulator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Accumulator {
     pub fn new() -> Self {
         Self {
@@ -250,7 +256,7 @@ impl Accumulator {
     /// caller skip the (single-workgroup, whole-image) reduction otherwise.
     pub fn wants_metric(&self) -> bool {
         let next = self.samples.get() + 1;
-        next >= MIN_SAMPLES && next % METRIC_INTERVAL == 0
+        next >= MIN_SAMPLES && next.is_multiple_of(METRIC_INTERVAL)
     }
 
     /// Record that a sample was accumulated this frame.
@@ -276,7 +282,7 @@ impl Accumulator {
             return;
         }
 
-        if self.samples.get() % METRIC_INTERVAL == 0 {
+        if self.samples.get().is_multiple_of(METRIC_INTERVAL) {
             let gpu = gpu.clone();
             let metric = buffer.metric().clone();
             self.metric.refresh(async move {

@@ -8,7 +8,7 @@
 @group(2) @binding(2) var<storage> LINE_LENGTH: u32;
 @group(2) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
 
-@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(3) @binding(0) var<uniform> TRACTOGRAPHY: Tractography;
 
 const WORKGROUP_SIZE: u32 = 256;
 const CHUNK_SIZE: u32 = 32;
@@ -19,8 +19,8 @@ var<workgroup> WORKGROUP_OFFSET: u32;
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = LINE_LENGTH;
-    let scale = f32(ENVIRONMENT.volume);
-    let radius = ENVIRONMENT.settings.radius;
+    let scale = f32(TRACTOGRAPHY.volume);
+    let radius = TRACTOGRAPHY.radius;
 
     var offset = 0u;
 
@@ -71,8 +71,8 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 }
 
 fn culling(v0: vec3<f32>, v1: vec3<f32>) -> f32 {
-    let v_min = vec3<u32>(min(v0, v1) - ENVIRONMENT.settings.radius);
-    let v_max = vec3<u32>(max(v0, v1) + ENVIRONMENT.settings.radius);
+    let v_min = vec3<u32>(min(v0, v1) - TRACTOGRAPHY.radius);
+    let v_max = vec3<u32>(max(v0, v1) + TRACTOGRAPHY.radius);
 
     let level = 32 - minimum3(countLeadingZeros(v_min ^ v_max));
 

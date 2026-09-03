@@ -118,7 +118,8 @@ pub struct LineBuffer {
     // bind `binding_render` next to `CullingBuffer::layout_write`, and folding
     // the acceleration-structure storage buffers in there would exceed
     // `max_storage_buffers_per_shader_stage` (10, the WebGPU/Chrome limit).
-    binding_trace: BindGroup,
+    // `None` only during `new` construction, before the first `trace_binding`.
+    binding_trace: Option<BindGroup>,
 
     n_lines: u32,
 }
@@ -219,10 +220,9 @@ impl LineBuffer {
         let materials: Vec<u32> = files
             .iter()
             .enumerate()
-            .map(|(index, file)| {
+            .flat_map(|(index, file)| {
                 [(index as u32)].repeat(file.lines().iter().map(|line| line.len()).sum())
             })
-            .flatten()
             .collect();
 
         let raw_indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -344,22 +344,7 @@ impl LineBuffer {
         let occupancy = OccupancyBuffer::new(gpu, volume);
         let culling = CullingBuffer::new(gpu, volume, index_buffer_size);
 
-        let binding_trace = Self::trace_binding(
-            gpu,
-            &indices,
-            &vertices,
-            &length,
-            &offset,
-            &materials,
-            &settings_buffer,
-            &transform,
-            &scalar,
-            &colormap_view,
-            &occupancy,
-            &culling,
-        );
-
-        Self {
+        let mut line = Self {
             global_settings,
             settings,
             settings_buffer,
@@ -386,30 +371,19 @@ impl LineBuffer {
             binding_transform,
             binding_crop,
             binding_render,
-            binding_trace,
+            binding_trace: None,
 
             n_lines,
-        }
+        };
+
+        line.binding_trace = Some(line.trace_binding(gpu));
+        line
     }
 
     /// Builds the merged ray-marcher bind group (`layout_trace`): line geometry
     /// buffers, colormap, and the tractography acceleration structure
     /// (occupancy / culling). Used by `new` and `resize`.
-    #[allow(clippy::too_many_arguments)]
-    fn trace_binding(
-        gpu: &Gpu,
-        indices: &Buffer,
-        vertices: &Buffer,
-        length: &Buffer,
-        offset: &Buffer,
-        materials: &Buffer,
-        settings_buffer: &Buffer,
-        transform: &Buffer,
-        scalar: &Buffer,
-        colormap_view: &TextureView,
-        occupancy: &OccupancyBuffer,
-        culling: &CullingBuffer,
-    ) -> BindGroup {
+    fn trace_binding(&self, gpu: &Gpu) -> BindGroup {
         gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some("LineTrace"),
             layout: &Self::layout_trace(gpu),
@@ -417,51 +391,51 @@ impl LineBuffer {
                 vec![
                     BindGroupEntry {
                         binding: 0,
-                        resource: indices.as_entire_binding(),
+                        resource: self.indices.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 1,
-                        resource: vertices.as_entire_binding(),
+                        resource: self.vertices.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 2,
-                        resource: length.as_entire_binding(),
+                        resource: self.length.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 3,
-                        resource: offset.as_entire_binding(),
+                        resource: self.offset.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 4,
-                        resource: materials.as_entire_binding(),
+                        resource: self.materials.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 5,
-                        resource: settings_buffer.as_entire_binding(),
+                        resource: self.settings_buffer.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 6,
-                        resource: transform.as_entire_binding(),
+                        resource: self.transform.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 7,
-                        resource: scalar.as_entire_binding(),
+                        resource: self.scalar.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 8,
-                        resource: BindingResource::TextureView(colormap_view),
+                        resource: BindingResource::TextureView(&self.colormap_view),
                     },
                 ],
-                occupancy.pyramid().binding_entries(9),
-                occupancy.count().binding_entries(11),
+                self.occupancy.pyramid().binding_entries(9),
+                self.occupancy.count().binding_entries(11),
                 vec![
                     BindGroupEntry {
                         binding: 17,
-                        resource: culling.offset().as_entire_binding(),
+                        resource: self.culling.offset().as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 18,
-                        resource: culling.index().as_entire_binding(),
+                        resource: self.culling.index().as_entire_binding(),
                     },
                 ],
             ]
@@ -478,20 +452,7 @@ impl LineBuffer {
         self.occupancy = OccupancyBuffer::new(gpu, settings.volume);
         self.culling = CullingBuffer::new(gpu, settings.volume, settings.index_buffer_size);
 
-        self.binding_trace = Self::trace_binding(
-            gpu,
-            &self.indices,
-            &self.vertices,
-            &self.length,
-            &self.offset,
-            &self.materials,
-            &self.settings_buffer,
-            &self.transform,
-            &self.scalar,
-            &self.colormap_view,
-            &self.occupancy,
-            &self.culling,
-        );
+        self.binding_trace = Some(self.trace_binding(gpu));
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {
@@ -531,7 +492,7 @@ impl LineBuffer {
     }
 
     pub fn binding_trace(&self) -> &BindGroup {
-        &self.binding_trace
+        self.binding_trace.as_ref().unwrap()
     }
 
     pub fn clear_offset(&self, cmd: &mut CommandEncoder) {

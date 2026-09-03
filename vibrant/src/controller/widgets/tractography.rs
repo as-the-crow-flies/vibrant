@@ -28,6 +28,12 @@ impl Tracked for TractographyWidget {
     }
 }
 
+impl Default for TractographyWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TractographyWidget {
     const LINE_COLOR_MODE_HELP: &str = "
 Tangent: Tangent RGB Coloring

@@ -29,6 +29,12 @@ impl Tracked for VolumesWidget {
     }
 }
 
+impl Default for VolumesWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VolumesWidget {
     pub fn new() -> Self {
         Self {

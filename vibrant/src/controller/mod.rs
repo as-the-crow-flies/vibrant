@@ -3,7 +3,6 @@ pub mod components;
 pub mod event;
 pub mod icons;
 pub mod light;
-pub mod segment;
 pub mod settings;
 pub mod state;
 pub mod widgets;
@@ -23,16 +22,12 @@ use crate::controller::widgets::{
     crop::CropWidget, masks::MasksWidget, rendering::RenderingWidget,
     tractography::TractographyWidget, volumes::VolumesWidget,
 };
-use crate::{
-    asset::Asset, controller::segment::Segment, file::FileStage,
-    surface::accumulate::AccumulationStatus,
-};
+use crate::{asset::Asset, file::FileStage, surface::accumulate::AccumulationStatus};
 
 pub struct Controller {
     state: ControllerState,
     camera: Camera,
     light: Light,
-    segment: Segment,
     settings: Settings,
     time: Instant,
 
@@ -47,13 +42,18 @@ pub struct Controller {
     hovered: bool,
 }
 
+impl Default for Controller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Controller {
     pub fn new() -> Self {
         Self {
             state: ControllerState::default(),
             camera: Camera::new(),
             light: Light::new(),
-            segment: Segment::new(),
             settings: Settings::new(),
             time: Instant::now(),
 
@@ -156,7 +156,7 @@ impl Controller {
                     self.crop_widget.show(ui, &mut asset.crop);
 
                     self.volumes_widget
-                        .show(ui, &mut asset.volumes, &mut asset.masks);
+                        .show(ui, &mut asset.volumes, &asset.masks);
 
                     self.mask_widget.show(ui, &mut asset.masks);
 
@@ -205,10 +205,6 @@ impl Controller {
 
     pub fn light(&self) -> &Light {
         &self.light
-    }
-
-    pub fn segment(&self) -> &Segment {
-        &self.segment
     }
 
     pub fn settings(&self) -> &Settings {

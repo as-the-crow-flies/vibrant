@@ -28,6 +28,12 @@ impl Tracked for RenderingWidget {
     }
 }
 
+impl Default for RenderingWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RenderingWidget {
     pub fn new() -> Self {
         Self {

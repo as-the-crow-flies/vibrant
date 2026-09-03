@@ -20,6 +20,12 @@ impl Tracked for CropWidget {
     }
 }
 
+impl Default for CropWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CropWidget {
     pub fn new() -> Self {
         Self { changed: true }

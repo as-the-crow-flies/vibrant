@@ -97,12 +97,12 @@ impl HdriTexture {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
+                    resource: BindingResource::Sampler(sampler),
                 },
                 BindGroupEntry {
                     binding: 2,
                     resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &settings,
+                        buffer: settings,
                         offset: 0,
                         size: None,
                     }),
@@ -141,7 +141,7 @@ impl HdriTexture {
 
         Self::new(
             gpu,
-            &file.name(),
+            file.name(),
             file.size(),
             file.data(),
             sampler,

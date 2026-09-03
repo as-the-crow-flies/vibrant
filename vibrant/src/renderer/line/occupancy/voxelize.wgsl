@@ -5,7 +5,7 @@
 @group(1) @binding(2) var<storage> LINE_LENGTH: u32;
 @group(1) @binding(3) var<storage, read_write> LINE_OFFSET: atomic<u32>;
 
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(2) @binding(0) var<uniform> TRACTOGRAPHY: Tractography;
 
 const WORKGROUP_SIZE: u32 = 256;
 const CHUNK_SIZE: u32 = 32;
@@ -19,9 +19,9 @@ var<private> DENSITY_MULTIPLIER: f32;
 @workgroup_size(WORKGROUP_SIZE)
 fn main(@builtin(local_invocation_index) local: u32) {
     let n_indices = LINE_LENGTH;
-    let scale = f32(ENVIRONMENT.volume);
+    let scale = f32(TRACTOGRAPHY.volume);
 
-    RADIUS = ENVIRONMENT.settings.radius;
+    RADIUS = TRACTOGRAPHY.radius;
     DENSITY_MULTIPLIER = PI * RADIUS * RADIUS;
 
     var offset = 0u;
@@ -49,19 +49,19 @@ fn main(@builtin(local_invocation_index) local: u32) {
 }
 
 fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length: f32) {
-    let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
+    let idx = block_index(vec3<u32>(voxel), vec3<u32>(TRACTOGRAPHY.volume));
     let density = DENSITY_MULTIPLIER * length;
 
     atomicAdd(&DENSITY[idx], encode_density(density));
 }
 
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
-    let smoothing = ENVIRONMENT.settings.smoothing;
+    let smoothing = TRACTOGRAPHY.smoothing;
 
     let radius_clamp = max(smoothing, RADIUS);
     let radius_ratio = pow(RADIUS / radius_clamp, 2.0);
 
-    let idx = block_index(vec3<u32>(voxel), vec3<u32>(ENVIRONMENT.volume));
+    let idx = block_index(vec3<u32>(voxel), vec3<u32>(TRACTOGRAPHY.volume));
 
     let p = vec3<f32>(voxel) + 0.5;
 

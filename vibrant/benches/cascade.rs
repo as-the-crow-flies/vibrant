@@ -4,16 +4,14 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use pollster::FutureExt;
 use vibrant::{
     asset::{
-        colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer, radiance::GaussianRadianceBuffer,
-        volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
-        volume_mask::VolumeMaskBuffer,
+        colormap::Colormap, crop::CropBuffer, environment::Environment, hdri::HdriBuffer,
+        radiance::GaussianRadianceBuffer, volume::PhysicalVolume,
+        volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
     },
     file::{File, VolumeFile},
     gpu::Gpu,
     renderer::{
-        environment::Environment,
-        gradient::GradientPipeline,
-        lighting::LightingRenderer,
+        gradient::GradientPipeline, lighting::LightingRenderer,
         volume::transfer::VolumeTransferPipeline,
     },
 };

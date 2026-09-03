@@ -4,6 +4,12 @@ use crate::controller::icons;
 
 pub struct ControlsWidget {}
 
+impl Default for ControlsWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ControlsWidget {
     pub fn new() -> Self {
         Self {}

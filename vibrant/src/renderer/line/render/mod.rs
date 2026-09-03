@@ -1,16 +1,18 @@
 use std::{any::type_name, cell::Cell};
 
-use egui::Rect;
 use wgpu::{
     ColorTargetState, CommandEncoder, FragmentState, MultisampleState, PrimitiveState,
     PrimitiveTopology, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
 use crate::{
-    asset::{line::LineBuffer, radiance::GaussianRadianceBuffer},
-    controller::settings::RenderMode,
+    asset::{
+        environment::Environment, line::LineBuffer, radiance::GaussianRadianceBuffer,
+        tractography::Tractography, Asset,
+    },
+    controller::{settings::RenderMode, Controller},
     gpu::Gpu,
-    renderer::{environment::Environment, lighting::VMM_SIZE_OPTIONS},
+    renderer::lighting::VMM_SIZE_OPTIONS,
     surface::{color::ColorBuffer, Frame},
 };
 
@@ -36,6 +38,7 @@ impl LineRenderPipeline {
             &LineBuffer::layout_trace(gpu),
             &Environment::layout(gpu),
             &GaussianRadianceBuffer::layout(gpu),
+            &Tractography::layout(gpu),
         ]);
 
         // Both variants are MRT (colour + R32Float depth) so the single
@@ -43,7 +46,8 @@ impl LineRenderPipeline {
         // the appended visit/result differ. X-ray ignores the depth output.
         let build = |appended: &str, blend: ColorTargetState| {
             VMM_SIZE_OPTIONS.map(|vmm_size| {
-                let src = (trace.to_string() + appended).replace("#VMM_SIZE", &vmm_size.to_string());
+                let src =
+                    (trace.to_string() + appended).replace("#VMM_SIZE", &vmm_size.to_string());
                 let module = gpu.shader(&src);
 
                 gpu.device()
@@ -80,7 +84,12 @@ impl LineRenderPipeline {
                 include_str!("transparent.wgsl"),
                 ColorBuffer::target_premultiplied(),
             ),
-            active: Cell::new(VMM_SIZE_OPTIONS.iter().position(|&size| size == 32).unwrap()),
+            active: Cell::new(
+                VMM_SIZE_OPTIONS
+                    .iter()
+                    .position(|&size| size == 32)
+                    .unwrap(),
+            ),
         }
     }
 
@@ -90,21 +99,22 @@ impl LineRenderPipeline {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
+        asset: &Asset,
+        controller: &Controller,
         frame: &Frame,
-        environment: &Environment,
-        viewport: Rect,
-        vmm_size: u32,
-        mode: RenderMode,
-        radiance: &GaussianRadianceBuffer,
-        line: &LineBuffer,
     ) {
-        self.set_vmm_size(vmm_size);
+        // X-ray+both -> the line-only cascade; otherwise the primary one.
+        let radiance = asset.radiance_lines.as_ref().or(asset.radiance.as_ref());
+        let (Some(line), Some(radiance)) = (&asset.line, radiance) else {
+            return;
+        };
 
-        let variants = match mode {
+        self.set_vmm_size(controller.radiance().lobes());
+
+        let variants = match controller.settings().render_mode {
             RenderMode::Combined => &self.combined,
             RenderMode::XRay => &self.xray,
         };
@@ -118,6 +128,7 @@ impl LineRenderPipeline {
             ..Default::default()
         });
 
+        let viewport = controller.viewport();
         pass.set_viewport(
             viewport.min.x,
             viewport.min.y,
@@ -129,8 +140,9 @@ impl LineRenderPipeline {
 
         pass.set_pipeline(&variants[self.active.get()]);
         pass.set_bind_group(0, line.binding_trace(), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
+        pass.set_bind_group(1, asset.environment.binding(), &[]);
         pass.set_bind_group(2, radiance.binding(), &[]);
+        pass.set_bind_group(3, asset.tractography.binding(), &[]);
         pass.draw(0..4, 0..1);
     }
 }

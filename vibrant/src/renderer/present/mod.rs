@@ -9,7 +9,10 @@ use wgpu::{
     TextureFormat, TextureView,
 };
 
-use crate::{gpu::Gpu, surface::color::ColorBuffer};
+use crate::{
+    gpu::Gpu,
+    surface::{color::ColorBuffer, Frame},
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -118,47 +121,9 @@ impl PresentPipeline {
             })
     }
 
-    /// On-screen present: `scene` + `overlay` -> swapchain `target`.
-    pub fn dispatch(
-        &self,
-        gpu: &Gpu,
-        cmd: &mut CommandEncoder,
-        scene: &ColorBuffer,
-        overlay: &ColorBuffer,
-        target: &TextureView,
-        presentation: Presentation,
-        headroom: f32,
-    ) {
-        let pipeline = match presentation {
-            Presentation::Sdr => &self.sdr,
-            Presentation::HdrLinear => &self.hdr_linear,
-            Presentation::HdrEncoded => &self.hdr_encoded,
-        };
-        self.run(gpu, cmd, pipeline, scene, overlay, target, headroom);
-    }
-
-    /// SDR present into an `Rgba8Unorm` `target` for screenshot readback.
-    pub fn export(
-        &self,
-        gpu: &Gpu,
-        cmd: &mut CommandEncoder,
-        scene: &ColorBuffer,
-        overlay: &ColorBuffer,
-        target: &TextureView,
-    ) {
-        self.run(gpu, cmd, &self.export, scene, overlay, target, 1.0);
-    }
-
-    fn run(
-        &self,
-        gpu: &Gpu,
-        cmd: &mut CommandEncoder,
-        pipeline: &RenderPipeline,
-        scene: &ColorBuffer,
-        overlay: &ColorBuffer,
-        target: &TextureView,
-        headroom: f32,
-    ) {
+    /// Primes the per-frame tone-map headroom in the shared uniform. Call before
+    /// [`Self::dispatch`] / [`Self::export`] (mirrors `AccumulateBuffer::set_sample`).
+    pub fn set_headroom(&self, gpu: &Gpu, headroom: f32) {
         gpu.queue().write_buffer(
             &self.uniform,
             0,
@@ -168,7 +133,44 @@ impl PresentPipeline {
                 _pad: [0.0; 2],
             }),
         );
+    }
 
+    /// On-screen present: `scene` + `frame.overlay()` -> swapchain `target`.
+    pub fn dispatch(
+        &self,
+        cmd: &mut CommandEncoder,
+        scene: &ColorBuffer,
+        frame: &Frame,
+        target: &TextureView,
+        presentation: Presentation,
+    ) {
+        let pipeline = match presentation {
+            Presentation::Sdr => &self.sdr,
+            Presentation::HdrLinear => &self.hdr_linear,
+            Presentation::HdrEncoded => &self.hdr_encoded,
+        };
+        self.run(cmd, pipeline, scene, frame, target);
+    }
+
+    /// SDR present into an `Rgba8Unorm` `target` for screenshot readback.
+    pub fn export(
+        &self,
+        cmd: &mut CommandEncoder,
+        scene: &ColorBuffer,
+        frame: &Frame,
+        target: &TextureView,
+    ) {
+        self.run(cmd, &self.export, scene, frame, target);
+    }
+
+    fn run(
+        &self,
+        cmd: &mut CommandEncoder,
+        pipeline: &RenderPipeline,
+        scene: &ColorBuffer,
+        frame: &Frame,
+        target: &TextureView,
+    ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -185,7 +187,7 @@ impl PresentPipeline {
 
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, scene.binding(), &[]);
-        pass.set_bind_group(1, overlay.binding(), &[]);
+        pass.set_bind_group(1, frame.overlay().binding(), &[]);
         pass.set_bind_group(2, &self.binding, &[]);
         pass.draw(0..4, 0..1);
     }

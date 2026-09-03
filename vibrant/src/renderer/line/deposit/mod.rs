@@ -12,7 +12,6 @@ use crate::{
         volume::PhysicalVolume,
     },
     gpu::Gpu,
-    renderer::environment::Environment,
 };
 
 /// Writes neutral line density (from the occupancy pyramid) into the shared
@@ -44,13 +43,7 @@ impl LineDepositPipeline {
         }
     }
 
-    pub fn dispatch(
-        &self,
-        cmd: &mut CommandEncoder,
-        _environment: &Environment,
-        volume: &PhysicalVolume,
-        line: &LineBuffer,
-    ) {
+    pub fn dispatch(&self, cmd: &mut CommandEncoder, volume: &PhysicalVolume, line: &LineBuffer) {
         let n = volume.size().add(3).div(4);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {

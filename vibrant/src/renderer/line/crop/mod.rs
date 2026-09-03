@@ -1,9 +1,8 @@
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::{crop::CropBuffer, line::LineBuffer},
+    asset::{crop::CropBuffer, line::LineBuffer, tractography::Tractography, Asset},
     gpu::Gpu,
-    renderer::environment::Environment,
 };
 
 pub struct LineCropPipeline {
@@ -18,7 +17,7 @@ impl LineCropPipeline {
                 "Crop",
                 &gpu.pipeline_layout(&[
                     &LineBuffer::layout_crop(gpu),
-                    &Environment::layout(gpu),
+                    &Tractography::layout(gpu),
                     &CropBuffer::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("crop.wgsl")),
@@ -31,24 +30,12 @@ impl LineCropPipeline {
         }
     }
 
-    pub fn dispatch(
-        &self,
-        cmd: &mut CommandEncoder,
-        line: &LineBuffer,
-        environment: &Environment,
-        crop: &CropBuffer,
-    ) {
-        self.crop(cmd, line, environment, crop);
+    pub fn dispatch(&self, cmd: &mut CommandEncoder, asset: &Asset, line: &LineBuffer) {
+        self.crop(cmd, asset, line);
         self.adjacency(cmd, line);
     }
 
-    fn crop(
-        &self,
-        cmd: &mut CommandEncoder,
-        line: &LineBuffer,
-        environment: &Environment,
-        crop: &CropBuffer,
-    ) {
+    fn crop(&self, cmd: &mut CommandEncoder, asset: &Asset, line: &LineBuffer) {
         line.clear_length(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -58,8 +45,8 @@ impl LineCropPipeline {
 
         pass.set_pipeline(&self.crop);
         pass.set_bind_group(0, line.binding_crop(), &[]);
-        pass.set_bind_group(1, environment.binding(), &[]);
-        pass.set_bind_group(2, crop.binding(), &[]);
+        pass.set_bind_group(1, asset.tractography.binding(), &[]);
+        pass.set_bind_group(2, asset.crop.binding(), &[]);
         pass.dispatch_workgroups(line.n_lines().div_ceil(32), 1, 1);
     }
 

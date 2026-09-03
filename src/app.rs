@@ -223,29 +223,20 @@ fn vibrant_event(event: WindowEvent) -> Option<Event> {
             event:
                 KeyEvent {
                     physical_key: PhysicalKey::Code(code),
-                    logical_key: _,
-                    text: _,
-                    location: _,
                     state: ElementState::Pressed,
-                    repeat: _,
                     ..
                 },
             is_synthetic: _,
-        } => keycode(code).map(|key| Event::KeyPressed(key)),
+        } => keycode(code).map(Event::KeyPressed),
         WindowEvent::KeyboardInput {
-            device_id: _,
             event:
                 KeyEvent {
                     physical_key: PhysicalKey::Code(code),
-                    logical_key: _,
-                    text: _,
-                    location: _,
                     state: ElementState::Released,
-                    repeat: _,
                     ..
                 },
-            is_synthetic: _,
-        } => keycode(code).map(|key| Event::KeyReleased(key)),
+            ..
+        } => keycode(code).map(Event::KeyReleased),
         _ => None,
     }
 }
@@ -281,6 +272,12 @@ pub async fn run() {
 pub struct Fps<const N: usize> {
     buffer: [Instant; N],
     index: usize,
+}
+
+impl<const N: usize> Default for Fps<N> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<const N: usize> Fps<N> {

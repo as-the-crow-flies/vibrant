@@ -1,5 +1,4 @@
 pub mod accumulate;
-pub mod environment;
 pub mod gradient;
 pub mod lighting;
 pub mod line;
@@ -16,7 +15,6 @@ use crate::renderer::{
     gradient::GradientPipeline, lighting::LightingRenderer, line::LineRenderer,
     util::clear::ClearPipeline, volume::VolumeRenderer,
 };
-use environment::Environment;
 use ui::UiRenderer;
 use wgpu::RenderPassDescriptor;
 use winit::window::Window;
@@ -45,7 +43,6 @@ pub struct Renderer {
     line: LineRenderer,
     ui: UiRenderer,
 
-    environment: Environment,
     asset: Asset,
 }
 
@@ -62,7 +59,6 @@ impl Renderer {
             lighting: LightingRenderer::new(gpu),
             line: LineRenderer::new(gpu),
 
-            environment: Environment::new(gpu),
             asset: Asset::new(gpu),
         }
     }
@@ -105,7 +101,7 @@ impl Renderer {
         let settings = *controller.settings();
         let plan = self.surface.plan_accumulation(&settings, scene_dirty);
 
-        self.environment.update(gpu, controller, plan.jitter);
+        self.asset.environment.update(gpu, controller, plan.jitter);
 
         if let Some(frame) = self.surface.frame() {
             let mut cmd = gpu.cmd();
@@ -126,12 +122,10 @@ impl Renderer {
 
                 let data_changed = self.asset.changed() || controller.changed();
                 let lighting_changed = data_changed || controller.light().changed();
-                let lobes = controller.radiance().lobes();
 
                 if data_changed {
                     // Occupancy pyramid first: the line deposit samples it.
-                    self.line
-                        .transfer(&mut cmd, controller, &self.environment, &self.asset);
+                    self.line.transfer(&mut cmd, controller, &self.asset);
 
                     if let Some(pv) = &self.asset.physical_volume {
                         // Volume fractions -> the marched textures (line-free).
@@ -139,8 +133,7 @@ impl Renderer {
                         self.gradient.dispatch(&mut cmd, pv);
                         // Neutral line density -> `pv.line_extinction` (a
                         // separate texture the volume tracer never reads).
-                        self.line
-                            .deposit(&mut cmd, controller, &self.environment, &self.asset);
+                        self.line.deposit(&mut cmd, controller, &self.asset);
                     }
                 }
 
@@ -150,25 +143,13 @@ impl Renderer {
                         // volume only. Sources are baked into each radiance
                         // buffer's `cascade_opts` by `Asset::sync_physical_volume`.
                         if let Some(rad) = &self.asset.radiance {
-                            self.lighting.dispatch_for(
-                                &mut cmd,
-                                &self.environment,
-                                &self.asset.hdri,
-                                rad,
-                                pv,
-                                lobes,
-                            );
+                            self.lighting
+                                .dispatch_for(&mut cmd, &self.asset, controller, rad, pv);
                         }
                         // X-ray only: the line-only cascade.
                         if let Some(rad) = &self.asset.radiance_lines {
-                            self.lighting.dispatch_for(
-                                &mut cmd,
-                                &self.environment,
-                                &self.asset.hdri,
-                                rad,
-                                pv,
-                                lobes,
-                            );
+                            self.lighting
+                                .dispatch_for(&mut cmd, &self.asset, controller, rad, pv);
                         }
                     }
                 }
@@ -176,28 +157,14 @@ impl Renderer {
                 if combined {
                     // Lines first (opaque, writes depth `s`), then the volume
                     // clamped to it and composited over.
-                    self.line
-                        .render(&mut cmd, controller, &self.environment, &self.asset, frame);
-                    self.volume.render(
-                        gpu,
-                        &mut cmd,
-                        controller,
-                        &self.environment,
-                        &self.asset,
-                        frame,
-                    );
+                    self.line.render(&mut cmd, controller, &self.asset, frame);
+                    self.volume
+                        .render(gpu, &mut cmd, controller, &self.asset, frame);
                 } else {
                     // Volume first, then transparent lines composited on top.
-                    self.volume.render(
-                        gpu,
-                        &mut cmd,
-                        controller,
-                        &self.environment,
-                        &self.asset,
-                        frame,
-                    );
-                    self.line
-                        .render(&mut cmd, controller, &self.environment, &self.asset, frame);
+                    self.volume
+                        .render(gpu, &mut cmd, controller, &self.asset, frame);
+                    self.line.render(&mut cmd, controller, &self.asset, frame);
                 }
             }
 

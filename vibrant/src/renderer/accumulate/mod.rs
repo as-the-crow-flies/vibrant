@@ -1,13 +1,3 @@
-//! GPU passes for progressive frame accumulation.
-//!
-//! `accumulate` (a fullscreen quad) folds this frame's raw sample into the
-//! running mean; `reduce` (one compute workgroup) sums the per-pixel luminance
-//! residual for the convergence metric. Both are owned by
-//! [`crate::surface::Surface`] - like [`crate::renderer::present::PresentPipeline`]
-//! - and read their buffers/bindings from
-//! [`crate::surface::accumulate::AccumulateBuffer`]. The sample counter and
-//! convergence logic live in [`crate::surface::accumulate::Accumulator`].
-
 use std::any::type_name;
 
 use wgpu::{
@@ -17,7 +7,7 @@ use wgpu::{
 
 use crate::{
     gpu::Gpu,
-    surface::{accumulate::AccumulateBuffer, color::ColorBuffer},
+    surface::{accumulate::AccumulateBuffer, color::ColorBuffer, Frame},
 };
 
 /// The `accumulate` and `reduce` render/compute pipelines.
@@ -52,19 +42,19 @@ impl AccumulatePipeline {
         Self { accumulate, reduce }
     }
 
-    /// Fold `color` (this frame's raw sample) into the running mean: `prev` holds
-    /// the mean of `sample` earlier samples, the result is written to `next`.
+    /// Fold `frame.color()` (this frame's raw sample) into the running mean:
+    /// `frame.accum(parity)` holds the mean of the earlier samples, the result
+    /// is written to `frame.accum(parity ^ 1)`. The caller primes the sample
+    /// count via [`AccumulateBuffer::set_sample`] first.
     pub fn accumulate(
         &self,
-        gpu: &Gpu,
         cmd: &mut CommandEncoder,
         buffer: &AccumulateBuffer,
-        color: &ColorBuffer,
-        prev: &ColorBuffer,
-        next: &ColorBuffer,
-        sample: u32,
+        frame: &Frame,
+        parity: usize,
     ) {
-        buffer.set_sample(gpu, sample);
+        let prev = frame.accum(parity);
+        let next = frame.accum(parity ^ 1);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
@@ -81,7 +71,7 @@ impl AccumulatePipeline {
         });
 
         pass.set_pipeline(&self.accumulate);
-        pass.set_bind_group(0, color.binding(), &[]);
+        pass.set_bind_group(0, frame.color().binding(), &[]);
         pass.set_bind_group(1, prev.binding(), &[]);
         pass.set_bind_group(2, buffer.uniform_binding(), &[]);
         pass.draw(0..4, 0..1);

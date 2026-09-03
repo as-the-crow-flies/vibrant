@@ -3,6 +3,9 @@
 @group(2) @binding(3) var DENSITY_ERODED: texture_storage_3d<r32float, read_write>;
 @group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+// `settings.culling`, baked in at pipeline-compile time (see LineCullPipeline).
+const CULLING_ENABLED: bool = #CULLING;
+
 @compute
 @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
@@ -15,7 +18,7 @@ fn main(@builtin(global_invocation_id) this_voxel: vec3<u32>) {
 
     let max_density = 16.0;
 
-    var keep = ENVIRONMENT.settings.culling == 0 && this_voxel_density > 0.0;
+    var keep = !CULLING_ENABLED && this_voxel_density > 0.0;
 
     if (!keep && this_voxel_density > 0.0) {
         let position = vec3<f32>(this_voxel) + 0.5;

@@ -11,6 +11,12 @@ pub struct Light {
     changed: bool,
 }
 
+impl Default for Light {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Light {
     pub fn new() -> Self {
         Self {

@@ -55,10 +55,8 @@ impl From<&PathBuf> for File {
     fn from(path: &PathBuf) -> Self {
         Self {
             name: path.file_name().unwrap().to_str().unwrap().to_owned(),
-            data: fs::read(&path).expect(&format!(
-                "should be able to read path: `{:?}`",
-                path.to_str()
-            )),
+            data: fs::read(path)
+                .unwrap_or_else(|_| panic!("should be able to read path: `{:?}`", path.to_str())),
         }
     }
 }

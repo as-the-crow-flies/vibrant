@@ -32,15 +32,15 @@
 //!   2. single-scattering albedo  a'(l) = mu_s' / (mu_s' + mu_a)
 //!      diffusion attenuation     mu_eff(l) = sqrt(3 mu_a (mu_a + mu_s'))
 //!   3. semi-infinite diffuse reflectance, van de Hulst similarity fit:
-//!         R(a') = (1 - s)(1 - 0.139 s) / (1 + 1.17 s),   s = sqrt(1 - a')
+//!      R(a') = (1 - s)(1 - 0.139 s) / (1 + 1.17 s),   s = sqrt(1 - a')
 //!      -> integrate R(lambda) against CIE 1931 x/y/z under D65, convert to
-//!         linear sRGB. This is the true colour of a thick slab of the tissue.
+//!      linear sRGB. This is the true colour of a thick slab of the tissue.
 //!   4. do the same for transmittance exp(-mu_eff * d) at d = one photometric
 //!      diffusion length, giving the true transmitted colour.
 //!   5. per channel, invert: R -> a'_c, T -> mu_eff_c, then
-//!         mu_t'_c  = mu_eff_c / sqrt(3 (1 - a'_c))
-//!         mu_a_c   = (1 - a'_c) mu_t'_c
-//!         mu_s'_c  = a'_c mu_t'_c
+//!      mu_t'_c  = mu_eff_c / sqrt(3 (1 - a'_c))
+//!      mu_a_c   = (1 - a'_c) mu_t'_c
+//!      mu_s'_c  = a'_c mu_t'_c
 //!
 //! Two observables, two unknowns per channel, so the fit is exact: the RGB
 //! material reproduces both the reflected and the transmitted colour of the

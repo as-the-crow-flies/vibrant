@@ -1,6 +1,5 @@
 @group(0) @binding(0) var DENSITY: texture_3d<f32>;
 @group(1) @binding(3) var ERODE: texture_storage_3d<r32float, read_write>;
-@group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
 @compute
 @workgroup_size(4, 4, 4)

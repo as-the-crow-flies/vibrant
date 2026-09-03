@@ -3,9 +3,12 @@ use std::cell::Cell;
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::{hdri::HdriBuffer, radiance::GaussianRadianceBuffer, volume::PhysicalVolume},
+    asset::{
+        environment::Environment, hdri::HdriBuffer, radiance::GaussianRadianceBuffer,
+        volume::PhysicalVolume, Asset,
+    },
+    controller::Controller,
     gpu::Gpu,
-    renderer::environment::Environment,
 };
 
 // Selectable lobe counts -- see RenderingWidget::lobes. Each entry gets its own
@@ -85,13 +88,15 @@ impl LightingRenderer {
     pub fn dispatch_for(
         &self,
         cmd: &mut CommandEncoder,
-        environment: &Environment,
-        hdri: &HdriBuffer,
+        asset: &Asset,
+        controller: &Controller,
         radiance: &GaussianRadianceBuffer,
         volume: &PhysicalVolume,
-        lobes: u32,
     ) {
-        self.set_vmm_size(lobes);
+        self.set_vmm_size(controller.radiance().lobes());
+
+        let environment = &asset.environment;
+        let hdri = &asset.hdri;
 
         self.hdri(cmd, environment, hdri, radiance, volume);
         self.radiance(cmd, environment, hdri, radiance, volume);

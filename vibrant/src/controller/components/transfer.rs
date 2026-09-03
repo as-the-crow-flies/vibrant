@@ -39,6 +39,12 @@ impl Tracked for TransferFunctionEditor {
     }
 }
 
+impl Default for TransferFunctionEditor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TransferFunctionEditor {
     const HANDLE_SIZE: f32 = 10.0;
 

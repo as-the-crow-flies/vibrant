@@ -171,8 +171,9 @@ impl Surface {
     /// exactly the on-screen SDR look, UI included. `scene` is the tone-map
     /// input (the accumulated mean, or the raw sample buffer).
     pub fn export(&self, gpu: &Gpu, cmd: &mut CommandEncoder, frame: &Frame, scene: &ColorBuffer) {
+        self.present.set_headroom(gpu, 1.0);
         self.present
-            .export(gpu, cmd, scene, frame.overlay(), frame.export().view());
+            .export(cmd, scene, frame, frame.export().view());
     }
 
     pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder, scene: &ColorBuffer) {
@@ -187,15 +188,9 @@ impl Surface {
                 self.hdr_headroom.clamp(1.0, self.hdr_headroom_limit(gpu))
             };
 
-            self.present.dispatch(
-                gpu,
-                &mut cmd,
-                scene,
-                frame.overlay(),
-                &view,
-                self.presentation,
-                headroom,
-            );
+            self.present.set_headroom(gpu, headroom);
+            self.present
+                .dispatch(&mut cmd, scene, frame, &view, self.presentation);
 
             gpu.submit(cmd);
             gpu.queue().present(surface);
@@ -238,28 +233,25 @@ impl Surface {
         }
 
         let parity = self.accumulator.parity();
-        let prev = frame.accum(parity);
-        let next = frame.accum(parity ^ 1);
 
-        self.accumulate.accumulate(
-            gpu,
-            cmd,
-            &self.accumulate_buffer,
-            frame.color(),
-            prev,
-            next,
-            self.accumulator.samples(),
-        );
+        self.accumulate_buffer
+            .set_sample(gpu, self.accumulator.samples());
+        self.accumulate
+            .accumulate(cmd, &self.accumulate_buffer, frame, parity);
 
         // Only run the whole-image reduction on frames whose result is read back.
         if self.accumulator.wants_metric() {
-            self.accumulate
-                .reduce(cmd, &self.accumulate_buffer, prev, next);
+            self.accumulate.reduce(
+                cmd,
+                &self.accumulate_buffer,
+                frame.accum(parity),
+                frame.accum(parity ^ 1),
+            );
         }
 
         self.accumulator.advance(settings);
 
-        Some(next)
+        Some(frame.accum(parity ^ 1))
     }
 
     /// Fold any finished convergence reading in and, on the interval, kick off

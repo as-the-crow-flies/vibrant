@@ -22,6 +22,8 @@ const VMM_SIZE : u32 = #VMM_SIZE;
 @group(2) @binding(1) var GAUSSIAN: texture_3d<f32>;
 @group(2) @binding(2) var VMM_SAMPLER: sampler;
 
+@group(3) @binding(0) var<uniform> TRACTOGRAPHY: Tractography;
+
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
 var<private> RADIUS: f32;
@@ -56,9 +58,9 @@ fn vertex(@builtin(vertex_index) index: u32) -> Fragment {
 
 @fragment
 fn fragment(fragment: Fragment) -> FragmentOut {
-    DIM = f32(ENVIRONMENT.volume);
+    DIM = f32(TRACTOGRAPHY.volume);
     DIM_INV = 1.0 / DIM;
-    RADIUS = ENVIRONMENT.settings.radius * DIM_INV;
+    RADIUS = TRACTOGRAPHY.radius * DIM_INV;
 
     let near = unproject(vec3<f32>(fragment.uv, 0.0));
     let far = unproject(vec3<f32>(fragment.uv, 1.0));
@@ -222,21 +224,21 @@ fn shade(
     let probe_p = clamp(position + 0.5, vec3<f32>(0.0), vec3<f32>(1.0));
     let view = -DIRECTION;
 
-    let roughness = clamp(ENVIRONMENT.settings.line_roughness, 0.04, 1.0);
-    let f0 = vec3<f32>(0.16 * ENVIRONMENT.settings.line_specular * ENVIRONMENT.settings.line_specular);
+    let roughness = clamp(TRACTOGRAPHY.line_roughness, 0.04, 1.0);
+    let f0 = vec3<f32>(0.16 * TRACTOGRAPHY.line_specular * TRACTOGRAPHY.line_specular);
 
     let radiance = sample_outgoing_radiance_surface(
         RADIANCE, GAUSSIAN, VMM_SAMPLER,
         probe_p, normal_smooth, view, albedo, roughness, f0,
-        ENVIRONMENT.settings.ambient_light, ENVIRONMENT.settings.direct_light,
+        TRACTOGRAPHY.ambient_light, TRACTOGRAPHY.direct_light,
         VMM_SIZE
     );
 
     // Combined: opaque. X-ray (render_mode == 1): honor per-bundle opacity.
     let alpha = select(
         1.0,
-        ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height),
-        ENVIRONMENT.settings.render_mode == 1u
+        TRACTOGRAPHY.alpha * mix(v0.alpha, v1.alpha, height),
+        TRACTOGRAPHY.render_mode == 1u
     );
 
     return vec4<f32>(radiance, alpha);

@@ -7,10 +7,7 @@ use crate::{
     asset::{volume::PhysicalVolume, Asset},
     controller::Controller,
     gpu::Gpu,
-    renderer::{
-        environment::Environment,
-        volume::{render::GaussianVolumeRenderer, transfer::VolumeTransferPipeline},
-    },
+    renderer::volume::{render::GaussianVolumeRenderer, transfer::VolumeTransferPipeline},
     surface::Frame,
 };
 
@@ -40,7 +37,6 @@ impl VolumeRenderer {
         gpu: &Gpu,
         cmd: &mut CommandEncoder,
         controller: &Controller,
-        environment: &Environment,
         asset: &Asset,
         frame: &Frame,
     ) {
@@ -51,20 +47,6 @@ impl VolumeRenderer {
             return;
         }
 
-        let (Some(volume), Some(radiance)) = (&asset.physical_volume, &asset.radiance) else {
-            return;
-        };
-
-        self.render.dispatch(
-            gpu,
-            cmd,
-            environment,
-            &asset.hdri,
-            frame,
-            radiance,
-            volume,
-            controller.viewport(),
-            controller.radiance().lobes(),
-        );
+        self.render.dispatch(gpu, cmd, asset, controller, frame);
     }
 }

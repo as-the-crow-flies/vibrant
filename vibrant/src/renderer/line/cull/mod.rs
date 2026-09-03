@@ -2,32 +2,31 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{
+        environment::Environment,
         line::{culling::CullingBuffer, occupancy::OccupancyBuffer, LineBuffer},
         texture::{MipTexture3D, R32Float},
+        Asset,
     },
+    controller::Controller,
     gpu::Gpu,
-    renderer::environment::Environment,
 };
 
 pub struct LineCullPipeline {
     erode: ComputePipeline,
-    culling: ComputePipeline,
+    // Indexed by `settings.culling`: the toggle is baked in as a `const` so the
+    // occlusion march (which needs the camera position) compiles away when off,
+    // keeping this pipeline within the 4 bind-group limit.
+    culling: [ComputePipeline; 2],
     mipmap: ComputePipeline,
 }
 
 impl LineCullPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        Self {
-            erode: gpu.compute(
-                "Culling::Erode",
-                &gpu.pipeline_layout(&[
-                    &OccupancyBuffer::layout_read(gpu),
-                    &CullingBuffer::layout_write(gpu),
-                    &Environment::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("erode.wgsl")),
-            ),
-            culling: gpu.compute(
+        let cull_src = include_str!("cull.wgsl");
+        let flag = |value: bool| if value { "true" } else { "false" };
+
+        let cull = |enabled: bool| {
+            gpu.compute(
                 "Culling::Culling",
                 &gpu.pipeline_layout(&[
                     &MipTexture3D::<R32Float>::layout_write(gpu),
@@ -35,8 +34,20 @@ impl LineCullPipeline {
                     &CullingBuffer::layout_write(gpu),
                     &Environment::layout(gpu),
                 ]),
-                &gpu.shader(include_str!("cull.wgsl")),
+                &gpu.shader(&cull_src.replace("#CULLING", flag(enabled))),
+            )
+        };
+
+        Self {
+            erode: gpu.compute(
+                "Culling::Erode",
+                &gpu.pipeline_layout(&[
+                    &OccupancyBuffer::layout_read(gpu),
+                    &CullingBuffer::layout_write(gpu),
+                ]),
+                &gpu.shader(include_str!("erode.wgsl")),
             ),
+            culling: [cull(false), cull(true)],
             mipmap: gpu.compute(
                 "Culling::Mipmap",
                 &gpu.pipeline_layout(&[&MipTexture3D::<R32Float>::layout_mipmap(gpu)]),
@@ -45,7 +56,13 @@ impl LineCullPipeline {
         }
     }
 
-    pub fn dispatch(&self, cmd: &mut CommandEncoder, line: &LineBuffer, environment: &Environment) {
+    pub fn dispatch(
+        &self,
+        cmd: &mut CommandEncoder,
+        asset: &Asset,
+        controller: &Controller,
+        line: &LineBuffer,
+    ) {
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Culling"),
             ..Default::default()
@@ -56,14 +73,13 @@ impl LineCullPipeline {
         pass.set_pipeline(&self.erode);
         pass.set_bind_group(0, line.occupancy().binding(), &[]);
         pass.set_bind_group(1, line.culling().binding_write(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
-        pass.set_pipeline(&self.culling);
+        pass.set_pipeline(&self.culling[controller.settings().culling as usize]);
         pass.set_bind_group(0, line.culling().pyramid().binding_write(), &[]);
         pass.set_bind_group(1, line.occupancy().pyramid().binding_write(), &[]);
         pass.set_bind_group(2, line.culling().binding_write(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(3, asset.environment.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);

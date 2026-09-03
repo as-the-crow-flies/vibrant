@@ -20,12 +20,18 @@ impl Tracked for MasksWidget {
     }
 }
 
+impl Default for MasksWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MasksWidget {
     pub fn new() -> Self {
         Self { changed: false }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, masks: &mut Vec<VolumeMaskBuffer>) {
+    pub fn show(&mut self, ui: &mut Ui, masks: &mut [VolumeMaskBuffer]) {
         self.changed = false;
 
         let mut masks = masks

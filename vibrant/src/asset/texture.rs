@@ -254,7 +254,7 @@ impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Forma
     pub fn binding_entries<'a>(&'a self, offset: u32) -> Vec<BindGroupEntry<'a>> {
         vec![
             BindGroupEntry {
-                binding: offset + 0,
+                binding: offset,
                 resource: BindingResource::TextureView(&self.view),
             },
             BindGroupEntry {
@@ -315,7 +315,7 @@ impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Forma
     pub fn layout_entries(offset: u32) -> Vec<BindGroupLayoutEntry> {
         vec![
             BindGroupLayoutEntry {
-                binding: offset + 0,
+                binding: offset,
                 visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                 ty: BindingType::Texture {
                     sample_type: Format::sample_type(),

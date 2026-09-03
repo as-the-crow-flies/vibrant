@@ -1,6 +1,5 @@
 use std::{any::type_name, cell::Cell};
 
-use egui::Rect;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferBindingType, CommandEncoder,
@@ -8,9 +7,13 @@ use wgpu::{
 };
 
 use crate::{
-    asset::{hdri::HdriBuffer, radiance::GaussianRadianceBuffer, volume::PhysicalVolume},
+    asset::{
+        environment::Environment, hdri::HdriBuffer, radiance::GaussianRadianceBuffer,
+        volume::PhysicalVolume, Asset,
+    },
+    controller::Controller,
     gpu::Gpu,
-    renderer::{environment::Environment, lighting::VMM_SIZE_OPTIONS},
+    renderer::lighting::VMM_SIZE_OPTIONS,
     surface::{color::ColorBuffer, Frame},
 };
 
@@ -43,7 +46,12 @@ impl GaussianVolumeRenderer {
             )
         });
 
-        let active = Cell::new(VMM_SIZE_OPTIONS.iter().position(|&size| size == 32).unwrap());
+        let active = Cell::new(
+            VMM_SIZE_OPTIONS
+                .iter()
+                .position(|&size| size == 32)
+                .unwrap(),
+        );
 
         Self {
             variants,
@@ -90,28 +98,28 @@ impl GaussianVolumeRenderer {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn dispatch(
         &self,
         gpu: &Gpu,
         cmd: &mut CommandEncoder,
-        environment: &Environment,
-        hdri: &HdriBuffer,
+        asset: &Asset,
+        controller: &Controller,
         frame: &Frame,
-        radiance: &GaussianRadianceBuffer,
-        volume: &PhysicalVolume,
-        viewport: Rect,
-        vmm_size: u32,
     ) {
-        self.set_vmm_size(vmm_size);
+        let (Some(volume), Some(radiance)) = (&asset.physical_volume, &asset.radiance) else {
+            return;
+        };
 
-        let material = self.material_binding(gpu, hdri, frame);
+        self.set_vmm_size(controller.radiance().lobes());
+
+        let material = self.material_binding(gpu, &asset.hdri, frame);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             color_attachments: &[Some(frame.color().attachment())],
             ..Default::default()
         });
 
+        let viewport = controller.viewport();
         pass.set_viewport(
             viewport.min.x,
             viewport.min.y,
@@ -125,7 +133,7 @@ impl GaussianVolumeRenderer {
 
         pass.set_bind_group(0, radiance.binding(), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(2, asset.environment.binding(), &[]);
         pass.set_bind_group(3, &material, &[]);
         pass.draw(0..4, 0..1);
     }
