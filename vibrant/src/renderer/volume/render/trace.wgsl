@@ -58,23 +58,30 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     // LINE_DEPTH is cleared to 1.0, making this a no-op where no line was drawn.
     let line_s = textureLoad(LINE_DEPTH, vec2<i32>(fragment.position.xy), 0).r;
 
-    var t0 = max(hit.x, 0.0) + hash(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
+    let step = 0.5;
+    let skip = 2.0;
+
+    let entry = max(hit.x, 0.0);
     let t1 = min(hit.y, line_s * length(far - near));
 
     var transmittance = vec3<f32>(1.0);
     var color = vec3<f32>(0.0);
 
-    var step = 0.5;
-
     let direction_norm = normalize(direction);
     let view = -direction_norm;
 
-    while (t0 < t1) {
-        let sample = origin + direction * (t0 + 2.0);
-
-        if (textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0).a > 0.0) { break; }
-        else { t0 += 2.0; }
+    // Coarse empty-space skip on an un-jittered `t0`, so the skipped distance
+    // doesn't flicker frame to frame.
+    var t0 = entry;
+    while (t0 + skip < t1) {
+        if (textureSampleLevel(GRADIENT, SAMPLER, origin + direction * (t0 + skip), 0.0).a > 0.0) { break; }
+        t0 += skip;
     }
+
+    // Step back one stride so the fine march can't miss a thin feature the
+    // look-ahead jumped over, then jitter within a single fine step (not the
+    // whole `[0, 1)` range, which is 2x `step` and just adds sampling variance).
+    t0 = max(t0 - skip, entry) + step * hash(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
 
     var ior = 1.0;
 
@@ -83,7 +90,11 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
         let material = sample_material(uv);
 
-        let normal = sample_normal(uv);
+        // Fall back to `view` where the gradient is degenerate (a volume face
+        // cut flat by the domain edge). A zero normal makes `half` below
+        // `normalize(0)` -> NaN, which poisons the accumulation buffer and shows
+        // up as a persistent noisy plane on that face.
+        let normal = sample_normal(uv, view);
         let light = reflect(-view, normal);
         let half = normalize(view + light);
 
@@ -137,10 +148,10 @@ fn sample_material(uv: vec3<f32>) -> Material {
     return Material(absorption, scattering, extinction, ior);
 }
 
-fn sample_normal(sample: vec3<f32>) -> vec3<f32> {
+fn sample_normal(sample: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
     let raw_normal = - 2.0 * textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0).xyz + 1.0;
     let normal_len = length(raw_normal);
-    return select(vec3<f32>(0.0), raw_normal / normal_len, normal_len > 1E-4);
+    return select(fallback, raw_normal / normal_len, normal_len > 1E-4);
 }
 
 fn sample_outgoing_radiance(

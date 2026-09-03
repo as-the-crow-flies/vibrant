@@ -66,9 +66,11 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let voxel_f32 = vec3<f32>(voxel) / dim - 0.5;
     let voxel_distance = dot(crop_normal, voxel_f32);
 
+    // `+ w` biases the smoothstep band fully past the +face at z == 0, so the
+    // default ("off") spherical crop doesn't fade out the volume's outer voxels.
     let voxel_distance_transform = smoothstep(
         -CROP.spherical.w, CROP.spherical.w,
-        0.5 - CROP.spherical.z - voxel_distance);
+        0.5 - CROP.spherical.z + CROP.spherical.w - voxel_distance);
 
     let uv = vec3<f32>(voxel) / dim;
     var fraction = textureSampleLevel(FRACTION, SAMPLER, uv, 0.0).x;
