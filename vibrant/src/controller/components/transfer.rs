@@ -158,7 +158,10 @@ impl TransferFunctionEditor {
                 }
 
                 ui.allocate_space(size);
-                ui.set_clip_rect(rect);
+                // Intersect, don't replace: replacing lets the mesh paint over
+                // the top panel when scrolled out of view and keeps it at full
+                // height during the Volumes collapse animation.
+                ui.set_clip_rect(rect.intersect(ui.clip_rect()));
 
                 let width = rect.width() / 256.0;
 
