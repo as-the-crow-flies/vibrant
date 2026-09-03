@@ -8,7 +8,7 @@ pub mod state;
 pub mod widgets;
 
 use camera::Camera;
-use egui::{Align, CentralPanel, Layout, ScrollArea, Ui};
+use egui::{Align, CentralPanel, Frame, Layout, Margin, ScrollArea, Ui};
 use egui::{Panel, Rect};
 use event::Event;
 use light::Light;
@@ -152,27 +152,43 @@ impl Controller {
             .show(ui, |ui| {
                 ui.take_available_width();
 
+                // Keep a constant gutter on the right so the floating scrollbar
+                // never sits on top of the widgets. A non-floating bar would
+                // reserve space that animates in/out, and the resizable panel
+                // would ratchet its width up a little on every toggle.
+                let scroll = ui.spacing().scroll;
+                let gutter = (scroll.bar_width + scroll.bar_inner_margin).ceil() as i8;
+
                 ScrollArea::new([false, true]).show(ui, |ui| {
-                    self.crop_widget.show(ui, &mut asset.crop);
+                    Frame::NONE
+                        .inner_margin(Margin {
+                            right: gutter,
+                            ..Margin::ZERO
+                        })
+                        .show(ui, |ui| {
+                            ui.take_available_width();
 
-                    self.volumes_widget
-                        .show(ui, &mut asset.volumes, &asset.masks);
+                            self.crop_widget.show(ui, &mut asset.crop);
 
-                    self.mask_widget.show(ui, &mut asset.masks);
+                            self.volumes_widget
+                                .show(ui, &mut asset.volumes, &asset.masks);
 
-                    self.tractography_widget
-                        .show(ui, &mut asset.line, &mut self.settings);
+                            self.mask_widget.show(ui, &mut asset.masks);
 
-                    self.rendering_widget.show(
-                        ui,
-                        &mut asset.hdri,
-                        &mut self.camera,
-                        &mut self.settings,
-                        hdr_headroom_limit,
-                        accumulation,
-                    );
+                            self.tractography_widget
+                                .show(ui, &mut asset.line, &mut self.settings);
 
-                    self.controls_widget.show(ui);
+                            self.rendering_widget.show(
+                                ui,
+                                &mut asset.hdri,
+                                &mut self.camera,
+                                &mut self.settings,
+                                hdr_headroom_limit,
+                                accumulation,
+                            );
+
+                            self.controls_widget.show(ui);
+                        });
                 });
             });
 
