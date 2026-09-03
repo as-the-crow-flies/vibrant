@@ -14,9 +14,12 @@ const VMM_SIZE : u32 = #VMM_SIZE;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-@group(3) @binding(0) var HDRI: texture_2d<f32>;
-@group(3) @binding(1) var HDRI_SAMPLER: sampler;
-@group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
+// The environment map itself is already integrated into the radiance cascade,
+// so the volume tracer only needs the HDRI material settings. Binding 1 is the
+// combined-mode line-depth target: the near→far fraction `s` of the first line
+// hit, used to clamp this trace's far `t`.
+@group(3) @binding(0) var<uniform> HDRI_SETTINGS: HdriSettings;
+@group(3) @binding(1) var LINE_DEPTH: texture_2d<f32>;
 
 struct Fragment {
     @builtin(position) position: vec4<f32>,
@@ -47,8 +50,16 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     if (hit.x > hit.y) { return vec4<f32>(0.0); }
 
+    // Combined mode: stop the march at the first line surface. The line tracer
+    // writes `s`, the fraction of its near→far segment where it first hit; both
+    // tracers share the same camera ray and volume TRANSFORM, so the matching
+    // `t` here is `s * length(far - near)` (AABB `t` is arc length along
+    // `direction`, whose fraction of the segment is `t / length(far - near)`).
+    // LINE_DEPTH is cleared to 1.0, making this a no-op where no line was drawn.
+    let line_s = textureLoad(LINE_DEPTH, vec2<i32>(fragment.position.xy), 0).r;
+
     var t0 = max(hit.x, 0.0) + hash(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
-    let t1 = hit.y;
+    let t1 = min(hit.y, line_s * length(far - near));
 
     var transmittance = vec3<f32>(1.0);
     var color = vec3<f32>(0.0);
@@ -142,22 +153,11 @@ fn sample_outgoing_radiance(
 {
     var outgoing_radiance = vec3<f32>(0.0);
 
-    let dims = vec3<f32>(textureDimensions(GAUSSIAN));
-    let probes = max(floor(dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
-    let local = clamp(uv * probes, vec3<f32>(0.5), probes - 0.5);
-
     let roughness = HDRI_SETTINGS.roughness;
     let anisotropy = HDRI_SETTINGS.anisotropy;
 
     for (var k = 0u; k < VMM_SIZE; k++) {
-        let tile = vec3<f32>(vec3<u32>(k & 3, (k >> 2) & 3, (k >> 4) & 1));
-
-        let lobe_uv = (tile * probes + local) / dims;
-
-        let sg = SG(
-            textureSampleLevel(GAUSSIAN, SAMPLER, lobe_uv, 0.0),
-            textureSampleLevel(RADIANCE, SAMPLER, lobe_uv, 0.0).rgb
-        );
+        let sg = probe_sg(RADIANCE, GAUSSIAN, SAMPLER, uv, k);
 
         outgoing_radiance +=
             sg_specular(sg, normal, view, roughness) * F +

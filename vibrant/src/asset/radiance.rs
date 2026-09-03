@@ -1,7 +1,10 @@
 use std::{any::type_name, mem::size_of, ops::Shr};
 
 use glam::UVec3;
-use wgpu::*;
+use wgpu::{
+    util::{BufferInitDescriptor, DeviceExt},
+    *,
+};
 
 use crate::gpu::Gpu;
 
@@ -12,6 +15,9 @@ pub struct GaussianRadianceBuffer {
     vmm_hdri: Buffer,
     phi_hdri: Buffer,
     em_iterations: Buffer,
+    // `cascade.wgsl` occlusion sources: (include_volume, include_lines, _, _).
+    // Combined = (1, 1); x-ray volume cascade = (1, 0); x-ray line cascade = (0, 1).
+    cascade_opts: Buffer,
     binding: BindGroup,
     binding_hdri: BindGroup,
     binding_mipmap: Vec<BindGroup>,
@@ -100,6 +106,12 @@ impl GaussianRadianceBuffer {
             size: Self::VMM_SIZE_MAX as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             mapped_at_creation: false,
+        });
+
+        let cascade_opts = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&[1u32, 0u32, 0u32, 0u32]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
@@ -256,6 +268,10 @@ impl GaussianRadianceBuffer {
                             binding: 9,
                             resource: vmm_hdri.as_entire_binding(),
                         },
+                        BindGroupEntry {
+                            binding: 10,
+                            resource: cascade_opts.as_entire_binding(),
+                        },
                     ],
                 })
             })
@@ -268,11 +284,20 @@ impl GaussianRadianceBuffer {
             vmm_hdri,
             phi_hdri,
             em_iterations,
+            cascade_opts,
             binding,
             binding_hdri,
             binding_mipmap,
             probes,
         }
+    }
+
+    pub fn set_cascade_sources(&self, gpu: &Gpu, include_volume: bool, include_lines: bool) {
+        gpu.queue().write_buffer(
+            &self.cascade_opts,
+            0,
+            bytemuck::cast_slice(&[include_volume as u32, include_lines as u32, 0u32, 0u32]),
+        );
     }
 
     pub fn size(&self) -> UVec3 {
@@ -494,6 +519,17 @@ impl GaussianRadianceBuffer {
                         },
                         count: None,
                     },
+                    // CASCADE_OPTS
+                    BindGroupLayoutEntry {
+                        binding: 10,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -507,5 +543,6 @@ impl Drop for GaussianRadianceBuffer {
         self.irradiance.destroy();
         self.phi_hdri.destroy();
         self.vmm_hdri.destroy();
+        self.cascade_opts.destroy();
     }
 }

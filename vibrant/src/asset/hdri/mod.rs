@@ -392,6 +392,10 @@ impl HdriBuffer {
         &self.texture().binding
     }
 
+    pub fn settings_buffer(&self) -> &Buffer {
+        &self.settings_buffer
+    }
+
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
         let visibility = ShaderStages::COMPUTE | ShaderStages::FRAGMENT;
 

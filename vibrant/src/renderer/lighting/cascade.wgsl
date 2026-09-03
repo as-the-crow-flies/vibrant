@@ -1,3 +1,8 @@
+struct CascadeOpts {
+    include_volume: u32,
+    include_lines: u32,
+}
+
 @group(0) @binding(0) var PHI_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(1) var VMM_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(3) var PHI_IN: texture_3d<f32>;
@@ -6,6 +11,7 @@
 @group(0) @binding(6) var IRRADIANCE_IN: texture_3d<f32>;
 @group(0) @binding(8) var<storage, read> PHI_HDRI_IN: array<vec4<f32>>;
 @group(0) @binding(9) var<storage, read> VMM_HDRI_IN: array<vec4<f32>>;
+@group(0) @binding(10) var<uniform> CASCADE_OPTS: CascadeOpts;
 
 // Diagnostic Histogram
 @group(0) @binding(7) var<storage, read_write> EM_ITERATIONS: array<atomic<u32>>;
@@ -14,6 +20,9 @@
 @group(1) @binding(3) var PROPERTIES: texture_3d<f32>;
 @group(1) @binding(4) var GRADIENT: texture_3d<f32>;
 @group(1) @binding(5) var SAMPLER: sampler;
+
+@group(1) @binding(8) var LINE_EXTINCTION: texture_3d<f32>;
+@group(1) @binding(9) var LINE_EXTINCTION_SAMPLER: sampler;
 @group(1) @binding(6) var<uniform> TRANSFORM: mat4x4<f32>;
 @group(1) @binding(7) var<uniform> TRANSFORM_INVERSE: mat4x4<f32>;
 
@@ -115,7 +124,7 @@ fn cull(origin: vec3<f32>, index: u32) -> bool {
 
     if (index < CULL_NEIGHBORS) {
         let sample = origin_sample + NEIGHBOR_OFFSET[index] * cell_sample;
-        let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, mip));
+        let extinction = sample_extinction(sample, mip);
         if (any(extinction > vec3<f32>(EPSILON))) { atomicOr(&CULL_OCCUPIED, 1u); }
     }
 
@@ -287,13 +296,26 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     for (var t=t0; t<t1; t+=step_size) {
         let sample = origin_sample + direction_sample * t;
 
-        let extinction = unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, 0.0));
+        let extinction = sample_extinction(sample, 0.0);
 
         transmission *= exp(-extinction * step_size / scale);
         if (all(transmission < vec3<f32>(1e-3)) || any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
     }
 
     return transmission;
+}
+
+// Occlusion extinction for the cascade: the volume's `EXTINCTION` and/or the
+// line deposit's `LINE_EXTINCTION`, per this radiance buffer's `cascade_opts`.
+fn sample_extinction(sample: vec3<f32>, mip: f32) -> vec3<f32> {
+    var e = vec3<f32>(0.0);
+    if (CASCADE_OPTS.include_volume != 0u) {
+        e += unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, sample, mip));
+    }
+    if (CASCADE_OPTS.include_lines != 0u) {
+        e += vec3<f32>(textureSampleLevel(LINE_EXTINCTION, LINE_EXTINCTION_SAMPLER, sample, mip).x);
+    }
+    return e;
 }
 
 fn scatter_partial(k: u32, subgroup: u32, subgroup_index: u32, item: vec4<f32>) {

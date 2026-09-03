@@ -8,7 +8,10 @@ use crate::{
         line::{LineBuffer, LineColorMode},
     },
     controller::{
-        components::UIComponents, icons, settings::Settings, widgets::util::UiResponseExtensions,
+        components::UIComponents,
+        icons,
+        settings::{RenderMode, Settings},
+        widgets::util::UiResponseExtensions,
     },
     util::{ResponseExtentions, Tracked},
 };
@@ -59,6 +62,44 @@ Scalar: Coloring according to corresponding .tsf file
                 RichText::new(format!("{} Tractography", icons::regular::PATH)).heading(),
                 open,
                 |ui| {
+                    ui.collapse(
+                        format!("{} Settings", icons::regular::LINE_SEGMENTS),
+                        false,
+                        |ui| {
+                            Grid::new("TractographySettings")
+                                .num_columns(2)
+                                .show(ui, |ui| {
+                                    ui.label("Line Radius")
+                                        .on_hover_text("Tractography Line Radius");
+                                    ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
+                                    ui.end_row();
+
+                                    ui.label("Roughness")
+                                        .on_hover_text("Line surface roughness (Disney BRDF)");
+                                    ui.slider(&mut settings.line_roughness, 0.04..=1.0)
+                                        .track(self);
+                                    ui.end_row();
+
+                                    ui.label("Specular")
+                                        .on_hover_text("Line surface specular reflectance");
+                                    ui.slider(&mut settings.line_specular, 0.0..=1.0)
+                                        .track(self);
+                                    ui.end_row();
+
+                                    ui.label("Diffuse")
+                                        .on_hover_text("Diffuse gain on the line VMM lighting");
+                                    ui.slider(&mut settings.ambient_light, 0.0..=3.0)
+                                        .track(self);
+                                    ui.end_row();
+
+                                    ui.label("Specular Gain")
+                                        .on_hover_text("Specular gain on the line VMM lighting");
+                                    ui.slider(&mut settings.direct_light, 0.0..=3.0).track(self);
+                                    ui.end_row();
+                                });
+                        },
+                    );
+
                     if let Some(lines) = lines {
                         for line in lines.settings_mut() {
                             ui.frame(|ui| {
@@ -109,37 +150,6 @@ Scalar: Coloring according to corresponding .tsf file
                             });
                         }
                     }
-
-                    ui.collapse(
-                        format!("{} Settings", icons::regular::LINE_SEGMENTS),
-                        false,
-                        |ui| {
-                            Grid::new("TractographySettings")
-                                .num_columns(2)
-                                .show(ui, |ui| {
-                                    ui.label("Line Radius")
-                                        .on_hover_text("Tractography Line Radius");
-                                    ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
-                                    ui.end_row();
-
-                                    ui.label("Line Opacity")
-                                        .on_hover_text("Tractography Opacity");
-                                    ui.slider(&mut settings.alpha, 0.01..=1.0).track(self);
-                                    ui.end_row();
-
-                                    ui.label("Ambient Light")
-                                        .on_hover_text("Ambient Lighting Strength");
-                                    ui.slider(&mut settings.ambient_light, 0.0..=3.0)
-                                        .track(self);
-                                    ui.end_row();
-
-                                    ui.label("Direct Light")
-                                        .on_hover_text("Directional Lighting Strength");
-                                    ui.slider(&mut settings.direct_light, 0.0..=3.0).track(self);
-                                    ui.end_row();
-                                });
-                        },
-                    );
                 },
             )
             .help(
@@ -162,6 +172,33 @@ Scalar: Coloring according to corresponding .tsf file
                             line.visible = visible;
                         }
 
+                        self.track();
+                    }
+
+                    if ui
+                        .selectable_label(
+                            settings.render_mode == RenderMode::XRay,
+                            icons::regular::CUBE_TRANSPARENT,
+                        )
+                        .on_hover_text(
+                            "X-ray: lines transparent, lit independently of the volume, \
+                             composited on top",
+                        )
+                        .clicked()
+                    {
+                        settings.render_mode = match settings.render_mode {
+                            RenderMode::Combined => RenderMode::XRay,
+                            RenderMode::XRay => RenderMode::Combined,
+                        };
+                        self.track();
+                    }
+
+                    if ui
+                        .selectable_label(settings.line_crop, icons::regular::CROP)
+                        .on_hover_text("Let the slicing / clipping planes cut the tractography")
+                        .clicked()
+                    {
+                        settings.line_crop = !settings.line_crop;
                         self.track();
                     }
 

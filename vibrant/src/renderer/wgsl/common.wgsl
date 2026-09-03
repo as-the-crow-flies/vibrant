@@ -18,6 +18,12 @@ struct Settings {
     crop_z_start: f32,
     crop_z_end: f32,
     plane: f32,
+    line_roughness: f32,
+    line_specular: f32,
+    // 0 = Combined, 1 = X-ray.
+    render_mode: u32,
+    // Whether the slicing / clipping planes cull tractography lines.
+    line_crop: u32,
 }
 
 struct Segment {

@@ -3,8 +3,7 @@ use std::cell::Cell;
 use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
-    asset::{hdri::HdriBuffer, radiance::GaussianRadianceBuffer, volume::PhysicalVolume, Asset},
-    controller::Controller,
+    asset::{hdri::HdriBuffer, radiance::GaussianRadianceBuffer, volume::PhysicalVolume},
     gpu::Gpu,
     renderer::environment::Environment,
 };
@@ -80,21 +79,22 @@ impl LightingRenderer {
         }
     }
 
-    pub fn dispatch(
+    /// Build one cascade (`hdri` fit + all levels) for an explicit
+    /// `PhysicalVolume` / `GaussianRadianceBuffer` pair. The renderer calls this
+    /// once per active PV/radiance pair (volume, lines, or both).
+    pub fn dispatch_for(
         &self,
         cmd: &mut CommandEncoder,
-        controller: &Controller,
         environment: &Environment,
-        asset: &Asset,
+        hdri: &HdriBuffer,
+        radiance: &GaussianRadianceBuffer,
+        volume: &PhysicalVolume,
+        lobes: u32,
     ) {
-        let (Some(volume), Some(radiance)) = (&asset.physical_volume, &asset.radiance) else {
-            return;
-        };
+        self.set_vmm_size(lobes);
 
-        self.set_vmm_size(controller.radiance().lobes());
-
-        self.hdri(cmd, environment, &asset.hdri, radiance, volume);
-        self.radiance(cmd, environment, &asset.hdri, radiance, volume);
+        self.hdri(cmd, environment, hdri, radiance, volume);
+        self.radiance(cmd, environment, hdri, radiance, volume);
     }
 
     pub fn hdri(

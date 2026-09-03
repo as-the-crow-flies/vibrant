@@ -243,3 +243,64 @@ fn sg_phase(sg: SG, view: vec3<f32>, g: f32) -> vec3<f32> {
 
     return sg.phi * ratio * exp2(exponent * LOG2_E);
 }
+
+// ── Shared VMM probe lookup ───────────────────────────────────────────────
+// Fetches SG lobe `k` from the octahedral radiance-cascade probe grid at the
+// volume-space [0,1] coord `p`. Both the volume tracer (phase model) and the
+// line tracer (surface Disney BRDF) build their per-lobe SG the same way.
+// Textures + sampler are passed in so this can live in the always-included
+// gaussian.wgsl without depending on any particular binding layout.
+fn probe_sg(
+    radiance_tex: texture_3d<f32>,
+    gaussian_tex: texture_3d<f32>,
+    samp: sampler,
+    p: vec3<f32>,
+    k: u32
+) -> SG {
+    let dims = vec3<f32>(textureDimensions(gaussian_tex));
+    let probes = max(floor(dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
+    let local = clamp(p * probes, vec3<f32>(0.5), probes - 0.5);
+
+    let tile = vec3<f32>(vec3<u32>(k & 3u, (k >> 2u) & 3u, (k >> 4u) & 1u));
+    let lobe_uv = (tile * probes + local) / dims;
+
+    return SG(
+        textureSampleLevel(gaussian_tex, samp, lobe_uv, 0.0),
+        textureSampleLevel(radiance_tex, samp, lobe_uv, 0.0).rgb
+    );
+}
+
+// Surface (opaque) outgoing radiance from the probe VMM: hemisphere SG diffuse
+// (× albedo) + GGX-from-SG specular (× Schlick Fresnel), summed over `count`
+// lobes. `diffuse_gain` / `specular_gain` are the repurposed line ambient /
+// direct light sliders. Used by the tractography line tracer.
+fn sample_outgoing_radiance_surface(
+    radiance_tex: texture_3d<f32>,
+    gaussian_tex: texture_3d<f32>,
+    samp: sampler,
+    p: vec3<f32>,
+    normal: vec3<f32>,
+    view: vec3<f32>,
+    albedo: vec3<f32>,
+    roughness: f32,
+    f0: vec3<f32>,
+    diffuse_gain: f32,
+    specular_gain: f32,
+    count: u32
+) -> vec3<f32> {
+    let light = reflect(-view, normal);
+    let half = normalize(view + light);
+    let fresnel = F_Schlick(max(dot(view, half), 0.0), f0);
+
+    var result = vec3<f32>(0.0);
+
+    for (var k = 0u; k < count; k++) {
+        let sg = probe_sg(radiance_tex, gaussian_tex, samp, p, k);
+
+        result +=
+            sg_irradiance(sg, normal) * albedo * diffuse_gain +
+            sg_specular(sg, normal, view, roughness) * fresnel * specular_gain;
+    }
+
+    return result;
+}

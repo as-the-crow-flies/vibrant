@@ -33,6 +33,9 @@ impl ColorBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     /// Overlay / export format: 8-bit, sRGB-encoded values (non-sRGB texture).
     pub const LDR_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+    /// Combined-mode line-depth format: the near→far lerp fraction of the first
+    /// line hit, `textureLoad`-ed by the volume tracer to clamp its far `t`.
+    pub const DEPTH_FORMAT: TextureFormat = TextureFormat::R32Float;
 
     pub fn new(gpu: &Gpu, width: u32, height: u32) -> Self {
         Self::create(
@@ -64,6 +67,48 @@ impl ColorBuffer {
                 | TextureUsages::TEXTURE_BINDING
                 | TextureUsages::COPY_SRC,
         )
+    }
+
+    /// Single-channel `R32Float` render target sampled via `textureLoad` (no
+    /// sampler): the combined-mode line-depth buffer.
+    pub fn depth(gpu: &Gpu, width: u32, height: u32) -> Self {
+        let label = Some(type_name::<Self>());
+
+        let texture = gpu.device().create_texture(&TextureDescriptor {
+            label,
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: Self::DEPTH_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let view = texture.create_view(&TextureViewDescriptor {
+            label,
+            format: Some(Self::DEPTH_FORMAT),
+            ..Default::default()
+        });
+
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &Self::depth_layout(gpu),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&view),
+            }],
+        });
+
+        Self {
+            texture,
+            view,
+            binding,
+        }
     }
 
     fn create(
@@ -165,6 +210,40 @@ impl ColorBuffer {
         }
     }
 
+    /// Premultiplied-alpha "over" blending: `dst = src.rgb + dst.rgb·(1−src.a)`.
+    /// The volume tracer returns radiance already weighted by coverage, so this
+    /// composites it over whatever the (earlier, opaque) line pass wrote.
+    pub fn target_premultiplied() -> ColorTargetState {
+        ColorTargetState {
+            format: Self::FORMAT,
+            blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+            write_mask: ColorWrites::all(),
+        }
+    }
+
+    /// Render-target state for the [`Self::depth`] line-depth attachment.
+    pub fn depth_target() -> ColorTargetState {
+        ColorTargetState {
+            format: Self::DEPTH_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        }
+    }
+
+    /// Clears the line-depth attachment to `1.0` (nothing in front): the volume
+    /// tracer's `t1 = min(t1, s)` clamp then becomes a no-op where no line was hit.
+    pub fn attachment_clear_far<'a>(&'a self) -> RenderPassColorAttachment<'a> {
+        RenderPassColorAttachment {
+            view: &self.view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(Color::WHITE),
+                store: StoreOp::Store,
+            },
+        }
+    }
+
     pub fn attachment<'a>(&'a self) -> RenderPassColorAttachment<'a> {
         RenderPassColorAttachment {
             view: &self.view,
@@ -211,6 +290,25 @@ impl ColorBuffer {
                         count: None,
                     },
                 ],
+            })
+    }
+
+    /// Texture-only (no sampler) layout for the [`Self::depth`] buffer, read
+    /// with `textureLoad` since `R32Float` is not filterable.
+    pub fn depth_layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: false },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                }],
             })
     }
 }

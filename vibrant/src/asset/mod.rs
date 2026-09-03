@@ -10,8 +10,8 @@ pub mod volume_fraction;
 pub mod volume_mask;
 
 use std::f32::consts::PI;
-use std::ops::Div;
 
+use glam::{Mat4, UVec3};
 use line::LineBuffer;
 use volume::PhysicalVolume;
 
@@ -20,7 +20,7 @@ use crate::{
         colormap::Colormap, crop::CropBuffer, hdri::HdriBuffer, radiance::GaussianRadianceBuffer,
         volume_fraction::VolumeFractionBuffer, volume_mask::VolumeMaskBuffer,
     },
-    controller::Controller,
+    controller::{settings::RenderMode, Controller},
     file::FileStage,
     gpu::Gpu,
 };
@@ -33,13 +33,29 @@ pub struct Asset {
     pub line: Option<LineBuffer>,
     pub volumes: Vec<VolumeFractionBuffer>,
     pub masks: Vec<VolumeMaskBuffer>,
+    // The single shared medium: volume density in the sampled textures (marched
+    // by the volume renderer), plus a `line_extinction` side texture the line
+    // deposit fills. Allocated whenever a volume OR a line is loaded.
     pub physical_volume: Option<PhysicalVolume>,
+    // Primary cascade. Combined: occlusion = volume + lines, sampled by both
+    // renderers. X-ray: occlusion = volume only, sampled by the volume renderer.
     pub radiance: Option<GaussianRadianceBuffer>,
+    // X-ray only, and only when a volume is also present: the line-only cascade
+    // the line surface shader samples so lines self-shadow without volume shadows.
+    pub radiance_lines: Option<GaussianRadianceBuffer>,
 
     // Last `settings.volume` / `settings.index_buffer_size` baked into
     // `line`'s acceleration structure; a mismatch triggers `LineBuffer::resize`.
     volume: u32,
     index_buffer_size: u32,
+
+    // (size, world→texture transform, radiance divisor, has_volume, has_line) the
+    // `physical_volume` + `radiance` were last built for. Mode-independent so a
+    // mode toggle doesn't churn them.
+    physical_key: Option<(UVec3, Mat4, u32, bool, bool)>,
+    // (has_volume, has_line, render_mode): drives `radiance_lines` (de)allocation
+    // and the per-cascade `set_cascade_sources` calls.
+    cascade_key: Option<(bool, bool, RenderMode)>,
 
     pub changed: bool,
 }
@@ -56,8 +72,11 @@ impl Asset {
             volumes: Vec::new(),
             physical_volume: None,
             radiance: None,
+            radiance_lines: None,
             volume: 0,
             index_buffer_size: 0,
+            physical_key: None,
+            cascade_key: None,
             changed: false,
         }
     }
@@ -92,8 +111,6 @@ impl Asset {
             }
         });
 
-        let mut radiance_should_update = controller.radiance().changed();
-
         FileStage::on_volumes(|volumes| {
             for volume in &volumes {
                 if volume.name().contains("mask") {
@@ -112,29 +129,10 @@ impl Asset {
                 if let Some(line) = &self.line {
                     line.set_transform(gpu, &volume.transform());
                 }
-
-                self.physical_volume =
-                    Some(PhysicalVolume::new(gpu, volume.size(), volume.transform()));
-
-                self.changed = true;
-
-                radiance_should_update = true;
             }
+
+            self.changed = true;
         });
-
-        if let Some(volume) = self
-            .volumes
-            .iter()
-            .max_by_key(|volume| volume.size().element_product())
-        {
-            if radiance_should_update {
-                let resolution = volume.size().div(controller.radiance().resolution());
-
-                self.radiance = Some(GaussianRadianceBuffer::new(gpu, resolution));
-
-                self.changed = true;
-            }
-        }
 
         FileStage::on_hdris(|hdris| {
             for hdri in hdris {
@@ -187,6 +185,91 @@ impl Asset {
                 line.culling().refresh_required_index_size(gpu);
             }
         }
+
+        self.sync_physical_volume(gpu, controller);
+    }
+
+    /// Keep the single shared `physical_volume` + its `radiance` cascade (and,
+    /// in x-ray mode, the extra `radiance_lines` cascade) sized/oriented to the
+    /// scene. Reference: the largest volume fraction if there is one, otherwise
+    /// a `settings.volume`³ box around the lines so a lines-only scene still gets
+    /// full cascade lighting. `physical_volume` / `radiance` realloc only when
+    /// that reference changes; `radiance_lines` follows the render mode. Any
+    /// (re)allocation flags `changed` so frame accumulation resets.
+    fn sync_physical_volume(&mut self, gpu: &Gpu, controller: &Controller) {
+        let reference = self
+            .volumes
+            .iter()
+            .max_by_key(|volume| volume.size().element_product())
+            .map(|volume| (volume.size(), volume.transform()))
+            .or_else(|| {
+                self.line.as_ref().map(|line| {
+                    (
+                        UVec3::splat(controller.settings().volume.max(1)),
+                        line.bounds().transform().inverse(),
+                    )
+                })
+            });
+
+        let divisor = controller.radiance().resolution().max(1);
+        let has_volume = !self.volumes.is_empty();
+        let has_line = self.line.is_some();
+        let mode = controller.settings().render_mode;
+
+        let radiance =
+            |size: UVec3| GaussianRadianceBuffer::new(gpu, (size / divisor).max(UVec3::ONE));
+
+        let key =
+            reference.map(|(size, transform)| (size, transform, divisor, has_volume, has_line));
+
+        if key != self.physical_key {
+            match reference {
+                Some((size, transform)) => {
+                    self.physical_volume = Some(PhysicalVolume::new(gpu, size, transform));
+                    self.radiance = Some(radiance(size));
+                }
+                None => {
+                    self.physical_volume = None;
+                    self.radiance = None;
+                }
+            }
+            self.radiance_lines = None;
+            self.physical_key = key;
+            self.cascade_key = None;
+            self.changed = true;
+        }
+
+        let cascade_key = Some((has_volume, has_line, mode));
+        if cascade_key == self.cascade_key {
+            return;
+        }
+
+        // The separate line cascade only earns its keep in x-ray with both a
+        // volume (to exclude) and lines present.
+        let split = mode == RenderMode::XRay && has_volume && has_line;
+
+        match (split, reference) {
+            (true, Some((size, _))) if self.radiance_lines.is_none() => {
+                self.radiance_lines = Some(radiance(size));
+            }
+            (false, _) => self.radiance_lines = None,
+            _ => {}
+        }
+
+        if let Some(rad) = &self.radiance {
+            let (volume, lines) = if split {
+                (true, false)
+            } else {
+                (has_volume, has_line)
+            };
+            rad.set_cascade_sources(gpu, volume, lines);
+        }
+        if let Some(rad) = &self.radiance_lines {
+            rad.set_cascade_sources(gpu, false, true);
+        }
+
+        self.cascade_key = cascade_key;
+        self.changed = true;
     }
 
     pub fn changed(&self) -> bool {

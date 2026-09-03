@@ -1,3 +1,5 @@
+const VMM_SIZE : u32 = #VMM_SIZE;
+
 @group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
 @group(0) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
@@ -8,22 +10,38 @@
 @group(0) @binding(9) var DENSITY: texture_3d<f32>;
 @group(0) @binding(10) var SAMPLER: sampler;
 @group(0) @binding(11) var COUNT: texture_3d<u32>;
-@group(0) @binding(13) var OCCLUSION_AMBIENT: texture_3d<f32>;
-@group(0) @binding(15) var OCCLUSION_DIRECTIONAL: texture_3d<f32>;
+// 13..16 intentionally free (removed line occlusion volumes).
 @group(0) @binding(17) var<storage> OFFSET: array<u32>;
 @group(0) @binding(18) var<storage> INDEX: array<u32>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
+// The shared octahedral radiance cascade (same probe grid the volume tracer
+// samples). No HDRI group: the cascade already integrates the environment.
+@group(2) @binding(0) var RADIANCE: texture_3d<f32>;
+@group(2) @binding(1) var GAUSSIAN: texture_3d<f32>;
+@group(2) @binding(2) var VMM_SAMPLER: sampler;
+
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
-var<private> DIR_INV: f32;
 var<private> RADIUS: f32;
-var<private> ALPHA: f32;
+// Ray direction (normalized, volume-[0,1] space) and near→far segment length of
+// the current pixel's ray, set by `fragment` / `raymarch` for `shade` and
+// `hit_fraction`.
+var<private> DIRECTION: vec3<f32>;
+var<private> RAY_LENGTH: f32;
 
 struct Fragment {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>
+}
+
+struct FragmentOut {
+    // Un-tone-mapped radiance; opaque (alpha forced to 1).
+    @location(0) color: vec4<f32>,
+    // Near→far fraction of the first hit; 1.0 on miss. The volume tracer clamps
+    // its far `t` to this.
+    @location(1) depth: f32,
 }
 
 @vertex
@@ -37,25 +55,30 @@ fn vertex(@builtin(vertex_index) index: u32) -> Fragment {
 }
 
 @fragment
-fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
+fn fragment(fragment: Fragment) -> FragmentOut {
     DIM = f32(ENVIRONMENT.volume);
     DIM_INV = 1.0 / DIM;
     RADIUS = ENVIRONMENT.settings.radius * DIM_INV;
-    ALPHA = ENVIRONMENT.settings.alpha;
 
     let near = unproject(vec3<f32>(fragment.uv, 0.0));
     let far = unproject(vec3<f32>(fragment.uv, 1.0));
 
+    RAY_LENGTH = length(far - near);
+
     let origin = near;
     let direction = normalize(far - near);
 
-    let result = raymarch(origin, direction);
+    let color = raymarch(origin, direction);
 
-    if (result.a > 0.0) { return vec4<f32>(result.rgb, result.a); }
-    else { return vec4<f32>(0.0); }
+    var out: FragmentOut;
+    out.depth = hit_fraction();
+    out.color = select(vec4<f32>(0.0), vec4<f32>(color.rgb, color.a), color.a > 0.0);
+    return out;
 }
 
 fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
+    DIRECTION = direction;
+
     let delta = select(1.0 / direction, vec3<f32>(1E10), abs(direction) < vec3<f32>(1E-5));
     let boundary = select(vec3<u32>(0), vec3<u32>(1), direction >= vec3<f32>(0.0));
 
@@ -149,53 +172,6 @@ fn unproject(v: vec3<f32>) -> vec3<f32> {
     return t.xyz / t.w;
 }
 
-fn background(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
-    let hit = plane_intersection(origin, direction, vec4<f32>(0.0, 1.0, 0.0, -ENVIRONMENT.settings.plane));
-    if (hit <= 0.0) { return vec4<f32>(1.0); }
-
-    let dim = f32(textureDimensions(DENSITY).x);
-    let one_over_dim = 1.0 / dim;
-
-    let position = origin + direction * hit;
-
-    var directional_occlusion = 0.0;
-
-    for (var distance = 1.0; distance < 2.0 * dim; distance += 1.0) {
-        let sample = (position + ENVIRONMENT.light * distance * one_over_dim);
-
-        directional_occlusion += (1.0 - directional_occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, 0.0).x;
-
-        if (directional_occlusion > 0.99) { break; }
-    }
-
-    var ambient_occlusion = 0.0;
-
-    for (var i=0u; i<12; i++) {
-        var icosahedron = ICOSAHEDRON[i];
-
-        var occlusion = 0.0;
-
-        for (var distance = 1.0; distance < dim * 2.0; distance *= 2.0) {
-            let sample = (position + icosahedron * distance * one_over_dim);
-            let level = log2(TAN_CONE_ANGLE * distance);
-
-            occlusion += (1.0 - occlusion) * textureSampleLevel(DENSITY, SAMPLER, sample, level).x;
-
-            if (occlusion > 0.99) { break; }
-        }
-
-        ambient_occlusion += occlusion;
-    }
-
-    ambient_occlusion = clamp(ambient_occlusion / 6.0, 0.0, 1.0);
-
-    let ao = 1.0 - ambient_occlusion;
-    let shadow = 1.0 - ENVIRONMENT.settings.direct_light * directional_occlusion;
-    let occlusion = 1.0 - (1.0 - shadow) * (1.0 - ao);
-
-    return vec4<f32>(vec3<f32>(occlusion), 1.0);
-}
-
 fn shade(
     v0: Vertex,
     v1: Vertex,
@@ -223,17 +199,10 @@ fn shade(
 
     let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
     let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
-    let diffuse = lambert(normal_smooth, ENVIRONMENT.light);
 
-    let ambient = 1.0 - textureSampleLevel(OCCLUSION_AMBIENT, SAMPLER, position + 0.5, 0.0).x;
-    let directional = 1.0 - textureSampleLevel(OCCLUSION_DIRECTIONAL, SAMPLER, position + 0.5, 0.0).x;
-
-    let ao = ambient * ENVIRONMENT.settings.ambient_light;
-    let shadow = diffuse * ENVIRONMENT.settings.direct_light * directional;
-    let factor = 1.0 - (1.0 - shadow) * (1.0 - ao);
-
-    let color = unpack4x8unorm(settings.color);
-
+    // Albedo: tangent RGB / fixed bundle color / scalar colormap. The old
+    // Lambert + occlusion term is gone -- lighting is the shared VMM Disney
+    // BRDF below.
     let tangent_color = tangent2rgb(abs(tangent));
     let line_color = unpack4x8unorm(settings.color);
 
@@ -244,13 +213,31 @@ fn shade(
     let has_line_color = !has_scalar_color && line_color.a > 0.4;
     let has_tangent_color = !has_line_color && !has_scalar_color;
 
-    let rgb = factor * (
+    let albedo =
         f32(has_line_color) * line_color.rgb +
         f32(has_scalar_color) * scalar_color +
-        f32(has_tangent_color) * tangent_color
+        f32(has_tangent_color) * tangent_color;
+
+    // `position` is centered volume space ([-0.5, 0.5]); the probe grid is [0, 1].
+    let probe_p = clamp(position + 0.5, vec3<f32>(0.0), vec3<f32>(1.0));
+    let view = -DIRECTION;
+
+    let roughness = clamp(ENVIRONMENT.settings.line_roughness, 0.04, 1.0);
+    let f0 = vec3<f32>(0.16 * ENVIRONMENT.settings.line_specular * ENVIRONMENT.settings.line_specular);
+
+    let radiance = sample_outgoing_radiance_surface(
+        RADIANCE, GAUSSIAN, VMM_SAMPLER,
+        probe_p, normal_smooth, view, albedo, roughness, f0,
+        ENVIRONMENT.settings.ambient_light, ENVIRONMENT.settings.direct_light,
+        VMM_SIZE
     );
 
-    let alpha = ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height);
+    // Combined: opaque. X-ray (render_mode == 1): honor per-bundle opacity.
+    let alpha = select(
+        1.0,
+        ENVIRONMENT.settings.alpha * mix(v0.alpha, v1.alpha, height),
+        ENVIRONMENT.settings.render_mode == 1u
+    );
 
-    return vec4<f32>(rgb, alpha);
+    return vec4<f32>(radiance, alpha);
 }

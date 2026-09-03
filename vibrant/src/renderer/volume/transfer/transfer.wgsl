@@ -16,6 +16,12 @@ struct Material {
     masked: u32,
     use_colormap: u32,
     colormap: u32,
+    // Scales absorption + scattering after the transfer function. `_pad` keeps
+    // `nodes` on a 16-byte boundary (see VolumeFractionSettingsBuffer).
+    opacity: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
     nodes: array<MaterialNode, 8>,
 }
 
@@ -86,6 +92,12 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         absorption *= invert_hue_approx(tint);
         scattering *= tint;
     }
+
+    // Volume opacity: scales this fraction's contribution to the medium after
+    // the transfer function (leaves refraction / ior in `properties` alone).
+    let opacity = saturate(MATERIAL.opacity);
+    absorption *= opacity;
+    scattering *= opacity;
 
     let attenuation = get_mask(uv) * voxel_distance_transform;
     absorption *= attenuation;

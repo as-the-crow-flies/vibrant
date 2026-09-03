@@ -7,7 +7,10 @@ use wgpu::{
     *,
 };
 
-use crate::gpu::Gpu;
+use crate::{
+    asset::texture::{MipTexture3D, R32Float},
+    gpu::Gpu,
+};
 
 pub struct PhysicalVolume {
     absorption: Texture,
@@ -20,6 +23,9 @@ pub struct PhysicalVolume {
     properties_u32: Texture,
 
     gradient: Texture,
+    // Neutral line density (mipmapped) written by the deposit pass; folded into
+    // the radiance cascades' occlusion, never marched by the volume tracer.
+    line_extinction: MipTexture3D<R32Float>,
     ping: Texture,
     pong: Texture,
     transform: Buffer,
@@ -40,6 +46,9 @@ impl PhysicalVolume {
         let label = Some(type_name::<Self>());
 
         let mip_level_count = size.min_element().ilog2().max(1);
+
+        let line_extinction =
+            MipTexture3D::<R32Float>::new(gpu, size.x, size.y, size.z, AddressMode::ClampToEdge);
 
         let size = Extent3d {
             width: size.x,
@@ -142,39 +151,44 @@ impl PhysicalVolume {
             label,
             layout: &Self::layout_read(gpu),
             entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&absorption_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(&scattering_view),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::TextureView(&extinction_view),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::TextureView(&properties_view),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::TextureView(&gradient_view),
-                },
-                BindGroupEntry {
-                    binding: 5,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-                BindGroupEntry {
-                    binding: 6,
-                    resource: transform.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 7,
-                    resource: transform_inverse.as_entire_binding(),
-                },
-            ],
+                vec![
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&absorption_view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::TextureView(&scattering_view),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: BindingResource::TextureView(&extinction_view),
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: BindingResource::TextureView(&properties_view),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: BindingResource::TextureView(&gradient_view),
+                    },
+                    BindGroupEntry {
+                        binding: 5,
+                        resource: BindingResource::Sampler(&sampler),
+                    },
+                    BindGroupEntry {
+                        binding: 6,
+                        resource: transform.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 7,
+                        resource: transform_inverse.as_entire_binding(),
+                    },
+                ],
+                // LINE_EXTINCTION texture (8) + sampler (9).
+                line_extinction.binding_entries(8),
+            ]
+            .concat(),
         });
 
         let binding_transfer = gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -372,6 +386,7 @@ impl PhysicalVolume {
             scattering_u32,
             properties_u32,
             gradient,
+            line_extinction,
             transform,
             transform_inverse,
             ping,
@@ -393,6 +408,12 @@ impl PhysicalVolume {
 
     pub fn binding_read(&self) -> &BindGroup {
         &self.binding_read
+    }
+
+    /// The neutral line-density texture: `binding_write()` (mip 0) is the line
+    /// deposit target, `bindings_mipmap()` builds its chain.
+    pub fn line_extinction(&self) -> &MipTexture3D<R32Float> {
+        &self.line_extinction
     }
 
     pub fn binding_transfer(&self) -> &BindGroup {
@@ -428,63 +449,71 @@ impl PhysicalVolume {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility,
-                        ty: binding_type_read,
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility,
-                        ty: binding_type_read,
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility,
-                        ty: binding_type_read,
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility,
-                        ty: binding_type_read,
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 4,
-                        visibility,
-                        ty: binding_type_read,
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 5,
-                        visibility,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 6,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                    vec![
+                        BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility,
+                            ty: binding_type_read,
+                            count: None,
                         },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 7,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                        BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility,
+                            ty: binding_type_read,
+                            count: None,
                         },
-                        count: None,
-                    },
-                ],
+                        BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility,
+                            ty: binding_type_read,
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility,
+                            ty: binding_type_read,
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 4,
+                            visibility,
+                            ty: binding_type_read,
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 5,
+                            visibility,
+                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 6,
+                            visibility,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 7,
+                            visibility,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                    // LINE_EXTINCTION texture (8) + sampler (9). Only
+                    // `cascade.wgsl` samples it (gated by its `cascade_opts`);
+                    // the volume tracer / hdri fit bind this layout too but
+                    // ignore 8/9.
+                    MipTexture3D::<R32Float>::layout_entries(8),
+                ]
+                .concat(),
             })
     }
 

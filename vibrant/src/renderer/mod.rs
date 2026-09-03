@@ -18,11 +18,13 @@ use crate::renderer::{
 };
 use environment::Environment;
 use ui::UiRenderer;
+use wgpu::RenderPassDescriptor;
 use winit::window::Window;
 
 use crate::{asset::Asset, file::FileStage, gpu::readback::spawn_task};
 
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
+use crate::controller::settings::RenderMode;
 
 /// What [`Renderer::render`] wants the event loop to do next.
 pub struct RenderOutcome {
@@ -111,29 +113,92 @@ impl Renderer {
             if plan.render {
                 self.clear.dispatch(&mut cmd, frame.color());
 
+                // Clear the combined-mode line-depth target to "far". The opaque
+                // line pass overwrites hit pixels; the volume tracer's `min`
+                // clamp is a no-op wherever it stays 1.0 (no line, or lines off).
+                cmd.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("LineDepthClear"),
+                    color_attachments: &[Some(frame.line_depth().attachment_clear_far())],
+                    ..Default::default()
+                });
+
+                let combined = settings.render_mode == RenderMode::Combined;
+
                 let data_changed = self.asset.changed() || controller.changed();
                 let lighting_changed = data_changed || controller.light().changed();
+                let lobes = controller.radiance().lobes();
 
                 if data_changed {
-                    if let Some(volume) = &self.asset.physical_volume {
-                        self.volume.transfer(&mut cmd, &self.asset, volume);
-                        self.gradient.dispatch(&mut cmd, volume);
-                    }
+                    // Occupancy pyramid first: the line deposit samples it.
                     self.line
                         .transfer(&mut cmd, controller, &self.environment, &self.asset);
+
+                    if let Some(pv) = &self.asset.physical_volume {
+                        // Volume fractions -> the marched textures (line-free).
+                        self.volume.transfer(&mut cmd, &self.asset, pv);
+                        self.gradient.dispatch(&mut cmd, pv);
+                        // Neutral line density -> `pv.line_extinction` (a
+                        // separate texture the volume tracer never reads).
+                        self.line
+                            .deposit(&mut cmd, controller, &self.environment, &self.asset);
+                    }
                 }
 
                 if lighting_changed {
-                    self.lighting
-                        .dispatch(&mut cmd, controller, &self.environment, &self.asset);
-                    self.line
-                        .lighting(&mut cmd, controller, &self.environment, &self.asset);
+                    if let Some(pv) = &self.asset.physical_volume {
+                        // Primary cascade. Combined: volume + lines. X-ray:
+                        // volume only. Sources are baked into each radiance
+                        // buffer's `cascade_opts` by `Asset::sync_physical_volume`.
+                        if let Some(rad) = &self.asset.radiance {
+                            self.lighting.dispatch_for(
+                                &mut cmd,
+                                &self.environment,
+                                &self.asset.hdri,
+                                rad,
+                                pv,
+                                lobes,
+                            );
+                        }
+                        // X-ray only: the line-only cascade.
+                        if let Some(rad) = &self.asset.radiance_lines {
+                            self.lighting.dispatch_for(
+                                &mut cmd,
+                                &self.environment,
+                                &self.asset.hdri,
+                                rad,
+                                pv,
+                                lobes,
+                            );
+                        }
+                    }
                 }
 
-                self.volume
-                    .render(&mut cmd, controller, &self.environment, &self.asset, frame);
-                self.line
-                    .render(&mut cmd, controller, &self.environment, &self.asset, frame);
+                if combined {
+                    // Lines first (opaque, writes depth `s`), then the volume
+                    // clamped to it and composited over.
+                    self.line
+                        .render(&mut cmd, controller, &self.environment, &self.asset, frame);
+                    self.volume.render(
+                        gpu,
+                        &mut cmd,
+                        controller,
+                        &self.environment,
+                        &self.asset,
+                        frame,
+                    );
+                } else {
+                    // Volume first, then transparent lines composited on top.
+                    self.volume.render(
+                        gpu,
+                        &mut cmd,
+                        controller,
+                        &self.environment,
+                        &self.asset,
+                        frame,
+                    );
+                    self.line
+                        .render(&mut cmd, controller, &self.environment, &self.asset, frame);
+                }
             }
 
             // Fold the fresh sample into the running mean (when accumulating)

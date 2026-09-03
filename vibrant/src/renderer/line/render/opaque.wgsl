@@ -38,6 +38,13 @@ fn visit(
     return HIT.index != U32_MAX;
 }
 
+// Near→far fraction of the first hit, for the volume tracer's depth clamp
+// (Combined mode). 1.0 (segment end) on a miss.
+fn hit_fraction() -> f32 {
+    if (HIT.index == U32_MAX) { return 1.0; }
+    return clamp(HIT.distance / max(RAY_LENGTH, 1e-6), 0.0, 1.0);
+}
+
 fn result(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     if (HIT.index == U32_MAX) { return vec4<f32>(0.0); }
 

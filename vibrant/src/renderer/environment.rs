@@ -105,6 +105,10 @@ impl Environment {
                 bytes_of(&controller.settings().crop_z_start),
                 bytes_of(&controller.settings().crop_z_end),
                 bytes_of(&controller.settings().plane),
+                bytes_of(&controller.settings().line_roughness),
+                bytes_of(&controller.settings().line_specular),
+                bytes_of(&(controller.settings().render_mode as u32)),
+                bytes_of(&(controller.settings().line_crop as u32)),
             ]
             .concat(),
         );

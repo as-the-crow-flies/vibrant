@@ -64,6 +64,7 @@ pub struct VolumeFractionSettings {
     pub masked: bool,
     pub use_colormap: bool,
     pub colormap: ColormapSelection,
+    pub opacity: f32,
     pub histogram: Histogram,
     pub nodes: Vec<MaterialNode>,
 }
@@ -75,6 +76,8 @@ impl VolumeFractionSettings {
             masked: self.masked as u32,
             use_colormap: self.use_colormap as u32,
             colormap: self.colormap as u32,
+            opacity: self.opacity,
+            _pad: [0.0; 3],
             nodes: array::from_fn(|index| {
                 self.nodes
                     .get(index)
@@ -121,6 +124,8 @@ pub struct VolumeFractionSettingsBuffer {
     masked: u32,
     use_colormap: u32,
     colormap: u32,
+    opacity: f32,
+    _pad: [f32; 3],
     nodes: [MaterialNodeBuffer; MaterialNodeBuffer::MAX_NODES],
 }
 
@@ -195,6 +200,7 @@ impl VolumeFractionBuffer {
             masked: true,
             use_colormap: false,
             colormap: ColormapSelection::Viridis,
+            opacity: 1.0,
             histogram: Histogram::from_data(file.data()),
             nodes: vec![
                 MaterialNode {

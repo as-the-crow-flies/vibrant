@@ -1,5 +1,4 @@
 pub mod culling;
-pub mod occlusion;
 pub mod occupancy;
 
 use std::{any::type_name, iter::zip};
@@ -17,7 +16,7 @@ use wgpu::{
 use crate::{
     asset::{
         colormap::{Colormap, ColormapSelection},
-        line::{culling::CullingBuffer, occlusion::OcclusionBuffer, occupancy::OccupancyBuffer},
+        line::{culling::CullingBuffer, occupancy::OccupancyBuffer},
         texture::{MipTexture3D, R32Float, R32Uint},
     },
     controller::settings::Settings,
@@ -107,7 +106,6 @@ pub struct LineBuffer {
     // rebuilt via `resize` when `settings.volume` / `settings.index_buffer_size`
     // change rather than when a new line file is loaded.
     occupancy: OccupancyBuffer,
-    occlusion: OcclusionBuffer,
     culling: CullingBuffer,
 
     colormap_view: TextureView,
@@ -344,7 +342,6 @@ impl LineBuffer {
         );
 
         let occupancy = OccupancyBuffer::new(gpu, volume);
-        let occlusion = OcclusionBuffer::new(gpu, volume);
         let culling = CullingBuffer::new(gpu, volume, index_buffer_size);
 
         let binding_trace = Self::trace_binding(
@@ -359,7 +356,6 @@ impl LineBuffer {
             &scalar,
             &colormap_view,
             &occupancy,
-            &occlusion,
             &culling,
         );
 
@@ -380,7 +376,6 @@ impl LineBuffer {
             transform,
 
             occupancy,
-            occlusion,
             culling,
 
             colormap_view,
@@ -399,7 +394,7 @@ impl LineBuffer {
 
     /// Builds the merged ray-marcher bind group (`layout_trace`): line geometry
     /// buffers, colormap, and the tractography acceleration structure
-    /// (occupancy / occlusion / culling). Used by `new` and `resize`.
+    /// (occupancy / culling). Used by `new` and `resize`.
     #[allow(clippy::too_many_arguments)]
     fn trace_binding(
         gpu: &Gpu,
@@ -413,7 +408,6 @@ impl LineBuffer {
         scalar: &Buffer,
         colormap_view: &TextureView,
         occupancy: &OccupancyBuffer,
-        occlusion: &OcclusionBuffer,
         culling: &CullingBuffer,
     ) -> BindGroup {
         gpu.device().create_bind_group(&BindGroupDescriptor {
@@ -460,8 +454,6 @@ impl LineBuffer {
                 ],
                 occupancy.pyramid().binding_entries(9),
                 occupancy.count().binding_entries(11),
-                occlusion.ambient().binding_entries(13),
-                occlusion.directional().binding_entries(15),
                 vec![
                     BindGroupEntry {
                         binding: 17,
@@ -484,7 +476,6 @@ impl LineBuffer {
     /// structure) untouched.
     pub fn resize(&mut self, gpu: &Gpu, settings: &Settings) {
         self.occupancy = OccupancyBuffer::new(gpu, settings.volume);
-        self.occlusion = OcclusionBuffer::new(gpu, settings.volume);
         self.culling = CullingBuffer::new(gpu, settings.volume, settings.index_buffer_size);
 
         self.binding_trace = Self::trace_binding(
@@ -499,17 +490,12 @@ impl LineBuffer {
             &self.scalar,
             &self.colormap_view,
             &self.occupancy,
-            &self.occlusion,
             &self.culling,
         );
     }
 
     pub fn occupancy(&self) -> &OccupancyBuffer {
         &self.occupancy
-    }
-
-    pub fn occlusion(&self) -> &OcclusionBuffer {
-        &self.occlusion
     }
 
     pub fn culling(&self) -> &CullingBuffer {
@@ -816,8 +802,10 @@ impl LineBuffer {
 
     /// The single merged bind group for the tractography ray-marcher
     /// (`render/trace.wgsl`): everything from `layout_render` (0..8) plus the
-    /// occupancy / occlusion textures (9..16) and the culling `OFFSET` /
-    /// `INDEX` buffers (17, 18), so the fragment shader needs only one group.
+    /// occupancy textures (9..12) and the culling `OFFSET` / `INDEX` buffers
+    /// (17, 18), so the fragment shader needs only one group. Binding numbers
+    /// 13..16 are intentionally left free (they used to hold the removed line
+    /// occlusion volumes).
     ///
     /// Deliberately distinct from `layout_render`: the voxelization compute
     /// pipelines bind `layout_render` alongside `CullingBuffer::layout_write`,
@@ -856,9 +844,6 @@ impl LineBuffer {
                     // Occupancy - Density (9, 10) / Count (11, 12)
                     MipTexture3D::<R32Float>::layout_entries(9),
                     MipTexture3D::<R32Uint>::layout_entries(11),
-                    // Occlusion - Ambient (13, 14) / Directional (15, 16)
-                    MipTexture3D::<R32Float>::layout_entries(13),
-                    MipTexture3D::<R32Float>::layout_entries(15),
                     vec![
                         // Culling - Offset
                         BindGroupLayoutEntry {

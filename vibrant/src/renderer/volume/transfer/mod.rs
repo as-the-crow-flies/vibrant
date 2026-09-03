@@ -48,7 +48,25 @@ impl VolumeTransferPipeline {
         }
     }
 
+    /// Full volume transfer in one shot: [`Self::begin`] + [`Self::finalize`].
+    /// The renderer interposes the line deposit pass between the two; callers
+    /// with no line density (e.g. `benches/cascade.rs`) use this wrapper.
     pub fn dispatch(
+        &self,
+        cmd: &mut CommandEncoder,
+        fractions: &[VolumeFractionBuffer],
+        masks: &[VolumeMaskBuffer],
+        volume: &PhysicalVolume,
+        crop: &CropBuffer,
+    ) {
+        self.begin(cmd, fractions, masks, volume, crop);
+        self.finalize(cmd, volume);
+    }
+
+    /// Clears the `r32uint` accumulation textures and adds every visible volume
+    /// fraction into them. After this, `LineDepositPipeline` can read-modify-write
+    /// more density in before [`Self::finalize`] resolves it.
+    pub fn begin(
         &self,
         cmd: &mut CommandEncoder,
         fractions: &[VolumeFractionBuffer],
@@ -73,6 +91,14 @@ impl VolumeTransferPipeline {
             pass.set_bind_group(2, masks[fraction.settings().mask].binding(), &[]);
             pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
         }
+    }
+
+    /// Resolves the accumulated `r32uint` textures into the sampled `rgba8` +
+    /// `extinction` textures and builds their mip chain.
+    pub fn finalize(&self, cmd: &mut CommandEncoder, volume: &PhysicalVolume) {
+        let n_workgroups = volume.size().add(3).div(4);
+
+        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, volume.binding_copy(), &[]);

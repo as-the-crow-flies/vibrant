@@ -21,6 +21,7 @@ use super::gpu::Gpu;
 
 pub struct Frame {
     color: ColorBuffer,
+    line_depth: ColorBuffer,
     accum: [ColorBuffer; 2],
     overlay: ColorBuffer,
     export: ColorBuffer,
@@ -30,6 +31,7 @@ impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
         Self {
             color: ColorBuffer::new(gpu, settings.width, settings.height),
+            line_depth: ColorBuffer::depth(gpu, settings.width, settings.height),
             accum: [
                 ColorBuffer::new(gpu, settings.width, settings.height),
                 ColorBuffer::new(gpu, settings.width, settings.height),
@@ -42,6 +44,13 @@ impl Frame {
     /// Linear HDR scene buffer - every renderer writes un-tone-mapped radiance here.
     pub fn color(&self) -> &ColorBuffer {
         &self.color
+    }
+
+    /// Combined-mode line-depth target: the opaque line pass writes the near→far
+    /// fraction `s` of its first hit here, and the volume tracer clamps its far
+    /// `t` to it. Cleared to `1.0` when no line is drawn.
+    pub fn line_depth(&self) -> &ColorBuffer {
+        &self.line_depth
     }
 
     /// One of the two ping-ponged accumulation buffers (running mean of all

@@ -104,6 +104,12 @@ impl VolumesWidget {
         Grid::new("VolumeSettingsGrid")
             .num_columns(2)
             .show(ui, |ui| {
+                ui.label("Opacity").on_hover_text(
+                    "Scales this volume's absorption and scattering, after the transfer function is applied.",
+                );
+                ui.slider(&mut volume.opacity, 0.0..=1.0).track(self);
+                ui.end_row();
+
                 ui.label("Mask").on_hover_text(
                     "Mask from the 'Masks' section to apply to this volume.",
                 );

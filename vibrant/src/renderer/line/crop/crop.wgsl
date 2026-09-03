@@ -71,6 +71,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 }
 
 fn should_keep(v0: vec3<f32>, v1: vec3<f32>) -> bool {
+    if (ENVIRONMENT.settings.line_crop == FALSE) { return true; }
+
     let crop_normal = normal_from_spherical(CROP.spherical.x, CROP.spherical.y);
     let v0_distance = dot(crop_normal, v0) + CROP.spherical.z - 0.5;
     let v1_distance = dot(crop_normal, v1) + CROP.spherical.z - 0.5;
