@@ -296,10 +296,13 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     for (var t=t0; t<t1; t+=step_size) {
         let sample = origin_sample + direction_sample * t;
 
+        if (any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
+
         let extinction = sample_extinction(sample, 0.0);
 
         transmission *= exp(-extinction * step_size / scale);
-        if (all(transmission < vec3<f32>(1e-3)) || any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
+
+        if (all(transmission < vec3<f32>(1e-3))) { break; }
     }
 
     return transmission;
