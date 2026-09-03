@@ -190,7 +190,7 @@ impl Controller {
 
         self.hovered = viewport.response.hovered();
         self.viewport = viewport.response.rect * scale;
-        self.camera.aspect = self.viewport.aspect_ratio();
+        self.camera.set_aspect(self.viewport.aspect_ratio());
     }
 
     pub fn camera(&self) -> &Camera {

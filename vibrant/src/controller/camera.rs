@@ -43,8 +43,17 @@ impl Camera {
         std::mem::replace(&mut self.changed, false)
     }
 
+    /// Set the projection aspect ratio, flagging the view as changed when it
+    /// actually moves so accumulation restarts (e.g. the side panel was resized).
+    pub fn set_aspect(&mut self, aspect: f32) {
+        if aspect.is_finite() && (self.aspect - aspect).abs() > 1e-4 {
+            self.changed = true;
+            self.aspect = aspect;
+        }
+    }
+
     pub fn update(&mut self, state: &ControllerState) {
-        self.aspect = state.width as f32 / state.height as f32;
+        // `aspect` is set from the viewport rect in `Controller::ui` each frame.
 
         if state.shift {
             return;
