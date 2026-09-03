@@ -12,10 +12,9 @@ use vibrant::{
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        volume::{
-            gradient::GradientPipeline, render::GaussianVolumeRenderer,
-            transfer::VolumeTransferPipeline,
-        },
+        gradient::GradientPipeline,
+        lighting::LightingRenderer,
+        volume::transfer::VolumeTransferPipeline,
     },
 };
 
@@ -26,7 +25,7 @@ const VOLUME_PATH: &str = "/Users/bkraaijeveld/Data/HCP-100307/100307_t1w.nii.gz
 struct Scene {
     volume: PhysicalVolume,
     radiance: GaussianRadianceBuffer,
-    renderer: GaussianVolumeRenderer,
+    lighting: LightingRenderer,
     environment: Environment,
     hdri: HdriBuffer,
     gpu: Gpu,
@@ -57,7 +56,7 @@ fn setup() -> Scene {
     gpu.wait();
 
     let radiance = GaussianRadianceBuffer::new(&gpu, file.size() / RESOLUTION_DIVISOR);
-    let renderer = GaussianVolumeRenderer::new(&gpu);
+    let lighting = LightingRenderer::new(&gpu);
     let environment = Environment::new(&gpu);
     let mut hdri = HdriBuffer::new(&gpu);
     hdri.index = 3; // Ferndale
@@ -65,7 +64,7 @@ fn setup() -> Scene {
     let scene = Scene {
         volume,
         radiance,
-        renderer,
+        lighting,
         environment,
         hdri,
         gpu,
@@ -75,7 +74,7 @@ fn setup() -> Scene {
     // whatever's in VMM_HDRI/PHI_HDRI (see cascade.wgsl). Prime those once here
     // so the per-cascade and histogram passes below aren't reading zeroed buffers.
     let mut cmd = scene.gpu.cmd();
-    scene.renderer.hdri(
+    scene.lighting.hdri(
         &mut cmd,
         &scene.environment,
         &scene.hdri,
@@ -106,14 +105,14 @@ fn print_em_iteration_histogram(scene: &Scene) {
         .write_buffer(scene.radiance.em_iterations(), 0, &zeros);
 
     let mut cmd = scene.gpu.cmd();
-    scene.renderer.hdri(
+    scene.lighting.hdri(
         &mut cmd,
         &scene.environment,
         &scene.hdri,
         &scene.radiance,
         &scene.volume,
     );
-    scene.renderer.radiance(
+    scene.lighting.radiance(
         &mut cmd,
         &scene.environment,
         &scene.hdri,
@@ -171,7 +170,7 @@ fn bench_cascade(c: &mut Criterion) {
     c.bench_function("hdri", |b| {
         b.iter(|| {
             let mut cmd = scene.gpu.cmd();
-            scene.renderer.hdri(
+            scene.lighting.hdri(
                 &mut cmd,
                 &scene.environment,
                 &scene.hdri,
@@ -186,18 +185,18 @@ fn bench_cascade(c: &mut Criterion) {
     let mut group = c.benchmark_group("cascade");
 
     // The full radiance pass: the HDRI fit plus all 6 cascades, exactly what a
-    // real recompute frame dispatches (see GaussianVolumeRenderer::dispatch).
+    // real recompute frame dispatches (see LightingRenderer::dispatch).
     group.bench_function("all_levels", |b| {
         b.iter(|| {
             let mut cmd = scene.gpu.cmd();
-            scene.renderer.hdri(
+            scene.lighting.hdri(
                 &mut cmd,
                 &scene.environment,
                 &scene.hdri,
                 &scene.radiance,
                 &scene.volume,
             );
-            scene.renderer.radiance(
+            scene.lighting.radiance(
                 &mut cmd,
                 &scene.environment,
                 &scene.hdri,
@@ -220,7 +219,7 @@ fn bench_cascade(c: &mut Criterion) {
             |b, &cascade| {
                 b.iter(|| {
                     let mut cmd = scene.gpu.cmd();
-                    scene.renderer.cascade(
+                    scene.lighting.cascade(
                         &mut cmd,
                         &scene.environment,
                         &scene.hdri,

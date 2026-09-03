@@ -47,7 +47,7 @@ impl App {
         let window = Arc::clone(self.window.as_ref().expect("Window"));
         let renderer = self.renderer.as_mut().expect("Renderer");
 
-        let response = renderer.egui().on_window_event(&window, &event);
+        let response = renderer.ui().on_window_event(&window, &event);
         let consumed = response.consumed;
 
         // Anything that changes what's on screen (input we act on, egui asking

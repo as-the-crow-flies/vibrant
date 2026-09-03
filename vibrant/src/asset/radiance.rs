@@ -22,8 +22,8 @@ impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     pub const LEVELS: u32 = 6;
 
-    // Upper bound on GaussianVolumeRenderer's selectable lobe count (see
-    // RenderingWidget::lobes / VMM_SIZE in common.wgsl). Sizes the
+    // Upper bound on LightingRenderer's selectable lobe count (see
+    // RenderingWidget::lobes / VMM_SIZE in lighting/common.wgsl). Sizes the
     // vmm_hdri/phi_hdri buffers below so they fit the largest variant
     // regardless of which one is currently active.
     pub const VMM_SIZE_MAX: u32 = 32;

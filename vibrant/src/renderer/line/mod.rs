@@ -18,7 +18,7 @@ use crate::{
         populate::LinePopulatePipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
-    surface::Surface,
+    surface::Frame,
 };
 
 use super::environment::Environment;
@@ -46,22 +46,15 @@ impl LineRenderer {
         }
     }
 
-    pub fn render(
+    pub fn transfer(
         &self,
         cmd: &mut CommandEncoder,
         controller: &Controller,
         environment: &Environment,
-        surface: &Surface,
         asset: &Asset,
     ) {
-        if !controller.tractography().visible() {
-            return;
-        }
-
-        if let (Some(frame), Some(line)) = (surface.frame(), &asset.line) {
-            let changed = surface.changed() | asset.changed() | controller.changed();
-
-            if changed {
+        if controller.tractography().visible() {
+            if let Some(line) = &asset.line {
                 self.transform.dispatch(cmd, line, environment);
 
                 self.crop.dispatch(cmd, line, environment, &asset.crop);
@@ -74,19 +67,42 @@ impl LineRenderer {
                 self.populate
                     .dispatch(cmd, environment, controller.settings(), line);
             }
+        }
+    }
 
-            if changed || controller.lighting_changed() {
+    pub fn lighting(
+        &self,
+        cmd: &mut CommandEncoder,
+        controller: &Controller,
+        environment: &Environment,
+        asset: &Asset,
+    ) {
+        if controller.tractography().visible() {
+            if let Some(line) = &asset.line {
                 self.occlusion.dispatch(cmd, line, environment);
             }
+        }
+    }
 
-            self.render.dispatch(
-                cmd,
-                frame,
-                environment,
-                controller.settings(),
-                controller.viewport(),
-                line,
-            );
+    pub fn render(
+        &self,
+        cmd: &mut CommandEncoder,
+        controller: &Controller,
+        environment: &Environment,
+        asset: &Asset,
+        frame: &Frame,
+    ) {
+        if controller.tractography().visible() {
+            if let Some(line) = &asset.line {
+                self.render.dispatch(
+                    cmd,
+                    frame,
+                    environment,
+                    controller.settings(),
+                    controller.viewport(),
+                    line,
+                );
+            }
         }
     }
 }

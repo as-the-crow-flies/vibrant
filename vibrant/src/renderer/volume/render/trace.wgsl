@@ -1,3 +1,5 @@
+const VMM_SIZE : u32 = #VMM_SIZE;
+
 @group(0) @binding(0) var RADIANCE: texture_3d<f32>;
 @group(0) @binding(1) var GAUSSIAN: texture_3d<f32>;
 

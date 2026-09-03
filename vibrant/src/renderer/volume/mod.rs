@@ -1,26 +1,21 @@
-pub mod gradient;
 pub mod render;
 pub mod transfer;
 
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::Asset,
+    asset::{volume::PhysicalVolume, Asset},
     controller::Controller,
     gpu::Gpu,
     renderer::{
         environment::Environment,
-        volume::{
-            gradient::GradientPipeline, render::GaussianVolumeRenderer,
-            transfer::VolumeTransferPipeline,
-        },
+        volume::{render::GaussianVolumeRenderer, transfer::VolumeTransferPipeline},
     },
-    surface::Surface,
+    surface::Frame,
 };
 
 pub struct VolumeRenderer {
     transfer: VolumeTransferPipeline,
-    gradient: GradientPipeline,
     render: GaussianVolumeRenderer,
 }
 
@@ -28,9 +23,13 @@ impl VolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             transfer: VolumeTransferPipeline::new(gpu),
-            gradient: GradientPipeline::new(gpu),
             render: GaussianVolumeRenderer::new(gpu),
         }
+    }
+
+    pub fn transfer(&self, cmd: &mut CommandEncoder, asset: &Asset, volume: &PhysicalVolume) {
+        self.transfer
+            .dispatch(cmd, &asset.volumes, &asset.masks, volume, &asset.crop);
     }
 
     pub fn render(
@@ -38,32 +37,22 @@ impl VolumeRenderer {
         cmd: &mut CommandEncoder,
         controller: &Controller,
         environment: &Environment,
-        surface: &Surface,
         asset: &Asset,
+        frame: &Frame,
     ) {
-        if let (Some(frame), Some(volume), Some(radiance)) =
-            (surface.frame(), &asset.physical_volume, &asset.radiance)
-        {
-            let recompute = surface.changed() | asset.changed() | controller.lighting_changed();
+        let (Some(volume), Some(radiance)) = (&asset.physical_volume, &asset.radiance) else {
+            return;
+        };
 
-            if recompute {
-                self.transfer
-                    .dispatch(cmd, &asset.volumes, &asset.masks, volume, &asset.crop);
-
-                self.gradient.dispatch(cmd, volume);
-            }
-
-            self.render.dispatch(
-                cmd,
-                environment,
-                &asset.hdri,
-                frame,
-                radiance,
-                volume,
-                controller.viewport(),
-                recompute,
-                controller.radiance().lobes(),
-            );
-        }
+        self.render.dispatch(
+            cmd,
+            environment,
+            &asset.hdri,
+            frame,
+            radiance,
+            volume,
+            controller.viewport(),
+            controller.radiance().lobes(),
+        );
     }
 }
