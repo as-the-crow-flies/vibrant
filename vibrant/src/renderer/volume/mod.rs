@@ -11,7 +11,7 @@ use crate::{
     renderer::{
         environment::Environment,
         volume::{
-            gradient::GradientPipeline, render::VolumeRenderPipeline,
+            gradient::GradientPipeline, render::GaussianVolumeRenderer,
             transfer::VolumeTransferPipeline,
         },
     },
@@ -21,7 +21,7 @@ use crate::{
 pub struct VolumeRenderer {
     transfer: VolumeTransferPipeline,
     gradient: GradientPipeline,
-    render: VolumeRenderPipeline,
+    render: GaussianVolumeRenderer,
 }
 
 impl VolumeRenderer {
@@ -29,7 +29,7 @@ impl VolumeRenderer {
         Self {
             transfer: VolumeTransferPipeline::new(gpu),
             gradient: GradientPipeline::new(gpu),
-            render: VolumeRenderPipeline::new(gpu),
+            render: GaussianVolumeRenderer::new(gpu),
         }
     }
 
@@ -41,7 +41,9 @@ impl VolumeRenderer {
         surface: &Surface,
         asset: &Asset,
     ) {
-        if let (Some(frame), Some(volume)) = (surface.frame(), &asset.physical_volume) {
+        if let (Some(frame), Some(volume), Some(radiance)) =
+            (surface.frame(), &asset.physical_volume, &asset.radiance)
+        {
             let recompute = surface.changed() | asset.changed() | controller.lighting_changed();
 
             if recompute {
@@ -56,7 +58,7 @@ impl VolumeRenderer {
                 environment,
                 &asset.hdri,
                 frame,
-                &asset.radiance,
+                radiance,
                 volume,
                 controller.viewport(),
                 recompute,

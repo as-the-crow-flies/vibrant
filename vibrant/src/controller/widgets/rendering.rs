@@ -1,6 +1,5 @@
 use egui::{ComboBox, Grid, RichText, Ui};
 use itertools::Itertools;
-use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
     asset::hdri::HdriBuffer,
@@ -12,16 +11,9 @@ use crate::{
     util::{ResponseExtentions, Tracked},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, EnumIter)]
-pub enum RadianceMethod {
-    Linear,
-    Gaussian,
-}
-
 #[derive(Debug)]
 pub struct RenderingWidget {
     changed: bool,
-    method: RadianceMethod,
     resolution: u32,
     lobes: u32,
     /// While true, HDR strength follows the display's headroom limit. Cleared
@@ -40,7 +32,6 @@ impl RenderingWidget {
     pub fn new() -> Self {
         Self {
             changed: false,
-            method: RadianceMethod::Gaussian,
             resolution: 4,
             lobes: 16,
             hdr_headroom_auto: true,
@@ -187,22 +178,6 @@ impl RenderingWidget {
 
                         ui.collapse(format!("{} Performance", icons::regular::GAUGE), false, |ui| {
                             Grid::new("RadianceSettings").num_columns(2).show(ui, |ui| {
-                                ui.label("Lighting Method");
-                                ComboBox::from_id_salt("Method")
-                                    .selected_text(format!("{:?}", self.method))
-                                    .width(ui.available_width())
-                                    .show_ui(ui, |ui| {
-                                        for setting in RadianceMethod::iter() {
-                                            ui.selectable_value(
-                                                &mut self.method,
-                                                setting,
-                                                format!("{:?}", setting),
-                                            )
-                                            .track(self);
-                                        }
-                                    });
-                                ui.end_row();
-
                                 ui.label("Lighting Resolution");
                                 ComboBox::from_id_salt("Resolution")
                                     .selected_text(format!("{:?}", self.resolution))
@@ -336,10 +311,6 @@ impl RenderingWidget {
 
     pub fn changed(&self) -> bool {
         self.changed
-    }
-
-    pub fn method(&self) -> RadianceMethod {
-        self.method
     }
 
     pub fn resolution(&self) -> u32 {
