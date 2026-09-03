@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use vibrant::controller::event::{Key, MouseButton};
@@ -28,6 +29,15 @@ struct App {
     /// egui's timed repaints (tooltips, animations) once the render loop has
     /// otherwise gone idle on a converged frame.
     next_repaint: Option<Instant>,
+    /// Set while a frame's GPU work is in flight, cleared by
+    /// `on_submitted_work_done`. `RedrawRequested` bails out while it's set so at
+    /// most one frame is ever queued: on web `Gpu::wait` can't block, so without
+    /// this an input burst at low fps stacks a render per animation frame and
+    /// the view lags several frames behind.
+    in_flight: Arc<AtomicBool>,
+    /// A redraw is wanted (input, egui, resize, ...). Set from `event`, consumed
+    /// by the next render.
+    dirty: bool,
 }
 
 impl App {
@@ -40,6 +50,8 @@ impl App {
             focused: true,
             fps: Fps::new(),
             next_repaint: None,
+            in_flight: Arc::new(AtomicBool::new(false)),
+            dirty: false,
         }
     }
 
@@ -66,15 +78,27 @@ impl App {
                 wants_redraw = true;
             }
             WindowEvent::RedrawRequested => {
+                // A previous frame's GPU work is still draining; skip so we
+                // don't queue a second one behind it. The completion callback
+                // re-requests a redraw once it lands.
+                if self.in_flight.load(Ordering::SeqCst) {
+                    return;
+                }
+
                 self.fps.tick();
 
                 let outcome =
                     renderer.render(&self.gpu, &window, &mut self.controller, self.fps.seconds());
 
-                if outcome.accumulating {
-                    // Drive the next sample as soon as the GPU drains.
+                if outcome.accumulating || self.dirty {
+                    // Another frame is wanted - re-arm once the GPU drains, so
+                    // exactly one render is ever in flight.
+                    self.dirty = false;
+                    self.in_flight.store(true, Ordering::SeqCst);
                     let window = Arc::clone(&window);
+                    let in_flight = Arc::clone(&self.in_flight);
                     self.gpu.queue().on_submitted_work_done(move || {
+                        in_flight.store(false, Ordering::SeqCst);
                         window.request_redraw();
                     });
                 } else if outcome.repaint_after < Duration::MAX {
@@ -100,6 +124,7 @@ impl App {
         }
 
         if wants_redraw {
+            self.dirty = true;
             window.request_redraw();
         }
     }
