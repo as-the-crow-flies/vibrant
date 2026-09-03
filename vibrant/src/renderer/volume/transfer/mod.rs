@@ -10,23 +10,23 @@ use crate::{
     gpu::Gpu,
 };
 
-pub struct AnatomyTransferPipeline {
+pub struct VolumeTransferPipeline {
     clear: ComputePipeline,
     transfer: ComputePipeline,
     copy: ComputePipeline,
     mipmap: ComputePipeline,
 }
 
-impl AnatomyTransferPipeline {
+impl VolumeTransferPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             clear: gpu.compute(
-                "AnatomyClearPipeline",
+                "VolumeClearPipeline",
                 &gpu.pipeline_layout(&[&PhysicalVolume::layout_transfer(gpu)]),
                 &gpu.shader(include_str!("clear.wgsl")),
             ),
             transfer: gpu.compute(
-                "AnatomyTransferPipeline",
+                "VolumeTransferPipeline",
                 &gpu.pipeline_layout(&[
                     &PhysicalVolume::layout_transfer(gpu),
                     &VolumeFractionBuffer::layout(gpu),
@@ -36,12 +36,12 @@ impl AnatomyTransferPipeline {
                 &gpu.shader(include_str!("transfer.wgsl")),
             ),
             copy: gpu.compute(
-                "AnatomyCopyPipeline",
+                "VolumeCopyPipeline",
                 &gpu.pipeline_layout(&[&PhysicalVolume::layout_copy(gpu)]),
                 &gpu.shader(include_str!("copy.wgsl")),
             ),
             mipmap: gpu.compute(
-                "AnatomyMipMapPipeline",
+                "VolumeMipMapPipeline",
                 &gpu.pipeline_layout(&[&PhysicalVolume::layout_mipmap(gpu)]),
                 &gpu.shader(include_str!("mipmap.wgsl")),
             ),

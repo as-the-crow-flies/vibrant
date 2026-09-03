@@ -5,8 +5,8 @@ use crate::{
     asset::{hdri::HdriBuffer, radiance::RadianceBuffer, volume::PhysicalVolume},
     gpu::Gpu,
     renderer::{
-        anatomy::render::{gaussian::GaussianVolumeRenderer, linear::LinearVolumeRenderer},
         environment::Environment,
+        volume::render::{gaussian::GaussianVolumeRenderer, linear::LinearVolumeRenderer},
     },
     surface::Frame,
 };
@@ -14,12 +14,12 @@ use crate::{
 pub mod gaussian;
 pub mod linear;
 
-pub struct AnatomyVolumeRenderer {
+pub struct VolumeRenderPipeline {
     linear: LinearVolumeRenderer,
     gaussian: GaussianVolumeRenderer,
 }
 
-impl AnatomyVolumeRenderer {
+impl VolumeRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
             linear: LinearVolumeRenderer::new(gpu),

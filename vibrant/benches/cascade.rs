@@ -11,11 +11,11 @@ use vibrant::{
     file::{File, VolumeFile},
     gpu::Gpu,
     renderer::{
-        anatomy::{
-            gradient::GradientPipeline, render::gaussian::GaussianVolumeRenderer,
-            transfer::AnatomyTransferPipeline,
-        },
         environment::Environment,
+        volume::{
+            gradient::GradientPipeline, render::gaussian::GaussianVolumeRenderer,
+            transfer::VolumeTransferPipeline,
+        },
     },
 };
 
@@ -47,7 +47,7 @@ fn setup() -> Scene {
 
     let volume = PhysicalVolume::new(&gpu, file.size(), file.transform());
 
-    let transfer = AnatomyTransferPipeline::new(&gpu);
+    let transfer = VolumeTransferPipeline::new(&gpu);
     let gradient = GradientPipeline::new(&gpu);
 
     let mut cmd = gpu.cmd();

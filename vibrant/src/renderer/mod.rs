@@ -1,18 +1,16 @@
 pub mod accumulate;
-pub mod anatomy;
 pub mod environment;
 pub mod line;
 pub mod present;
 pub mod ui;
 pub mod util;
+pub mod volume;
 pub mod wgsl;
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::renderer::{
-    anatomy::AnatomyRenderer, line::LineRenderer, util::clear::ClearPipeline,
-};
+use crate::renderer::{line::LineRenderer, util::clear::ClearPipeline, volume::VolumeRenderer};
 use environment::Environment;
 use ui::UiRenderer;
 use winit::window::Window;
@@ -35,7 +33,7 @@ pub struct Renderer {
     egui: egui_winit::State,
 
     clear: ClearPipeline,
-    anatomy: AnatomyRenderer,
+    volume: VolumeRenderer,
     line: LineRenderer,
     ui: UiRenderer,
 
@@ -63,7 +61,7 @@ impl Renderer {
 
             clear: ClearPipeline::new(gpu),
 
-            anatomy: AnatomyRenderer::new(gpu),
+            volume: VolumeRenderer::new(gpu),
             line: LineRenderer::new(gpu),
             ui: UiRenderer::new(gpu),
 
@@ -114,9 +112,8 @@ impl Renderer {
         // accumulated image. Camera movement is polled here (not covered by
         // `lighting_changed`); the view-independent radiance cascades keep their
         // own gate, so a camera-only move just re-traces per sample.
-        let scene_dirty = self.asset.changed()
-            | controller.lighting_changed()
-            | controller.take_camera_changed();
+        let scene_dirty =
+            self.asset.changed() | controller.lighting_changed() | controller.take_camera_changed();
 
         let settings = *controller.settings();
         let plan = self.surface.plan_accumulation(&settings, scene_dirty);
@@ -133,7 +130,7 @@ impl Renderer {
             if plan.render {
                 self.clear.dispatch(&mut cmd, frame.color());
 
-                self.anatomy.render(
+                self.volume.render(
                     &mut cmd,
                     controller,
                     &self.environment,

@@ -9,27 +9,27 @@ use crate::{
     controller::Controller,
     gpu::Gpu,
     renderer::{
-        anatomy::{
-            gradient::GradientPipeline, render::AnatomyVolumeRenderer,
-            transfer::AnatomyTransferPipeline,
-        },
         environment::Environment,
+        volume::{
+            gradient::GradientPipeline, render::VolumeRenderPipeline,
+            transfer::VolumeTransferPipeline,
+        },
     },
     surface::Surface,
 };
 
-pub struct AnatomyRenderer {
-    transfer: AnatomyTransferPipeline,
+pub struct VolumeRenderer {
+    transfer: VolumeTransferPipeline,
     gradient: GradientPipeline,
-    render: AnatomyVolumeRenderer,
+    render: VolumeRenderPipeline,
 }
 
-impl AnatomyRenderer {
+impl VolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            transfer: AnatomyTransferPipeline::new(gpu),
+            transfer: VolumeTransferPipeline::new(gpu),
             gradient: GradientPipeline::new(gpu),
-            render: AnatomyVolumeRenderer::new(gpu),
+            render: VolumeRenderPipeline::new(gpu),
         }
     }
 
