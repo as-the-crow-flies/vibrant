@@ -27,16 +27,28 @@ pub struct Histogram {
 }
 
 impl Histogram {
+    /// Bins at each end excluded when picking the display scale. Volumes often
+    /// pile a huge spike into pure min/max (empty background, saturated
+    /// intensity); scaling to those flattens everything else, so instead scale
+    /// to the tallest *central* bin and let the edge spikes clip.
+    const EDGE_MARGIN: usize = 6;
+
     pub fn from_data(data: &[f32]) -> Self {
-        let values = data.iter().fold([0u32; 256], |mut hist, value| {
-            hist[(value * 255.0) as usize] += 1;
+        let counts = data.iter().fold([0u32; 256], |mut hist, value| {
+            hist[((value * 255.0) as usize).min(255)] += 1;
             hist
         });
 
-        let max = 1.0 / values.iter().copied().skip(1).max().unwrap_or(1) as f32;
+        let peak = counts[Self::EDGE_MARGIN..256 - Self::EDGE_MARGIN]
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        let scale = 1.0 / peak as f32;
 
         Self {
-            values: values.map(|value| value as f32 * max),
+            values: counts.map(|count| count as f32 * scale),
         }
     }
 
