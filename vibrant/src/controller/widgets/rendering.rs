@@ -323,6 +323,12 @@ impl RenderingWidget {
         self.resolution
     }
 
+    /// Override the radiance-cascade resolution divisor. For headless callers
+    /// (benches) that never open the widget.
+    pub fn set_resolution(&mut self, resolution: u32) {
+        self.resolution = resolution.max(1);
+    }
+
     pub fn lobes(&self) -> u32 {
         self.lobes
     }

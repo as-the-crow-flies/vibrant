@@ -47,7 +47,12 @@ web-sys = { version = "0.3", features = [
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["html_reports"] }
+wgpu.workspace = true
 
 [[bench]]
 name = "cascade"
+harness = false
+
+[[bench]]
+name = "pipeline"
 harness = false

@@ -73,6 +73,10 @@ impl Controller {
         &self.rendering_widget
     }
 
+    pub fn rendering_mut(&mut self) -> &mut RenderingWidget {
+        &mut self.rendering_widget
+    }
+
     pub fn crop(&self) -> &CropWidget {
         &self.crop_widget
     }
@@ -234,6 +238,14 @@ impl Controller {
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         self.settings.width = size.width;
         self.settings.height = size.height;
+    }
+
+    /// Set the render viewport directly, for headless callers (benches) that
+    /// never run the egui pass that normally derives it from the central panel.
+    /// Mirrors the `self.viewport` / `set_aspect` lines in [`Self::ui`].
+    pub fn set_viewport(&mut self, width: f32, height: f32) {
+        self.viewport = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(width, height));
+        self.camera.set_aspect(self.viewport.aspect_ratio());
     }
 
     pub fn time(&self) -> f32 {
