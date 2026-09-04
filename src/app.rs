@@ -38,6 +38,9 @@ struct App {
     /// A redraw is wanted (input, egui, resize, ...). Set from `event`, consumed
     /// by the next render.
     dirty: bool,
+    /// Cleared once the first frame has been drawn - used on web to dismiss the
+    /// HTML loading overlay.
+    first_frame: bool,
 }
 
 impl App {
@@ -52,6 +55,7 @@ impl App {
             next_repaint: None,
             in_flight: Arc::new(AtomicBool::new(false)),
             dirty: false,
+            first_frame: true,
         }
     }
 
@@ -89,6 +93,12 @@ impl App {
 
                 let outcome =
                     renderer.render(&self.gpu, &window, &mut self.controller, self.fps.seconds());
+
+                if self.first_frame {
+                    self.first_frame = false;
+                    #[cfg(target_arch = "wasm32")]
+                    dismiss_loading_overlay();
+                }
 
                 if outcome.accumulating || self.dirty {
                     // Another frame is wanted - re-arm once the GPU drains, so
@@ -276,11 +286,53 @@ fn keycode(code: KeyCode) -> Option<Key> {
     }
 }
 
+/// Hide the HTML loading overlay once the app can draw.
+#[cfg(target_arch = "wasm32")]
+fn dismiss_loading_overlay() {
+    if let Some(overlay) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("overlay"))
+    {
+        let _ = overlay.set_attribute("hidden", "");
+    }
+}
+
+/// Swap the loading overlay for the "WebGPU not supported" widget.
+#[cfg(target_arch = "wasm32")]
+fn show_unsupported_overlay() {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+
+    if let Some(loading) = document.get_element_by_id("loading") {
+        let _ = loading.set_attribute("hidden", "");
+    }
+    if let Some(widget) = document.get_element_by_id("webgpu-unsupported") {
+        let _ = widget.remove_attribute("hidden");
+    }
+    if let Some(overlay) = document.get_element_by_id("overlay") {
+        let _ = overlay.remove_attribute("hidden");
+    }
+}
+
 pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
 
+    let gpu = match Gpu::new().await {
+        Some(gpu) => gpu,
+        None => {
+            #[cfg(target_arch = "wasm32")]
+            {
+                show_unsupported_overlay();
+                return;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            panic!("Could not acquire a compatible GPU adapter/device");
+        }
+    };
+
     #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
-    let mut app = App::new(Gpu::new().await);
+    let mut app = App::new(gpu);
 
     #[cfg(not(target_arch = "wasm32"))]
     {

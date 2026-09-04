@@ -27,7 +27,7 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    pub async fn new() -> Self {
+    pub async fn new() -> Option<Self> {
         let instance = wgpu::Instance::default();
 
         let adapter = instance
@@ -36,7 +36,7 @@ impl Gpu {
                 ..Default::default()
             })
             .await
-            .expect("Could not aqcuire GPU Adapter");
+            .ok()?;
 
         let limits = adapter.limits();
 
@@ -58,14 +58,14 @@ impl Gpu {
                 ..Default::default()
             })
             .await
-            .expect("Could not acquire GPU Device");
+            .ok()?;
 
-        Self {
+        Some(Self {
             instance,
             adapter,
             device,
             queue,
-        }
+        })
     }
 
     pub fn instance(&self) -> &wgpu::Instance {
