@@ -208,6 +208,11 @@ impl Controller {
             }
         });
 
+        // Busy (spinning) cursor while files are being read/parsed/built.
+        if FileStage::loading() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Progress);
+        }
+
         self.hovered = viewport.response.hovered();
         self.viewport = viewport.response.rect * scale;
         self.camera.set_aspect(self.viewport.aspect_ratio());

@@ -29,6 +29,9 @@ pub struct RenderOutcome {
     /// The image is still progressively refining - schedule another frame as
     /// soon as the GPU goes idle.
     pub accumulating: bool,
+    /// A file load is in progress - keep the loop rendering so the spinner
+    /// animates and the built scene appears without needing further input.
+    pub loading: bool,
     /// egui's requested delay until the next repaint (`Duration::MAX` = none).
     pub repaint_after: Duration,
 }
@@ -204,6 +207,7 @@ impl Renderer {
 
         RenderOutcome {
             accumulating: self.surface.accumulating(&settings),
+            loading: FileStage::loading(),
             repaint_after,
         }
     }

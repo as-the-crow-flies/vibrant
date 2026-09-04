@@ -92,6 +92,8 @@ impl Asset {
     pub fn update(&mut self, gpu: &Gpu, controller: &mut Controller) {
         self.changed = false;
 
+        let had_pending = FileStage::has_pending();
+
         FileStage::on_lines(|lines| {
             let line = LineBuffer::new(gpu, &lines, &self.colormap, controller.settings());
 
@@ -149,6 +151,12 @@ impl Asset {
 
             self.changed = true;
         });
+
+        // The queue held files this frame and they've now been built into GPU
+        // resources - drop the loading spinner.
+        if had_pending {
+            FileStage::finish_loading();
+        }
 
         // Rotation is driven by the same shift+drag gesture as the tractography
         // light (Light::yaw) rather than its own slider, so the environment

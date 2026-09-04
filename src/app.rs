@@ -100,7 +100,7 @@ impl App {
                     dismiss_loading_overlay();
                 }
 
-                if outcome.accumulating || self.dirty {
+                if outcome.accumulating || outcome.loading || self.dirty {
                     // Another frame is wanted - re-arm once the GPU drains, so
                     // exactly one render is ever in flight.
                     self.dirty = false;
@@ -168,6 +168,13 @@ impl ApplicationHandler for App {
         }
 
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
+
+        // Let background file parsing wake the loop so the loading spinner
+        // animates while the render loop is otherwise idle.
+        {
+            let window = Arc::clone(&window);
+            FileStage::set_waker(move || window.request_redraw());
+        }
 
         let renderer = Renderer::new(&self.gpu, Arc::clone(&window));
 
