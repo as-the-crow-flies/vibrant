@@ -245,11 +245,12 @@ fn get_incident_radiance(origin: vec3<f32>, omega: mat4x3<f32>) -> mat4x3<f32> {
     var expectation_sum = vec4<f32>(0.0);
 
     for (var k=0u; k<VMM_SIZE; k++) {
+        if (PHI[k].w < EPSILON) { continue; }
+
         let expectation = vmf(VMM[k], omega);
             expectation_sum += expectation;
 
-        let phi = PHI[k];
-        let phi_norm = phi.rgb / phi.w;
+        let phi_norm = PHI[k].rgb / PHI[k].w;
 
         radiance += mat4x3<f32>(
             expectation[0] * phi_norm,
