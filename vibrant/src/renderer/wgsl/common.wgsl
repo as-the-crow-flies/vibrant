@@ -3,7 +3,7 @@
 struct Tractography {
     volume: u32,
     culling: u32,
-    // 0 = Combined, 1 = X-ray.
+    // 0 = Combined, 1 = Overlay.
     render_mode: u32,
     // Whether the slicing / clipping planes cull tractography lines.
     line_crop: u32,

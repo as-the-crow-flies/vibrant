@@ -1,4 +1,4 @@
-// X-ray mode: accumulate every line the ray crosses (premultiplied), honoring
+// Overlay mode: accumulate every line the ray crosses (premultiplied), honoring
 // per-bundle `settings.alpha`. Composited unconditionally over the volume, so
 // there is no depth to report.
 var<private> COLOR: vec4<f32>;

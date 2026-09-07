@@ -142,14 +142,14 @@ impl Renderer {
 
                 if lighting_changed {
                     if let Some(pv) = &self.asset.physical_volume {
-                        // Primary cascade. Combined: volume + lines. X-ray:
+                        // Primary cascade. Combined: volume + lines. Overlay:
                         // volume only. Sources are baked into each radiance
                         // buffer's `cascade_opts` by `Asset::sync_physical_volume`.
                         if let Some(rad) = &self.asset.radiance {
                             self.lighting
                                 .dispatch_for(&mut cmd, &self.asset, controller, rad, pv);
                         }
-                        // X-ray only: the line-only cascade.
+                        // Overlay only: the line-only cascade.
                         if let Some(rad) = &self.asset.radiance_lines {
                             self.lighting
                                 .dispatch_for(&mut cmd, &self.asset, controller, rad, pv);

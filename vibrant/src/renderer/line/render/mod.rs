@@ -22,11 +22,11 @@ use crate::{
 ///
 /// * **Combined** (`opaque.wgsl`): nearest hit only, alpha forced to 1, writes
 ///   HDR colour + the near→far hit fraction the volume tracer clamps to.
-/// * **X-ray** (`transparent.wgsl`): every crossed line accumulated
+/// * **Overlay** (`transparent.wgsl`): every crossed line accumulated
 ///   (premultiplied), honoring `settings.alpha`; composited over the volume.
 pub struct LineRenderPipeline {
     combined: [RenderPipeline; 3],
-    xray: [RenderPipeline; 3],
+    overlay: [RenderPipeline; 3],
     active: Cell<usize>,
 }
 
@@ -43,7 +43,7 @@ impl LineRenderPipeline {
 
         // Both variants are MRT (colour + R32Float depth) so the single
         // `fragment` entry point works for either; only target-0 blending and
-        // the appended visit/result differ. X-ray ignores the depth output.
+        // the appended visit/result differ. Overlay ignores the depth output.
         let build = |appended: &str, blend: ColorTargetState| {
             VMM_SIZE_OPTIONS.map(|vmm_size| {
                 let src =
@@ -80,8 +80,8 @@ impl LineRenderPipeline {
 
         Self {
             combined: build(include_str!("opaque.wgsl"), ColorBuffer::target_blend()),
-            xray: build(
-                include_str!("transparent.wgsl"),
+            overlay: build(
+                include_str!("opaque.wgsl"),
                 ColorBuffer::target_premultiplied(),
             ),
             active: Cell::new(
@@ -106,7 +106,7 @@ impl LineRenderPipeline {
         controller: &Controller,
         frame: &Frame,
     ) {
-        // X-ray+both -> the line-only cascade; otherwise the primary one.
+        // Overlay+both -> the line-only cascade; otherwise the primary one.
         let radiance = asset.radiance_lines.as_ref().or(asset.radiance.as_ref());
         let (Some(line), Some(radiance)) = (&asset.line, radiance) else {
             return;
@@ -116,7 +116,7 @@ impl LineRenderPipeline {
 
         let variants = match controller.settings().render_mode {
             RenderMode::Combined => &self.combined,
-            RenderMode::XRay => &self.xray,
+            RenderMode::Overlay => &self.overlay,
         };
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {

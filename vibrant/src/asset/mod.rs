@@ -44,9 +44,9 @@ pub struct Asset {
     // deposit fills. Allocated whenever a volume OR a line is loaded.
     pub physical_volume: Option<PhysicalVolume>,
     // Primary cascade. Combined: occlusion = volume + lines, sampled by both
-    // renderers. X-ray: occlusion = volume only, sampled by the volume renderer.
+    // renderers. Overlay: occlusion = volume only, sampled by the volume renderer.
     pub radiance: Option<GaussianRadianceBuffer>,
-    // X-ray only, and only when a volume is also present: the line-only cascade
+    // Overlay only, and only when a volume is also present: the line-only cascade
     // the line surface shader samples so lines self-shadow without volume shadows.
     pub radiance_lines: Option<GaussianRadianceBuffer>,
 
@@ -223,7 +223,7 @@ impl Asset {
     }
 
     /// Keep the single shared `physical_volume` + its `radiance` cascade (and,
-    /// in x-ray mode, the extra `radiance_lines` cascade) sized/oriented to the
+    /// in overlay mode, the extra `radiance_lines` cascade) sized/oriented to the
     /// scene. Reference: the largest volume fraction if there is one, otherwise
     /// a `settings.volume`³ box around the lines so a lines-only scene still gets
     /// full cascade lighting. `physical_volume` / `radiance` realloc only when
@@ -282,9 +282,9 @@ impl Asset {
             return;
         }
 
-        // The separate line cascade only earns its keep in x-ray with both a
+        // The separate line cascade only earns its keep in overlay with both a
         // volume (to exclude) and lines present.
-        let split = mode == RenderMode::XRay && has_volume && has_line;
+        let split = mode == RenderMode::Overlay && has_volume && has_line;
 
         match (split, reference) {
             (true, Some((size, _))) if self.radiance_lines.is_none() => {

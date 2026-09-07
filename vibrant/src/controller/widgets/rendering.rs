@@ -107,15 +107,19 @@ impl RenderingWidget {
             camera_open,
             |ui| {
                 Grid::new("CameraSettings").num_columns(2).show(ui, |ui| {
-                    ui.label("Field of View")
-                        .on_hover_text("Camera Field of View");
+                    ui.label("Field of View").on_hover_text(
+                        "Camera field of view. Low values flatten perspective \
+                         (closer to an orthographic view); high values \
+                         exaggerate depth.",
+                    );
                     ui.slider(&mut camera.fov, 0.2..=1.0).track(self);
                     ui.end_row();
 
                     ui.label("HDR Display").on_hover_text(
-                        "Present to an HDR (scRGB) display instead of tone \
-                         mapping to SDR with ACES. Disabled when the current \
-                         display or GPU can't present HDR.",
+                        "Send the image to an HDR display for brighter \
+                         highlights, instead of tone-mapping for a standard \
+                         display. Unavailable if the display or GPU can't show \
+                         HDR.",
                     );
                     ui.horizontal(|ui| {
                         ui.add_enabled(
@@ -136,9 +140,10 @@ impl RenderingWidget {
                                 .add_enabled_ui(settings.hdr, |ui| {
                                     ui.slider(&mut settings.hdr_headroom, 1.0..=limit)
                                         .on_hover_text(
-                                            "Peak brightness as a multiple of SDR white. \
-                                             Capped at what the display reports it can \
-                                             drive.",
+                                            "Peak brightness of the HDR image, as a \
+                                             multiple of standard-display white. \
+                                             Limited by what the display reports it \
+                                             can produce.",
                                         )
                                         .track(self)
                                         .changed()
@@ -162,7 +167,9 @@ impl RenderingWidget {
                 Grid::new("EnvironmentMapGrid")
                     .num_columns(2)
                     .show(ui, |ui| {
-                        ui.label("Map");
+                        ui.label("Map").on_hover_text(
+                            "360° environment image used to light the scene.",
+                        );
                         ComboBox::from_id_salt("EnvironmentMapSelect")
                             .selected_text(name)
                             .width(ui.available_width())
@@ -174,7 +181,10 @@ impl RenderingWidget {
                             });
                         ui.end_row();
 
-                        ui.label("Strength");
+                        ui.label("Strength").on_hover_text(
+                            "Brightness of the environment lighting. Raise it \
+                             for a brighter scene and stronger highlights.",
+                        );
                         ui.slider(&mut hdri.settings_mut().strength, 0.0..=8.0)
                             .track(self);
                         ui.end_row();
@@ -182,14 +192,19 @@ impl RenderingWidget {
             },
         )
         .help(
-            "Environment Textures",
-            "Add realistic lighting by loading an environment texture.\n
-            Click open to load an .exr file (e.g. from http://polyhaven.com)",
+            "Environment lighting",
+            "The scene is lit by a 360° environment image. Pick a built-in map, \
+             or use Open to load your own .exr (e.g. from polyhaven.com). \
+             Shift + drag in the view to rotate the lighting.",
         );
 
         ui.collapse(format!("{} Quality", icons::regular::GAUGE), false, |ui| {
             Grid::new("RadianceSettings").num_columns(2).show(ui, |ui| {
-                ui.label("Preset");
+                ui.label("Preset").on_hover_text(
+                    "Overall lighting quality. Higher settings give smoother, \
+                     more accurate light and shadows but render more slowly. \
+                     Pick \"Custom\" to set the values below yourself.",
+                );
                 ComboBox::from_id_salt("QualityPreset")
                     .selected_text(format!("{:?}", self.quality))
                     .width(ui.available_width())
@@ -211,7 +226,11 @@ impl RenderingWidget {
 
                 let custom = self.quality == Quality::Custom;
 
-                ui.label("Lightmap Resolution");
+                ui.label("Lightmap Resolution").on_hover_text(
+                    "Detail of the lighting grid across the scene. Higher values \
+                     resolve finer shadow and lighting detail, at the cost of \
+                     speed.",
+                );
                 ui.add_enabled_ui(custom, |ui| {
                     ComboBox::from_id_salt("Resolution")
                         .selected_text(format!("{}", self.lightmap_resolution))
@@ -229,7 +248,11 @@ impl RenderingWidget {
                 });
                 ui.end_row();
 
-                ui.label("Lighting Lobes");
+                ui.label("Lighting Lobes").on_hover_text(
+                    "How many directions each point uses to gather light. More \
+                     lobes give smoother, less noisy lighting but render more \
+                     slowly.",
+                );
                 ui.add_enabled_ui(custom, |ui| {
                     ComboBox::from_id_salt("Lobes")
                         .selected_text(format!("{}", self.lobes))
@@ -255,10 +278,9 @@ impl RenderingWidget {
                     .num_columns(2)
                     .show(ui, |ui| {
                         ui.label("Enabled").on_hover_text(
-                            "Blend successive frames while the view is \
-                             still, reducing noise and anti-aliasing \
-                             edges. Rendering pauses once the image \
-                             converges, saving power.",
+                            "While the view is still, blend successive frames to \
+                             reduce noise and smooth edges. Rendering pauses \
+                             automatically once the image stops changing.",
                         );
                         ui.horizontal(|ui| {
                             ui.checkbox(&mut settings.accumulate, "").track(self);

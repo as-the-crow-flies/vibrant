@@ -16,7 +16,7 @@ pub struct GaussianRadianceBuffer {
     phi_hdri: Buffer,
     em_iterations: Buffer,
     // `cascade.wgsl` occlusion sources: (include_volume, include_lines, _, _).
-    // Combined = (1, 1); x-ray volume cascade = (1, 0); x-ray line cascade = (0, 1).
+    // Combined = (1, 1); overlay volume cascade = (1, 0); overlay line cascade = (0, 1).
     cascade_opts: Buffer,
     binding: BindGroup,
     binding_hdri: BindGroup,

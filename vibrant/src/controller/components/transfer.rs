@@ -146,7 +146,12 @@ impl TransferFunctionEditor {
                 let id = ui.id().with("transfer_histogram").with(volume.id);
                 let response = ui
                     .interact(rect, id, Sense::click())
-                    .on_hover_text("Double-click to add/remove a color stop.");
+                    .on_hover_text(
+                        "Intensity histogram of this volume. Double-click to add \
+                         a control point; double-click a point to remove it. \
+                         Control points set which intensities are visible and \
+                         how they look.",
+                    );
 
                 let add_at = (response.double_clicked())
                     .then(|| response.interact_pointer_pos())
@@ -418,18 +423,29 @@ impl TransferFunctionEditor {
                             .spacing(spacing)
                             .show(ui, |ui| {
                                 ui.label("Absorption").on_hover_text(
-                                    "Volume Absorption per millimeter.\nHow much light is absorbed by the volume.",
+                                    "How much light this material removes per \
+                                     millimetre as it passes through. Higher \
+                                     values make the structure darker and more \
+                                     solid. Per-channel, so it also tints the \
+                                     transmitted light.",
                                 );
                                 ui.hdr_color_edit(&mut node.material.absorption).track(self);
                                 ui.end_row();
 
                                 ui.label("Scattering").on_hover_text(
-                                    "Volume Scattering per millimeter.\nHow much light is scattered by the volume.",
+                                    "How much light this material scatters per \
+                                     millimetre. Higher values make the \
+                                     structure brighter and more opaque, like \
+                                     tissue glowing under a lamp.",
                                 );
                                 ui.hdr_color_edit(&mut node.material.scattering).track(self);
                                 ui.end_row();
 
-                                ui.label("IOR").on_hover_text("Adjust Index Of Refraction");
+                                ui.label("IOR").on_hover_text(
+                                    "Index of refraction. Higher values bend \
+                                     light more at boundaries, for a denser, \
+                                     more glass-like look.",
+                                );
                                 ui.slider(&mut node.material.ior, 1.0..=5.0).track(self);
                                 ui.end_row();
                             });
@@ -460,7 +476,10 @@ impl TransferFunctionEditor {
 
                     if ui
                         .color_edit_button_rgb(&mut color)
-                        .on_hover_text("Volume color")
+                        .on_hover_text(
+                            "Pick this control point's colour directly; \
+                             absorption and scattering are set to match.",
+                        )
                         .track(self)
                         .changed()
                     {
@@ -513,7 +532,11 @@ impl TransferFunctionEditor {
                     }
                 })
                 .response
-                .on_hover_text("Material preset for this transfer function stop.");
+                .on_hover_text(
+                    "Start this control point from a tissue-like appearance \
+                     (white matter, grey matter, CSF, bone, blood, …), then \
+                     fine-tune. Editing the values switches this to \"Custom\".",
+                );
         });
     }
 

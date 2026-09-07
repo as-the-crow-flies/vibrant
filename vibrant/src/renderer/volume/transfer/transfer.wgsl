@@ -62,9 +62,13 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         any(voxel >= textureDimensions(ABSORPTION)))
         { return; }
 
+    // Voxel center, not corner: sampling FRACTION/MASK at `voxel / dim` reads
+    // half a texel toward the origin, shifting the whole material volume (and
+    // its gradient) off the source scan and adding a needless trilinear blur.
+    let center = (vec3<f32>(voxel) + 0.5) / dim;
+
     let crop_normal = normal_from_spherical(CROP.spherical.x, CROP.spherical.y);
-    let voxel_f32 = vec3<f32>(voxel) / dim - 0.5;
-    let voxel_distance = dot(crop_normal, voxel_f32);
+    let voxel_distance = dot(crop_normal, center - 0.5);
 
     // `+ w` biases the smoothstep band fully past the +face at z == 0, so the
     // default ("off") spherical crop doesn't fade out the volume's outer voxels.
@@ -72,7 +76,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
         -CROP.spherical.w, CROP.spherical.w,
         0.5 - CROP.spherical.z + CROP.spherical.w - voxel_distance);
 
-    let uv = vec3<f32>(voxel) / dim;
+    let uv = center;
     var fraction = textureSampleLevel(FRACTION, SAMPLER, uv, 0.0).x;
     if (bool(MATERIAL.inverted) && fraction != 0.0) { fraction = 1.0 - fraction; }
 

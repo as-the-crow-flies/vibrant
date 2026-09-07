@@ -34,11 +34,12 @@ impl Default for TractographyWidget {
 }
 
 impl TractographyWidget {
-    const LINE_COLOR_MODE_HELP: &str = "
-Tangent: Tangent RGB Coloring
-Color: Fixed Bundle Coloring
-Scalar: Coloring according to corresponding .tsf file
-        ";
+    const LINE_COLOR_MODE_HELP: &str = "\
+How streamlines in this bundle are coloured:
+
+Tangent — direction-encoded RGB (red = L/R, green = A/P, blue = I/S).
+Color — one flat colour for the whole bundle.
+Scalar — values from the matching .tsf file, mapped through a colormap (e.g. FA).";
 
     pub fn new() -> Self {
         Self {
@@ -65,7 +66,15 @@ Scalar: Coloring according to corresponding .tsf file
             Grid::new("TractographySettings")
                 .num_columns(2)
                 .show(ui, |ui| {
-                    ui.label("Render Mode");
+                    ui.label("Render Mode").help(
+                        "Render Mode",
+                        "How bundles are combined with the volumes.\n\n\
+                         Combined — bundles and volume share one lighting pass \
+                         and occlude each other, so tracts pass convincingly \
+                         behind anatomy.\n\
+                         Overlay — bundles are drawn on top of the volume and \
+                         stay fully visible, like a see-through schematic.",
+                    );
                     ComboBox::from_id_salt("TractographyRenderMode")
                         .selected_text(format!("{}", settings.render_mode))
                         .width(ui.available_width())
@@ -78,8 +87,8 @@ Scalar: Coloring according to corresponding .tsf file
                             .track(self);
                             ui.selectable_value(
                                 &mut settings.render_mode,
-                                RenderMode::XRay,
-                                format!("{}", RenderMode::XRay),
+                                RenderMode::Overlay,
+                                format!("{}", RenderMode::Overlay),
                             )
                             .track(self);
                         });
@@ -92,7 +101,7 @@ Scalar: Coloring according to corresponding .tsf file
                         .then(|| lines.bounds().scale().max_element() / settings.volume as f32)
                     {
                         ui.label("Tract Radius")
-                            .on_hover_text("Tractography line radius in mm");
+                            .on_hover_text("Rendered radius of each streamline, in millimetres.");
                         let mut radius_mm = settings.radius * mm_per_unit;
                         if ui.slider(&mut radius_mm, 0.0..=2.0).track(self).changed() {
                             settings.radius = radius_mm / mm_per_unit;
@@ -133,7 +142,7 @@ Scalar: Coloring according to corresponding .tsf file
 
                     if ui
                         .selectable_label(settings.line_crop, icons::regular::CROP)
-                        .on_hover_text("Let the slicing / clipping planes cut the tractography")
+                        .on_hover_text("Let the slicing planes cut every bundle, not just the volumes.")
                         .clicked()
                     {
                         settings.line_crop = !settings.line_crop;
@@ -185,7 +194,7 @@ Scalar: Coloring according to corresponding .tsf file
 
                         ui.toggle(
                             icons::regular::CROP,
-                            "Let the slicing / clipping planes cut this tract",
+                            "Let the slicing planes cut this bundle along with the volumes.",
                             &mut line.crop,
                         )
                         .track(self);
@@ -206,7 +215,7 @@ Scalar: Coloring according to corresponding .tsf file
 
                         if line.color_mode == LineColorMode::Color {
                             ui.color_edit_button_srgb(&mut line.color)
-                                .on_hover_text("Choose Bundle Color")
+                                .on_hover_text("Flat colour for this bundle in \"Color\" mode.")
                                 .track(self);
                         }
 
@@ -223,7 +232,10 @@ Scalar: Coloring according to corresponding .tsf file
                                     }
                                 })
                                 .response
-                                .on_hover_text("Choose .tsf Colormap");
+                                .on_hover_text(
+                                    "Colormap for this bundle's track-scalar \
+                                     (.tsf) values, e.g. FA or MD.",
+                                );
                         }
                     });
                 });

@@ -75,21 +75,27 @@ impl MasksWidget {
     fn show_mask(&mut self, ui: &mut Ui, mask: &mut VolumeMaskSettings) {
         if mask.binary {
             ui.horizontal(|ui| {
-                ui.label("Blend")
-                    .on_hover_text("Blend between fully and partially masked");
+                ui.label("Blend").on_hover_text(
+                    "How strongly this mask is applied. 0 leaves the volume \
+                     untouched; 1 clips it fully to the mask.",
+                );
 
                 ui.slider(&mut mask.offset, 0.0..=1.0).track(self);
             });
         } else {
             Grid::new("MaskSettings").num_columns(2).show(ui, |ui| {
-                ui.label("Offset")
-                    .on_hover_text("Signed Distance Mask Offset");
+                ui.label("Offset").on_hover_text(
+                    "Grow or shrink the masked region. Negative values erode \
+                     inward, positive values dilate outward.",
+                );
 
                 ui.slider(&mut mask.offset, -1.0..=1.0).track(self);
                 ui.end_row();
 
-                ui.label("Smoothing")
-                    .on_hover_text("Signed Distance Mask Smoothing");
+                ui.label("Smoothing").on_hover_text(
+                    "Softness of the mask edge. Higher values fade the boundary \
+                     over a wider band instead of a hard cut.",
+                );
                 ui.slider(&mut mask.width, 0.1..=1.0).track(self);
                 ui.end_row();
             });

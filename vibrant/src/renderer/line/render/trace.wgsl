@@ -234,7 +234,7 @@ fn shade(
         VMM_SIZE
     );
 
-    // Combined: opaque. X-ray (render_mode == 1): honor per-bundle opacity.
+    // Combined: opaque. Overlay (render_mode == 1): honor per-bundle opacity.
     let alpha = select(
         1.0,
         TRACTOGRAPHY.alpha * mix(v0.alpha, v1.alpha, height),

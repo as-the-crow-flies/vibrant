@@ -269,7 +269,12 @@ impl Controller {
             ui.horizontal(|ui| {
                 if ui
                     .button("📂 open")
-                    .on_hover_text("Open .nii.gz/.tck/.tsf files")
+                    .on_hover_text(
+                        "Load imaging data: NIfTI volumes (.nii / .nii.gz), \
+                         tractograms (.tck), track scalars (.tsf), and .exr \
+                         environment maps. A file whose name contains \"mask\" \
+                         is loaded as a mask.",
+                    )
                     .clicked()
                 {
                     FileStage::load();
@@ -277,7 +282,10 @@ impl Controller {
 
                 if ui
                     .button("📷 screenshot")
-                    .on_hover_text("Take screenshot with transparent background")
+                    .on_hover_text(
+                        "Save the current view as a PNG with a transparent \
+                         background, ready to drop into a figure or slide.",
+                    )
                     .clicked()
                 {
                     FileStage::save();
@@ -285,7 +293,7 @@ impl Controller {
 
                 if ui
                     .button(format!("{} GitHub", icons::regular::GITHUB_LOGO))
-                    .on_hover_text("View on GitHub")
+                    .on_hover_text("Open the VIBRANT source repository on GitHub.")
                     .clicked()
                 {
                     ui.ctx().open_url(egui::OpenUrl::new_tab(

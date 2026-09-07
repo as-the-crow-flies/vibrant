@@ -50,15 +50,20 @@ impl UIComponents for Ui {
     }
 
     fn toggle_visible(&mut self, selected: &mut bool) -> Response {
-        self.toggle("👁", "Show/Hide", selected)
+        self.toggle("👁", "Show or hide this in the 3D view.", selected)
     }
 
     fn toggle_inverted(&mut self, selected: &mut bool) -> Response {
-        self.toggle("🌗", "Invert", selected)
+        self.toggle(
+            "🌗",
+            "Invert this mask: swap the region it keeps for the region it removes.",
+            selected,
+        )
     }
 
     fn delete(&mut self) -> Response {
-        self.icon_button("🗑", true, false).on_hover_text("Delete")
+        self.icon_button("🗑", true, false)
+            .on_hover_text("Remove this item.")
     }
 
     fn icon_button(&mut self, icon: &str, enabled: bool, selected: bool) -> Response {

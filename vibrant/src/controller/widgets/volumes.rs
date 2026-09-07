@@ -66,14 +66,17 @@ impl VolumesWidget {
                 .num_columns(2)
                 .show(ui, |ui| {
                     ui.label("Specular").on_hover_text(
-                        "Specular reflectance of the volume material under environment lighting.",
+                        "Strength of mirror-like highlights on dense structures \
+                         under environment lighting. 0 = matte, 1 = glossy.",
                     );
                     ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
                         .track(self);
                     ui.end_row();
 
-                    ui.label("Roughness")
-                        .on_hover_text("Roughness of the volume material's specular response.");
+                    ui.label("Roughness").on_hover_text(
+                        "How spread-out the specular highlights are. Low = tight, \
+                         wet-looking reflections; high = a soft, broad sheen.",
+                    );
                     ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0)
                         .track(self);
                     ui.end_row();
@@ -132,13 +135,17 @@ impl VolumesWidget {
             .num_columns(2)
             .show(ui, |ui| {
                 ui.label("Opacity").on_hover_text(
-                    "Scales this volume's absorption and scattering, after the transfer function is applied.",
+                    "Overall opacity of this volume. Scales how strongly it \
+                     absorbs and scatters light after the transfer function, \
+                     so you can fade a volume in or out without re-editing \
+                     every stop.",
                 );
                 ui.slider(&mut volume.opacity, 0.0..=1.0).track(self);
                 ui.end_row();
 
                 ui.label("Mask").on_hover_text(
-                    "Mask from the 'Masks' section to apply to this volume.",
+                    "Restrict this volume to a region of interest using a mask \
+                     from the Masks tab.",
                 );
                 ui.horizontal(|ui| {
                     ComboBox::from_id_salt("VolumeMask")
@@ -156,14 +163,19 @@ impl VolumesWidget {
                                 .track(self);
                             }
                         }).response.on_hover_text(
-                            "Mask from the 'Masks' section to apply to this volume.\nChoose 'None' to disable masking.",
+                            "Mask applied to this volume. Choose \"None\" to show \
+                             the whole volume.",
                         );
                 });
                 ui.end_row();
 
-                ui.label("Colormap").on_hover_text("Colormap to apply to volume. The colormap is applied after contrast and material settings are applied.");
+                ui.label("Colormap").on_hover_text(
+                    "Recolour this volume with a perceptually uniform colormap \
+                     (useful for scalar maps). Applied after the transfer \
+                     function and lighting.",
+                );
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut volume.use_colormap, "").on_hover_text("Enable/Disable Colormap").track(self);
+                    ui.checkbox(&mut volume.use_colormap, "").on_hover_text("Turn the colormap on or off for this volume.").track(self);
                     ComboBox::from_id_salt(format!(
                         "{}_VolumeColormap",
                         volume.name
@@ -182,7 +194,7 @@ impl VolumesWidget {
                                 .track(self);
                             }
                         },
-                    ).response.on_hover_text("Colormap Preset");
+                    ).response.on_hover_text("Colormap used to recolour this volume.");
                 })
             });
     }

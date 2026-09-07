@@ -29,14 +29,14 @@ pub enum RenderMode {
     /// Lines and volume lit by fully independent cascades (each only
     /// self-occludes); lines are transparent and composited unconditionally on
     /// top of the volume.
-    XRay,
+    Overlay,
 }
 
 impl Display for RenderMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RenderMode::Combined => f.write_str("Combined with Volume"),
-            RenderMode::XRay => f.write_str("In front of Volume"),
+            RenderMode::Combined => f.write_str("Combined"),
+            RenderMode::Overlay => f.write_str("Overlay"),
         }
     }
 }
