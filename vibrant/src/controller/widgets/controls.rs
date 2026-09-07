@@ -1,6 +1,6 @@
-use egui::{RichText, Ui};
+use egui::{Grid, Ui};
 
-use crate::controller::icons;
+use crate::controller::{components::UIComponents, icons};
 
 pub struct ControlsWidget {}
 
@@ -16,29 +16,38 @@ impl ControlsWidget {
     }
 
     pub fn show(&self, ui: &mut Ui) {
-        ui.collapsing(
-            RichText::new(format!("{} Controls", icons::regular::MOUSE)).heading(),
-            |ui| {
-                let actions = [
-                    ("Rotate Camera", "Left Mouse Button"),
-                    ("Pan Camera", "Right Mouse Button"),
-                    ("Zoom Camera", "Mouse Wheel"),
-                    ("Reset Camera", "Backspace"),
-                    ("Rotate Light / Environment", "Shift + Left Mouse Button"),
-                ];
+        let camera_actions = [
+            ("Rotate", "Left Mouse Button"),
+            ("Pan", "Right Mouse Button"),
+            ("Zoom", "Mouse Wheel"),
+            ("Reset", "Backspace"),
+        ];
 
-                egui::Grid::new("my_grid").striped(true).show(ui, |ui| {
-                    for (action, control) in actions {
-                        ui.label(action);
-                        ui.label(control);
+        let light_actions = [("Rotate", "Shift + Left Mouse Button")];
 
-                        let filler_width = (ui.available_width() - 1.0).max(0.0);
-                        ui.add_sized([filler_width, 0.0], egui::Label::new(""));
-
-                        ui.end_row();
-                    }
-                });
-            },
+        let camera_open = ui.is_new("Controls.Camera");
+        ui.collapse(
+            format!("{} Camera", icons::regular::VIDEO_CAMERA),
+            camera_open,
+            |ui| Self::actions_grid(ui, "ControlsCameraGrid", &camera_actions),
         );
+
+        let light_open = ui.is_new("Controls.Light");
+        ui.collapse(format!("{} Light", icons::regular::SUN), light_open, |ui| {
+            Self::actions_grid(ui, "ControlsLightGrid", &light_actions)
+        });
+    }
+
+    fn actions_grid(ui: &mut Ui, id: &str, actions: &[(&str, &str)]) {
+        Grid::new(id)
+            .num_columns(2)
+            .spacing([40.0, ui.spacing().item_spacing.y])
+            .show(ui, |ui| {
+                for (action, control) in actions {
+                    ui.label(*action);
+                    ui.label(*control);
+                    ui.end_row();
+                }
+            });
     }
 }

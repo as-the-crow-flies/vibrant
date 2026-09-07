@@ -45,7 +45,10 @@ fn bench_pipeline(c: &mut Criterion) {
 
     group.bench_function("line/occupancy", |t| {
         t.iter(|| {
-            b.time_pass(|cmd| b.line_occupancy.dispatch(cmd, &b.asset, &b.controller, b.line()))
+            b.time_pass(|cmd| {
+                b.line_occupancy
+                    .dispatch(cmd, &b.asset, &b.controller, b.line())
+            })
         })
     });
 
@@ -55,7 +58,10 @@ fn bench_pipeline(c: &mut Criterion) {
 
     group.bench_function("line/populate", |t| {
         t.iter(|| {
-            b.time_pass(|cmd| b.line_populate.dispatch(cmd, &b.asset, &b.controller, b.line()))
+            b.time_pass(|cmd| {
+                b.line_populate
+                    .dispatch(cmd, &b.asset, &b.controller, b.line())
+            })
         })
     });
 
@@ -120,7 +126,12 @@ fn bench_pipeline(c: &mut Criterion) {
     // --- Raster traces ---
 
     group.bench_function("line/render", |t| {
-        t.iter(|| b.time_pass(|cmd| b.line_render.dispatch(cmd, &b.asset, &b.controller, &b.frame)))
+        t.iter(|| {
+            b.time_pass(|cmd| {
+                b.line_render
+                    .dispatch(cmd, &b.asset, &b.controller, &b.frame)
+            })
+        })
     });
 
     group.bench_function("volume/render", |t| {

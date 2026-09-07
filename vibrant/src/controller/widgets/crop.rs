@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use egui::{Grid, RichText, Ui};
+use egui::{Grid, Ui};
 use egui_double_slider::DoubleSlider;
 
 use crate::{
@@ -40,54 +40,50 @@ impl CropWidget {
 
         let s = crop.settings_mut();
 
+        let orthogonal_open = ui.is_new("Slicing.Orthogonal");
         ui.collapse(
-            RichText::new(format!("{} Slicing", icons::regular::CROP)).heading(),
-            false,
+            format!("{} Orthogonal", icons::regular::GRID_FOUR),
+            orthogonal_open,
             |ui| {
-                ui.collapse(
-                    format!("{} Orthogonal", icons::regular::GRID_FOUR),
-                    false,
-                    |ui| {
-                        Grid::new("CropWidgetGridOrthogonal")
-                            .num_columns(2)
-                            .show(ui, |ui| {
-                                self.slider(ui, "Axial", &mut s.min.z, &mut s.max.z);
-                                self.slider(ui, "Sagittal", &mut s.min.x, &mut s.max.x);
-                                self.slider(ui, "Coronal", &mut s.min.y, &mut s.max.y);
-                            });
-                    },
-                );
-
-                ui.collapse(
-                    format!("{} Spherical", icons::regular::SPHERE),
-                    false,
-                    |ui| {
-                        Grid::new("CropWidgetGridSpherical")
-                            .num_columns(2)
-                            .show(ui, |ui| {
-                                ui.label("Azimuth");
-                                ui.slider(&mut s.spherical.x, 0.0..=2.0 * PI).track(self);
-                                ui.end_row();
-
-                                ui.label("Elevation");
-                                ui.slider(&mut s.spherical.y, 0.0..=PI).track(self);
-                                ui.end_row();
-
-                                ui.label("Depth");
-                                ui.slider(&mut s.spherical.z, 0.0..=1.0).track(self);
-                                ui.end_row();
-
-                                ui.label("Smooth");
-                                ui.slider(&mut s.spherical.w, 0.0..=1.0).track(self);
-                                ui.end_row();
-                            });
-                    },
-                );
+                Grid::new("CropWidgetGridOrthogonal")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        self.slider(ui, "Axial", &mut s.min.z, &mut s.max.z);
+                        self.slider(ui, "Sagittal", &mut s.min.x, &mut s.max.x);
+                        self.slider(ui, "Coronal", &mut s.min.y, &mut s.max.y);
+                    });
             },
         )
         .help(
             "Slicing",
             "Crop volume using orthogonal and spherical slice controls.",
+        );
+
+        let spherical_open = ui.is_new("Slicing.Spherical");
+        ui.collapse(
+            format!("{} Spherical", icons::regular::SPHERE),
+            spherical_open,
+            |ui| {
+                Grid::new("CropWidgetGridSpherical")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        ui.label("Azimuth");
+                        ui.slider(&mut s.spherical.x, 0.0..=2.0 * PI).track(self);
+                        ui.end_row();
+
+                        ui.label("Elevation");
+                        ui.slider(&mut s.spherical.y, 0.0..=PI).track(self);
+                        ui.end_row();
+
+                        ui.label("Depth");
+                        ui.slider(&mut s.spherical.z, 0.0..=1.0).track(self);
+                        ui.end_row();
+
+                        ui.label("Smooth");
+                        ui.slider(&mut s.spherical.w, 0.0..=1.0).track(self);
+                        ui.end_row();
+                    });
+            },
         );
     }
 

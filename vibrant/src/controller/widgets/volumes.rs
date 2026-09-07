@@ -1,19 +1,19 @@
 use std::iter::zip;
 
-use egui::{ComboBox, Grid, RichText, Ui};
+use egui::{ComboBox, Grid, ScrollArea, Ui};
 use itertools::Itertools;
 use strum::IntoEnumIterator;
 
 use crate::{
     asset::{
         colormap::ColormapSelection,
+        hdri::HdriBuffer,
         volume_fraction::{VolumeFractionBuffer, VolumeFractionSettings},
         volume_mask::VolumeMaskBuffer,
     },
     controller::{
         components::{transfer::TransferFunctionEditor, UIComponents},
         icons,
-        widgets::util::UiResponseExtensions,
     },
     util::{ResponseExtentions, Tracked},
 };
@@ -48,8 +48,37 @@ impl VolumesWidget {
         ui: &mut Ui,
         volumes: &mut Vec<VolumeFractionBuffer>,
         masks: &[VolumeMaskBuffer],
+        hdri: &mut HdriBuffer,
     ) {
         self.changed = false;
+
+        if volumes.is_empty() {
+            ui.vertical_centered(|ui| {
+                ui.weak("Open .nii.gz files using the [📂 open] button");
+            });
+            return;
+        }
+
+        // Closed by default and rendered ahead of the per-volume list, same
+        // as Tractography's settings header.
+        ui.collapse(format!("{} Settings", icons::regular::GEAR), false, |ui| {
+            Grid::new("VolumeGlobalSettingsGrid")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    ui.label("Specular").on_hover_text(
+                        "Specular reflectance of the volume material under environment lighting.",
+                    );
+                    ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                        .track(self);
+                    ui.end_row();
+
+                    ui.label("Roughness")
+                        .on_hover_text("Roughness of the volume material's specular response.");
+                    ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0)
+                        .track(self);
+                    ui.end_row();
+                });
+        });
 
         let mut index_to_remove: Option<usize> = None;
 
@@ -58,33 +87,25 @@ impl VolumesWidget {
             .map(|volume| ui.is_new(&volume.settings().name))
             .collect_vec();
 
-        ui.collapse(
-            RichText::new(format!("{} Volumes", icons::regular::BRAIN)).heading(),
-            open.iter().any(|&x| x),
-            |ui| {
-                for (index, (volume, open)) in zip(volumes.iter_mut(), open).enumerate() {
-                    let volume = volume.settings_mut();
+        ScrollArea::new([false, true]).show(ui, |ui| {
+            for (index, (volume, open)) in zip(volumes.iter_mut(), open).enumerate() {
+                let volume = volume.settings_mut();
 
-                    ui.frame(|ui| {
-                        let title = volume.name.clone();
-                        let response = ui.collapse(title, open, |ui| {
-                            self.show_volume(ui, volume, masks);
-                        });
-
-                        ui.inline(&response, |ui| {
-                            if ui.delete().track(self).clicked() {
-                                index_to_remove = Some(index);
-                            }
-                            ui.toggle_visible(&mut volume.visible).track(self);
-                        });
+                ui.frame(|ui| {
+                    let title = volume.name.clone();
+                    let response = ui.collapse(title, open, |ui| {
+                        self.show_volume(ui, volume, masks);
                     });
-                }
-            },
-        )
-        .help(
-            "NIfTI Volume Rendering",
-            "Open .nii.gz files to render them volumetrically.",
-        );
+
+                    ui.inline(&response, |ui| {
+                        if ui.delete().track(self).clicked() {
+                            index_to_remove = Some(index);
+                        }
+                        ui.toggle_visible(&mut volume.visible).track(self);
+                    });
+                });
+            }
+        });
 
         if let Some(index) = index_to_remove {
             volumes.remove(index);

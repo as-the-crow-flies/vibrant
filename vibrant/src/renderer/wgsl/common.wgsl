@@ -34,6 +34,9 @@ struct LineSettings {
     colormap: u32,
     crop_start: f32,
     crop_end: f32,
+    // Whether the slicing / clipping planes cut this line. Only takes
+    // effect while `Tractography.line_crop` (the master switch) is also on.
+    crop: u32,
 }
 
 struct HdriSettings {

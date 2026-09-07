@@ -49,7 +49,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if (should_keep(v0, v1)) {
+        if (should_keep(v0, v1, settings)) {
            total_length++;
         }
     }
@@ -63,15 +63,15 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if (should_keep(v0, v1)) {
+        if (should_keep(v0, v1, settings)) {
             LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
             offset_index++;
         }
     }
 }
 
-fn should_keep(v0: vec3<f32>, v1: vec3<f32>) -> bool {
-    if (TRACTOGRAPHY.line_crop == FALSE) { return true; }
+fn should_keep(v0: vec3<f32>, v1: vec3<f32>, settings: LineSettings) -> bool {
+    if (TRACTOGRAPHY.line_crop == FALSE || settings.crop == FALSE) { return true; }
 
     let crop_normal = normal_from_spherical(CROP.spherical.x, CROP.spherical.y);
     let v0_distance = dot(crop_normal, v0) + CROP.spherical.z - 0.5;

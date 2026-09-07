@@ -139,20 +139,24 @@ fn bench_cascade(c: &mut Criterion) {
     // CASCADE_MAX (level 5) seeds its per-probe EM from the "hdri" fit above
     // rather than starting cold, but still runs its own refinement per probe.
     for cascade in 0..GaussianRadianceBuffer::LEVELS as usize {
-        group.bench_with_input(BenchmarkId::new("level", cascade), &cascade, |t, &cascade| {
-            t.iter(|| {
-                b.time_pass(|cmd| {
-                    b.lighting.cascade(
-                        cmd,
-                        &b.asset.environment,
-                        &b.asset.hdri,
-                        b.radiance(),
-                        b.pv(),
-                        cascade,
-                    )
-                })
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("level", cascade),
+            &cascade,
+            |t, &cascade| {
+                t.iter(|| {
+                    b.time_pass(|cmd| {
+                        b.lighting.cascade(
+                            cmd,
+                            &b.asset.environment,
+                            &b.asset.hdri,
+                            b.radiance(),
+                            b.pv(),
+                            cascade,
+                        )
+                    })
+                });
+            },
+        );
     }
 
     group.finish();

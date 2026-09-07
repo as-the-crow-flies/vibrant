@@ -207,8 +207,7 @@ impl Surface {
     /// changed (assets, camera, lighting); the surface folds in its own
     /// resize/reconfigure `changed` flag.
     pub fn plan_accumulation(&self, settings: &Settings, scene_dirty: bool) -> AccumulationPlan {
-        self.accumulator
-            .plan(settings, scene_dirty || self.changed)
+        self.accumulator.plan(settings, scene_dirty || self.changed)
     }
 
     /// After the renderer has traced into `frame.color()` (when `rendered`),

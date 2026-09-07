@@ -1,11 +1,11 @@
 use std::iter::zip;
 
-use egui::{Grid, RichText, Ui};
+use egui::{Grid, Ui};
 use itertools::Itertools;
 
 use crate::{
     asset::volume_mask::{VolumeMaskBuffer, VolumeMaskSettings},
-    controller::{components::UIComponents, icons, widgets::util::UiResponseExtensions},
+    controller::components::UIComponents,
     util::{ResponseExtentions, Tracked},
 };
 
@@ -39,32 +39,33 @@ impl MasksWidget {
             .filter(|mask| mask.settings().name != "None")
             .collect_vec();
 
+        if masks.is_empty() {
+            ui.vertical_centered(|ui| {
+                ui.weak("Open *mask*.nii.gz files using the [📂 open] button");
+            });
+            return;
+        }
+
         let open = masks
             .iter()
             .map(|mask| ui.is_new(&mask.settings().name))
             .collect_vec();
 
-        ui.collapse(
-            RichText::new(format!("{} Masks", icons::regular::CIRCLE_HALF)).heading(),
-            open.iter().any(|&x| x),
-            |ui| {
-                for (mask, open) in zip(masks.iter_mut(), open) {
-                    let settings = mask.settings_mut();
+        for (mask, open) in zip(masks.iter_mut(), open) {
+            let settings = mask.settings_mut();
 
-                    ui.frame(|ui| {
-                        let title = settings.name.clone();
-                        let response = ui.collapse(title, open, |ui| {
-                            self.show_mask(ui, settings);
-                        });
+            ui.frame(|ui| {
+                let title = settings.name.clone();
+                let response = ui.collapse(title, open, |ui| {
+                    self.show_mask(ui, settings);
+                });
 
-                        ui.inline(&response, |ui| {
-                            ui.toggle_inverted(&mut settings.inverted).track(self);
-                            ui.toggle_visible(&mut settings.visible).track(self);
-                        });
-                    });
-                }
-            },
-        ).help("Volume Masking", "Open *mask*.nii.gz files to load masks. Then apply the mask to one or more NIfTI volumes.\nTwo types of masks are supported: Binary masks and Signed Distance Masks.");
+                ui.inline(&response, |ui| {
+                    ui.toggle_inverted(&mut settings.inverted).track(self);
+                    ui.toggle_visible(&mut settings.visible).track(self);
+                });
+            });
+        }
     }
 
     pub fn changed(&self) -> bool {

@@ -11,9 +11,7 @@ use std::path::PathBuf;
 
 use pollster::FutureExt;
 use vibrant::{
-    asset::{
-        line::LineBuffer, radiance::GaussianRadianceBuffer, volume::PhysicalVolume, Asset,
-    },
+    asset::{line::LineBuffer, radiance::GaussianRadianceBuffer, volume::PhysicalVolume, Asset},
     controller::Controller,
     file::FileStage,
     gpu::Gpu,
@@ -26,7 +24,7 @@ use vibrant::{
             occupancy::LineOccupancyPipeline, populate::LinePopulatePipeline,
             render::LineRenderPipeline, transform::LineTransformPipeline,
         },
-        present::{Presentation, PresentPipeline},
+        present::{PresentPipeline, Presentation},
         util::clear::ClearPipeline,
         volume::{render::GaussianVolumeRenderer, transfer::VolumeTransferPipeline},
     },
@@ -90,7 +88,9 @@ pub fn setup() -> Bench {
     controller.settings_mut().width = WIDTH;
     controller.settings_mut().height = HEIGHT;
     controller.set_viewport(WIDTH as f32, HEIGHT as f32);
-    controller.rendering_mut().set_resolution(RESOLUTION_DIVISOR);
+    controller
+        .rendering_mut()
+        .set_resolution(RESOLUTION_DIVISOR);
 
     let mut asset = Asset::new(&gpu);
     asset.update(&gpu, &mut controller); // builds line/volume/physical_volume/radiance
@@ -187,9 +187,11 @@ impl Bench {
 
         self.line_transform.dispatch(cmd, asset, line);
         self.line_crop.dispatch(cmd, asset, line);
-        self.line_occupancy.dispatch(cmd, asset, &self.controller, line);
+        self.line_occupancy
+            .dispatch(cmd, asset, &self.controller, line);
         self.line_cull.dispatch(cmd, asset, &self.controller, line);
-        self.line_populate.dispatch(cmd, asset, &self.controller, line);
+        self.line_populate
+            .dispatch(cmd, asset, &self.controller, line);
 
         self.volume_transfer
             .begin(cmd, &asset.volumes, &asset.masks, pv, &asset.crop);
@@ -237,7 +239,8 @@ impl Bench {
             .dispatch_for(cmd, asset, &self.controller, self.radiance(), pv);
 
         // Combined mode: opaque lines first, then the volume clamped to them.
-        self.line_render.dispatch(cmd, asset, &self.controller, frame);
+        self.line_render
+            .dispatch(cmd, asset, &self.controller, frame);
         self.volume_render
             .dispatch(&self.gpu, cmd, asset, &self.controller, frame);
 

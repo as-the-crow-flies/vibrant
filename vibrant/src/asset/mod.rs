@@ -111,6 +111,8 @@ impl Asset {
             self.line = Some(line);
 
             self.changed = true;
+
+            controller.focus_tractography_tab();
         });
 
         FileStage::on_track_scalars(|track_scalars| {
@@ -122,12 +124,17 @@ impl Asset {
         });
 
         FileStage::on_volumes(|volumes| {
+            let mut loaded_volume = false;
+            let mut loaded_mask = false;
+
             for volume in &volumes {
                 if volume.name().contains("mask") {
                     self.masks.push(VolumeMaskBuffer::new(gpu, volume));
+                    loaded_mask = true;
                 } else {
                     self.volumes
                         .push(VolumeFractionBuffer::new(gpu, volume, &self.colormap));
+                    loaded_volume = true;
                 }
             }
 
@@ -142,6 +149,15 @@ impl Asset {
             }
 
             self.changed = true;
+
+            // Volumes take priority: a batch can contain both (e.g. a folder
+            // with a "mask" file alongside regular ones), but only one tab
+            // can be focused.
+            if loaded_volume {
+                controller.focus_volumes_tab();
+            } else if loaded_mask {
+                controller.focus_masks_tab();
+            }
         });
 
         FileStage::on_hdris(|hdris| {

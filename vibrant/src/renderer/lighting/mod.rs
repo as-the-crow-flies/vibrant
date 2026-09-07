@@ -67,7 +67,12 @@ impl LightingRenderer {
         // matching the previous hardcoded behavior for callers -- like the
         // cascade benchmark -- that dispatch hdri/cascade directly and never
         // call dispatch() to select a variant.
-        let active = Cell::new(VMM_SIZE_OPTIONS.iter().position(|&size| size == 32).unwrap());
+        let active = Cell::new(
+            VMM_SIZE_OPTIONS
+                .iter()
+                .position(|&size| size == 32)
+                .unwrap(),
+        );
 
         Self { variants, active }
     }

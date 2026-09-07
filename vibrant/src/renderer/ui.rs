@@ -119,7 +119,8 @@ impl UiRenderer {
 
         let tris = self.state.egui_ctx().tessellate(shapes, pixels_per_point);
 
-        self.renderer.update_buffers(device, queue, cmd, &tris, &screen);
+        self.renderer
+            .update_buffers(device, queue, cmd, &tris, &screen);
 
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
@@ -137,7 +138,8 @@ impl UiRenderer {
 
         for (id, deltas) in &textures_delta.set {
             for image_delta in deltas {
-                self.renderer.update_texture(device, queue, *id, image_delta);
+                self.renderer
+                    .update_texture(device, queue, *id, image_delta);
             }
         }
 

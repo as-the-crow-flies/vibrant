@@ -88,7 +88,8 @@ impl Environment {
             _pad: [0.0; 3],
         };
 
-        gpu.queue().write_buffer(&self.buffer, 0, bytes_of(&uniform));
+        gpu.queue()
+            .write_buffer(&self.buffer, 0, bytes_of(&uniform));
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LineVoxelizationMode {
     #[default]
@@ -28,6 +30,15 @@ pub enum RenderMode {
     /// self-occludes); lines are transparent and composited unconditionally on
     /// top of the volume.
     XRay,
+}
+
+impl Display for RenderMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RenderMode::Combined => f.write_str("Combined with Volume"),
+            RenderMode::XRay => f.write_str("In front of Volume"),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
