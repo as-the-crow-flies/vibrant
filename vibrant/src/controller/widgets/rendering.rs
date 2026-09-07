@@ -260,40 +260,15 @@ impl RenderingWidget {
                              edges. Rendering pauses once the image \
                              converges, saving power.",
                         );
-                        ui.checkbox(&mut settings.accumulate, "").track(self);
-                        ui.end_row();
-
-                        ui.label("Max Samples")
-                            .on_hover_text("Stop accumulating after this many frames.");
-                        ui.add_enabled(
-                            settings.accumulate,
-                            egui::Slider::new(&mut settings.max_samples, 1..=4096)
-                                .logarithmic(true),
-                        )
-                        .track(self);
-                        ui.end_row();
-
-                        ui.label("Noise Threshold").on_hover_text(
-                            "Stop early once the mean per-pixel change \
-                             between samples drops below this. Larger = \
-                             stop sooner (noisier).",
-                        );
-                        ui.add_enabled(
-                            settings.accumulate,
-                            egui::Slider::new(&mut settings.noise_threshold, 1.0e-4..=1.0e-2)
-                                .logarithmic(true)
-                                .custom_formatter(|n, _| format!("{n:.1e}")),
-                        )
-                        .track(self);
-                        ui.end_row();
-
-                        ui.label("Status");
-                        ui.label(if !settings.accumulate {
-                            "off".to_owned()
-                        } else if converged {
-                            format!("converged ({samples} samples)")
-                        } else {
-                            format!("{samples} / {}", settings.max_samples.max(1))
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut settings.accumulate, "").track(self);
+                            ui.label(if !settings.accumulate {
+                                "off".to_owned()
+                            } else if converged {
+                                format!("converged ({samples} samples)")
+                            } else {
+                                format!("{samples} / {}", settings.max_samples.max(1))
+                            });
                         });
                         ui.end_row();
                     });
