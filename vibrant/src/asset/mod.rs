@@ -244,16 +244,21 @@ impl Asset {
                 })
             });
 
-        let divisor = controller.radiance().resolution().max(1);
+        let lightmap_resolution = controller.radiance().lightmap_resolution().max(1);
         let has_volume = !self.volumes.is_empty();
         let has_line = self.line.is_some();
         let mode = controller.settings().render_mode;
 
-        let radiance =
-            |size: UVec3| GaussianRadianceBuffer::new(gpu, (size / divisor).max(UVec3::ONE));
+        // Scale the reference volume so its longest axis hits the requested probe
+        // count, keeping aspect ratio.
+        let radiance = |size: UVec3| {
+            let scale = lightmap_resolution as f32 / size.max_element().max(1) as f32;
+            let dims = (size.as_vec3() * scale).round().as_uvec3().max(UVec3::ONE);
+            GaussianRadianceBuffer::new(gpu, dims)
+        };
 
-        let key =
-            reference.map(|(size, transform)| (size, transform, divisor, has_volume, has_line));
+        let key = reference
+            .map(|(size, transform)| (size, transform, lightmap_resolution, has_volume, has_line));
 
         if key != self.physical_key {
             match reference {

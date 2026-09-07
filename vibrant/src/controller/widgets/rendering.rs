@@ -11,10 +11,45 @@ use crate::{
     util::{ResponseExtentions, Tracked},
 };
 
+/// Selectable lightmap (radiance probe grid) resolutions, in probes along the
+/// volume's longest axis.
+const LIGHTMAP_RESOLUTIONS: [u32; 7] = [64, 96, 128, 160, 192, 224, 256];
+
+/// Selectable lighting lobe counts.
+const LOBES: [u32; 3] = [8, 16, 32];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Quality {
+    Low,
+    Medium,
+    High,
+    Custom,
+}
+
+impl Quality {
+    const ALL: [Quality; 4] = [
+        Quality::Low,
+        Quality::Medium,
+        Quality::High,
+        Quality::Custom,
+    ];
+
+    /// `(lightmap resolution, lobes)` for a preset; `None` for `Custom`.
+    fn preset(self) -> Option<(u32, u32)> {
+        match self {
+            Quality::Low => Some((64, 8)),
+            Quality::Medium => Some((128, 16)),
+            Quality::High => Some((256, 32)),
+            Quality::Custom => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RenderingWidget {
     changed: bool,
-    resolution: u32,
+    quality: Quality,
+    lightmap_resolution: u32,
     lobes: u32,
     /// While true, HDR strength follows the display's headroom limit. Cleared
     /// when the user drags the slider below the max, re-set if they drag it
@@ -38,8 +73,9 @@ impl RenderingWidget {
     pub fn new() -> Self {
         Self {
             changed: false,
-            resolution: 4,
-            lobes: 16,
+            quality: Quality::Low,
+            lightmap_resolution: 64,
+            lobes: 8,
             hdr_headroom_auto: true,
         }
     }
@@ -151,45 +187,63 @@ impl RenderingWidget {
             Click open to load an .exr file (e.g. from http://polyhaven.com)",
         );
 
-        ui.collapse(
-            format!("{} Performance", icons::regular::GAUGE),
-            false,
-            |ui| {
-                Grid::new("RadianceSettings").num_columns(2).show(ui, |ui| {
-                    ui.label("Lighting Resolution");
-                    ComboBox::from_id_salt("Resolution")
-                        .selected_text(format!("{:?}", self.resolution))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for setting in [1, 2, 4, 8, 16] {
-                                ui.selectable_value(
-                                    &mut self.resolution,
-                                    setting,
-                                    format!("{}", setting),
-                                )
-                                .track(self);
+        ui.collapse(format!("{} Quality", icons::regular::GAUGE), false, |ui| {
+            Grid::new("RadianceSettings").num_columns(2).show(ui, |ui| {
+                ui.label("Preset");
+                ComboBox::from_id_salt("QualityPreset")
+                    .selected_text(format!("{:?}", self.quality))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for preset in Quality::ALL {
+                            if ui
+                                .selectable_value(&mut self.quality, preset, format!("{preset:?}"))
+                                .changed()
+                            {
+                                if let Some((resolution, lobes)) = preset.preset() {
+                                    self.lightmap_resolution = resolution;
+                                    self.lobes = lobes;
+                                }
+                                self.track();
                             }
-                        });
-                    ui.end_row();
+                        }
+                    });
+                ui.end_row();
 
-                    ui.label("Lighting Lobes");
-                    ComboBox::from_id_salt("Lobes")
-                        .selected_text(format!("{:?}", self.lobes))
+                let custom = self.quality == Quality::Custom;
+
+                ui.label("Lightmap Resolution");
+                ui.add_enabled_ui(custom, |ui| {
+                    ComboBox::from_id_salt("Resolution")
+                        .selected_text(format!("{}", self.lightmap_resolution))
                         .width(ui.available_width())
                         .show_ui(ui, |ui| {
-                            for setting in [8, 16, 32] {
+                            for setting in LIGHTMAP_RESOLUTIONS {
                                 ui.selectable_value(
-                                    &mut self.lobes,
+                                    &mut self.lightmap_resolution,
                                     setting,
-                                    format!("{}", setting),
+                                    format!("{setting}"),
                                 )
                                 .track(self);
                             }
                         });
-                    ui.end_row();
                 });
-            },
-        );
+                ui.end_row();
+
+                ui.label("Lighting Lobes");
+                ui.add_enabled_ui(custom, |ui| {
+                    ComboBox::from_id_salt("Lobes")
+                        .selected_text(format!("{}", self.lobes))
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for setting in LOBES {
+                                ui.selectable_value(&mut self.lobes, setting, format!("{setting}"))
+                                    .track(self);
+                            }
+                        });
+                });
+                ui.end_row();
+            });
+        });
 
         ui.collapse(
             format!("{} Accumulation", icons::regular::STACK),
@@ -251,14 +305,17 @@ impl RenderingWidget {
         self.changed
     }
 
-    pub fn resolution(&self) -> u32 {
-        self.resolution
+    /// Target probe count along the volume's longest axis for the radiance
+    /// lightmap; the other axes scale to preserve aspect ratio.
+    pub fn lightmap_resolution(&self) -> u32 {
+        self.lightmap_resolution
     }
 
-    /// Override the radiance-cascade resolution divisor. For headless callers
-    /// (benches) that never open the widget.
-    pub fn set_resolution(&mut self, resolution: u32) {
-        self.resolution = resolution.max(1);
+    /// Override the lightmap resolution. For headless callers (benches) that
+    /// never open the widget.
+    pub fn set_lightmap_resolution(&mut self, resolution: u32) {
+        self.quality = Quality::Custom;
+        self.lightmap_resolution = resolution.max(1);
     }
 
     pub fn lobes(&self) -> u32 {

@@ -41,8 +41,8 @@ use wgpu::{
 pub const VOLUME_PATH: &str = "/Users/bkraaijeveld/Data/HCP-100307/100307_t1w.nii.gz";
 pub const LINE_PATH: &str = "/Users/bkraaijeveld/Data/HCP-100307/whole_brain200k.tck";
 
-/// Radiance-cascade resolution divisor (was `RESOLUTION_DIVISOR` in `cascade.rs`).
-pub const RESOLUTION_DIVISOR: u32 = 4;
+/// Radiance lightmap resolution (probes along the volume's longest axis).
+pub const LIGHTMAP_RESOLUTION: u32 = 128;
 
 /// Render viewport the raster passes (volume trace, line trace, present) cover.
 pub const WIDTH: u32 = 1920;
@@ -90,7 +90,7 @@ pub fn setup() -> Bench {
     controller.set_viewport(WIDTH as f32, HEIGHT as f32);
     controller
         .rendering_mut()
-        .set_resolution(RESOLUTION_DIVISOR);
+        .set_lightmap_resolution(LIGHTMAP_RESOLUTION);
 
     let mut asset = Asset::new(&gpu);
     asset.update(&gpu, &mut controller); // builds line/volume/physical_volume/radiance
