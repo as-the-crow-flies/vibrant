@@ -73,18 +73,6 @@ Explore interior structure with orthogonal (axial / sagittal / coronal) clip pla
 
 Any NIfTI whose filename contains `mask` is loaded as a mask and can be assigned to one or more volumes to restrict them to a region of interest. Both binary and signed-distance masks are supported, and masks can be inverted.
 
-<p align="center">
-  <img src="docs/screenshots/slicing.png" alt="Orthogonal and spherical slicing of a volume and tractogram" width="90%" />
-</p>
-
-### Lighting & materials
-
-Lighting comes from an image-based environment map. A few maps are built in, and you can load your own `.exr` (for example from [Poly Haven](https://polyhaven.com/)); the light direction is draggable directly in the view. Adjusting the environment and the volume's surface response changes the entire mood of a figure.
-
-| Hangar environment map | Ferndale environment map |
-| --- | --- |
-| ![The scene lit by the Hangar environment map](docs/screenshots/environment-hangar.png) | ![The same scene lit by the Ferndale environment map](docs/screenshots/environment-ferndale.png) |
-
 ---
 
 ## Getting started
