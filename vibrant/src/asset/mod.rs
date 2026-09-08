@@ -120,6 +120,8 @@ impl Asset {
                 for scalar in track_scalars {
                     line.set_scalar(gpu, scalar);
                 }
+
+                self.changed = true;
             }
         });
 

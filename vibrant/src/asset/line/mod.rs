@@ -180,7 +180,7 @@ impl LineBuffer {
                 selected: false,
                 visible: true,
                 color_mode: LineColorMode::Tangent,
-                colormap: ColormapSelection::Greys,
+                colormap: ColormapSelection::Viridis,
                 crop_start: 0.0,
                 crop_end: 1.0,
                 crop: true,

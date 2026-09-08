@@ -339,7 +339,7 @@ impl Controller {
             });
 
         let viewport = CentralPanel::no_frame().show(ui, |ui| {
-            if asset.volumes.is_empty() && asset.line.is_none() {
+            if asset.volumes.is_empty() && asset.line.is_none() && !FileStage::loading() {
                 ui.painter().text(
                     ui.max_rect().center(),
                     egui::Align2::CENTER_CENTER,
@@ -348,12 +348,13 @@ impl Controller {
                     ui.visuals().weak_text_color(),
                 );
             }
-        });
 
-        // Busy (spinning) cursor while files are being read/parsed/built.
-        if FileStage::loading() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::Progress);
-        }
+            if FileStage::loading() {
+                let rect =
+                    egui::Rect::from_center_size(ui.max_rect().center(), egui::Vec2::splat(48.0));
+                egui::Spinner::new().size(32.0).paint_at(ui, rect);
+            }
+        });
 
         self.hovered = viewport.response.hovered();
         self.viewport = viewport.response.rect * scale;

@@ -207,7 +207,8 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
                                         &mut line.color_mode,
                                         mode,
                                         format!("{:?}", mode),
-                                    );
+                                    )
+                                    .track(self);
                                 }
                             })
                             .response
@@ -228,7 +229,8 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
                                             &mut line.colormap,
                                             map,
                                             format!("{:?}", map),
-                                        );
+                                        )
+                                        .track(self);
                                     }
                                 })
                                 .response
