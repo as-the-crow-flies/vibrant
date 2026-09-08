@@ -50,8 +50,6 @@ impl VolumesWidget {
         masks: &[VolumeMaskBuffer],
         hdri: &mut HdriBuffer,
     ) {
-        self.changed = false;
-
         if volumes.is_empty() {
             ui.vertical_centered(|ui| {
                 ui.weak("Open .nii.gz files using the [📂 open] button");
@@ -120,6 +118,10 @@ impl VolumesWidget {
         self.changed
     }
 
+    pub fn reset_changed(&mut self) {
+        self.changed = false;
+    }
+
     fn show_volume(
         &mut self,
         ui: &mut Ui,
@@ -149,9 +151,7 @@ impl VolumesWidget {
                 );
                 ui.horizontal(|ui| {
                     ComboBox::from_id_salt("VolumeMask")
-                        .selected_text(
-                            masks[volume.mask].settings().name.clone(),
-                        )
+                        .selected_text(masks[volume.mask].settings().name.clone())
                         .width(ui.available_width())
                         .show_ui(ui, |ui| {
                             for (index, mask) in masks.iter().enumerate() {
@@ -162,7 +162,9 @@ impl VolumesWidget {
                                 )
                                 .track(self);
                             }
-                        }).response.on_hover_text(
+                        })
+                        .response
+                        .on_hover_text(
                             "Mask applied to this volume. Choose \"None\" to show \
                              the whole volume.",
                         );
@@ -175,16 +177,13 @@ impl VolumesWidget {
                      function and lighting.",
                 );
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut volume.use_colormap, "").on_hover_text("Turn the colormap on or off for this volume.").track(self);
-                    ComboBox::from_id_salt(format!(
-                        "{}_VolumeColormap",
-                        volume.name
-                    ))
-                    .width(ui.available_width())
-                    .selected_text(format!("{:?}", volume.colormap))
-                    .show_ui(
-                        ui,
-                        |ui| {
+                    ui.checkbox(&mut volume.use_colormap, "")
+                        .on_hover_text("Turn the colormap on or off for this volume.")
+                        .track(self);
+                    ComboBox::from_id_salt(format!("{}_VolumeColormap", volume.name))
+                        .width(ui.available_width())
+                        .selected_text(format!("{:?}", volume.colormap))
+                        .show_ui(ui, |ui| {
                             for map in ColormapSelection::iter() {
                                 ui.selectable_value(
                                     &mut volume.colormap,
@@ -193,8 +192,9 @@ impl VolumesWidget {
                                 )
                                 .track(self);
                             }
-                        },
-                    ).response.on_hover_text("Colormap used to recolour this volume.");
+                        })
+                        .response
+                        .on_hover_text("Colormap used to recolour this volume.");
                 })
             });
     }

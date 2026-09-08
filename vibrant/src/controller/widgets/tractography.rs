@@ -49,8 +49,6 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
     }
 
     pub fn show(&mut self, ui: &mut Ui, lines: &mut Option<LineBuffer>, settings: &mut Settings) {
-        self.changed = false;
-
         let Some(lines) = lines else {
             ui.vertical_centered(|ui| {
                 ui.weak("Open .tck files using the [📂 open] button");
@@ -142,7 +140,7 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
 
                     if ui
                         .selectable_label(settings.line_crop, icons::regular::CROP)
-                        .on_hover_text("Let the slicing planes cut every bundle, not just the volumes.")
+                        .on_hover_text("Let the slicing planes cut every bundle")
                         .clicked()
                     {
                         settings.line_crop = !settings.line_crop;
@@ -251,5 +249,9 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
 
     pub fn changed(&self) -> bool {
         self.changed
+    }
+
+    pub fn reset_changed(&mut self) {
+        self.changed = false;
     }
 }

@@ -265,6 +265,12 @@ impl Controller {
         // Live accumulation progress from the renderer.
         accumulation: AccumulationStatus,
     ) {
+        self.crop_widget.reset_changed();
+        self.volumes_widget.reset_changed();
+        self.mask_widget.reset_changed();
+        self.tractography_widget.reset_changed();
+        self.rendering_widget.reset_changed();
+
         Panel::top("TopBottomPanel").show(ui, |ui| {
             ui.horizontal(|ui| {
                 if ui

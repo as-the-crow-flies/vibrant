@@ -38,8 +38,8 @@ impl Quality {
     fn preset(self) -> Option<(u32, u32)> {
         match self {
             Quality::Low => Some((64, 8)),
-            Quality::Medium => Some((128, 16)),
-            Quality::High => Some((256, 32)),
+            Quality::Medium => Some((96, 16)),
+            Quality::High => Some((128, 32)),
             Quality::Custom => None,
         }
     }
@@ -73,7 +73,7 @@ impl RenderingWidget {
     pub fn new() -> Self {
         Self {
             changed: false,
-            quality: Quality::Low,
+            quality: Quality::Medium,
             lightmap_resolution: 64,
             lobes: 8,
             hdr_headroom_auto: true,
@@ -91,8 +91,6 @@ impl RenderingWidget {
         // Live accumulation progress from the renderer.
         accumulation: AccumulationStatus,
     ) {
-        self.changed = false;
-
         let name = hdri.texture().name().to_owned();
 
         let names = hdri
@@ -167,9 +165,8 @@ impl RenderingWidget {
                 Grid::new("EnvironmentMapGrid")
                     .num_columns(2)
                     .show(ui, |ui| {
-                        ui.label("Map").on_hover_text(
-                            "360° environment image used to light the scene.",
-                        );
+                        ui.label("Map")
+                            .on_hover_text("360° environment image used to light the scene.");
                         ComboBox::from_id_salt("EnvironmentMapSelect")
                             .selected_text(name)
                             .width(ui.available_width())
@@ -300,6 +297,10 @@ impl RenderingWidget {
 
     pub fn changed(&self) -> bool {
         self.changed
+    }
+
+    pub fn reset_changed(&mut self) {
+        self.changed = false;
     }
 
     /// Target probe count along the volume's longest axis for the radiance

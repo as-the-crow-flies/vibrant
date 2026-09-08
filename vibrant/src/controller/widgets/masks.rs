@@ -32,8 +32,6 @@ impl MasksWidget {
     }
 
     pub fn show(&mut self, ui: &mut Ui, masks: &mut [VolumeMaskBuffer]) {
-        self.changed = false;
-
         let mut masks = masks
             .iter_mut()
             .filter(|mask| mask.settings().name != "None")
@@ -70,6 +68,10 @@ impl MasksWidget {
 
     pub fn changed(&self) -> bool {
         self.changed
+    }
+
+    pub fn reset_changed(&mut self) {
+        self.changed = false;
     }
 
     fn show_mask(&mut self, ui: &mut Ui, mask: &mut VolumeMaskSettings) {

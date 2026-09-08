@@ -35,9 +35,11 @@ impl CropWidget {
         self.changed
     }
 
-    pub fn show(&mut self, ui: &mut Ui, crop: &mut CropBuffer) {
+    pub fn reset_changed(&mut self) {
         self.changed = false;
+    }
 
+    pub fn show(&mut self, ui: &mut Ui, crop: &mut CropBuffer) {
         let s = crop.settings_mut();
 
         let orthogonal_open = ui.is_new("Slicing.Orthogonal");
@@ -84,9 +86,8 @@ impl CropWidget {
                         ui.slider(&mut s.spherical.y, 0.0..=PI).track(self);
                         ui.end_row();
 
-                        ui.label("Depth").on_hover_text(
-                            "How far the spherical cut reaches into the scene.",
-                        );
+                        ui.label("Depth")
+                            .on_hover_text("How far the spherical cut reaches into the scene.");
                         ui.slider(&mut s.spherical.z, 0.0..=1.0).track(self);
                         ui.end_row();
 
