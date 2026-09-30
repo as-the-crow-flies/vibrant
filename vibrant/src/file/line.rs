@@ -67,9 +67,9 @@ impl LineFile {
 
         let header = TckHeader::parse(bytes);
 
+        #[allow(clippy::unnecessary_to_owned)] // Copy when vertices are not properly aligned
         let lines: Vec<Vec3> = try_cast_slice(&bytes[header.offset..])
             .map(|slice| slice.to_vec())
-            // Fallback to copy when vertices are not aligned properly
             .unwrap_or_else(|_| cast_slice(&bytes[header.offset..].to_owned()).to_vec());
 
         let lines: Vec<Vec<Vec4>> = lines

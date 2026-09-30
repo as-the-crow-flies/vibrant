@@ -1,52 +1,66 @@
-use std::{any::type_name, ops::Neg};
+use std::{any::type_name, mem::size_of, ops::Shr};
 
-use bytemuck::bytes_of;
-use glam::{IVec3, UVec3};
-use itertools::Itertools;
+use glam::UVec3;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
-    BufferBindingType, BufferUsages, Extent3d, FilterMode, MipmapFilterMode, SamplerBindingType,
-    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension,
+    *,
 };
 
 use crate::gpu::Gpu;
 
-pub struct RadianceCascadesBuffer {
+pub struct GaussianRadianceBuffer {
+    vmm: Texture,
+    phi: Texture,
     irradiance: Texture,
-    radiance: Vec<Texture>,
-    transmission: Vec<Texture>,
-    binding_cascade: Vec<BindGroup>,
-    binding_read: BindGroup,
-    binding_copy: BindGroup,
-    size: Extent3d,
-    size_cascade: Vec<Extent3d>,
+    vmm_hdri: Buffer,
+    phi_hdri: Buffer,
+    em_iterations: Buffer,
+    // `cascade.wgsl` occlusion sources: (include_volume, include_lines, _, _).
+    // Combined = (1, 1); overlay volume cascade = (1, 0); overlay line cascade = (0, 1).
+    cascade_opts: Buffer,
+    binding: BindGroup,
+    binding_hdri: BindGroup,
+    binding_mipmap: Vec<BindGroup>,
+    probes: Vec<UVec3>,
 }
 
-impl RadianceCascadesBuffer {
-    pub const N_CASCADES: usize = 6;
-    pub const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+impl GaussianRadianceBuffer {
+    pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    pub const LEVELS: u32 = 6;
 
-    pub fn new_octahedral(gpu: &Gpu, size: UVec3) -> Self {
-        Self::new(gpu, size, size * 2, IVec3::new(1, 1, -2))
-    }
+    // Upper bound on LightingRenderer's selectable lobe count (see
+    // RenderingWidget::lobes / VMM_SIZE in lighting/common.wgsl). Sizes the
+    // vmm_hdri/phi_hdri buffers below so they fit the largest variant
+    // regardless of which one is currently active.
+    pub const VMM_SIZE_MAX: u32 = 32;
 
-    pub fn new(gpu: &Gpu, size: UVec3, base: UVec3, multiplier: IVec3) -> Self {
+    // Must match EM_ITERATIONS_MAX in cascade.wgsl/hdri.wgsl: one bucket per
+    // possible iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0
+    // (unused; cascade.wgsl reserves it for culled probes).
+    pub const EM_ITERATIONS_MAX: u32 = 100;
+    pub const EM_HISTOGRAM_BUCKETS: u32 = Self::EM_ITERATIONS_MAX + 1;
+
+    // One row per cascade level plus one extra row (index LEVELS) for the
+    // single hdri.wgsl fit -- see EM_ITERATIONS_HDRI_ROW in hdri.wgsl.
+    pub const EM_HISTOGRAM_ROWS: u32 = Self::LEVELS + 1;
+
+    pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
-        let size = Extent3d {
-            width: size.x,
-            height: size.y,
-            depth_or_array_layers: size.z,
-        };
+        let size = size.max(UVec3::splat(2u32.pow(Self::LEVELS)));
+
+        let probes = (0..Self::LEVELS)
+            .map(|cascade| size.shr(UVec3::splat(cascade)).max(UVec3::ONE))
+            .collect();
 
         let descriptor = TextureDescriptor {
             label,
-            size,
-            mip_level_count: 1,
+            size: Extent3d {
+                width: size.x * 4,
+                height: size.y * 4,
+                depth_or_array_layers: size.z * 2,
+            },
+            mip_level_count: Self::LEVELS,
             sample_count: 1,
             dimension: TextureDimension::D3,
             format: Self::FORMAT,
@@ -54,7 +68,51 @@ impl RadianceCascadesBuffer {
             view_formats: &[],
         };
 
-        let irradiance = gpu.device().create_texture(&descriptor);
+        let phi = gpu.device().create_texture(&descriptor);
+        let vmm = gpu.device().create_texture(&descriptor);
+
+        let irradiance = gpu.device().create_texture(&TextureDescriptor {
+            label,
+            size: Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: size.z,
+            },
+            mip_level_count: Self::LEVELS,
+            sample_count: 1,
+            dimension: TextureDimension::D3,
+            format: Self::FORMAT,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
+
+        let em_iterations = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: (Self::EM_HISTOGRAM_ROWS * Self::EM_HISTOGRAM_BUCKETS) as u64
+                * size_of::<u32>() as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let phi_hdri = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: Self::VMM_SIZE_MAX as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let vmm_hdri = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: Self::VMM_SIZE_MAX as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let cascade_opts = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&[1u32, 0u32, 0u32, 0u32]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -63,196 +121,35 @@ impl RadianceCascadesBuffer {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: MipmapFilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Nearest,
             lod_min_clamp: 0.0,
-            lod_max_clamp: 0.0,
+            lod_max_clamp: f32::MAX,
             compare: None,
             anisotropy_clamp: 1,
             border_color: None,
         });
 
-        let mut base = base;
-
-        let size_cascade = (0..Self::N_CASCADES)
-            .map(|_| {
-                let extend = Extent3d {
-                    width: base.x.max(1),
-                    height: base.y.max(1),
-                    depth_or_array_layers: base.z.max(1),
-                };
-
-                base = base * multiplier.max(IVec3::ONE).as_uvec3()
-                    / multiplier.neg().max(IVec3::ONE).as_uvec3();
-
-                extend
-            })
-            .collect_vec();
-
-        let radiance = (0..Self::N_CASCADES)
-            .map(|cascade| {
-                gpu.device().create_texture(&TextureDescriptor {
-                    size: size_cascade[cascade],
-                    ..descriptor
-                })
-            })
-            .collect_vec();
-
-        let transmission = (0..Self::N_CASCADES)
-            .map(|cascade| {
-                gpu.device().create_texture(&TextureDescriptor {
-                    size: size_cascade[cascade],
-                    ..descriptor
-                })
-            })
-            .collect_vec();
-
-        let binding_cascade = (0..Self::N_CASCADES)
-            .map(|index| {
-                gpu.device().create_bind_group(&BindGroupDescriptor {
-                    label,
-                    layout: &Self::layout_cascade(gpu),
-                    entries: &[
-                        BindGroupEntry {
-                            binding: 0,
-                            resource: BindingResource::TextureView(
-                                &radiance[index].create_view(&TextureViewDescriptor::default()),
-                            ),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
-                            resource: BindingResource::TextureView(
-                                &transmission[index].create_view(&TextureViewDescriptor::default()),
-                            ),
-                        },
-                        BindGroupEntry {
-                            binding: 2,
-                            resource: BindingResource::TextureView(
-                                &radiance[(index + 1) % Self::N_CASCADES]
-                                    .create_view(&TextureViewDescriptor::default()),
-                            ),
-                        },
-                        BindGroupEntry {
-                            binding: 3,
-                            resource: BindingResource::TextureView(
-                                &irradiance.create_view(&TextureViewDescriptor::default()),
-                            ),
-                        },
-                        BindGroupEntry {
-                            binding: 4,
-                            resource: gpu
-                                .device()
-                                .create_buffer_init(&BufferInitDescriptor {
-                                    label,
-                                    contents: bytes_of(&(index as u32)),
-                                    usage: BufferUsages::UNIFORM,
-                                })
-                                .as_entire_binding(),
-                        },
-                    ],
-                })
-            })
-            .collect_vec();
-
-        let binding_read = gpu.device().create_bind_group(&BindGroupDescriptor {
+        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
-            layout: &Self::layout_read(gpu),
+            layout: &Self::layout(gpu),
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(
-                        &irradiance.create_view(&TextureViewDescriptor::default()),
-                    ),
+                    resource: BindingResource::TextureView(&phi.create_view(
+                        &TextureViewDescriptor {
+                            label,
+                            ..Default::default()
+                        },
+                    )),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(
-                        &radiance[0].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::TextureView(
-                        &radiance[1].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::TextureView(
-                        &radiance[2].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::TextureView(
-                        &radiance[3].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 5,
-                    resource: BindingResource::TextureView(
-                        &radiance[4].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 6,
-                    resource: BindingResource::TextureView(
-                        &radiance[5].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 7,
-                    resource: BindingResource::TextureView(
-                        &transmission[0].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 8,
-                    resource: BindingResource::TextureView(
-                        &transmission[1].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 9,
-                    resource: BindingResource::TextureView(
-                        &transmission[2].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 10,
-                    resource: BindingResource::TextureView(
-                        &transmission[3].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 11,
-                    resource: BindingResource::TextureView(
-                        &transmission[4].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 12,
-                    resource: BindingResource::TextureView(
-                        &transmission[5].create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-            ],
-        });
-
-        let binding_copy = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_copy(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(
-                        &irradiance.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(
-                        &radiance[0].create_view(&TextureViewDescriptor::default()),
-                    ),
+                    resource: BindingResource::TextureView(&vmm.create_view(
+                        &TextureViewDescriptor {
+                            label,
+                            ..Default::default()
+                        },
+                    )),
                 },
                 BindGroupEntry {
                     binding: 2,
@@ -261,56 +158,202 @@ impl RadianceCascadesBuffer {
             ],
         });
 
+        let binding_hdri = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label,
+            layout: &Self::layout_hdri(gpu),
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: phi_hdri.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: vmm_hdri.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: em_iterations.as_entire_binding(),
+                },
+            ],
+        });
+
+        let binding_mipmap = (0..Self::LEVELS)
+            .into_iter()
+            .map(|level| {
+                let parent = (level + 1) % Self::LEVELS;
+
+                gpu.device().create_bind_group(&BindGroupDescriptor {
+                    label,
+                    layout: &Self::layout_mipmap(gpu),
+                    entries: &[
+                        BindGroupEntry {
+                            binding: 0,
+                            resource: BindingResource::TextureView(&phi.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 1,
+                            resource: BindingResource::TextureView(&vmm.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 2,
+                            resource: BindingResource::Sampler(&sampler),
+                        },
+                        BindGroupEntry {
+                            binding: 3,
+                            resource: BindingResource::TextureView(&phi.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: parent,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 4,
+                            resource: BindingResource::TextureView(&vmm.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: parent,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 5,
+                            resource: BindingResource::TextureView(&irradiance.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: level,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 6,
+                            resource: BindingResource::TextureView(&irradiance.create_view(
+                                &TextureViewDescriptor {
+                                    label,
+                                    base_mip_level: parent,
+                                    mip_level_count: Some(1),
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 7,
+                            resource: em_iterations.as_entire_binding(),
+                        },
+                        BindGroupEntry {
+                            binding: 8,
+                            resource: phi_hdri.as_entire_binding(),
+                        },
+                        BindGroupEntry {
+                            binding: 9,
+                            resource: vmm_hdri.as_entire_binding(),
+                        },
+                        BindGroupEntry {
+                            binding: 10,
+                            resource: cascade_opts.as_entire_binding(),
+                        },
+                    ],
+                })
+            })
+            .collect();
+
         Self {
+            phi,
+            vmm,
             irradiance,
-            radiance,
-            transmission,
-            binding_cascade,
-            binding_read,
-            binding_copy,
-            size,
-            size_cascade,
+            vmm_hdri,
+            phi_hdri,
+            em_iterations,
+            cascade_opts,
+            binding,
+            binding_hdri,
+            binding_mipmap,
+            probes,
         }
     }
 
-    pub fn layout_read(gpu: &Gpu) -> BindGroupLayout {
+    pub fn set_cascade_sources(&self, gpu: &Gpu, include_volume: bool, include_lines: bool) {
+        gpu.queue().write_buffer(
+            &self.cascade_opts,
+            0,
+            bytemuck::cast_slice(&[include_volume as u32, include_lines as u32, 0u32, 0u32]),
+        );
+    }
+
+    pub fn size(&self) -> UVec3 {
+        let s = self.gaussian().size();
+        UVec3::new(s.width, s.height, s.depth_or_array_layers)
+    }
+
+    pub fn binding(&self) -> &BindGroup {
+        &self.binding
+    }
+
+    pub fn binding_hdri(&self) -> &BindGroup {
+        &self.binding_hdri
+    }
+
+    pub fn binding_mipmap(&self, cascade: usize) -> &BindGroup {
+        &self.binding_mipmap[cascade]
+    }
+
+    pub fn gaussian(&self) -> &Texture {
+        &self.vmm
+    }
+
+    pub fn radiance(&self) -> &Texture {
+        &self.phi
+    }
+
+    pub fn irradiance(&self) -> &Texture {
+        &self.irradiance
+    }
+
+    pub fn probes(&self, cascade: usize) -> UVec3 {
+        self.probes[cascade]
+    }
+
+    pub fn em_iterations(&self) -> &Buffer {
+        &self.em_iterations
+    }
+
+    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
+        let visibility = ShaderStages::FRAGMENT;
+
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
-                entries: &(0..13)
-                    .map(|binding| BindGroupLayoutEntry {
-                        binding,
-                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Float { filterable: true },
                             view_dimension: TextureViewDimension::D3,
                             multisampled: false,
                         },
                         count: None,
-                    })
-                    .collect_vec(),
-            })
-    }
-
-    pub fn layout_copy(gpu: &Gpu) -> BindGroupLayout {
-        let visibility = ShaderStages::COMPUTE | ShaderStages::FRAGMENT;
-
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    // Irradiance
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::WriteOnly,
-                            format: Self::FORMAT,
-                            view_dimension: TextureViewDimension::D3,
-                        },
-                        count: None,
                     },
-                    // Radiance 0
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility,
@@ -321,7 +364,6 @@ impl RadianceCascadesBuffer {
                         },
                         count: None,
                     },
-                    // Sampler
                     BindGroupLayoutEntry {
                         binding: 2,
                         visibility,
@@ -332,28 +374,56 @@ impl RadianceCascadesBuffer {
             })
     }
 
-    pub fn layout_cascade(gpu: &Gpu) -> BindGroupLayout {
-        let visibility = ShaderStages::COMPUTE | ShaderStages::FRAGMENT;
-
+    pub fn layout_hdri(gpu: &Gpu) -> BindGroupLayout {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    // Radiance 0
+                    // PHI_HDRI
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::WriteOnly,
-                            format: Self::FORMAT,
-                            view_dimension: TextureViewDimension::D3,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
                         },
                         count: None,
                     },
-                    // Transmission 0
+                    // VMM_HDRI
                     BindGroupLayoutEntry {
                         binding: 1,
-                        visibility,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // EM_ITERATIONS
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            })
+    }
+
+    pub fn layout_mipmap(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::WriteOnly,
                             format: Self::FORMAT,
@@ -361,21 +431,25 @@ impl RadianceCascadesBuffer {
                         },
                         count: None,
                     },
-                    // Radiance 1
                     BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::FORMAT,
                             view_dimension: TextureViewDimension::D3,
-                            multisampled: false,
                         },
                         count: None,
                     },
-                    // Irradiance
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
                     BindGroupLayoutEntry {
                         binding: 3,
-                        visibility,
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Float { filterable: true },
                             view_dimension: TextureViewDimension::D3,
@@ -385,7 +459,70 @@ impl RadianceCascadesBuffer {
                     },
                     BindGroupLayoutEntry {
                         binding: 4,
-                        visibility,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::FORMAT,
+                            view_dimension: TextureViewDimension::D3,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // PHI_HDRI
+                    BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // VMM_HDRI
+                    BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // CASCADE_OPTS
+                    BindGroupLayoutEntry {
+                        binding: 10,
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -396,38 +533,16 @@ impl RadianceCascadesBuffer {
                 ],
             })
     }
-
-    pub fn binding_cascade(&self) -> &[BindGroup] {
-        &self.binding_cascade
-    }
-
-    pub fn binding_read(&self) -> &BindGroup {
-        &self.binding_read
-    }
-
-    pub fn binding_copy(&self) -> &BindGroup {
-        &self.binding_copy
-    }
-
-    pub fn size_cascade(&self) -> &[Extent3d] {
-        &self.size_cascade
-    }
-
-    pub fn size(&self) -> Extent3d {
-        self.size
-    }
 }
 
-impl Drop for RadianceCascadesBuffer {
+impl Drop for GaussianRadianceBuffer {
     fn drop(&mut self) {
+        self.em_iterations.destroy();
+        self.phi.destroy();
+        self.vmm.destroy();
         self.irradiance.destroy();
-
-        for radiance in &self.radiance {
-            radiance.destroy();
-        }
-
-        for transmission in &self.transmission {
-            transmission.destroy();
-        }
+        self.phi_hdri.destroy();
+        self.vmm_hdri.destroy();
+        self.cascade_opts.destroy();
     }
 }

@@ -1,6 +1,6 @@
 pub mod crop;
 pub mod cull;
-pub mod occlusion;
+pub mod deposit;
 pub mod occupancy;
 pub mod populate;
 pub mod render;
@@ -14,21 +14,19 @@ use crate::{
     controller::Controller,
     gpu::Gpu,
     renderer::line::{
-        crop::LineCropPipeline, cull::LineCullPipeline, occlusion::LineOcclusionPipeline,
+        crop::LineCropPipeline, cull::LineCullPipeline, deposit::LineDepositPipeline,
         populate::LinePopulatePipeline, render::LineRenderPipeline,
         transform::LineTransformPipeline,
     },
-    surface::Surface,
+    surface::Frame,
 };
-
-use super::environment::Environment;
 
 pub struct LineRenderer {
     transform: LineTransformPipeline,
     crop: LineCropPipeline,
     occupancy: LineOccupancyPipeline,
     cull: LineCullPipeline,
-    occlusion: LineOcclusionPipeline,
+    deposit: LineDepositPipeline,
     populate: LinePopulatePipeline,
     render: LineRenderPipeline,
 }
@@ -39,54 +37,59 @@ impl LineRenderer {
             transform: LineTransformPipeline::new(gpu),
             crop: LineCropPipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
-            occlusion: LineOcclusionPipeline::new(gpu),
             cull: LineCullPipeline::new(gpu),
+            deposit: LineDepositPipeline::new(gpu),
             populate: LinePopulatePipeline::new(gpu),
             render: LineRenderPipeline::new(gpu),
         }
+    }
+
+    /// Builds the tractography acceleration structure (transform/crop/occupancy/
+    /// cull/populate). The occupancy density pyramid it produces is also what
+    /// [`Self::deposit`] samples to bake line density into the shared
+    /// [`PhysicalVolume`](crate::asset::volume::PhysicalVolume).
+    pub fn transfer(&self, cmd: &mut CommandEncoder, controller: &Controller, asset: &Asset) {
+        if controller.tractography().visible() {
+            if let Some(line) = &asset.line {
+                self.transform.dispatch(cmd, asset, line);
+
+                self.crop.dispatch(cmd, asset, line);
+
+                self.occupancy.dispatch(cmd, asset, controller, line);
+
+                self.cull.dispatch(cmd, asset, controller, line);
+
+                self.populate.dispatch(cmd, asset, controller, line);
+            }
+        }
+    }
+
+    /// Writes neutral line density into the shared `PhysicalVolume`'s
+    /// `line_extinction` side texture, so the radiance cascade(s) pick up the
+    /// lines' occlusion. Never touches the marched volume textures.
+    pub fn deposit(&self, cmd: &mut CommandEncoder, controller: &Controller, asset: &Asset) {
+        if !controller.tractography().visible() {
+            return;
+        }
+
+        let (Some(line), Some(volume)) = (&asset.line, &asset.physical_volume) else {
+            return;
+        };
+
+        self.deposit.dispatch(cmd, volume, line);
     }
 
     pub fn render(
         &self,
         cmd: &mut CommandEncoder,
         controller: &Controller,
-        environment: &Environment,
-        surface: &Surface,
         asset: &Asset,
+        frame: &Frame,
     ) {
         if !controller.tractography().visible() {
             return;
         }
 
-        if let (Some(frame), Some(line)) = (surface.frame(), &asset.line) {
-            let changed = surface.changed() | asset.changed() | controller.changed();
-
-            if changed {
-                self.transform.dispatch(cmd, line, environment);
-
-                self.crop.dispatch(cmd, line, environment, &asset.crop);
-
-                self.occupancy
-                    .dispatch(cmd, frame, environment, controller.settings(), line);
-
-                self.cull.dispatch(cmd, frame, environment);
-
-                self.populate
-                    .dispatch(cmd, frame, environment, controller.settings(), line);
-            }
-
-            if changed || controller.lighting_changed() {
-                self.occlusion.dispatch(cmd, frame, environment);
-            }
-
-            self.render.dispatch(
-                cmd,
-                frame,
-                environment,
-                controller.settings(),
-                controller.viewport(),
-                line,
-            );
-        }
+        self.render.dispatch(cmd, asset, controller, frame);
     }
 }

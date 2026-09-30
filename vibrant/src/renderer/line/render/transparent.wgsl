@@ -1,4 +1,11 @@
+// Overlay mode: accumulate every line the ray crosses (premultiplied), honoring
+// per-bundle `settings.alpha`. Composited unconditionally over the volume, so
+// there is no depth to report.
 var<private> COLOR: vec4<f32>;
+
+fn hit_fraction() -> f32 {
+    return 1.0;
+}
 
 fn visit(
     voxel: vec3<u32>,

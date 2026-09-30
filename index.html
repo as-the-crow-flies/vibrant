@@ -1,11 +1,22 @@
+<!DOCTYPE html>
 <html lang="en">
     <head>
         <title>VIBRANT</title>
         <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style>
             * {
                 padding: 0;
                 margin: 0;
+                box-sizing: border-box;
+            }
+
+            html,
+            body {
+                width: 100%;
+                height: 100%;
+                background: #1e1e1e;
+                overflow: hidden;
             }
 
             canvas {
@@ -25,13 +36,188 @@
                     0
                 ); /* mobile webkit */
             }
+
+            #overlay {
+                position: fixed;
+                inset: 0;
+                z-index: 10;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #1e1e1e;
+                color: #e0e0e0;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    Roboto, Helvetica, Arial, sans-serif;
+            }
+
+            #overlay[hidden] {
+                display: none;
+            }
+
+            .panel {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 1.25rem;
+                max-width: 35rem;
+                padding: 2rem;
+                text-align: center;
+            }
+
+            .panel[hidden] {
+                display: none;
+            }
+
+            .title {
+                font-size: 1.5rem;
+                font-weight: 600;
+                letter-spacing: 0.4em;
+                text-indent: 0.4em;
+            }
+
+            .body {
+                font-size: 0.95rem;
+                line-height: 1.55;
+                color: #a8a8a8;
+            }
+
+            #overlay a {
+                color: #6ea8fe;
+            }
+
+            #overlay a.repo-link {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                margin-top: 0.25rem;
+                font-size: 0.9rem;
+                color: #a8a8a8;
+                text-decoration: none;
+            }
+
+            #overlay a.repo-link:hover {
+                color: #e0e0e0;
+            }
+
+            .repo-link svg {
+                width: 1.15rem;
+                height: 1.15rem;
+                fill: currentColor;
+            }
+
+            .spinner {
+                width: 2.75rem;
+                height: 2.75rem;
+                border: 0.28rem solid rgba(255, 255, 255, 0.14);
+                border-top-color: #6ea8fe;
+                border-radius: 50%;
+                animation: spin 0.9s linear infinite;
+            }
+
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                .spinner {
+                    animation-duration: 2s;
+                }
+            }
         </style>
     </head>
     <body>
         <canvas id="canvas"></canvas>
+
+        <div id="overlay">
+            <div id="loading" class="panel">
+                <div class="spinner"></div>
+                <div class="title">VIBRANT</div>
+                <div class="body">Loading&hellip;</div>
+            </div>
+
+            <div id="webgpu-unsupported" class="panel" hidden>
+                <div class="title">VIBRANT</div>
+                <p class="body">
+                    This browser can't run VIBRANT because it has no
+                    <a
+                        href="https://caniuse.com/webgpu"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >WebGPU support</a
+                    >.
+                </p>
+                <a
+                    class="repo-link"
+                    href="https://github.com/as-the-crow-flies/vibrant"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path
+                            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+                        />
+                    </svg>
+                    View on GitHub
+                </a>
+            </div>
+        </div>
+
         <script type="module">
-            import init from "./pkg/vibrant_app_web.js";
-            init();
+            // wgpu-rs's WebGPU backend doesn't forward the "subgroups"
+            // feature to GPUAdapter.requestDevice() (it's still treated as
+            // native-only, see gfx-rs/wgpu#5555), even though browsers that
+            // support it accept it fine. Patch it back in here so devices
+            // whose adapter actually advertises "subgroups" get it enabled.
+            if (typeof GPUAdapter !== "undefined") {
+                const requestDevice = GPUAdapter.prototype.requestDevice;
+                GPUAdapter.prototype.requestDevice = function (descriptor = {}) {
+                    const requiredFeatures = new Set(descriptor.requiredFeatures ?? []);
+                    if (this.features.has("subgroups")) {
+                        requiredFeatures.add("subgroups");
+                    }
+                    return requestDevice.call(this, {
+                        ...descriptor,
+                        requiredFeatures: [...requiredFeatures],
+                    });
+                };
+            }
+
+            const showUnsupported = () => {
+                document.getElementById("loading").hidden = true;
+                document.getElementById("webgpu-unsupported").hidden = false;
+                document.getElementById("overlay").hidden = false;
+            };
+
+            // Fast path: bail before downloading the wasm bundle when the
+            // browser clearly has no WebGPU. The Rust side re-checks (and can
+            // also fail on a missing device feature), swapping in the same
+            // widget via #overlay if the adapter/device request fails there.
+            const webGpuAvailable = async () => {
+                if (!navigator.gpu) return false;
+                try {
+                    const adapter = await navigator.gpu.requestAdapter({
+                        powerPreference: "high-performance",
+                    });
+                    return adapter != null;
+                } catch (err) {
+                    console.error("WebGPU adapter request failed:", err);
+                    return false;
+                }
+            };
+
+            if (!(await webGpuAvailable())) {
+                showUnsupported();
+            } else {
+                try {
+                    const init = (await import("./pkg/vibrant_app_web.js")).default;
+                    await init();
+                } catch (err) {
+                    console.error("Failed to start VIBRANT:", err);
+                    showUnsupported();
+                }
+            }
         </script>
     </body>
 </html>

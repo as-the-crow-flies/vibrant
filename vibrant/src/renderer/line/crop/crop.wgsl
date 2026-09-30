@@ -6,7 +6,7 @@
 @group(0) @binding(5) var<storage> LINE_INDEX_RAW: array<u32>;
 @group(0) @binding(6) var<storage> LINE_OFFSET_RAW: array<u32>;
 
-@group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(1) @binding(0) var<uniform> TRACTOGRAPHY: Tractography;
 
 @group(2) @binding(0) var<uniform> CROP: CropSettings;
 
@@ -33,8 +33,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
     let start_index = LINE_INDEX_RAW[start];
 
-    let crop_start = max(ENVIRONMENT.settings.crop_start, settings.crop_start);
-    let crop_end = min(ENVIRONMENT.settings.crop_end, settings.crop_end);
+    let crop_start = max(TRACTOGRAPHY.crop_start, settings.crop_start);
+    let crop_end = min(TRACTOGRAPHY.crop_end, settings.crop_end);
 
     let offset_start = u32(crop_start * f32(length));
     let offset_end = u32(crop_end * f32(length));
@@ -49,7 +49,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if (should_keep(v0, v1)) {
+        if (should_keep(v0, v1, settings)) {
            total_length++;
         }
     }
@@ -63,14 +63,16 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let v0 = LINE_VERTEX[index].xyz;
         let v1 = LINE_VERTEX[index + 1].xyz;
 
-        if (should_keep(v0, v1)) {
+        if (should_keep(v0, v1, settings)) {
             LINE_INDEX[offset_line + offset_index] = LINE_INDEX_RAW[start + offset_start + i];
             offset_index++;
         }
     }
 }
 
-fn should_keep(v0: vec3<f32>, v1: vec3<f32>) -> bool {
+fn should_keep(v0: vec3<f32>, v1: vec3<f32>, settings: LineSettings) -> bool {
+    if (TRACTOGRAPHY.line_crop == FALSE || settings.crop == FALSE) { return true; }
+
     let crop_normal = normal_from_spherical(CROP.spherical.x, CROP.spherical.y);
     let v0_distance = dot(crop_normal, v0) + CROP.spherical.z - 0.5;
     let v1_distance = dot(crop_normal, v1) + CROP.spherical.z - 0.5;

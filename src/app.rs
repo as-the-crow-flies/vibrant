@@ -1,4 +1,6 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use vibrant::controller::event::{Key, MouseButton};
 use vibrant::file::FileStage;
 use vibrant::gpu::Gpu;
@@ -12,7 +14,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{self, WindowId},
 };
 
@@ -23,6 +25,22 @@ struct App {
     controller: Controller,
     focused: bool,
     fps: Fps<8>,
+    /// When set, `about_to_wait` schedules a redraw at this instant - used for
+    /// egui's timed repaints (tooltips, animations) once the render loop has
+    /// otherwise gone idle on a converged frame.
+    next_repaint: Option<Instant>,
+    /// Set while a frame's GPU work is in flight, cleared by
+    /// `on_submitted_work_done`. `RedrawRequested` bails out while it's set so at
+    /// most one frame is ever queued: on web `Gpu::wait` can't block, so without
+    /// this an input burst at low fps stacks a render per animation frame and
+    /// the view lags several frames behind.
+    in_flight: Arc<AtomicBool>,
+    /// A redraw is wanted (input, egui, resize, ...). Set from `event`, consumed
+    /// by the next render.
+    dirty: bool,
+    /// Cleared once the first frame has been drawn - used on web to dismiss the
+    /// HTML loading overlay.
+    first_frame: bool,
 }
 
 impl App {
@@ -34,53 +52,91 @@ impl App {
             controller: Controller::new(),
             focused: true,
             fps: Fps::new(),
+            next_repaint: None,
+            in_flight: Arc::new(AtomicBool::new(false)),
+            dirty: false,
+            first_frame: true,
         }
     }
 
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
-        let window = self.window.as_ref().expect("Window");
+        let window = Arc::clone(self.window.as_ref().expect("Window"));
         let renderer = self.renderer.as_mut().expect("Renderer");
 
-        let consumed = renderer.egui().on_window_event(window, &event).consumed;
+        let response = renderer.ui().on_window_event(&window, &event);
+        let consumed = response.consumed;
+
+        // Anything that changes what's on screen (input we act on, egui asking
+        // for a repaint, a resize, a dropped file) needs a fresh frame; the
+        // loop is otherwise allowed to sleep once the image has converged.
+        let mut wants_redraw = response.repaint;
 
         match &event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Focused(focused) => {
                 self.focused = *focused;
-
-                if self.focused {
-                    self.request_redraw()
-                }
+                wants_redraw |= self.focused;
             }
-            WindowEvent::Resized(size) => self.controller.resize(*size),
+            WindowEvent::Resized(size) => {
+                self.controller.resize(*size);
+                wants_redraw = true;
+            }
             WindowEvent::RedrawRequested => {
+                // A previous frame's GPU work is still draining; skip so we
+                // don't queue a second one behind it. The completion callback
+                // re-requests a redraw once it lands.
+                if self.in_flight.load(Ordering::SeqCst) {
+                    return;
+                }
+
                 self.fps.tick();
 
-                renderer.render(&self.gpu, window, &mut self.controller, self.fps.seconds());
+                let outcome =
+                    renderer.render(&self.gpu, &window, &mut self.controller, self.fps.seconds());
 
-                if let Some(window) = self.window.clone() {
+                if self.first_frame {
+                    self.first_frame = false;
+                    #[cfg(target_arch = "wasm32")]
+                    dismiss_loading_overlay();
+                }
+
+                if outcome.accumulating || outcome.loading || self.dirty {
+                    // Another frame is wanted - re-arm once the GPU drains, so
+                    // exactly one render is ever in flight.
+                    self.dirty = false;
+                    self.in_flight.store(true, Ordering::SeqCst);
+                    let window = Arc::clone(&window);
+                    let in_flight = Arc::clone(&self.in_flight);
                     self.gpu.queue().on_submitted_work_done(move || {
+                        in_flight.store(false, Ordering::SeqCst);
                         window.request_redraw();
                     });
+                } else if outcome.repaint_after < Duration::MAX {
+                    let at = Instant::now() + outcome.repaint_after;
+                    self.next_repaint =
+                        Some(self.next_repaint.map_or(at, |existing| existing.min(at)));
                 }
+
+                self.gpu.wait();
             }
-            WindowEvent::DroppedFile(path) => FileStage::load_path(path),
+            WindowEvent::DroppedFile(path) => {
+                FileStage::load_path(path);
+                wants_redraw = true;
+            }
             _ => (),
         }
 
         if let Some(vibrant_event) = vibrant_event(event) {
             if self.controller.hovered() | !consumed {
                 self.controller.event(vibrant_event);
+                wants_redraw = true;
             }
         }
-    }
 
-    fn window(&self) -> &Arc<window::Window> {
-        self.window.as_ref().expect("Window was uninitialized")
-    }
-
-    fn request_redraw(&self) {
-        self.window().request_redraw();
+        if wants_redraw {
+            self.dirty = true;
+            window.request_redraw();
+        }
     }
 }
 
@@ -98,7 +154,7 @@ impl ApplicationHandler for App {
             use web_sys::{window, HtmlCanvasElement};
             use winit::platform::web::WindowAttributesExtWebSys;
 
-            let mut canvas = window()
+            let canvas = window()
                 .and_then(|window| window.document())
                 .and_then(|document| document.get_element_by_id("canvas"))
                 .expect("No Element with id 'canvas'")
@@ -113,9 +169,17 @@ impl ApplicationHandler for App {
 
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
+        // Let background file parsing wake the loop so the loading spinner
+        // animates while the render loop is otherwise idle.
+        {
+            let window = Arc::clone(&window);
+            FileStage::set_waker(move || window.request_redraw());
+        }
+
         let renderer = Renderer::new(&self.gpu, Arc::clone(&window));
 
         window.set_visible(true);
+        window.request_redraw();
 
         self.window = Some(window);
         self.renderer = Some(renderer);
@@ -123,6 +187,23 @@ impl ApplicationHandler for App {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         self.event(event_loop, event);
+    }
+
+    /// Idle policy: sleep until the OS wakes us, unless egui asked for a timed
+    /// repaint (`next_repaint`), in which case wait exactly that long and then
+    /// request one. Active accumulation doesn't rely on this - it re-arms via
+    /// `on_submitted_work_done` in `RedrawRequested`.
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        match self.next_repaint {
+            Some(at) if Instant::now() >= at => {
+                self.next_repaint = None;
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            Some(at) => event_loop.set_control_flow(ControlFlow::WaitUntil(at)),
+            None => event_loop.set_control_flow(ControlFlow::Wait),
+        }
     }
 }
 
@@ -184,29 +265,20 @@ fn vibrant_event(event: WindowEvent) -> Option<Event> {
             event:
                 KeyEvent {
                     physical_key: PhysicalKey::Code(code),
-                    logical_key: _,
-                    text: _,
-                    location: _,
                     state: ElementState::Pressed,
-                    repeat: _,
                     ..
                 },
             is_synthetic: _,
-        } => keycode(code).map(|key| Event::KeyPressed(key)),
+        } => keycode(code).map(Event::KeyPressed),
         WindowEvent::KeyboardInput {
-            device_id: _,
             event:
                 KeyEvent {
                     physical_key: PhysicalKey::Code(code),
-                    logical_key: _,
-                    text: _,
-                    location: _,
                     state: ElementState::Released,
-                    repeat: _,
                     ..
                 },
-            is_synthetic: _,
-        } => keycode(code).map(|key| Event::KeyReleased(key)),
+            ..
+        } => keycode(code).map(Event::KeyReleased),
         _ => None,
     }
 }
@@ -221,9 +293,53 @@ fn keycode(code: KeyCode) -> Option<Key> {
     }
 }
 
+/// Hide the HTML loading overlay once the app can draw.
+#[cfg(target_arch = "wasm32")]
+fn dismiss_loading_overlay() {
+    if let Some(overlay) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("overlay"))
+    {
+        let _ = overlay.set_attribute("hidden", "");
+    }
+}
+
+/// Swap the loading overlay for the "WebGPU not supported" widget.
+#[cfg(target_arch = "wasm32")]
+fn show_unsupported_overlay() {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+
+    if let Some(loading) = document.get_element_by_id("loading") {
+        let _ = loading.set_attribute("hidden", "");
+    }
+    if let Some(widget) = document.get_element_by_id("webgpu-unsupported") {
+        let _ = widget.remove_attribute("hidden");
+    }
+    if let Some(overlay) = document.get_element_by_id("overlay") {
+        let _ = overlay.remove_attribute("hidden");
+    }
+}
+
 pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App::new(Gpu::new().await);
+
+    let gpu = match Gpu::new().await {
+        Some(gpu) => gpu,
+        None => {
+            #[cfg(target_arch = "wasm32")]
+            {
+                show_unsupported_overlay();
+                return;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            panic!("Could not acquire a compatible GPU adapter/device");
+        }
+    };
+
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
+    let mut app = App::new(gpu);
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -240,6 +356,12 @@ pub async fn run() {
 pub struct Fps<const N: usize> {
     buffer: [Instant; N],
     index: usize,
+}
+
+impl<const N: usize> Default for Fps<N> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<const N: usize> Fps<N> {

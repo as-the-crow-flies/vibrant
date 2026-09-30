@@ -1,22 +1,25 @@
 use std::iter::zip;
 
-use egui::{ComboBox, Grid, RichText, Ui};
-use egui_double_slider::DoubleSlider;
+use egui::{ComboBox, Grid, ScrollArea, Ui};
 use itertools::Itertools;
 use strum::IntoEnumIterator;
 
 use crate::{
     asset::{
         colormap::ColormapSelection,
-        volume_fraction::{MaterialPreset, VolumeFractionBuffer, VolumeFractionSettings},
+        hdri::HdriBuffer,
+        volume_fraction::{VolumeFractionBuffer, VolumeFractionSettings},
         volume_mask::VolumeMaskBuffer,
     },
-    controller::{components::UIComponents, widgets::util::UiResponseExtensions},
+    controller::{
+        components::{transfer::TransferFunctionEditor, UIComponents},
+        icons,
+    },
     util::{ResponseExtentions, Tracked},
 };
 
-#[derive(Debug)]
 pub struct VolumesWidget {
+    transfer: TransferFunctionEditor,
     changed: bool,
 }
 
@@ -26,9 +29,18 @@ impl Tracked for VolumesWidget {
     }
 }
 
+impl Default for VolumesWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VolumesWidget {
     pub fn new() -> Self {
-        Self { changed: false }
+        Self {
+            transfer: TransferFunctionEditor::new(),
+            changed: false,
+        }
     }
 
     pub fn show(
@@ -36,8 +48,38 @@ impl VolumesWidget {
         ui: &mut Ui,
         volumes: &mut Vec<VolumeFractionBuffer>,
         masks: &[VolumeMaskBuffer],
+        hdri: &mut HdriBuffer,
     ) {
-        self.changed = false;
+        if volumes.is_empty() {
+            ui.vertical_centered(|ui| {
+                ui.weak("Open .nii.gz files using the [📂 open] button");
+            });
+            return;
+        }
+
+        // Closed by default and rendered ahead of the per-volume list, same
+        // as Tractography's settings header.
+        ui.collapse(format!("{} Settings", icons::regular::GEAR), false, |ui| {
+            Grid::new("VolumeGlobalSettingsGrid")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    ui.label("Specular").on_hover_text(
+                        "Strength of mirror-like highlights on dense structures \
+                         under environment lighting. 0 = matte, 1 = glossy.",
+                    );
+                    ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                        .track(self);
+                    ui.end_row();
+
+                    ui.label("Roughness").on_hover_text(
+                        "How spread-out the specular highlights are. Low = tight, \
+                         wet-looking reflections; high = a soft, broad sheen.",
+                    );
+                    ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0)
+                        .track(self);
+                    ui.end_row();
+                });
+        });
 
         let mut index_to_remove: Option<usize> = None;
 
@@ -46,34 +88,25 @@ impl VolumesWidget {
             .map(|volume| ui.is_new(&volume.settings().name))
             .collect_vec();
 
-        ui.collapse(
-            RichText::new("Volumes").heading(),
-            open.iter().any(|&x| x),
-            |ui| {
-                for (index, (volume, open)) in zip(volumes.iter_mut(), open).enumerate() {
-                    let volume = volume.settings_mut();
+        ScrollArea::new([false, true]).show(ui, |ui| {
+            for (index, (volume, open)) in zip(volumes.iter_mut(), open).enumerate() {
+                let volume = volume.settings_mut();
 
-                    ui.frame(|ui| {
-                        let title = volume.name.clone();
-                        let response = ui.collapse(title, open, |ui| {
-                            self.show_volume(ui, volume, masks);
-                        });
-
-                        ui.inline(&response, |ui| {
-                            if ui.delete().track(self).clicked() {
-                                index_to_remove = Some(index);
-                            }
-                            ui.toggle_inverted(&mut volume.inverted).track(self);
-                            ui.toggle_visible(&mut volume.visible).track(self);
-                        });
+                ui.frame(|ui| {
+                    let title = volume.name.clone();
+                    let response = ui.collapse(title, open, |ui| {
+                        self.show_volume(ui, volume, masks);
                     });
-                }
-            },
-        )
-        .help(
-            "NIfTI Volume Rendering",
-            "Open .nii.gz files to render them volumetrically.",
-        );
+
+                    ui.inline(&response, |ui| {
+                        if ui.delete().track(self).clicked() {
+                            index_to_remove = Some(index);
+                        }
+                        ui.toggle_visible(&mut volume.visible).track(self);
+                    });
+                });
+            }
+        });
 
         if let Some(index) = index_to_remove {
             volumes.remove(index);
@@ -85,23 +118,40 @@ impl VolumesWidget {
         self.changed
     }
 
+    pub fn reset_changed(&mut self) {
+        self.changed = false;
+    }
+
     fn show_volume(
         &mut self,
         ui: &mut Ui,
         volume: &mut VolumeFractionSettings,
         masks: &[VolumeMaskBuffer],
     ) {
+        self.transfer.show(ui, volume);
+        self.changed |= self.transfer.changed();
+
+        ui.separator();
+
         Grid::new("VolumeSettingsGrid")
             .num_columns(2)
             .show(ui, |ui| {
+                ui.label("Opacity").on_hover_text(
+                    "Overall opacity of this volume. Scales how strongly it \
+                     absorbs and scatters light after the transfer function, \
+                     so you can fade a volume in or out without re-editing \
+                     every stop.",
+                );
+                ui.slider(&mut volume.opacity, 0.0..=1.0).track(self);
+                ui.end_row();
+
                 ui.label("Mask").on_hover_text(
-                    "Mask from the 'Masks' section to apply to this volume.",
+                    "Restrict this volume to a region of interest using a mask \
+                     from the Masks tab.",
                 );
                 ui.horizontal(|ui| {
                     ComboBox::from_id_salt("VolumeMask")
-                        .selected_text(
-                            masks[volume.mask].settings().name.clone(),
-                        )
+                        .selected_text(masks[volume.mask].settings().name.clone())
                         .width(ui.available_width())
                         .show_ui(ui, |ui| {
                             for (index, mask) in masks.iter().enumerate() {
@@ -112,89 +162,28 @@ impl VolumesWidget {
                                 )
                                 .track(self);
                             }
-                        }).response.on_hover_text(
-                            "Mask from the 'Masks' section to apply to this volume.\nChoose 'None' to disable masking.",
+                        })
+                        .response
+                        .on_hover_text(
+                            "Mask applied to this volume. Choose \"None\" to show \
+                             the whole volume.",
                         );
                 });
                 ui.end_row();
 
-                ui.label("Contrast").on_hover_text("Adjust mapping from volume min/max to display min/max values");
-                ui.add(
-                    DoubleSlider::new(
-                        &mut volume.min,
-                        &mut volume.max,
-                        0.0..=1.0,
-                    )
-                    .width(ui.available_width())
-                    .separation_distance(0.01),
-                )
-                .track(self);
-
-                ui.end_row();
-
-                ui.label("Opacity").on_hover_text("Adjust volume opacity");
-                ui.slider(&mut volume.opacity, 0.0..=2.0).track(self);
-                ui.end_row();
-
-                ui.label("Material").on_hover_text("Adjust volume appearance");
+                ui.label("Colormap").on_hover_text(
+                    "Recolour this volume with a perceptually uniform colormap \
+                     (useful for scalar maps). Applied after the transfer \
+                     function and lighting.",
+                );
                 ui.horizontal(|ui| {
-                    let mut material_changed = false;
-
-                    material_changed |= ui
-                        .color_edit_button_rgb(&mut volume.absorption)
-                        .on_hover_text("Volume Absorption.\nHow much light is absorbed by the volume.")
-                        .track(self)
-                        .changed();
-
-                    material_changed |= ui
-                        .color_edit_button_rgb(&mut volume.scattering)
-                        .on_hover_text("Volume Scattering.\nHow much light is scattered by the volume.")
-                        .track(self)
-                        .changed();
-
-                    if material_changed {
-                        volume.preset = MaterialPreset::Custom;
-                    }
-
-                    let mut preset_changed = false;
-
-                    ComboBox::from_id_salt("MaterialPreset")
-                        .selected_text(format!("{:?}", volume.preset))
+                    ui.checkbox(&mut volume.use_colormap, "")
+                        .on_hover_text("Turn the colormap on or off for this volume.")
+                        .track(self);
+                    ComboBox::from_id_salt(format!("{}_VolumeColormap", volume.name))
                         .width(ui.available_width())
+                        .selected_text(format!("{:?}", volume.colormap))
                         .show_ui(ui, |ui| {
-                            for value in MaterialPreset::iter() {
-                                let label = format!("{:?}", value);
-                                preset_changed |= ui
-                                    .selectable_value(
-                                        &mut volume.preset,
-                                        value,
-                                        label,
-                                    )
-                                    .track(self)
-                                    .changed();
-                            }
-                        }).response.on_hover_text("Material Preset");
-
-                    if preset_changed {
-                        (volume.absorption, volume.scattering) =
-                            volume.preset.into();
-                    }
-                });
-
-                ui.end_row();
-
-                ui.label("Colormap").on_hover_text("Colormap to apply to volume. The colormap is applied after contrast and material settings are applied.");
-                ui.horizontal(|ui| {
-                    ui.checkbox(&mut volume.use_colormap, "").on_hover_text("Enable/Disable Colormap").track(self);
-                    ComboBox::from_id_salt(format!(
-                        "{}_VolumeColormap",
-                        volume.name
-                    ))
-                    .width(ui.available_width())
-                    .selected_text(format!("{:?}", volume.colormap))
-                    .show_ui(
-                        ui,
-                        |ui| {
                             for map in ColormapSelection::iter() {
                                 ui.selectable_value(
                                     &mut volume.colormap,
@@ -203,8 +192,9 @@ impl VolumesWidget {
                                 )
                                 .track(self);
                             }
-                        },
-                    ).response.on_hover_text("Colormap Preset");
+                        })
+                        .response
+                        .on_hover_text("Colormap used to recolour this volume.");
                 })
             });
     }

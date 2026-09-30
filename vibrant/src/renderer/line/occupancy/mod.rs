@@ -2,13 +2,14 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{
-        line::LineBuffer,
+        line::{occupancy::OccupancyBuffer, LineBuffer},
         texture::{MipTexture3D, R32Float, R32Uint},
+        tractography::Tractography,
+        Asset,
     },
-    controller::settings::{LineVoxelizationMode, Settings},
+    controller::{settings::LineVoxelizationMode, Controller},
     gpu::Gpu,
-    renderer::{environment::Environment, wgsl},
-    surface::{occupancy::OccupancyBuffer, Frame},
+    renderer::wgsl,
 };
 
 pub struct LineOccupancyPipeline {
@@ -24,7 +25,7 @@ impl LineOccupancyPipeline {
         let voxelize_layout = &gpu.pipeline_layout(&[
             &OccupancyBuffer::layout_write(gpu),
             &LineBuffer::layout_render(gpu),
-            &Environment::layout(gpu),
+            &Tractography::layout(gpu),
         ]);
 
         let voxelize_shader_source = include_str!("voxelize.wgsl");
@@ -51,7 +52,7 @@ impl LineOccupancyPipeline {
                     &OccupancyBuffer::layout_write(gpu),
                     &MipTexture3D::<R32Float>::layout_write(gpu),
                     &MipTexture3D::<R32Uint>::layout_write(gpu),
-                    &Environment::layout(gpu),
+                    &Tractography::layout(gpu),
                 ]),
                 &gpu.shader(include_str!("copy.wgsl")),
             ),
@@ -66,12 +67,13 @@ impl LineOccupancyPipeline {
     pub fn dispatch(
         &self,
         cmd: &mut CommandEncoder,
-        frame: &Frame,
-        environment: &Environment,
-        settings: &Settings,
+        asset: &Asset,
+        controller: &Controller,
         line: &LineBuffer,
     ) {
-        frame.occupancy().clear(cmd);
+        let settings = controller.settings();
+
+        line.occupancy().clear(cmd);
         line.clear_offset(cmd);
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
@@ -79,11 +81,11 @@ impl LineOccupancyPipeline {
             ..Default::default()
         });
 
-        let n = frame.occupancy().pyramid().resolution().div_ceil(4);
+        let n = line.occupancy().pyramid().resolution().div_ceil(4);
 
-        pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
+        pass.set_bind_group(0, line.occupancy().binding_write(), &[]);
         pass.set_bind_group(1, line.binding_render(), &[]);
-        pass.set_bind_group(2, environment.binding(), &[]);
+        pass.set_bind_group(2, asset.tractography.binding(), &[]);
 
         pass.set_pipeline(match settings.voxelization {
             LineVoxelizationMode::Line => &self.voxelize_line,
@@ -93,17 +95,17 @@ impl LineOccupancyPipeline {
         pass.dispatch_workgroups(settings.workgroups, 1, 1);
 
         pass.set_pipeline(&self.copy);
-        pass.set_bind_group(0, frame.occupancy().binding_write(), &[]);
-        pass.set_bind_group(1, frame.occupancy().pyramid().binding_write(), &[]);
-        pass.set_bind_group(2, frame.occupancy().count().binding_write(), &[]);
-        pass.set_bind_group(3, environment.binding(), &[]);
+        pass.set_bind_group(0, line.occupancy().binding_write(), &[]);
+        pass.set_bind_group(1, line.occupancy().pyramid().binding_write(), &[]);
+        pass.set_bind_group(2, line.occupancy().count().binding_write(), &[]);
+        pass.set_bind_group(3, asset.tractography.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = frame.occupancy().pyramid().resolution().div_ceil(4);
+        let mut mipmap = line.occupancy().pyramid().resolution().div_ceil(4);
 
-        for binding in frame.occupancy().pyramid().bindings_mipmap() {
+        for binding in line.occupancy().pyramid().bindings_mipmap() {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(mipmap, mipmap, mipmap);
 

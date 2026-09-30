@@ -18,7 +18,6 @@ pub trait MipTextureFormat {
 }
 
 pub struct Rgba16Float {}
-pub struct Rgba8Unorm {}
 pub struct R32Float {}
 pub struct R32Uint {}
 
@@ -43,24 +42,6 @@ impl MipTextureFormat for R32Float {
 impl MipTextureFormat for Rgba16Float {
     fn format() -> TextureFormat {
         TextureFormat::Rgba16Float
-    }
-
-    fn sample_type() -> TextureSampleType {
-        TextureSampleType::Float { filterable: true }
-    }
-
-    fn filter() -> FilterMode {
-        FilterMode::Linear
-    }
-
-    fn mipmap_filter() -> MipmapFilterMode {
-        MipmapFilterMode::Linear
-    }
-}
-
-impl MipTextureFormat for Rgba8Unorm {
-    fn format() -> TextureFormat {
-        TextureFormat::Rgba8Unorm
     }
 
     fn sample_type() -> TextureSampleType {
@@ -273,7 +254,7 @@ impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Forma
     pub fn binding_entries<'a>(&'a self, offset: u32) -> Vec<BindGroupEntry<'a>> {
         vec![
             BindGroupEntry {
-                binding: offset + 0,
+                binding: offset,
                 resource: BindingResource::TextureView(&self.view),
             },
             BindGroupEntry {
@@ -334,7 +315,7 @@ impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Forma
     pub fn layout_entries(offset: u32) -> Vec<BindGroupLayoutEntry> {
         vec![
             BindGroupLayoutEntry {
-                binding: offset + 0,
+                binding: offset,
                 visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
                 ty: BindingType::Texture {
                     sample_type: Format::sample_type(),

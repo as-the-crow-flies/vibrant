@@ -1,109 +1,99 @@
+pub mod accumulate;
 pub mod color;
-pub mod culling;
-pub mod occlusion;
-pub mod occupancy;
 
-use std::any::type_name;
-
+use accumulate::{AccumulateBuffer, AccumulationPlan, AccumulationStatus, Accumulator};
 use color::ColorBuffer;
-use occlusion::OcclusionBuffer;
-use occupancy::OccupancyBuffer;
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, ColorTargetState,
-    ColorWrites, CommandEncoder, CompositeAlphaMode, CurrentSurfaceTexture, PresentMode,
-    SurfaceConfiguration, SurfaceTarget, SurfaceTexture, TextureFormat, TextureUsages,
+    CommandEncoder, CompositeAlphaMode, CurrentSurfaceTexture, PresentMode, SurfaceColorSpace,
+    SurfaceColorSpaces, SurfaceConfiguration, SurfaceTarget, SurfaceTexture, TextureFormat,
+    TextureUsages, TextureViewDescriptor,
 };
 
 use crate::{
-    asset::texture::{MipTexture3D, R32Float, R32Uint},
     controller::settings::Settings,
-    renderer::util::copy::CopyPipeline,
-    surface::culling::CullingBuffer,
+    renderer::{
+        accumulate::AccumulatePipeline,
+        present::{PresentPipeline, Presentation},
+    },
 };
 
 use super::gpu::Gpu;
 
 pub struct Frame {
     color: ColorBuffer,
-    occupancy: OccupancyBuffer,
-    occlusion: OcclusionBuffer,
-    culling: CullingBuffer,
-    binding: BindGroup,
+    line_depth: ColorBuffer,
+    accum: [ColorBuffer; 2],
+    overlay: ColorBuffer,
+    export: ColorBuffer,
 }
 
 impl Frame {
     pub fn new(gpu: &Gpu, settings: &Settings) -> Self {
-        let color = ColorBuffer::new(gpu, settings.width, settings.height);
-
-        let occupancy = OccupancyBuffer::new(gpu, settings.volume);
-        let occlusion = OcclusionBuffer::new(gpu, settings.volume);
-        let culling = CullingBuffer::new(gpu, settings.volume, settings.index_buffer_size);
-
-        let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label: Some(type_name::<Self>()),
-            layout: &Self::layout(gpu),
-            entries: &[
-                occupancy.pyramid().binding_entries(0),
-                occupancy.count().binding_entries(2),
-                occlusion.ambient().binding_entries(4),
-                occlusion.directional().binding_entries(6),
-            ]
-            .concat(),
-        });
-
         Self {
-            color,
-            occupancy,
-            occlusion,
-            culling,
-            binding,
+            color: ColorBuffer::new(gpu, settings.width, settings.height),
+            line_depth: ColorBuffer::depth(gpu, settings.width, settings.height),
+            accum: [
+                ColorBuffer::new(gpu, settings.width, settings.height),
+                ColorBuffer::new(gpu, settings.width, settings.height),
+            ],
+            overlay: ColorBuffer::overlay(gpu, settings.width, settings.height),
+            export: ColorBuffer::export(gpu, settings.width, settings.height),
         }
     }
 
+    /// Linear HDR scene buffer - every renderer writes un-tone-mapped radiance here.
     pub fn color(&self) -> &ColorBuffer {
         &self.color
     }
 
-    pub fn occupancy(&self) -> &OccupancyBuffer {
-        &self.occupancy
+    /// Combined-mode line-depth target: the opaque line pass writes the near→far
+    /// fraction `s` of its first hit here, and the volume tracer clamps its far
+    /// `t` to it. Cleared to `1.0` when no line is drawn.
+    pub fn line_depth(&self) -> &ColorBuffer {
+        &self.line_depth
     }
 
-    pub fn occlusion(&self) -> &OcclusionBuffer {
-        &self.occlusion
+    /// One of the two ping-ponged accumulation buffers (running mean of all
+    /// samples since the scene last changed). `parity` selects which; see
+    /// [`accumulate::Accumulator`].
+    pub fn accum(&self, parity: usize) -> &ColorBuffer {
+        &self.accum[parity]
     }
 
-    pub fn culling(&self) -> &CullingBuffer {
-        &self.culling
+    /// egui paints here; the present pass composites it over the tone-mapped scene.
+    pub fn overlay(&self) -> &ColorBuffer {
+        &self.overlay
     }
 
-    pub fn binding(&self) -> &BindGroup {
-        &self.binding
-    }
-
-    pub fn layout(gpu: &Gpu) -> BindGroupLayout {
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    MipTexture3D::<R32Float>::layout_entries(0), // Occupancy - Density
-                    MipTexture3D::<R32Uint>::layout_entries(2),  // Occupancy - Count
-                    MipTexture3D::<R32Float>::layout_entries(4), // Occlusion - Ambient
-                    MipTexture3D::<R32Float>::layout_entries(6), // Occlusion - Directional
-                ]
-                .concat(),
-            })
+    /// SDR copy of the composited image, kept `COPY_SRC` for screenshot readback.
+    pub fn export(&self) -> &ColorBuffer {
+        &self.export
     }
 }
 
 pub struct Surface {
     surface: wgpu::Surface<'static>,
     frame: Option<Frame>,
-    copy: CopyPipeline,
+    present: PresentPipeline,
+    /// Accumulate/reduce pipelines + their resolution-independent buffers, and
+    /// the sample counter / convergence state they drive.
+    accumulate: AccumulatePipeline,
+    accumulate_buffer: AccumulateBuffer,
+    accumulator: Accumulator,
     changed: bool,
+    /// The HDR presentation to use when the toggle is on, or `None` when the
+    /// surface can't present HDR at all. `ExtendedSrgbLinear` (native) is
+    /// preferred over `ExtendedSrgb` (the only one the browser exposes).
+    hdr: Option<Presentation>,
+    presentation: Presentation,
+    /// User-requested HDR peak (`Settings::hdr_headroom`), stashed each frame in
+    /// `maybe_reconfigure`; clamped to the live display limit in `present`.
+    hdr_headroom: f32,
 }
 
 impl Surface {
-    const FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
+    const SDR_FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
+    const HDR_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
     pub fn new(gpu: &Gpu, window: impl Into<SurfaceTarget<'static>>) -> Self {
         let surface = gpu
@@ -111,29 +101,46 @@ impl Surface {
             .create_surface(window)
             .expect("Could not create surface");
 
-        surface.configure(gpu.device(), &Self::config(1, 1));
+        let spaces = surface
+            .get_capabilities(gpu.adapter())
+            .color_spaces(Self::HDR_FORMAT);
+
+        let hdr = if spaces.contains(SurfaceColorSpaces::EXTENDED_SRGB_LINEAR) {
+            Some(Presentation::HdrLinear)
+        } else if spaces.contains(SurfaceColorSpaces::EXTENDED_SRGB) {
+            Some(Presentation::HdrEncoded)
+        } else {
+            None
+        };
+
+        surface.configure(gpu.device(), &Self::config(1, 1, Presentation::Sdr));
 
         Self {
             surface,
             frame: None,
             changed: true,
-            copy: CopyPipeline::new(gpu),
+            present: PresentPipeline::new(gpu, Self::SDR_FORMAT, Self::HDR_FORMAT),
+            accumulate: AccumulatePipeline::new(gpu),
+            accumulate_buffer: AccumulateBuffer::new(gpu),
+            accumulator: Accumulator::new(),
+            hdr,
+            presentation: Presentation::Sdr,
+            hdr_headroom: 2.0,
         }
     }
 
-    pub fn maybe_resize(&mut self, gpu: &Gpu, settings: &mut Settings) {
+    pub fn maybe_reconfigure(&mut self, gpu: &Gpu, settings: &Settings) {
+        self.hdr_headroom = settings.hdr_headroom;
+
+        let presentation = match (settings.hdr, self.hdr) {
+            (true, Some(hdr)) => hdr,
+            _ => Presentation::Sdr,
+        };
+
         if let Some(frame) = &self.frame {
-            // Update Required Index Size
-
-            let required_index_size = frame.culling().get_required_index_size(gpu);
-            if required_index_size > settings.index_buffer_size {
-                settings.index_buffer_size = required_index_size.next_power_of_two()
-            }
-
             if settings.width == frame.color().width()
                 && settings.height == frame.color().height()
-                && settings.volume == frame.occupancy().resolution()
-                && settings.index_buffer_size == frame.culling().index_buffer_size()
+                && presentation == self.presentation
             {
                 self.changed = false;
                 return;
@@ -141,10 +148,13 @@ impl Surface {
         }
 
         self.frame.take();
-        self.frame = Some(Frame::new(gpu, &settings));
+        self.frame = Some(Frame::new(gpu, settings));
+        self.presentation = presentation;
 
-        self.surface
-            .configure(gpu.device(), &Self::config(settings.width, settings.height));
+        self.surface.configure(
+            gpu.device(),
+            &Self::config(settings.width, settings.height, presentation),
+        );
 
         self.changed = true;
     }
@@ -157,34 +167,122 @@ impl Surface {
         }
     }
 
-    pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder) {
+    /// Records the SDR present into `frame.export()` so a screenshot captures
+    /// exactly the on-screen SDR look, UI included. `scene` is the tone-map
+    /// input (the accumulated mean, or the raw sample buffer).
+    pub fn export(&self, gpu: &Gpu, cmd: &mut CommandEncoder, frame: &Frame, scene: &ColorBuffer) {
+        self.present.set_headroom(gpu, 1.0);
+        self.present
+            .export(cmd, scene, frame, frame.export().view());
+    }
+
+    pub fn present(&self, gpu: &Gpu, mut cmd: CommandEncoder, scene: &ColorBuffer) {
         if let (Some(frame), Some(surface)) = (&self.frame, self.get_current_texture()) {
-            self.copy
-                .dispatch(&mut cmd, frame.color(), &surface.texture);
+            let view = surface
+                .texture
+                .create_view(&TextureViewDescriptor::default());
+
+            let headroom = if self.presentation == Presentation::Sdr {
+                1.0
+            } else {
+                self.hdr_headroom.clamp(1.0, self.hdr_headroom_limit(gpu))
+            };
+
+            self.present.set_headroom(gpu, headroom);
+            self.present
+                .dispatch(&mut cmd, scene, frame, &view, self.presentation);
 
             gpu.submit(cmd);
-            surface.present();
+            gpu.queue().present(surface);
         }
     }
 
-    fn config(width: u32, height: u32) -> SurfaceConfiguration {
+    /// Progress snapshot for the UI.
+    pub fn accumulation(&self) -> AccumulationStatus {
+        self.accumulator.status()
+    }
+
+    /// Decide whether the renderer should trace the scene this frame and with
+    /// what sub-pixel jitter. `scene_dirty` = something the surface can't see
+    /// changed (assets, camera, lighting); the surface folds in its own
+    /// resize/reconfigure `changed` flag.
+    pub fn plan_accumulation(&self, settings: &Settings, scene_dirty: bool) -> AccumulationPlan {
+        self.accumulator.plan(settings, scene_dirty || self.changed)
+    }
+
+    /// After the renderer has traced into `frame.color()` (when `rendered`),
+    /// fold that sample into the running mean and return the buffer the
+    /// present/export passes should tone map: the accumulated mean, the raw
+    /// sample (accumulation off), or the last mean (converged, `!rendered`).
+    pub fn resolve(
+        &self,
+        gpu: &Gpu,
+        cmd: &mut CommandEncoder,
+        settings: &Settings,
+        rendered: bool,
+    ) -> Option<&ColorBuffer> {
+        let frame = self.frame.as_ref()?;
+
+        if !rendered {
+            return Some(frame.accum(self.accumulator.parity()));
+        }
+
+        if !settings.accumulate {
+            return Some(frame.color());
+        }
+
+        let parity = self.accumulator.parity();
+
+        self.accumulate_buffer
+            .set_sample(gpu, self.accumulator.samples());
+        self.accumulate
+            .accumulate(cmd, &self.accumulate_buffer, frame, parity);
+
+        // Only run the whole-image reduction on frames whose result is read back.
+        if self.accumulator.wants_metric() {
+            self.accumulate.reduce(
+                cmd,
+                &self.accumulate_buffer,
+                frame.accum(parity),
+                frame.accum(parity ^ 1),
+            );
+        }
+
+        self.accumulator.advance(settings);
+
+        Some(frame.accum(parity ^ 1))
+    }
+
+    /// Fold any finished convergence reading in and, on the interval, kick off
+    /// the next readback. Call after `present` has submitted the `reduce` pass.
+    pub fn read_metric(&self, gpu: &Gpu, settings: &Settings) {
+        self.accumulator
+            .read_metric(gpu, &self.accumulate_buffer, settings);
+    }
+
+    /// Whether the render loop should schedule another frame immediately
+    /// (still refining, or legacy continuous mode).
+    pub fn accumulating(&self, settings: &Settings) -> bool {
+        self.accumulator.accumulating(settings)
+    }
+
+    fn config(width: u32, height: u32, presentation: Presentation) -> SurfaceConfiguration {
+        let (format, color_space) = match presentation {
+            Presentation::Sdr => (Self::SDR_FORMAT, SurfaceColorSpace::Auto),
+            Presentation::HdrLinear => (Self::HDR_FORMAT, SurfaceColorSpace::ExtendedSrgbLinear),
+            Presentation::HdrEncoded => (Self::HDR_FORMAT, SurfaceColorSpace::ExtendedSrgb),
+        };
+
         SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
-            format: Self::FORMAT,
+            format,
             width,
             height,
             present_mode: PresentMode::Fifo,
             desired_maximum_frame_latency: 2,
             alpha_mode: CompositeAlphaMode::Auto,
-            view_formats: vec![Self::FORMAT],
-        }
-    }
-
-    pub fn target() -> ColorTargetState {
-        ColorTargetState {
-            format: Self::FORMAT,
-            blend: None,
-            write_mask: ColorWrites::all(),
+            view_formats: vec![format],
+            color_space,
         }
     }
 
@@ -194,5 +292,28 @@ impl Surface {
 
     pub fn changed(&self) -> bool {
         self.changed
+    }
+
+    /// Whether the current surface/adapter can present an HDR swapchain.
+    pub fn hdr_supported(&self) -> bool {
+        self.hdr.is_some()
+    }
+
+    /// The largest HDR peak (multiple of SDR white) the display can drive.
+    /// Prefers the ideal-conditions ceiling (Apple's `potential` EDR headroom)
+    /// so the slider doesn't jitter with the OS brightness slider the way the
+    /// live `current` figure does; falls back to `current`, then the
+    /// nits-derived ratio, then 2.0 when the platform reports nothing (e.g. the
+    /// web). Capped at 8.0. This is the upper bound the HDR strength slider and
+    /// `present` clamp `Settings::hdr_headroom` to.
+    pub fn hdr_headroom_limit(&self, gpu: &Gpu) -> f32 {
+        let info = self.surface.display_hdr_info(gpu.adapter());
+
+        info.headroom
+            .and_then(|h| h.potential.or(h.current))
+            .or_else(|| info.tone_map_headroom())
+            .filter(|h| h.is_finite() && *h > 1.0)
+            .unwrap_or(2.0)
+            .clamp(1.0, 8.0)
     }
 }

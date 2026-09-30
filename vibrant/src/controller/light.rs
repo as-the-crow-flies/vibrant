@@ -11,6 +11,12 @@ pub struct Light {
     changed: bool,
 }
 
+impl Default for Light {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Light {
     pub fn new() -> Self {
         Self {
@@ -29,6 +35,10 @@ impl Light {
 
             self.changed = true;
         }
+    }
+
+    pub fn yaw(&self) -> f32 {
+        self.yaw
     }
 
     pub fn rotation(&self) -> Quat {

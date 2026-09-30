@@ -26,10 +26,34 @@ random_color = "1.1.0"
 exr = "1.74"
 half = { version = "2.7", features = ["bytemuck"] }
 ordered-float = "5.3"
-egui_double_slider = "1.1.0"
+egui_double_slider = "4"
 num = "0.4.3"
 strum = { version = "0.27", features = ["derive"] }
+egui_dock = "0.21.1"
 
-# [target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
+wasm-bindgen = "0.2"
 getrandom = { version = "0.3.3", features = ["wasm_js"] }
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlAnchorElement",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+] }
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["html_reports"] }
+wgpu.workspace = true
+
+[[bench]]
+name = "cascade"
+harness = false
+
+[[bench]]
+name = "pipeline"
+harness = false

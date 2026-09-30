@@ -5,8 +5,6 @@
 
 @group(2) @binding(0) var COUNT: texture_3d<u32>;
 
-@group(3) @binding(0) var<uniform> ENVIRONMENT: Environment;
-
 @compute
 @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {

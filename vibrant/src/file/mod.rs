@@ -8,8 +8,11 @@ pub use volume::*;
 
 use std::{
     fs::{self},
-    path::PathBuf,
-    sync::{LazyLock, Mutex},
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        LazyLock, Mutex,
+    },
 };
 
 use log::warn;
@@ -55,10 +58,8 @@ impl From<&PathBuf> for File {
     fn from(path: &PathBuf) -> Self {
         Self {
             name: path.file_name().unwrap().to_str().unwrap().to_owned(),
-            data: fs::read(&path).expect(&format!(
-                "should be able to read path: `{:?}`",
-                path.to_str()
-            )),
+            data: fs::read(path)
+                .unwrap_or_else(|_| panic!("should be able to read path: `{:?}`", path.to_str())),
         }
     }
 }
@@ -73,18 +74,64 @@ pub struct FileStage {
 }
 
 impl FileStage {
+    /// Register a callback that nudges the event loop into rendering a frame,
+    /// so the loading spinner animates while files parse off the main thread
+    /// (native) or off a resolved promise (web).
+    pub fn set_waker(waker: impl Fn() + Send + 'static) {
+        if let Ok(mut slot) = WAKER.lock() {
+            *slot = Some(Box::new(waker));
+        }
+    }
+
+    /// Whether a file load is in progress: dialog committed, bytes still being
+    /// parsed, or the result not yet drained into GPU resources by `Asset`.
+    pub fn loading() -> bool {
+        LOADING.load(Ordering::Relaxed)
+    }
+
+    fn set_loading(loading: bool) {
+        LOADING.store(loading, Ordering::Relaxed);
+        if let Ok(slot) = WAKER.lock() {
+            if let Some(waker) = slot.as_ref() {
+                waker();
+            }
+        }
+    }
+
+    /// True while the queue still holds files `Asset` hasn't consumed.
+    pub fn has_pending() -> bool {
+        QUEUE
+            .lock()
+            .map(|stage| {
+                !stage.lines.is_empty()
+                    || !stage.track_scalars.is_empty()
+                    || !stage.volumes.is_empty()
+                    || !stage.hdris.is_empty()
+            })
+            .unwrap_or(false)
+    }
+
+    /// Called by `Asset` once it has drained the queue, so the spinner clears
+    /// only after the loaded data is actually built.
+    pub fn finish_loading() {
+        Self::set_loading(false);
+    }
+
     #[cfg(target_arch = "wasm32")]
     pub fn load() {
         wasm_bindgen_futures::spawn_local(async move {
-            let mut files: Vec<File> = Vec::new();
+            let Some(handles) = rfd::AsyncFileDialog::new().pick_files().await else {
+                return;
+            };
 
-            if let Some(handles) = rfd::AsyncFileDialog::new().pick_files().await {
-                for handle in handles {
-                    files.push(File {
-                        name: handle.file_name(),
-                        data: handle.read().await,
-                    });
-                }
+            Self::set_loading(true);
+
+            let mut files: Vec<File> = Vec::new();
+            for handle in handles {
+                files.push(File {
+                    name: handle.file_name(),
+                    data: handle.read().await,
+                });
             }
 
             Self::load_files(files);
@@ -94,12 +141,36 @@ impl FileStage {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load() {
         if let Some(paths) = rfd::FileDialog::new().pick_files() {
-            Self::load_files(paths.iter().map(|path| path.into()).collect());
+            Self::spawn_load(move || paths.iter().map(|path| path.into()).collect());
         }
     }
 
-    pub fn load_path(path: &PathBuf) {
-        Self::load_files(vec![path.into()]);
+    pub fn load_path(path: &Path) {
+        let path = path.to_path_buf();
+        Self::spawn_load(move || vec![File::from(&path)]);
+    }
+
+    /// Parse `collect`'s files off the main thread and queue them, keeping
+    /// `loading()` true until `Asset` drains the result. A parse panic (bad
+    /// file) is contained here instead of taking down the app.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn spawn_load(collect: impl FnOnce() -> Vec<File> + Send + 'static) {
+        Self::set_loading(true);
+        std::thread::spawn(move || {
+            let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Self::load_files(collect())
+            }));
+            if parsed.is_err() {
+                log::error!("file load failed");
+                Self::set_loading(false);
+            }
+        });
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn spawn_load(collect: impl FnOnce() -> Vec<File> + 'static) {
+        Self::set_loading(true);
+        wasm_bindgen_futures::spawn_local(async move { Self::load_files(collect()) });
     }
 
     fn load_files(files: Vec<File>) {
@@ -129,11 +200,22 @@ impl FileStage {
             }
         }
 
+        let queued = !lines.is_empty()
+            || !track_scalars.is_empty()
+            || !volumes.is_empty()
+            || !hdris.is_empty();
+
         if let Ok(stage) = QUEUE.lock().as_mut() {
             stage.lines.extend(lines);
             stage.track_scalars.extend(track_scalars);
             stage.volumes.extend(volumes);
             stage.hdris.extend(hdris);
+        }
+
+        // Nothing landed in the queue (all files unsupported), so `Asset` will
+        // never call `finish_loading` - clear the spinner here instead.
+        if !queued {
+            Self::set_loading(false);
         }
     }
 
@@ -147,9 +229,12 @@ impl FileStage {
         }
     }
 
+    /// Browsers have no notion of a save-file dialog with filesystem access,
+    /// so there's no path to pick - just queue the default filename and let
+    /// `Gpu::save`'s web delivery path trigger a browser download.
     #[cfg(target_arch = "wasm32")]
     pub fn save() {
-        todo!()
+        Self::publish_save_path(PathBuf::from("screenshot.png"));
     }
 
     pub fn on_lines(callback: impl FnOnce(Vec<LineFile>)) {
@@ -184,10 +269,6 @@ impl FileStage {
         }
     }
 
-    pub fn about_to_save() -> bool {
-        QUEUE.lock().unwrap().save.is_some()
-    }
-
     pub fn on_save(callback: impl FnOnce(PathBuf)) {
         let mut data = QUEUE.lock().unwrap();
 
@@ -206,3 +287,8 @@ impl FileStage {
 }
 
 static QUEUE: LazyLock<Mutex<FileStage>> = LazyLock::new(|| Mutex::new(FileStage::default()));
+
+static LOADING: AtomicBool = AtomicBool::new(false);
+
+#[allow(clippy::type_complexity)]
+static WAKER: Mutex<Option<Box<dyn Fn() + Send>>> = Mutex::new(None);

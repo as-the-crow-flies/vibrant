@@ -1,47 +1,31 @@
-struct Settings {
+// Tractography-only render parameters (see asset/tractography.rs). Bound by the
+// line passes; field order must match `TractographySettings`.
+struct Tractography {
+    volume: u32,
+    culling: u32,
+    // 0 = Combined, 1 = Overlay.
+    render_mode: u32,
+    // Whether the slicing / clipping planes cull tractography lines.
+    line_crop: u32,
     radius: f32,
-    lighting: f32,
+    alpha: f32,
     ambient_light: f32,
     direct_light: f32,
-    tangent_color: f32,
-    shadows: f32,
-    alpha: f32,
-    level: f32,
     smoothing: f32,
-    culling: u32,
     crop_start: f32,
     crop_end: f32,
-    crop_x_start: f32,
-    crop_x_end: f32,
-    crop_y_start: f32,
-    crop_y_end: f32,
-    crop_z_start: f32,
-    crop_z_end: f32,
-    plane: f32,
-}
-
-struct Segment {
-    position: vec3<f32>,
-    radius: f32
+    line_roughness: f32,
+    line_specular: f32,
 }
 
 struct Camera {
     transform: mat4x4<f32>,
-    projection: mat4x4<f32>,
     projection_inverse: mat4x4<f32>,
-    near: f32,
-    far: f32,
 }
 
 struct Environment {
-    surface: vec2<u32>,
-    volume: u32,
-    time: f32,
     camera: Camera,
-    segment: Segment,
-    light: vec3<f32>,
-    light_: f32,
-    settings: Settings
+    time: f32,
 }
 
 struct LineSettings {
@@ -50,6 +34,9 @@ struct LineSettings {
     colormap: u32,
     crop_start: f32,
     crop_end: f32,
+    // Whether the slicing / clipping planes cut this line. Only takes
+    // effect while `Tractography.line_crop` (the master switch) is also on.
+    crop: u32,
 }
 
 struct HdriSettings {
@@ -57,6 +44,7 @@ struct HdriSettings {
     strength: f32,
     specular: f32,
     roughness: f32,
+    anisotropy: f32
 }
 
 struct CropSettings {
@@ -313,12 +301,16 @@ fn orthonormalize(normal: vec3<f32>, tangent: vec3<f32>) -> vec3<f32> {
 }
 
 fn tangent2rgb(tangent: vec3<f32>) -> vec3<f32> {
+    // Hue directions in the OkLab (a, b) plane for the three tract axes.
     let red = vec2<f32>(0.217, 0.125);
     let green = vec2<f32>(-0.217, 0.125);
     let blue = vec2<f32>(0.000, -0.250);
 
-    let oklab = vec3<f32>(0.8, tangent.r * red + tangent.g * green + tangent.b * blue);
-    return oklab2rgb(oklab);
+    let lightness = 0.8;
+    let chroma = 0.8;
+    let ab = tangent.r * red + tangent.g * green + tangent.b * blue;
+
+    return oklab2rgb(vec3<f32>(lightness, chroma * ab));
 }
 
 /*
@@ -472,6 +464,14 @@ fn linear_to_srgb(linear: vec3<f32>) -> vec3<f32> {
     );
 }
 
+fn srgb_to_linear(srgb: vec3<f32>) -> vec3<f32> {
+    return select(
+        pow((srgb + 0.055) / 1.055, vec3<f32>(2.4)),
+        srgb / 12.92,
+        srgb < vec3<f32>(0.04045)
+    );
+}
+
 fn aces(x: vec3<f32>) -> vec3<f32> {
     let a = 2.51;
     let b = 0.03;
@@ -548,66 +548,6 @@ fn rotation_z(angle: f32) -> mat3x3<f32> {
     );
 }
 
-struct CubeCoordinates {
-    face: u32,
-    uv: vec2<f32>,
-};
-
-fn cubemap_encode(direction: vec3<f32>) -> CubeCoordinates {
-    let d = normalize(direction);
-    let ad = abs(d);
-
-    var face: u32;
-    var uv: vec2<f32>;
-
-    if (ad.x >= ad.y && ad.x >= ad.z) {
-        if (d.x > 0.0) {
-            face = 0u; // +X
-            uv = vec2(-d.z, -d.y) / ad.x;
-        } else {
-            face = 3u; // -X
-            uv = vec2(d.z, -d.y) / ad.x;
-        }
-    } else if (ad.y >= ad.x && ad.y >= ad.z) {
-        if (d.y > 0.0) {
-            face = 1u; // +Y
-            uv = vec2(d.x, d.z) / ad.y;
-        } else {
-            face = 4u; // -Y
-            uv = vec2(d.x, -d.z) / ad.y;
-        }
-    } else {
-        if (d.z > 0.0) {
-            face = 2u; // +Z
-            uv = vec2(d.x, -d.y) / ad.z;
-        } else {
-            face = 5u; // -Z
-            uv = vec2(-d.x, -d.y) / ad.z;
-        }
-    }
-
-    uv = uv * 0.5 + 0.5;
-
-    return CubeCoordinates(face, uv);
-}
-
-fn cubemap_decode(c: CubeCoordinates) -> vec3<f32> {
-    let uv = c.uv * 2.0 - 1.0;
-
-    var dir: vec3<f32>;
-
-    switch (c.face) {
-        case 0u: { dir = vec3( 1.0, -uv.y, -uv.x); } // +X
-        case 3u: { dir = vec3(-1.0, -uv.y,  uv.x); } // -X
-        case 1u: { dir = vec3( uv.x,  1.0,  uv.y); } // +Y
-        case 4u: { dir = vec3( uv.x, -1.0, -uv.y); } // -Y
-        case 2u: { dir = vec3( uv.x, -uv.y,  1.0); } // +Z
-        default: { dir = vec3(-uv.x, -uv.y, -1.0); } // -Z
-    }
-
-    return normalize(dir);
-}
-
 const PACK_RGB_LOG_LO:   f32 = -9.965784;  // log2(1e-3)
 const PACK_RGB_LOG_SPAN: f32 = 16.609640;  // log2(1e2) - log2(1e-3)
 
@@ -624,4 +564,51 @@ fn pack_rgb(src: vec3<f32>) -> vec4<f32> {
 fn unpack_rgb(src: vec4<f32>) -> vec3<f32> {
     let scale = exp2(PACK_RGB_LOG_LO + src.a * PACK_RGB_LOG_SPAN);
     return src.rgb * scale;
+}
+
+fn sign_not_zero(v: f32) -> f32 {
+  return select(-1.0, 1.0, v >= 0.0);
+}
+
+fn sign_not_zero_2(v: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
+}
+
+fn octahedron_encode(v: vec3<f32>) -> vec2<f32> {
+    let l1norm = abs(v.x) + abs(v.y) + abs(v.z);
+    var result = v.xy * (1.0 / l1norm);
+    if v.z < 0.0 { result = (1.0 - abs(result.yx)) * sign_not_zero_2(result.xy); }
+    return result;
+}
+
+fn octahedron_decode(o: vec2<f32>) -> vec3<f32> {
+    var v = vec3f(o.x, o.y, 1.0 - abs(o.x) - abs(o.y));
+    if v.z < 0.0 { v = vec3f((1.0 - abs(v.yx)) * sign_not_zero_2(v.xy), v.z); }
+    return normalize(v);
+}
+
+fn clarberg_equal_area_sphere(uv: vec2<f32>) -> vec3<f32> {
+    let au = abs(uv.x);
+    let av = abs(uv.y);
+
+    // Branchless octahedral fold
+    let d = 1.0 - (au + av);
+    let r = 1.0 - abs(d);
+
+    // Avoid division by zero at poles
+    let inv_r = select(0.0, 1.0 / r, r > 0.0);
+    let phi0 = 0.25 * PI * ((av - au) * inv_r + 1.0);
+
+    let xy_scale = r * sqrt(max(0.0, 2.0 - r * r));
+
+    let xy = sign_not_zero_2(uv) * vec2<f32>(cos(phi0), sin(phi0)) * xy_scale;
+
+    let z_mag = 1.0 - r * r;
+    let z = sign_not_zero(d) * z_mag;
+
+    return vec3<f32>(xy, z);
+}
+
+fn brightness(rgb: vec3<f32>) -> f32 {
+    return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
 }

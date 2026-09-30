@@ -1,8 +1,11 @@
-use std::{any::type_name, hash::Hash};
+use std::{
+    any::type_name,
+    array,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use bytemuck::{bytes_of, checked::cast_slice, Pod, Zeroable};
-use glam::{Mat4, UVec2, UVec3};
-use strum::EnumIter;
+use glam::{Mat4, UVec3};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     wgt::TextureDataOrder,
@@ -10,62 +13,118 @@ use wgpu::{
 };
 
 use crate::{
-    asset::colormap::{Colormap, ColormapSelection},
+    asset::{
+        colormap::{Colormap, ColormapSelection},
+        material::{Material, MaterialNode, MaterialPreset},
+    },
     file::VolumeFile,
     gpu::Gpu,
 };
 
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, EnumIter)]
-pub enum MaterialPreset {
-    Custom,
-    White,
-    Brain,
-    Blood,
+#[derive(Debug, Clone, PartialEq)]
+pub struct Histogram {
+    values: [f32; 256],
 }
 
-impl Into<([f32; 3], [f32; 3])> for MaterialPreset {
-    fn into(self) -> ([f32; 3], [f32; 3]) {
-        match self {
-            MaterialPreset::Custom => ([1.0; 3], [1.0; 3]),
-            MaterialPreset::White => ([1.0; 3], [1.0; 3]),
-            MaterialPreset::Brain => ([0.162, 0.662, 1.0], [1.0, 0.732, 0.575]),
-            MaterialPreset::Blood => ([0.510, 0.768, 0.871], [0.544, 0.056, 0.100]),
+impl Histogram {
+    /// Bins at each end excluded when picking the display scale. Volumes often
+    /// pile a huge spike into pure min/max (empty background, saturated
+    /// intensity); scaling to those flattens everything else, so instead scale
+    /// to the tallest *central* bin and let the edge spikes clip.
+    const EDGE_MARGIN: usize = 6;
+
+    pub fn from_data(data: &[f32]) -> Self {
+        let counts = data.iter().fold([0u32; 256], |mut hist, value| {
+            hist[((value * 255.0) as usize).min(255)] += 1;
+            hist
+        });
+
+        let peak = counts[Self::EDGE_MARGIN..256 - Self::EDGE_MARGIN]
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        let scale = 1.0 / peak as f32;
+
+        Self {
+            values: counts.map(|count| count as f32 * scale),
         }
     }
+
+    pub fn values(&self) -> &[f32; 256] {
+        &self.values
+    }
+}
+
+/// Stable across the volume's lifetime, unlike its Vec index. Used to give UI
+/// widgets (e.g. the transfer function editor) identity that doesn't collide
+/// across volumes or shift when volumes are added/removed.
+static NEXT_VOLUME_ID: AtomicU64 = AtomicU64::new(0);
+
+fn next_volume_id() -> u64 {
+    NEXT_VOLUME_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VolumeFractionSettings {
+    pub id: u64,
     pub name: String,
     pub visible: bool,
-    pub preset: MaterialPreset,
     pub mask: usize,
-    pub absorption: [f32; 3],
-    pub scattering: [f32; 3],
-    pub opacity: f32,
-    pub min: f32,
-    pub max: f32,
     pub inverted: bool,
     pub masked: bool,
     pub use_colormap: bool,
     pub colormap: ColormapSelection,
+    pub opacity: f32,
+    pub histogram: Histogram,
+    pub nodes: Vec<MaterialNode>,
 }
 
 impl VolumeFractionSettings {
     fn to_buffer(&self) -> VolumeFractionSettingsBuffer {
-        let [ar, ag, ab] = self.absorption;
-        let [sr, sg, sb] = self.scattering;
-
         VolumeFractionSettingsBuffer {
-            absorption: [ar, ag, ab, self.opacity],
-            scattering: [sr, sg, sb, self.opacity],
-            min: self.min,
-            max: self.max,
             inverted: self.inverted as u32,
             masked: self.masked as u32,
             use_colormap: self.use_colormap as u32,
             colormap: self.colormap as u32,
-            ..Default::default()
+            opacity: self.opacity,
+            _pad: [0.0; 3],
+            nodes: array::from_fn(|index| {
+                self.nodes
+                    .get(index)
+                    .map(|node| node.into())
+                    .unwrap_or(MaterialNodeBuffer {
+                        position: 0.0,
+                        absorption: [0.0, 0.0, 0.0],
+                        scattering: [0.0, 0.0, 0.0],
+                        ior: 0.0,
+                    })
+            }),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
+pub struct MaterialNodeBuffer {
+    absorption: [f32; 3],
+    position: f32,
+    scattering: [f32; 3],
+    ior: f32,
+}
+
+impl MaterialNodeBuffer {
+    pub const MAX_NODES: usize = 8;
+}
+
+impl From<&MaterialNode> for MaterialNodeBuffer {
+    fn from(value: &MaterialNode) -> Self {
+        MaterialNodeBuffer {
+            absorption: value.material.absorption,
+            position: value.position,
+            scattering: value.material.scattering,
+            ior: value.material.ior,
         }
     }
 }
@@ -73,15 +132,13 @@ impl VolumeFractionSettings {
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
 pub struct VolumeFractionSettingsBuffer {
-    absorption: [f32; 4],
-    scattering: [f32; 4],
-    min: f32,
-    max: f32,
     inverted: u32,
     masked: u32,
     use_colormap: u32,
     colormap: u32,
-    padding: UVec2,
+    opacity: f32,
+    _pad: [f32; 3],
+    nodes: [MaterialNodeBuffer; MaterialNodeBuffer::MAX_NODES],
 }
 
 pub struct VolumeFractionBuffer {
@@ -147,19 +204,36 @@ impl VolumeFractionBuffer {
         });
 
         let settings = VolumeFractionSettings {
+            id: next_volume_id(),
             name: file.name().to_string(),
             visible: true,
-            preset: MaterialPreset::White,
             mask: 0,
-            absorption: [1.0; 3],
-            scattering: [1.0; 3],
-            opacity: 1.0,
-            min: 0.0,
-            max: 1.0,
             inverted: false,
             masked: true,
             use_colormap: false,
             colormap: ColormapSelection::Viridis,
+            opacity: 1.0,
+            histogram: Histogram::from_data(file.data()),
+            nodes: vec![
+                MaterialNode {
+                    id: 0,
+                    selected: false,
+                    position: 0.0,
+                    preset: MaterialPreset::Air,
+                    material: MaterialPreset::Air.material().unwrap(),
+                },
+                MaterialNode {
+                    id: 1,
+                    selected: true,
+                    position: 1.0,
+                    preset: MaterialPreset::Custom,
+                    material: Material {
+                        absorption: [1.0, 1.0, 1.0],
+                        scattering: [1.0, 1.0, 1.0],
+                        ior: 1.5,
+                    },
+                },
+            ],
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
