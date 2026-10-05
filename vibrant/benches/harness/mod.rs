@@ -81,8 +81,8 @@ pub fn setup() -> Bench {
 
     // Push the scene files onto the global FileStage queue, then let `Asset`
     // drain + build them exactly as the app does on load.
-    FileStage::load_path(&PathBuf::from(VOLUME_PATH));
-    FileStage::load_path(&PathBuf::from(LINE_PATH));
+    FileStage::load_path_blocking(&PathBuf::from(VOLUME_PATH));
+    FileStage::load_path_blocking(&PathBuf::from(LINE_PATH));
 
     let mut controller = Controller::new();
     controller.settings_mut().width = WIDTH;

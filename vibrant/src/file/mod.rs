@@ -150,6 +150,11 @@ impl FileStage {
         Self::spawn_load(move || vec![File::from(&path)]);
     }
 
+    /// Parse and queue `path` on the calling thread.
+    pub fn load_path_blocking(path: &Path) {
+        Self::load_files(vec![File::from(&path.to_path_buf())]);
+    }
+
     /// Parse `collect`'s files off the main thread and queue them, keeping
     /// `loading()` true until `Asset` drains the result. A parse panic (bad
     /// file) is contained here instead of taking down the app.
