@@ -48,6 +48,9 @@ const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
 
 const IRRADIANCE_CULL: f32 = 0.05;
 
+// Each sample covers a solid angle of 4π / SAMPLES ≈ π tan²θ.
+const CONE_TAN: f32 = 2.0 / sqrt(f32(SAMPLES));
+
 var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
 var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_SIZE>;
 
@@ -258,18 +261,24 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
     let radiance_scale = f32(textureDimensions(EXTINCTION).x) / dim.x;
 
     let scale = length(TRANSFORM[0].xyz) * dim.x; // voxels/mm
-    let step_size = 1.0 / radiance_scale;
+    let voxel = 1.0 / radiance_scale;
 
-    for (var t=t0; t<t1; t+=step_size) {
-        let sample = origin_sample + direction_sample * t;
+    var t = t0;
+
+    while (t < t1) {
+        let diameter = max(2.0 * CONE_TAN * t, voxel);
+        let step = min(diameter, t1 - t);
+        let sample = origin_sample + direction_sample * (t + 0.5 * step);
 
         if (any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
 
-        let extinction = sample_extinction(sample, 0.0);
+        let extinction = sample_extinction(sample, log2(diameter / voxel));
 
-        transmission *= exp(-extinction * step_size / scale);
+        transmission *= exp(-extinction * step / scale);
 
         if (all(transmission < vec3<f32>(1e-3))) { break; }
+
+        t += step;
     }
 
     return transmission;
