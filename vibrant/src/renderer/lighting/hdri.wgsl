@@ -33,26 +33,9 @@ fn main(@builtin(local_invocation_index) index: u32) {
 
     workgroupBarrier();
 
-    let omega = mat4x3<f32>(
-        get_direction(4*index+0, SAMPLES),
-        get_direction(4*index+1, SAMPLES),
-        get_direction(4*index+2, SAMPLES),
-        get_direction(4*index+3, SAMPLES),
-    );
-
-    let radiance = mat4x3<f32>(
-        hdri(omega[0]),
-        hdri(omega[1]),
-        hdri(omega[2]),
-        hdri(omega[3]),
-    );
-
-    let weight = vec4<f32>(
-        radiance_weight(radiance[0]),
-        radiance_weight(radiance[1]),
-        radiance_weight(radiance[2]),
-        radiance_weight(radiance[3]),
-    );
+    let omega = sample_directions(index);
+    let radiance = trace_samples(vec3<f32>(0.0), omega);
+    let weight = sample_weights(radiance);
 
     expectation_maximization(omega, radiance, weight, index);
 
@@ -63,12 +46,12 @@ fn initialize(index: u32) {
     VMM[index] = vec4<f32>(get_direction(index, VMM_SIZE), 1.0) / f32(VMM_SIZE);
 }
 
-fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: vec4<f32>, index: u32) {
+fn expectation_maximization(omega: Directions, radiance: Radiances, weight: Weights, index: u32) {
     let subgroup = index >> 5u;
     let subgroup_index = index & 31;
 
-    var expectation = array<vec4<f32>, VMM_SIZE>();
-    var expectation_sum_inv = vec4<f32>(0.0);
+    var expectation = array<Weights, VMM_SIZE>();
+    var expectation_sum_inv = Weights();
 
     var iteration = 1u;
 
@@ -76,21 +59,21 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
         if (index == 0u) { atomicStore(&VMM_DELTA, 0u); }
 
         // Expectation
-        var expectation_sum = vec4<f32>(0.0);
+        var expectation_sum = Weights();
 
         for (var k=0u; k<VMM_SIZE; k++) {
             expectation[k] = vmf(VMM[k], omega);
             expectation_sum += expectation[k];
         }
 
-        expectation_sum_inv = 1.0 / max(expectation_sum, vec4<f32>(EPSILON));
+        expectation_sum_inv = 1.0 / max(expectation_sum, Weights(EPSILON));
 
         workgroupBarrier();
 
         // Maximization
         for (var k=0u; k<VMM_SIZE; k++) {
             let gamma_weight = expectation[k] * expectation_sum_inv * weight;
-            let vmm = vec4<f32>(omega * gamma_weight, sum(gamma_weight));
+            let vmm = vec4<f32>(omega * gamma_weight, total(gamma_weight));
             scatter_partial(k, subgroup, subgroup_index, vmm);
         }
 
@@ -108,7 +91,7 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
     // Maximize Phi
     for (var k=0u; k<VMM_SIZE; k++) {
         let gamma = expectation[k] * expectation_sum_inv;
-        let phi = vec4<f32>(radiance * gamma, sum(gamma));
+        let phi = vec4<f32>(radiance * gamma, total(gamma));
         scatter_partial(k, subgroup, subgroup_index, phi);
     }
 
@@ -192,6 +175,10 @@ fn rotate_hdri(direction: vec3<f32>) -> vec3<f32> {
     let local = normalize((TRANSFORM * vec4<f32>(world_rotated, 0.0)).xyz);
 
     return local;
+}
+
+fn trace(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+    return hdri(direction);
 }
 
 fn hdri(direction: vec3<f32>) -> vec3<f32> {

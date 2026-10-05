@@ -11,10 +11,20 @@ use crate::{
     gpu::Gpu,
 };
 
-// Selectable lobe counts -- see RenderingWidget::lobes. Each entry gets its own
-// fully precompiled set of pipelines (below) so switching at runtime is just
-// picking which one to dispatch, no shader recompilation involved.
 pub const VMM_SIZE_OPTIONS: [u32; 3] = [8, 16, 32];
+
+const SAMPLES_X1: &str = include_str!("samples_x1.wgsl");
+const SAMPLES_X4: &str = include_str!("samples_x4.wgsl");
+
+// (workgroup size, per-thread sample layout) per cascade level.
+const CASCADE_LAYOUT: [(u32, &str); GaussianRadianceBuffer::LEVELS as usize] = [
+    (32, SAMPLES_X1),
+    (32, SAMPLES_X1),
+    (32, SAMPLES_X4),
+    (64, SAMPLES_X4),
+    (256, SAMPLES_X4),
+    (1024, SAMPLES_X4),
+];
 
 struct LightingVariant {
     hdri: ComputePipeline,
@@ -30,8 +40,7 @@ impl LightingRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         let common = include_str!("common.wgsl");
 
-        let hdri_src = include_str!("hdri.wgsl").to_string() + common;
-        let cascade_src = include_str!("cascade.wgsl").to_string() + common;
+        let hdri_src = include_str!("hdri.wgsl").to_string() + SAMPLES_X4 + common;
 
         let variants = VMM_SIZE_OPTIONS.map(|vmm_size| LightingVariant {
             hdri: gpu.compute(
@@ -54,19 +63,12 @@ impl LightingRenderer {
                             &Environment::layout(gpu),
                             &HdriBuffer::layout(gpu),
                         ]),
-                        &gpu.shader(&vmm_template(
-                            &cascade_template(&cascade_src, cascade),
-                            vmm_size,
-                        )),
+                        &gpu.shader(&vmm_template(&cascade_src(cascade, common), vmm_size)),
                     )
                 })
                 .collect(),
         });
 
-        // Defaults to the 32-lobe variant (index of 32 in VMM_SIZE_OPTIONS),
-        // matching the previous hardcoded behavior for callers -- like the
-        // cascade benchmark -- that dispatch hdri/cascade directly and never
-        // call dispatch() to select a variant.
         let active = Cell::new(
             VMM_SIZE_OPTIONS
                 .iter()
@@ -81,15 +83,12 @@ impl LightingRenderer {
         &self.variants[self.active.get()]
     }
 
-    fn set_vmm_size(&self, vmm_size: u32) {
+    pub fn set_vmm_size(&self, vmm_size: u32) {
         if let Some(index) = VMM_SIZE_OPTIONS.iter().position(|&size| size == vmm_size) {
             self.active.set(index);
         }
     }
 
-    /// Build one cascade (`hdri` fit + all levels) for an explicit
-    /// `PhysicalVolume` / `GaussianRadianceBuffer` pair. The renderer calls this
-    /// once per active PV/radiance pair (volume, lines, or both).
     pub fn dispatch_for(
         &self,
         cmd: &mut CommandEncoder,
@@ -167,40 +166,12 @@ impl LightingRenderer {
     }
 }
 
-fn cascade_template(src: &str, cascade: u32) -> String {
-    src.replace("#CASCADE", &cascade.to_string())
-        .to_string()
-        .replace(
-            "#WORKGROUP",
-            &match cascade {
-                5 => 1024,
-                4 => 256,
-                3 => 64,
-                _ => 32,
-            }
-            .to_string(),
-        )
-        .replace(
-            "#SUBGROUPS",
-            &match cascade {
-                5 => 32,
-                4 => 8,
-                3 => 2,
-                _ => 1,
-            }
-            .to_string(),
-        )
-        .replace(
-            "#SAMPLES",
-            &match cascade {
-                5 => 4096,
-                4 => 1024,
-                3 => 256,
-                _ => 128,
-            }
-            .to_string(),
-        )
-        .to_string()
+fn cascade_src(cascade: u32, common: &str) -> String {
+    let (workgroup, samples) = CASCADE_LAYOUT[cascade as usize];
+
+    (include_str!("cascade.wgsl").to_string() + samples + common)
+        .replace("#CASCADE", &cascade.to_string())
+        .replace("#WORKGROUP", &workgroup.to_string())
 }
 
 fn vmm_template(src: &str, vmm_size: u32) -> String {

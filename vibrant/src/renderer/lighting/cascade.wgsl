@@ -32,23 +32,21 @@ struct CascadeOpts {
 @group(3) @binding(1) var HDRI_SAMPLER: sampler;
 @group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
 
-// LEVEL SAMPLES  WORKGROUP  SUBGROUPS
-//     0     128         32          1
-//     1     128         32          1
-//     2     128         32          1
-//     3     256         64          2
-//     4    1024        256          8
-//     5    4096       1024         32
+// LEVEL SAMPLES  WORKGROUP  SUBGROUPS  SAMPLES_PER_THREAD
+//     0      32         32          1                   1
+//     1      32         32          1                   1
+//     2     128         32          1                   4
+//     3     256         64          2                   4
+//     4    1024        256          8                   4
+//     5    4096       1024         32                   4
 
 const CASCADE_MAX: u32 = 5u;
 const CASCADE: u32 = #CASCADE;
 const WORKGROUP: u32 = #WORKGROUP;
-const SUBGROUPS: u32 = #SUBGROUPS;
-const SAMPLES: u32 = #SAMPLES;
+const SUBGROUPS: u32 = WORKGROUP / 32u;
+const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
 
 const IRRADIANCE_CULL: f32 = 0.05;
-
-const TRANSMISSION_SINGLE_RAY_CASCADE: u32 = 3u;
 
 var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
 var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_SIZE>;
@@ -88,21 +86,9 @@ fn main(
         return;
     }
 
-    let omega = mat4x3<f32>(
-        get_direction(4*index+0, SAMPLES),
-        get_direction(4*index+1, SAMPLES),
-        get_direction(4*index+2, SAMPLES),
-        get_direction(4*index+3, SAMPLES),
-    );
-
+    let omega = sample_directions(index);
     let radiance = get_incident_radiance(origin, omega);
-
-    let weight = vec4<f32>(
-        radiance_weight(radiance[0]),
-        radiance_weight(radiance[1]),
-        radiance_weight(radiance[2]),
-        radiance_weight(radiance[3]),
-    );
+    let weight = sample_weights(radiance);
 
     expectation_maximization(omega, radiance, weight, index);
 
@@ -155,12 +141,12 @@ fn initialize(probe: vec3<u32>, index: u32) {
     VMM_PRIOR[index] = VMM[index];
 }
 
-fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: vec4<f32>, index: u32) {
+fn expectation_maximization(omega: Directions, radiance: Radiances, weight: Weights, index: u32) {
     let subgroup = index >> 5u;
     let subgroup_index = index & 31;
 
-    var expectation = array<vec4<f32>, VMM_SIZE>();
-    var expectation_sum_inv = vec4<f32>(0.0);
+    var expectation = array<Weights, VMM_SIZE>();
+    var expectation_sum_inv = Weights();
 
     var iteration = 1u;
 
@@ -168,21 +154,21 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
         if (index == 0u) { atomicStore(&VMM_DELTA, 0u); }
 
         // Expectation
-        var expectation_sum = vec4<f32>(0.0);
+        var expectation_sum = Weights();
 
         for (var k=0u; k<VMM_SIZE; k++) {
             expectation[k] = vmf(VMM[k], omega);
             expectation_sum += expectation[k];
         }
 
-        expectation_sum_inv = 1.0 / max(expectation_sum, vec4<f32>(EPSILON));
+        expectation_sum_inv = 1.0 / max(expectation_sum, Weights(EPSILON));
 
         workgroupBarrier();
 
         // Maximization
         for (var k=0u; k<VMM_SIZE; k++) {
             let gamma_weight = expectation[k] * expectation_sum_inv * weight;
-            let vmm = vec4<f32>(omega * gamma_weight, sum(gamma_weight));
+            let vmm = vec4<f32>(omega * gamma_weight, total(gamma_weight));
             scatter_partial(k, subgroup, subgroup_index, vmm);
         }
 
@@ -200,7 +186,7 @@ fn expectation_maximization(omega: mat4x3<f32>, radiance: mat4x3<f32>, weight: v
     // Maximize Phi
     for (var k=0u; k<VMM_SIZE; k++) {
         let gamma = expectation[k] * expectation_sum_inv;
-        let phi = vec4<f32>(radiance * gamma, sum(gamma));
+        let phi = vec4<f32>(radiance * gamma, total(gamma));
         scatter_partial(k, subgroup, subgroup_index, phi);
     }
 
@@ -240,46 +226,26 @@ fn store_irradiance(probe: vec3<u32>) {
     textureStore(IRRADIANCE_OUT, probe, pack_rgb(irradiance));
 }
 
-fn get_incident_radiance(origin: vec3<f32>, omega: mat4x3<f32>) -> mat4x3<f32> {
-    var radiance = mat4x3<f32>();
-    var expectation_sum = vec4<f32>(0.0);
+fn get_incident_radiance(origin: vec3<f32>, omega: Directions) -> Radiances {
+    var radiance = Radiances();
+    var expectation_sum = Weights();
 
     for (var k=0u; k<VMM_SIZE; k++) {
         if (PHI[k].w < EPSILON) { continue; }
 
         let expectation = vmf(VMM[k], omega);
-            expectation_sum += expectation;
+        expectation_sum += expectation;
 
-        let phi_norm = PHI[k].rgb / PHI[k].w;
-
-        radiance += mat4x3<f32>(
-            expectation[0] * phi_norm,
-            expectation[1] * phi_norm,
-            expectation[2] * phi_norm,
-            expectation[3] * phi_norm,
-        );
+        radiance += outer(PHI[k].rgb / PHI[k].w, expectation);
     }
 
-    let expectation_sum_inv = 1.0 / expectation_sum;
-    radiance =  mat4x3<f32>(
-        radiance[0] * expectation_sum_inv[0],
-        radiance[1] * expectation_sum_inv[1],
-        radiance[2] * expectation_sum_inv[2],
-        radiance[3] * expectation_sum_inv[3],
-    );
+    radiance = scale(radiance, 1.0 / expectation_sum);
 
-    if (CASCADE < TRANSMISSION_SINGLE_RAY_CASCADE) {
-        let direction = normalize(omega[0] + omega[1] + omega[2] + omega[3]);
-        let t = transmission(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
-        return mat4x3<f32>(radiance[0] * t, radiance[1] * t, radiance[2] * t, radiance[3] * t);
-    } else {
-        return mat4x3<f32>(
-            radiance[0] * transmission(origin, omega[0], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-            radiance[1] * transmission(origin, omega[1], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-            radiance[2] * transmission(origin, omega[2], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-            radiance[3] * transmission(origin, omega[3], INTERVAL[CASCADE], INTERVAL[CASCADE + 1]),
-        );
-    }
+    return hadamard(radiance, trace_samples(origin, omega));
+}
+
+fn trace(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+    return transmission(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
 }
 
 fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {

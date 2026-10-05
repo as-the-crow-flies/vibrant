@@ -1,7 +1,6 @@
 // Times the gaussian radiance-cascade compute pass (cascade.wgsl) in isolation:
 // the HDRI fit, all levels together, and each level on its own. Scene setup is
-// shared with `benches/pipeline.rs` (see `harness`). This bench leaves the
-// LightingRenderer at its default 32-lobe variant.
+// shared with `benches/pipeline.rs` (see `harness`).
 //
 //   cargo bench --bench cascade            # full run
 //   cargo bench --bench cascade -- --test  # one pass + the histogram, no timing

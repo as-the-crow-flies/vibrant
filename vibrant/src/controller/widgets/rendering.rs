@@ -319,4 +319,11 @@ impl RenderingWidget {
     pub fn lobes(&self) -> u32 {
         self.lobes
     }
+
+    /// Override the lobe count. For headless callers (benches) that never open
+    /// the widget.
+    pub fn set_lobes(&mut self, lobes: u32) {
+        self.quality = Quality::Custom;
+        self.lobes = lobes;
+    }
 }
