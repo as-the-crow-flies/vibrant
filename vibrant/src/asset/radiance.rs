@@ -12,14 +12,11 @@ pub struct GaussianRadianceBuffer {
     vmm: Texture,
     phi: Texture,
     irradiance: Texture,
-    vmm_hdri: Buffer,
-    phi_hdri: Buffer,
     em_iterations: Buffer,
     // `cascade.wgsl` occlusion sources: (include_volume, include_lines, _, _).
     // Combined = (1, 1); overlay volume cascade = (1, 0); overlay line cascade = (0, 1).
     cascade_opts: Buffer,
     binding: BindGroup,
-    binding_hdri: BindGroup,
     binding_mipmap: Vec<BindGroup>,
     probes: Vec<UVec3>,
 }
@@ -28,21 +25,14 @@ impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     pub const LEVELS: u32 = 6;
 
-    // Upper bound on LightingRenderer's selectable lobe count (see
-    // RenderingWidget::lobes / VMM_SIZE in lighting/em.wgsl). Sizes the
-    // vmm_hdri/phi_hdri buffers below so they fit the largest variant
-    // regardless of which one is currently active.
-    pub const VMM_SIZE_MAX: u32 = 32;
-
-    // Must match EM_ITERATIONS_MAX in cascade.wgsl/hdri.wgsl: one bucket per
+    // Must match EM_ITERATIONS_MAX in em.wgsl: one bucket per
     // possible iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0
     // (unused; cascade.wgsl reserves it for culled probes).
     pub const EM_ITERATIONS_MAX: u32 = 100;
     pub const EM_HISTOGRAM_BUCKETS: u32 = Self::EM_ITERATIONS_MAX + 1;
 
-    // One row per cascade level plus one extra row (index LEVELS) for the
-    // single hdri.wgsl fit -- see EM_ITERATIONS_HDRI_ROW in hdri.wgsl.
-    pub const EM_HISTOGRAM_ROWS: u32 = Self::LEVELS + 1;
+    // One row per cascade level.
+    pub const EM_HISTOGRAM_ROWS: u32 = Self::LEVELS;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
@@ -94,20 +84,6 @@ impl GaussianRadianceBuffer {
             mapped_at_creation: false,
         });
 
-        let phi_hdri = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: Self::VMM_SIZE_MAX as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let vmm_hdri = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: Self::VMM_SIZE_MAX as u64 * 4 * 4, // (Lobes) * (4 Components) * (4 Bytes)
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let cascade_opts = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&[1u32, 0u32, 0u32, 0u32]),
@@ -154,25 +130,6 @@ impl GaussianRadianceBuffer {
                 BindGroupEntry {
                     binding: 2,
                     resource: BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        let binding_hdri = gpu.device().create_bind_group(&BindGroupDescriptor {
-            label,
-            layout: &Self::layout_hdri(gpu),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: phi_hdri.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: vmm_hdri.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: em_iterations.as_entire_binding(),
                 },
             ],
         });
@@ -262,14 +219,6 @@ impl GaussianRadianceBuffer {
                         },
                         BindGroupEntry {
                             binding: 8,
-                            resource: phi_hdri.as_entire_binding(),
-                        },
-                        BindGroupEntry {
-                            binding: 9,
-                            resource: vmm_hdri.as_entire_binding(),
-                        },
-                        BindGroupEntry {
-                            binding: 10,
                             resource: cascade_opts.as_entire_binding(),
                         },
                     ],
@@ -281,12 +230,9 @@ impl GaussianRadianceBuffer {
             phi,
             vmm,
             irradiance,
-            vmm_hdri,
-            phi_hdri,
             em_iterations,
             cascade_opts,
             binding,
-            binding_hdri,
             binding_mipmap,
             probes,
         }
@@ -307,10 +253,6 @@ impl GaussianRadianceBuffer {
 
     pub fn binding(&self) -> &BindGroup {
         &self.binding
-    }
-
-    pub fn binding_hdri(&self) -> &BindGroup {
-        &self.binding_hdri
     }
 
     pub fn binding_mipmap(&self, cascade: usize) -> &BindGroup {
@@ -368,48 +310,6 @@ impl GaussianRadianceBuffer {
                         binding: 2,
                         visibility,
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            })
-    }
-
-    pub fn layout_hdri(gpu: &Gpu) -> BindGroupLayout {
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    // PHI_HDRI
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // VMM_HDRI
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // EM_ITERATIONS
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
                         count: None,
                     },
                 ],
@@ -497,31 +397,9 @@ impl GaussianRadianceBuffer {
                         },
                         count: None,
                     },
-                    // PHI_HDRI
-                    BindGroupLayoutEntry {
-                        binding: 8,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // VMM_HDRI
-                    BindGroupLayoutEntry {
-                        binding: 9,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                     // CASCADE_OPTS
                     BindGroupLayoutEntry {
-                        binding: 10,
+                        binding: 8,
                         visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
@@ -541,8 +419,6 @@ impl Drop for GaussianRadianceBuffer {
         self.phi.destroy();
         self.vmm.destroy();
         self.irradiance.destroy();
-        self.phi_hdri.destroy();
-        self.vmm_hdri.destroy();
         self.cascade_opts.destroy();
     }
 }

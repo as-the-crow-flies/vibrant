@@ -1,3 +1,5 @@
+mod importance;
+
 use std::any::type_name;
 
 use bytemuck::{bytes_of, Pod, Zeroable};
@@ -13,6 +15,8 @@ use crate::{
     gpu::Gpu,
 };
 
+use importance::{Importance, Lobes};
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct HdriBufferSettings {
@@ -26,6 +30,7 @@ pub struct HdriBufferSettings {
 pub struct HdriTexture {
     name: String,
     texture: Texture,
+    lobes: Lobes,
     binding: BindGroup,
 }
 
@@ -85,6 +90,8 @@ impl HdriTexture {
 
         Self::generate_mipmaps(gpu, &texture, mip_level_count, sampler, mipmap);
 
+        let lobes = Lobes::new(gpu);
+
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &HdriBuffer::layout(gpu),
@@ -107,12 +114,21 @@ impl HdriTexture {
                         size: None,
                     }),
                 },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: lobes.vmm.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: lobes.phi.as_entire_binding(),
+                },
             ],
         });
 
         Self {
             name: name.to_string(),
             texture,
+            lobes,
             binding,
         }
     }
@@ -148,6 +164,10 @@ impl HdriTexture {
             settings,
             mipmap,
         )
+    }
+
+    fn bake(&self, gpu: &Gpu, importance: &Importance, sampler: &Sampler, cut: bool) {
+        importance.bake(gpu, &self.texture, sampler, &self.lobes, cut);
     }
 
     fn mipmap_layout(gpu: &Gpu) -> BindGroupLayout {
@@ -242,11 +262,15 @@ impl HdriTexture {
 
 pub struct HdriBuffer {
     pub index: usize,
+    /// Seed the environment fit from the luminance cut instead of uniform lobes.
+    pub cut: bool,
+    baked_cut: bool,
     textures: Vec<HdriTexture>,
     sampler: Sampler,
     settings: HdriBufferSettings,
     settings_buffer: Buffer,
     mipmap: ComputePipeline,
+    importance: Importance,
 }
 
 impl HdriBuffer {
@@ -258,6 +282,8 @@ impl HdriBuffer {
             &gpu.pipeline_layout(&[&HdriTexture::mipmap_layout(gpu)]),
             &gpu.shader(include_str!("mipmap.wgsl")),
         );
+
+        let importance = Importance::new(gpu);
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -278,7 +304,7 @@ impl HdriBuffer {
             rotation: 0.0,
             strength: 1.0,
             specular: 1.0,
-            roughness: 0.5,
+            roughness: 0.25,
             anisotropy: 0.0,
         };
 
@@ -293,7 +319,7 @@ impl HdriBuffer {
             HdriTexture::from_exr_bytes(
                 gpu,
                 "Brown",
-                include_bytes!("brown.exr").to_vec(),
+                include_bytes!("exr/brown.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
@@ -301,7 +327,7 @@ impl HdriBuffer {
             HdriTexture::from_exr_bytes(
                 gpu,
                 "Country",
-                include_bytes!("country.exr").to_vec(),
+                include_bytes!("exr/country.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
@@ -309,7 +335,7 @@ impl HdriBuffer {
             HdriTexture::from_exr_bytes(
                 gpu,
                 "Ferndale",
-                include_bytes!("ferndale.exr").to_vec(),
+                include_bytes!("exr/ferndale.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
@@ -317,7 +343,7 @@ impl HdriBuffer {
             HdriTexture::from_exr_bytes(
                 gpu,
                 "Hangar",
-                include_bytes!("hangar.exr").to_vec(),
+                include_bytes!("exr/hangar.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
@@ -325,7 +351,7 @@ impl HdriBuffer {
             HdriTexture::from_exr_bytes(
                 gpu,
                 "Loft",
-                include_bytes!("loft.exr").to_vec(),
+                include_bytes!("exr/loft.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
@@ -333,7 +359,7 @@ impl HdriBuffer {
             HdriTexture::from_exr_bytes(
                 gpu,
                 "Studio",
-                include_bytes!("studio.exr").to_vec(),
+                include_bytes!("exr/studio.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
@@ -341,20 +367,27 @@ impl HdriBuffer {
             HdriTexture::from_exr_bytes(
                 gpu,
                 "Workshop",
-                include_bytes!("workshop.exr").to_vec(),
+                include_bytes!("exr/workshop.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
             ),
         ];
 
+        for texture in &textures {
+            texture.bake(gpu, &importance, &sampler, true);
+        }
+
         Self {
             textures,
             sampler,
             index: 0,
+            cut: true,
+            baked_cut: true,
             settings,
             settings_buffer,
             mipmap,
+            importance,
         }
     }
 
@@ -369,6 +402,9 @@ impl HdriBuffer {
             &self.mipmap,
         ));
         self.index = self.textures().len() - 1;
+
+        self.texture()
+            .bake(gpu, &self.importance, &self.sampler, self.baked_cut);
     }
 
     pub fn texture(&self) -> &HdriTexture {
@@ -383,9 +419,16 @@ impl HdriBuffer {
         &mut self.settings
     }
 
-    pub fn update_settings(&self, gpu: &Gpu) {
+    pub fn update_settings(&mut self, gpu: &Gpu) {
         gpu.queue()
             .write_buffer(&self.settings_buffer, 0, bytes_of(&self.settings));
+
+        if self.cut != self.baked_cut {
+            for texture in &self.textures {
+                texture.bake(gpu, &self.importance, &self.sampler, self.cut);
+            }
+            self.baked_cut = self.cut;
+        }
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -429,6 +472,26 @@ impl HdriBuffer {
                         },
                         count: None,
                     },
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -437,6 +500,8 @@ impl HdriBuffer {
 impl Drop for HdriTexture {
     fn drop(&mut self) {
         self.texture.destroy();
+        self.lobes.vmm.destroy();
+        self.lobes.phi.destroy();
     }
 }
 

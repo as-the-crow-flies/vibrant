@@ -95,20 +95,6 @@ fn bench_pipeline(c: &mut Criterion) {
 
     // --- Radiance cascade (see benches/cascade.rs for the per-level breakdown) ---
 
-    group.bench_function("lighting/hdri", |t| {
-        t.iter(|| {
-            b.time_pass(|cmd| {
-                b.lighting.hdri(
-                    cmd,
-                    &b.asset.environment,
-                    &b.asset.hdri,
-                    b.radiance(),
-                    b.pv(),
-                )
-            })
-        })
-    });
-
     group.bench_function("lighting/cascade_all", |t| {
         t.iter(|| {
             b.time_pass(|cmd| {

@@ -9,9 +9,7 @@ struct CascadeOpts {
 @group(0) @binding(4) var VMM_IN: texture_3d<f32>;
 @group(0) @binding(5) var IRRADIANCE_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(6) var IRRADIANCE_IN: texture_3d<f32>;
-@group(0) @binding(8) var<storage, read> PHI_HDRI: array<vec4<f32>>;
-@group(0) @binding(9) var<storage, read> VMM_HDRI: array<vec4<f32>>;
-@group(0) @binding(10) var<uniform> CASCADE_OPTS: CascadeOpts;
+@group(0) @binding(8) var<uniform> CASCADE_OPTS: CascadeOpts;
 
 // Diagnostic Histogram
 @group(0) @binding(7) var<storage, read_write> EM_ITERATIONS: array<atomic<u32>>;
@@ -31,6 +29,8 @@ struct CascadeOpts {
 @group(3) @binding(0) var HDRI: texture_2d<f32>;
 @group(3) @binding(1) var HDRI_SAMPLER: sampler;
 @group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
+@group(3) @binding(3) var<storage, read> VMM_HDRI: array<vec4<f32>>;
+@group(3) @binding(4) var<storage, read> PHI_HDRI: array<vec4<f32>>;
 
 // LEVEL SAMPLES  WORKGROUP  SUBGROUPS  SAMPLES_PER_THREAD
 //     0      32         32          1                   1
@@ -122,8 +122,11 @@ fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
 
 fn initialize_lobe(probe: vec3<u32>, k: u32) {
     if (CASCADE == CASCADE_MAX) {
-        VMM[k] = VMM_HDRI[k];
-        PHI[k] = PHI_HDRI[k];
+        let vmm = VMM_HDRI[VMM_SIZE + k];
+        let phi = PHI_HDRI[VMM_SIZE + k];
+
+        VMM[k] = vec4<f32>(rotate_hdri(vmm.xyz) * length(vmm.xyz), vmm.w);
+        PHI[k] = vec4<f32>(phi.rgb * HDRI_SETTINGS.strength, phi.w);
     } else {
         let uv = parent_uv(textureDimensions(VMM_IN), probe, k);
 
@@ -132,6 +135,12 @@ fn initialize_lobe(probe: vec3<u32>, k: u32) {
     }
 
     VMM_PRIOR[k] = VMM[k];
+}
+
+// The HDRI fit is baked in world space: rotate it, then bring it into the volume.
+fn rotate_hdri(direction: vec3<f32>) -> vec3<f32> {
+    let world = rotation_z(-HDRI_SETTINGS.rotation * 2.0 * PI) * normalize(direction);
+    return normalize((TRANSFORM * vec4<f32>(world, 0.0)).xyz);
 }
 
 fn store_lobe(probe: vec3<u32>, k: u32) {

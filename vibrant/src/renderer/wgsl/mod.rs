@@ -1,3 +1,4 @@
+pub mod em;
 pub mod voxelize;
 
 pub const COMMON: &str = include_str!("common.wgsl");
