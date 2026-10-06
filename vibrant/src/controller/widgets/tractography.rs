@@ -1,4 +1,4 @@
-use egui::{Align, ComboBox, Frame, Grid, Layout, Margin, ScrollArea, Ui};
+use egui::{Align, ComboBox, Frame, Layout, Margin, ScrollArea, Ui};
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -7,10 +7,7 @@ use crate::{
         line::{LineBuffer, LineColorMode},
     },
     controller::{
-        components::UIComponents,
-        icons,
-        settings::{RenderMode, Settings},
-        widgets::util::UiResponseExtensions,
+        components::UIComponents, icons, settings::Settings, widgets::util::UiResponseExtensions,
     },
     util::{ResponseExtentions, Tracked},
 };
@@ -55,61 +52,6 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
             });
             return;
         };
-
-        // Closed by default (`open: false`, same as every other collapsible
-        // here) and rendered ahead of the tract list's own `ScrollArea`
-        // below, so it stays put at the top instead of scrolling away with
-        // the tracts.
-        ui.collapse(format!("{} Settings", icons::regular::GEAR), false, |ui| {
-            Grid::new("TractographySettings")
-                .num_columns(2)
-                .show(ui, |ui| {
-                    ui.label("Render Mode").help(
-                        "Render Mode",
-                        "How bundles are combined with the volumes.\n\n\
-                         Combined — bundles and volume share one lighting pass \
-                         and occlude each other, so tracts pass convincingly \
-                         behind anatomy.\n\
-                         Overlay — bundles are drawn on top of the volume and \
-                         stay fully visible, like a see-through schematic.",
-                    );
-                    ComboBox::from_id_salt("TractographyRenderMode")
-                        .selected_text(format!("{}", settings.render_mode))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut settings.render_mode,
-                                RenderMode::Combined,
-                                format!("{}", RenderMode::Combined),
-                            )
-                            .track(self);
-                            ui.selectable_value(
-                                &mut settings.render_mode,
-                                RenderMode::Overlay,
-                                format!("{}", RenderMode::Overlay),
-                            )
-                            .track(self);
-                        });
-                    ui.end_row();
-
-                    // `settings.radius` is in voxels of the `settings.volume` grid,
-                    // which spans the tractogram's largest extent; scale by the mm
-                    // width of one such voxel so the slider reads in millimetres.
-                    if let Some(mm_per_unit) = (settings.volume > 0)
-                        .then(|| lines.bounds().scale().max_element() / settings.volume as f32)
-                    {
-                        ui.label("Tract Radius")
-                            .on_hover_text("Rendered radius of each streamline, in millimetres.");
-                        let mut radius_mm = settings.radius * mm_per_unit;
-                        if ui.slider(&mut radius_mm, 0.0..=2.0).track(self).changed() {
-                            settings.radius = radius_mm / mm_per_unit;
-                        }
-                        ui.end_row();
-                    }
-                });
-        });
-
-        ui.separator();
 
         // Right-inset to match the 6px `inner_margin` that `ui.frame` (used
         // below, per line) applies on every side - otherwise this row's

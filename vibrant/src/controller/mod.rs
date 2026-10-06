@@ -55,7 +55,7 @@ fn default_dock_state() -> DockState<Tab> {
 
     let [_, data] = surface.split_below(
         NodeIndex::root(),
-        0.3,
+        0.4,
         vec![Tab::Volumes, Tab::Masks, Tab::Tractography],
     );
 
@@ -100,9 +100,8 @@ impl egui_dock::TabViewer for ControllerTabViewer<'_> {
 
     fn scroll_bars(&self, tab: &Self::Tab) -> [bool; 2] {
         match tab {
-            // These widgets scroll their own item list (below a fixed
-            // settings header), so they manage their own `ScrollArea`
-            // instead of the dock body's.
+            // These widgets scroll their own item list, so they manage their
+            // own `ScrollArea` instead of the dock body's.
             Tab::Volumes | Tab::Tractography => [false, false],
             _ => [false, true],
         }
@@ -114,12 +113,8 @@ impl egui_dock::TabViewer for ControllerTabViewer<'_> {
                 self.crop_widget.show(ui, &mut self.asset.crop);
             }
             Tab::Volumes => {
-                self.volumes_widget.show(
-                    ui,
-                    &mut self.asset.volumes,
-                    &self.asset.masks,
-                    &mut self.asset.hdri,
-                );
+                self.volumes_widget
+                    .show(ui, &mut self.asset.volumes, &self.asset.masks);
             }
             Tab::Masks => {
                 self.mask_widget.show(ui, &mut self.asset.masks);
@@ -132,6 +127,7 @@ impl egui_dock::TabViewer for ControllerTabViewer<'_> {
                 self.rendering_widget.show(
                     ui,
                     &mut self.asset.hdri,
+                    self.asset.line.as_ref(),
                     self.camera,
                     self.settings,
                     self.hdr_headroom_limit,
