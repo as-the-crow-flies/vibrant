@@ -1,5 +1,5 @@
 // Workgroup-cooperative EM fit of the VMM to this workgroup's samples. Each
-// including shader defines SUBGROUPS, EM_HISTOGRAM_ROW and the EM_ITERATIONS binding.
+// including shader defines SUBGROUPS, EM_HISTOGRAM_ROW and EM_ITERATIONS.
 
 const VMM_SIZE: u32 = #VMM_SIZE;
 

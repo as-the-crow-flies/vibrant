@@ -382,6 +382,22 @@ impl RenderingWidget {
                     });
             },
         );
+
+        ui.collapse(
+            format!("{} Advanced", icons::regular::WRENCH),
+            false,
+            |ui| {
+                Grid::new("AdvancedSettings").num_columns(2).show(ui, |ui| {
+                    ui.label("Environment Cut").on_hover_text(
+                        "Start the environment lighting fit from lobes placed on \
+                     the brightest regions of the map. When off, lobes start \
+                     evenly spread over all directions.",
+                    );
+                    ui.checkbox(&mut hdri.cut, "").track(self);
+                    ui.end_row();
+                });
+            },
+        );
     }
 
     pub fn changed(&self) -> bool {

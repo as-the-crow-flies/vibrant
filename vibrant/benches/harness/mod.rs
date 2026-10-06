@@ -227,8 +227,6 @@ impl Bench {
 
         let (asset, pv) = (&self.asset, self.pv());
         self.lighting
-            .hdri(cmd, &asset.environment, &asset.hdri, self.radiance(), pv);
-        self.lighting
             .radiance(cmd, &asset.environment, &asset.hdri, self.radiance(), pv);
     }
 

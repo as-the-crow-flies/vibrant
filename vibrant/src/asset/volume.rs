@@ -509,7 +509,7 @@ impl PhysicalVolume {
                     ],
                     // LINE_EXTINCTION texture (8) + sampler (9). Only
                     // `cascade.wgsl` samples it (gated by its `cascade_opts`);
-                    // the volume tracer / hdri fit bind this layout too but
+                    // the volume tracer binds this layout too but
                     // ignore 8/9.
                     MipTexture3D::<R32Float>::layout_entries(8),
                 ]
