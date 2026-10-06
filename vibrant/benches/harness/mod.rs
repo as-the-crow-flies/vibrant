@@ -167,7 +167,7 @@ pub fn setup() -> Bench {
     // gradients, the tractography occupancy pyramid, the deposited line density,
     // and one full radiance-cascade solve -- so benchmarked passes measure
     // steady-state cost, not work against zeroed buffers (an unpopulated
-    // extinction volume makes `cull()` reject every probe). `pipeline.rs`
+    // extinction volume makes `is_culled()` reject every probe). `pipeline.rs`
     // additionally calls `prime_frame` to exercise the raster + resolve passes.
     bench.time_pass(|cmd| bench.prime_static(cmd));
 

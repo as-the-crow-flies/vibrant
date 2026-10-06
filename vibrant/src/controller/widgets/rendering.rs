@@ -74,8 +74,8 @@ impl RenderingWidget {
         Self {
             changed: false,
             quality: Quality::Medium,
-            lightmap_resolution: 64,
-            lobes: 8,
+            lightmap_resolution: 96,
+            lobes: 16,
             hdr_headroom_auto: true,
         }
     }

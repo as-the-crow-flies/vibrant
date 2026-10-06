@@ -19,7 +19,7 @@ use harness::Bench;
 // a one-shot diagnostic, not a benchmark. Bucket 0 is culled probes (they
 // never enter the EM loop; hdri.wgsl has no cull step, so its row never has
 // one). Useful for deciding whether EM_ITERATIONS_MAX/MIN/EM_CONVERGENCE in
-// cascade.wgsl/hdri.wgsl can be tightened, and for seeing how much cull() is
+// cascade.wgsl/hdri.wgsl can be tightened, and for seeing how much is_culled() is
 // actually skipping.
 fn print_em_iteration_histogram(bench: &Bench) {
     let buckets = GaussianRadianceBuffer::EM_HISTOGRAM_BUCKETS as usize;

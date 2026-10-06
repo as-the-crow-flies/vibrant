@@ -109,7 +109,7 @@ impl Settings {
             alpha: 1.0,
             line_roughness: 0.5,
             line_specular: 0.5,
-            line_crop: true,
+            line_crop: false,
             level: 0.0,
             smoothing: 1.0,
             culling: true,

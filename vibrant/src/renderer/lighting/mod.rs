@@ -13,6 +13,8 @@ use crate::{
 
 pub const VMM_SIZE_OPTIONS: [u32; 3] = [8, 16, 32];
 
+const EM: &str = include_str!("em.wgsl");
+
 const SAMPLES_X1: &str = include_str!("samples_x1.wgsl");
 const SAMPLES_X4: &str = include_str!("samples_x4.wgsl");
 
@@ -38,9 +40,7 @@ pub struct LightingRenderer {
 
 impl LightingRenderer {
     pub fn new(gpu: &Gpu) -> Self {
-        let common = include_str!("common.wgsl");
-
-        let hdri_src = include_str!("hdri.wgsl").to_string() + SAMPLES_X4 + common;
+        let hdri_src = include_str!("hdri.wgsl").to_string() + SAMPLES_X4 + EM;
 
         let variants = VMM_SIZE_OPTIONS.map(|vmm_size| LightingVariant {
             hdri: gpu.compute(
@@ -63,7 +63,7 @@ impl LightingRenderer {
                             &Environment::layout(gpu),
                             &HdriBuffer::layout(gpu),
                         ]),
-                        &gpu.shader(&vmm_template(&cascade_src(cascade, common), vmm_size)),
+                        &gpu.shader(&vmm_template(&cascade_src(cascade), vmm_size)),
                     )
                 })
                 .collect(),
@@ -166,10 +166,10 @@ impl LightingRenderer {
     }
 }
 
-fn cascade_src(cascade: u32, common: &str) -> String {
+fn cascade_src(cascade: u32) -> String {
     let (workgroup, samples) = CASCADE_LAYOUT[cascade as usize];
 
-    (include_str!("cascade.wgsl").to_string() + samples + common)
+    (include_str!("cascade.wgsl").to_string() + samples + EM)
         .replace("#CASCADE", &cascade.to_string())
         .replace("#WORKGROUP", &workgroup.to_string())
 }
