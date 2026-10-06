@@ -7,14 +7,10 @@ use strum::IntoEnumIterator;
 use crate::{
     asset::{
         colormap::ColormapSelection,
-        hdri::HdriBuffer,
         volume_fraction::{VolumeFractionBuffer, VolumeFractionSettings},
         volume_mask::VolumeMaskBuffer,
     },
-    controller::{
-        components::{transfer::TransferFunctionEditor, UIComponents},
-        icons,
-    },
+    controller::components::{transfer::TransferFunctionEditor, UIComponents},
     util::{ResponseExtentions, Tracked},
 };
 
@@ -48,7 +44,6 @@ impl VolumesWidget {
         ui: &mut Ui,
         volumes: &mut Vec<VolumeFractionBuffer>,
         masks: &[VolumeMaskBuffer],
-        hdri: &mut HdriBuffer,
     ) {
         if volumes.is_empty() {
             ui.vertical_centered(|ui| {
@@ -56,30 +51,6 @@ impl VolumesWidget {
             });
             return;
         }
-
-        // Closed by default and rendered ahead of the per-volume list, same
-        // as Tractography's settings header.
-        ui.collapse(format!("{} Settings", icons::regular::GEAR), false, |ui| {
-            Grid::new("VolumeGlobalSettingsGrid")
-                .num_columns(2)
-                .show(ui, |ui| {
-                    ui.label("Specular").on_hover_text(
-                        "Strength of mirror-like highlights on dense structures \
-                         under environment lighting. 0 = matte, 1 = glossy.",
-                    );
-                    ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
-                        .track(self);
-                    ui.end_row();
-
-                    ui.label("Roughness").on_hover_text(
-                        "How spread-out the specular highlights are. Low = tight, \
-                         wet-looking reflections; high = a soft, broad sheen.",
-                    );
-                    ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0)
-                        .track(self);
-                    ui.end_row();
-                });
-        });
 
         let mut index_to_remove: Option<usize> = None;
 

@@ -2,9 +2,12 @@ use egui::{ComboBox, Grid, Ui};
 use itertools::Itertools;
 
 use crate::{
-    asset::hdri::HdriBuffer,
+    asset::{hdri::HdriBuffer, line::LineBuffer},
     controller::{
-        camera::Camera, components::UIComponents, icons, settings::Settings,
+        camera::Camera,
+        components::UIComponents,
+        icons,
+        settings::{RenderMode, Settings},
         widgets::util::UiResponseExtensions,
     },
     surface::accumulate::AccumulationStatus,
@@ -74,16 +77,18 @@ impl RenderingWidget {
         Self {
             changed: false,
             quality: Quality::Medium,
-            lightmap_resolution: 64,
-            lobes: 8,
+            lightmap_resolution: 96,
+            lobes: 16,
             hdr_headroom_auto: true,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn show(
         &mut self,
         ui: &mut Ui,
         hdri: &mut HdriBuffer,
+        lines: Option<&LineBuffer>,
         camera: &mut Camera,
         settings: &mut Settings,
         // `Some(limit)` = HDR available + the max peak the display can drive now.
@@ -193,6 +198,90 @@ impl RenderingWidget {
             "The scene is lit by a 360° environment image. Pick a built-in map, \
              or use Open to load your own .exr (e.g. from polyhaven.com). \
              Shift + drag in the view to rotate the lighting.",
+        );
+
+        let volumes_open = ui.is_new("Rendering.Volumes");
+        ui.collapse(
+            format!("{} Volumes", icons::regular::BRAIN),
+            volumes_open,
+            |ui| {
+                Grid::new("VolumeRenderSettings")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        ui.label("Specular").on_hover_text(
+                            "Strength of mirror-like highlights on dense structures \
+                         under environment lighting. 0 = matte, 1 = glossy.",
+                        );
+                        ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                            .track(self);
+                        ui.end_row();
+
+                        ui.label("Roughness").on_hover_text(
+                            "How spread-out the specular highlights are. Low = tight, \
+                         wet-looking reflections; high = a soft, broad sheen.",
+                        );
+                        ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0)
+                            .track(self);
+                        ui.end_row();
+                    });
+            },
+        );
+
+        let tractography_open = ui.is_new("Rendering.Tractography");
+        ui.collapse(
+            format!("{} Tractography", icons::regular::PATH),
+            tractography_open,
+            |ui| {
+                Grid::new("TractographyRenderSettings")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        ui.label("Render Mode").help(
+                            "Render Mode",
+                            "How bundles are combined with the volumes.\n\n\
+                             Combined — bundles and volume share one lighting pass \
+                             and occlude each other, so tracts pass convincingly \
+                             behind anatomy.\n\
+                             Overlay — bundles are drawn on top of the volume and \
+                             stay fully visible, like a see-through schematic.",
+                        );
+                        ComboBox::from_id_salt("TractographyRenderMode")
+                            .selected_text(format!("{}", settings.render_mode))
+                            .width(ui.available_width())
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut settings.render_mode,
+                                    RenderMode::Combined,
+                                    format!("{}", RenderMode::Combined),
+                                )
+                                .track(self);
+                                ui.selectable_value(
+                                    &mut settings.render_mode,
+                                    RenderMode::Overlay,
+                                    format!("{}", RenderMode::Overlay),
+                                )
+                                .track(self);
+                            });
+                        ui.end_row();
+
+                        // `settings.radius` is in voxels of the `settings.volume` grid,
+                        // which spans the tractogram's largest extent; scale by the mm
+                        // width of one such voxel so the slider reads in millimetres.
+                        if let Some(mm_per_unit) =
+                            lines.filter(|_| settings.volume > 0).map(|lines| {
+                                lines.bounds().scale().max_element() / settings.volume as f32
+                            })
+                        {
+                            ui.label("Tract Radius").on_hover_text(
+                                "Rendered radius of each streamline, in millimetres.",
+                            );
+                            let mut radius_mm = settings.radius * mm_per_unit;
+                            if ui.slider(&mut radius_mm, 0.0..=2.0).track(self).changed() {
+                                settings.radius = radius_mm / mm_per_unit;
+                            }
+                            ui.end_row();
+                        }
+                    });
+            },
         );
 
         ui.collapse(format!("{} Quality", icons::regular::GAUGE), false, |ui| {
@@ -318,5 +407,12 @@ impl RenderingWidget {
 
     pub fn lobes(&self) -> u32 {
         self.lobes
+    }
+
+    /// Override the lobe count. For headless callers (benches) that never open
+    /// the widget.
+    pub fn set_lobes(&mut self, lobes: u32) {
+        self.quality = Quality::Custom;
+        self.lobes = lobes;
     }
 }

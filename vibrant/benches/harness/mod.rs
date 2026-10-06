@@ -36,20 +36,33 @@ use wgpu::{
     TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 
-/// Scene inputs. Editable -- point these at whatever volume / tractography pair
-/// you want to profile (mirrors the const at the top of the old `cascade.rs`).
-pub const VOLUME_PATH: &str = "/Users/bkraaijeveld/Data/HCP-100307/100307_t1w.nii.gz";
-pub const LINE_PATH: &str = "/Users/bkraaijeveld/Data/HCP-100307/whole_brain200k.tck";
+/// Scene + render settings shared by every bench.
+pub const SETTINGS: Settings = Settings {
+    volume_path: "/Users/bkraaijeveld/Data/HCP-100307/100307_t1w.nii.gz",
+    line_path: "/Users/bkraaijeveld/Data/HCP-100307/whole_brain200k.tck",
+    lightmap_resolution: 128,
+    lobes: 32,
+    width: 1920,
+    height: 1080,
+    hdri_index: 3, // Ferndale
+    hdri_rotation: 0.0,
+    hdri_strength: 1.0,
+};
 
-/// Radiance lightmap resolution (probes along the volume's longest axis).
-pub const LIGHTMAP_RESOLUTION: u32 = 128;
-
-/// Render viewport the raster passes (volume trace, line trace, present) cover.
-pub const WIDTH: u32 = 1920;
-pub const HEIGHT: u32 = 1080;
-
-/// Ferndale -- matches the old `cascade.rs` setup.
-pub const HDRI_INDEX: usize = 3;
+pub struct Settings {
+    pub volume_path: &'static str,
+    pub line_path: &'static str,
+    /// Radiance lightmap resolution (probes along the volume's longest axis).
+    pub lightmap_resolution: u32,
+    /// VMM lobe count -- one of `VMM_SIZE_OPTIONS`.
+    pub lobes: u32,
+    /// Render viewport the raster passes (volume trace, line trace, present) cover.
+    pub width: u32,
+    pub height: u32,
+    pub hdri_index: usize,
+    pub hdri_rotation: f32,
+    pub hdri_strength: f32,
+}
 
 pub struct Bench {
     pub gpu: Gpu,
@@ -77,24 +90,30 @@ pub struct Bench {
 }
 
 pub fn setup() -> Bench {
+    let settings = &SETTINGS;
+
     let gpu = Gpu::new().block_on().expect("Could not acquire a GPU");
 
     // Push the scene files onto the global FileStage queue, then let `Asset`
     // drain + build them exactly as the app does on load.
-    FileStage::load_path_blocking(&PathBuf::from(VOLUME_PATH));
-    FileStage::load_path_blocking(&PathBuf::from(LINE_PATH));
+    FileStage::load_path_blocking(&PathBuf::from(settings.volume_path));
+    FileStage::load_path_blocking(&PathBuf::from(settings.line_path));
 
     let mut controller = Controller::new();
-    controller.settings_mut().width = WIDTH;
-    controller.settings_mut().height = HEIGHT;
-    controller.set_viewport(WIDTH as f32, HEIGHT as f32);
+    controller.settings_mut().width = settings.width;
+    controller.settings_mut().height = settings.height;
+    controller.set_viewport(settings.width as f32, settings.height as f32);
     controller
         .rendering_mut()
-        .set_lightmap_resolution(LIGHTMAP_RESOLUTION);
+        .set_lightmap_resolution(settings.lightmap_resolution);
+    controller.rendering_mut().set_lobes(settings.lobes);
 
     let mut asset = Asset::new(&gpu);
     asset.update(&gpu, &mut controller); // builds line/volume/physical_volume/radiance
-    asset.hdri.index = HDRI_INDEX;
+    asset.hdri.index = settings.hdri_index;
+    asset.hdri.settings_mut().rotation = settings.hdri_rotation;
+    asset.hdri.settings_mut().strength = settings.hdri_strength;
+    asset.hdri.update_settings(&gpu);
     asset.environment.update(&gpu, &controller, Vec2::ZERO);
 
     let frame = Frame::new(&gpu, controller.settings());
@@ -104,8 +123,8 @@ pub fn setup() -> Bench {
         .create_texture(&TextureDescriptor {
             label: Some("bench.present_target"),
             size: Extent3d {
-                width: WIDTH,
-                height: HEIGHT,
+                width: settings.width,
+                height: settings.height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -116,6 +135,9 @@ pub fn setup() -> Bench {
             view_formats: &[],
         })
         .create_view(&TextureViewDescriptor::default());
+
+    let lighting = LightingRenderer::new(&gpu);
+    lighting.set_vmm_size(settings.lobes);
 
     let bench = Bench {
         clear: ClearPipeline::new(&gpu),
@@ -129,7 +151,7 @@ pub fn setup() -> Bench {
         volume_transfer: VolumeTransferPipeline::new(&gpu),
         gradient: GradientPipeline::new(&gpu),
         volume_render: GaussianVolumeRenderer::new(&gpu),
-        lighting: LightingRenderer::new(&gpu),
+        lighting,
         accumulate: AccumulatePipeline::new(&gpu),
         accumulate_buffer: AccumulateBuffer::new(&gpu),
         present: PresentPipeline::new(&gpu, TextureFormat::Bgra8Unorm, TextureFormat::Rgba16Float),
@@ -145,10 +167,8 @@ pub fn setup() -> Bench {
     // gradients, the tractography occupancy pyramid, the deposited line density,
     // and one full radiance-cascade solve -- so benchmarked passes measure
     // steady-state cost, not work against zeroed buffers (an unpopulated
-    // extinction volume makes `cull()` reject every probe). Uses the default
-    // 32-lobe LightingRenderer variant, which `cascade.rs` expects; `pipeline.rs`
-    // additionally calls `prime_frame` (switches to the app's 16 via
-    // `dispatch_for`, and exercises the raster + resolve passes).
+    // extinction volume makes `is_culled()` reject every probe). `pipeline.rs`
+    // additionally calls `prime_frame` to exercise the raster + resolve passes.
     bench.time_pass(|cmd| bench.prime_static(cmd));
 
     bench
@@ -201,7 +221,7 @@ impl Bench {
     }
 
     /// One-time population run from `setup`: scene build + a full radiance solve
-    /// via the direct 32-lobe calls `cascade.rs` benchmarks.
+    /// via the direct calls `cascade.rs` benchmarks.
     fn prime_static(&self, cmd: &mut CommandEncoder) {
         self.record_scene_build(cmd);
 
@@ -214,8 +234,7 @@ impl Bench {
 
     /// Replay the whole `Renderer::render` pass block once. `pipeline.rs` runs
     /// this a couple of times before timing so every texture / cascade / accel
-    /// buffer holds steady-state data (and the lobe count matches the app's 16,
-    /// via `dispatch_for`).
+    /// buffer holds steady-state data.
     pub fn prime_frame(&self) {
         for _ in 0..2 {
             self.time_pass(|cmd| self.record_frame(cmd));

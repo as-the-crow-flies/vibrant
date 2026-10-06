@@ -1,9 +1,3 @@
-// One invocation per PhysicalVolume voxel. Samples the resolution-independent
-// line occupancy density pyramid and writes a neutral (uncolored) extinction
-// scalar into `line_extinction` mip 0. A mipmap pass then builds its chain so
-// `cascade.wgsl`'s coarse `cull()` LOD lookups see the lines. The volume tracer
-// never touches this texture.
-
 @group(0) @binding(0) var LINE_EXTINCTION: texture_storage_3d<r32float, read_write>;
 @group(0) @binding(1) var LINE_SAMPLER: sampler; // unused (layout_write entry)
 
