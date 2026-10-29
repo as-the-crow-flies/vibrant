@@ -22,7 +22,7 @@
 
 ## What is VIBRANT?
 
-VIBRANT is a tool for visualizing tractography and brain anatomy together in 3D. It takes the files you already work with — NIfTI volumes (`.nii` / `.nii.gz`), tractograms (`.tck`), and track scalar files (`.tsf`) — and renders them with physically based lighting at interactive frame rates.
+VIBRANT is a tool for visualizing tractography and brain anatomy together in 3D. It takes the files you already work with — NIfTI volumes (`.nii` / `.nii.gz`), tractograms (`.tck` / `.trx`), and track scalar files (`.tsf` or TRX DPV fields) — and renders them with physically based lighting at interactive frame rates.
 
 - **Physically based.** Light, shadows, and materials follow real-world optics.
 - **Interactive.** Rotate, slice, and adjust lighting and materials in real time.
@@ -80,11 +80,11 @@ Load scalar NIfTI volumes for direct volume rendering. A histogram-based transfe
 
 ### Tractography
 
-Load one or many `.tck` tractograms and render them as lit tubes with shadows and ambient occlusion, so crossing and fanning geometry stays legible. Each bundle can be shown, hidden, coloured, and sliced on its own.
+Load one or many `.tck` or `.trx` tractograms and render them as lit tubes with shadows and ambient occlusion, so crossing and fanning geometry stays legible. TRX groups become separate bundles, with any streamlines outside a group shown as an ungrouped bundle. Each bundle can be shown, hidden, coloured, and sliced on its own.
 
-Streamlines can be coloured by **tangent direction**, by a **fixed colour per bundle**, or by a **track scalar** — drop a `.tsf` next to its `.tck` and VIBRANT pairs them automatically and maps the values through a sequential colormap.
+Streamlines can be coloured by **tangent direction**, by a **fixed colour per bundle**, or by a **track scalar** — drop a `.tsf` next to its `.tck`, or load a TRX file with a DPV field, and VIBRANT pairs the values automatically and maps them through a sequential colormap. TRX files prefer the `fa` field when present.
 
-| Tangent direction | Per-bundle colour | Track scalar (`.tsf`) |
+| Tangent direction | Per-bundle colour | Track scalar (`.tsf` / TRX DPV) |
 | --- | --- | --- |
 | ![Streamlines coloured by local tangent direction](docs/screenshots/tractography-tangent.png) | ![Streamlines with one solid colour per bundle](docs/screenshots/tractography-bundle.png) | ![Streamlines coloured by a track scalar](docs/screenshots/tractography-scalar.png) |
 

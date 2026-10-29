@@ -47,6 +47,7 @@ pub struct LineSettings {
     pub color: [u8; 3],
     pub color_mode: LineColorMode,
     pub colormap: ColormapSelection,
+    pub scalar_field: Option<String>,
     pub crop_start: f32,
     pub crop_end: f32,
     pub crop: bool,
@@ -179,6 +180,7 @@ impl LineBuffer {
                 visible: true,
                 color_mode: LineColorMode::Tangent,
                 colormap: ColormapSelection::Viridis,
+                scalar_field: None,
                 crop_start: 0.0,
                 crop_end: 1.0,
                 crop: true,
@@ -831,17 +833,23 @@ impl LineBuffer {
     }
 
     pub fn set_scalar(&mut self, gpu: &Gpu, scalar: TrackScalarFile) {
-        if let Some(line) = self
-            .settings
-            .iter_mut()
-            .find(|x| scalar.name().contains(&x.name))
-        {
+        if let Some(index) = scalar_target(&self.settings, scalar.name()) {
+            let line = &mut self.settings[index];
+
             gpu.queue()
                 .write_buffer(&self.scalar, line.offset * 4, cast_slice(scalar.values()));
 
-            line.color_mode = LineColorMode::Scalar
+            line.color_mode = LineColorMode::Scalar;
+            line.scalar_field = scalar.field().map(str::to_owned);
         }
     }
+}
+
+fn scalar_target(settings: &[LineSettings], name: &str) -> Option<usize> {
+    settings
+        .iter()
+        .position(|line| name == line.name)
+        .or_else(|| settings.iter().position(|line| name.contains(&line.name)))
 }
 
 impl Drop for LineBuffer {
@@ -856,5 +864,40 @@ impl Drop for LineBuffer {
         self.raw_indices.destroy();
         self.raw_vertices.destroy();
         self.raw_offsets.destroy();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{scalar_target, ColormapSelection, LineColorMode, LineSettings};
+
+    fn setting(name: &str) -> LineSettings {
+        LineSettings {
+            name: name.to_string(),
+            offset: 0,
+            selected: false,
+            visible: true,
+            color: [0, 0, 0],
+            color_mode: LineColorMode::Tangent,
+            colormap: ColormapSelection::Viridis,
+            scalar_field: None,
+            crop_start: 0.0,
+            crop_end: 1.0,
+            crop: false,
+        }
+    }
+
+    #[test]
+    fn prefers_exact_scalar_name_match() {
+        let settings = vec![setting("sample"), setting("sample left")];
+
+        assert_eq!(scalar_target(&settings, "sample left"), Some(1));
+    }
+
+    #[test]
+    fn falls_back_to_containing_name_for_tsf_files() {
+        let settings = vec![setting("sample"), setting("sample left")];
+
+        assert_eq!(scalar_target(&settings, "sample.tsf"), Some(0));
     }
 }

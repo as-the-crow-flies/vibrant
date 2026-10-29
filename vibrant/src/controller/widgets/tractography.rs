@@ -36,7 +36,7 @@ How streamlines in this bundle are coloured:
 
 Tangent — direction-encoded RGB (red = L/R, green = A/P, blue = I/S).
 Color — one flat colour for the whole bundle.
-Scalar — values from the matching .tsf file, mapped through a colormap (e.g. FA).";
+Scalar — values from a matching .tsf file or a TRX DPV field, mapped through a colormap (e.g. FA).";
 
     pub fn new() -> Self {
         Self {
@@ -48,7 +48,7 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
     pub fn show(&mut self, ui: &mut Ui, lines: &mut Option<LineBuffer>, settings: &mut Settings) {
         let Some(lines) = lines else {
             ui.vertical_centered(|ui| {
-                ui.weak("Open .tck files using the [📂 open] button");
+                ui.weak("Open .tck or .trx files using the [📂 open] button");
             });
             return;
         };
@@ -174,10 +174,14 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
                                     }
                                 })
                                 .response
-                                .on_hover_text(
-                                    "Colormap for this bundle's track-scalar \
-                                     (.tsf) values, e.g. FA or MD.",
-                                );
+                                .on_hover_text(match line.scalar_field.as_deref() {
+                                    Some(field) => format!(
+                                        "Colormap for this bundle's `{field}` scalar values.",
+                                    ),
+                                    None => "Colormap for this bundle's track-scalar \
+                                             (.tsf) values, e.g. FA or MD."
+                                        .to_owned(),
+                                });
                         }
                     });
                 });

@@ -272,9 +272,10 @@ impl Controller {
                     .button("📂 open")
                     .on_hover_text(
                         "Load imaging data: NIfTI volumes (.nii / .nii.gz), \
-                         tractograms (.tck), track scalars (.tsf), and .exr \
-                         environment maps. A file whose name contains \"mask\" \
-                         is loaded as a mask.",
+                         tractograms (.tck / .trx), track scalars (.tsf), and \
+                         .exr environment maps. TRX groups become separate \
+                         bundles and a DPV field is used for scalar colouring. \
+                         A file whose name contains \"mask\" is loaded as a mask.",
                     )
                     .clicked()
                 {
@@ -344,7 +345,7 @@ impl Controller {
                 ui.painter().text(
                     ui.max_rect().center(),
                     egui::Align2::CENTER_CENTER,
-                    "Open your first .nii.gz or .tck file using the [📂 open] button",
+                    "Open your first .nii.gz, .tck, or .trx file using the [📂 open] button",
                     egui::FontId::proportional(20.0),
                     ui.visuals().weak_text_color(),
                 );
