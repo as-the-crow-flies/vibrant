@@ -1,10 +1,10 @@
 pub mod readback;
 
-use std::{any::type_name, borrow::Cow, path::PathBuf};
+use std::{any::type_name, borrow::Cow, cell::LazyCell, fmt::Display, path::PathBuf};
 
 use bytemuck::Pod;
 use egui::Rect;
-use futures::channel::oneshot::channel;
+use futures_channel::oneshot::channel;
 use itertools::Itertools;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
@@ -16,7 +16,11 @@ use wgpu::{
     TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat, VertexState,
 };
 
-use crate::renderer::wgsl::{COMMON, GAUSSIAN, PBR};
+use web_time::Instant;
+
+use crate::renderer::wgsl;
+
+pub type Lazy<T> = LazyCell<T, Box<dyn FnOnce() -> T>>;
 
 #[derive(Clone)]
 pub struct Gpu {
@@ -91,19 +95,45 @@ impl Gpu {
             .min(self.device().limits().max_buffer_size)
     }
 
-    pub fn shader(&self, source: &str) -> ShaderModule {
+    /// The root shader at `path` (relative to `src/`).
+    pub fn shader(&self, path: &str) -> ShaderModule {
+        self.shader_with(path, &[])
+    }
+
+    /// The root shader at `path` with the given `const`s overridden.
+    pub fn shader_with(&self, path: &str, defines: &[(&str, &dyn Display)]) -> ShaderModule {
         let enable = if cfg!(target_arch = "wasm32") {
             "enable subgroups;\n"
         } else {
             ""
         };
 
+        let source = defines
+            .iter()
+            .fold(wgsl::source(path).to_string(), |source, (name, value)| {
+                wgsl::define(&source, name, *value)
+            });
+
         self.device().create_shader_module(ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(Cow::Owned(
-                enable.to_string() + COMMON + PBR + GAUSSIAN + source,
-            )),
+            label: Some(path),
+            source: ShaderSource::Wgsl(Cow::Owned(enable.to_string() + &source)),
         })
+    }
+
+    /// Defers `build` (typically shader + pipeline creation) to first use, and
+    /// logs how long it took at debug level.
+    pub fn lazy<T: 'static>(
+        &self,
+        label: impl Display + 'static,
+        build: impl FnOnce(&Gpu) -> T + 'static,
+    ) -> Lazy<T> {
+        let gpu = self.clone();
+        LazyCell::new(Box::new(move || {
+            let start = Instant::now();
+            let value = build(&gpu);
+            log::debug!("{label}: {:.1} ms", start.elapsed().as_secs_f64() * 1000.0);
+            value
+        }))
     }
 
     pub fn compute(

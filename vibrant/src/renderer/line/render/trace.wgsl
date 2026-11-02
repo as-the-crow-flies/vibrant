@@ -1,4 +1,11 @@
-const VMM_SIZE : u32 = #VMM_SIZE;
+use color;
+use gaussian;
+use math;
+use occlusion;
+use uniforms;
+use vertex;
+
+const VMM_SIZE: u32 = 32u;
 
 @group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;

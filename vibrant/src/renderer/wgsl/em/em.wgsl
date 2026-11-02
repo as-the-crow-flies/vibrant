@@ -1,7 +1,11 @@
 // Workgroup-cooperative EM fit of the VMM to this workgroup's samples. Each
 // including shader defines SUBGROUPS, EM_HISTOGRAM_ROW and EM_ITERATIONS.
 
-const VMM_SIZE: u32 = #VMM_SIZE;
+use gaussian;
+use random;
+use sphere;
+
+const VMM_SIZE: u32 = 32u;
 
 const EM_ITERATIONS_MAX: u32 = 100u;
 const EM_ITERATIONS_MIN: u32 = 1u;

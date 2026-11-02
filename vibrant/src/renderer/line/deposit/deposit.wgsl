@@ -1,3 +1,5 @@
+use uniforms;
+
 @group(0) @binding(0) var LINE_EXTINCTION: texture_storage_3d<r32float, read_write>;
 @group(0) @binding(1) var LINE_SAMPLER: sampler; // unused (layout_write entry)
 

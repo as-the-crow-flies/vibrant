@@ -11,11 +11,12 @@ name = "vibrant_app_web"
 crate-type = ["cdylib"]
 
 [workspace.dependencies]
-wgpu = "30"
+# Backends are picked per target in vibrant/Cargo.toml: WebGPU on the web
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl"] }
 winit = "0.30"
 
 egui = { version = "0.36" }
-egui-wgpu = { version = "0.36", features = ["winit"] }
+egui-wgpu = { version = "0.36", default-features = false, features = ["winit"] }
 egui-winit = { version = "0.36", default-features = false, features=["links"] }
 log = "0.4.28"
 pollster = "0.3"

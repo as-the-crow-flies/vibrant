@@ -7,7 +7,7 @@ use nifti::{
     object::GenericNiftiObject, DataElement, InMemNiftiObject, InMemNiftiVolume, NiftiObject,
     NiftiType,
 };
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 
 use crate::file::File;
 

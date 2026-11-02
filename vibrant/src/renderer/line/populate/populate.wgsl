@@ -1,3 +1,7 @@
+use block;
+use uniforms;
+use vertex;
+
 @group(0) @binding(0) var<storage, read_write> OFFSET: array<atomic<u32>>;
 @group(0) @binding(2) var<storage, read_write> INDEX: array<u32>;
 

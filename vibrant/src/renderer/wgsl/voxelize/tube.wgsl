@@ -1,3 +1,5 @@
+use vertex;
+
 fn voxelize(index: u32, v0_: Vertex, v1_: Vertex, radius: f32) {
     let delta = v1_.xyz - v0_.xyz;
     let axes = rank(abs(delta));

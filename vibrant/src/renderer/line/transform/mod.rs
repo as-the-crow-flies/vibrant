@@ -2,24 +2,26 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{environment::Environment, line::LineBuffer, Asset},
-    gpu::Gpu,
+    gpu::{Gpu, Lazy},
 };
 
 pub struct LineTransformPipeline {
-    transform: ComputePipeline,
+    transform: Lazy<ComputePipeline>,
 }
 
 impl LineTransformPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            transform: gpu.compute(
-                "Transform",
-                &gpu.pipeline_layout(&[
-                    &LineBuffer::layout_transform(gpu),
-                    &Environment::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("transform.wgsl")),
-            ),
+            transform: gpu.lazy("Transform", move |gpu| {
+                gpu.compute(
+                    "Transform",
+                    &gpu.pipeline_layout(&[
+                        &LineBuffer::layout_transform(gpu),
+                        &Environment::layout(gpu),
+                    ]),
+                    &gpu.shader("renderer/line/transform/transform.wgsl"),
+                )
+            }),
         }
     }
 

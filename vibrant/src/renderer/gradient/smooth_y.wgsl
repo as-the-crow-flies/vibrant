@@ -1,3 +1,6 @@
+use color;
+use kernel;
+
 @group(0) @binding(0) var PROPERTIES: texture_storage_3d<rgba8unorm, read>;
 @group(0) @binding(2) var PING: texture_storage_3d<rgba8unorm, read>;
 @group(0) @binding(3) var PONG: texture_storage_3d<rgba8unorm, write>;

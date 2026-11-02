@@ -1,3 +1,6 @@
+use random;
+use sphere;
+
 @group(0) @binding(0) var<storage, read_write> SEED: array<vec4<f32>>;
 
 // K lobes at uniform Hammersley directions for every power-of-two K, at SEED[K..2K].

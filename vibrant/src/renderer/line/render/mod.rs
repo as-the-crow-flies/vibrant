@@ -1,4 +1,4 @@
-use std::{any::type_name, cell::Cell};
+use std::any::type_name;
 
 use wgpu::{
     ColorTargetState, CommandEncoder, FragmentState, MultisampleState, PrimitiveState,
@@ -12,28 +12,25 @@ use crate::{
     },
     controller::{settings::RenderMode, Controller},
     gpu::Gpu,
-    renderer::lighting::VMM_SIZE_OPTIONS,
+    renderer::lighting::VmmVariants,
     surface::{color::ColorBuffer, Frame},
 };
 
 /// Tractography ray-marcher. Shades line surfaces with the shared VMM Disney
-/// BRDF (`trace.wgsl`) against the `radiance_lines` cascade. Two precompiled
-/// pipeline sets, one variant each per VMM lobe count:
+/// BRDF (`trace.wgsl`) against the `radiance_lines` cascade. Two pipeline
+/// sets, one lazily compiled variant each per VMM lobe count:
 ///
 /// * **Combined** (`opaque.wgsl`): nearest hit only, alpha forced to 1, writes
 ///   HDR colour + the near→far hit fraction the volume tracer clamps to.
 /// * **Overlay** (`transparent.wgsl`): every crossed line accumulated
 ///   (premultiplied), honoring `settings.alpha`; composited over the volume.
 pub struct LineRenderPipeline {
-    combined: [RenderPipeline; 3],
-    overlay: [RenderPipeline; 3],
-    active: Cell<usize>,
+    combined: VmmVariants<RenderPipeline>,
+    overlay: VmmVariants<RenderPipeline>,
 }
 
 impl LineRenderPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let trace = include_str!("trace.wgsl");
-
         let layout = gpu.pipeline_layout(&[
             &LineBuffer::layout_trace(gpu),
             &Environment::layout(gpu),
@@ -43,12 +40,11 @@ impl LineRenderPipeline {
 
         // Both variants are MRT (colour + R32Float depth) so the single
         // `fragment` entry point works for either; only target-0 blending and
-        // the appended visit/result differ. Overlay ignores the depth output.
-        let build = |appended: &str, blend: ColorTargetState| {
-            VMM_SIZE_OPTIONS.map(|vmm_size| {
-                let src =
-                    (trace.to_string() + appended).replace("#VMM_SIZE", &vmm_size.to_string());
-                let module = gpu.shader(&src);
+        // the visit/result in `shader` differ. Overlay ignores the depth output.
+        let build = |label: &'static str, shader: &'static str, blend: ColorTargetState| {
+            let layout = layout.clone();
+            VmmVariants::new(gpu, label, move |gpu, vmm_size| {
+                let module = gpu.shader_with(shader, &[("VMM_SIZE", &vmm_size)]);
 
                 gpu.device()
                     .create_render_pipeline(&RenderPipelineDescriptor {
@@ -79,23 +75,16 @@ impl LineRenderPipeline {
         };
 
         Self {
-            combined: build(include_str!("opaque.wgsl"), ColorBuffer::target_blend()),
+            combined: build(
+                "LineTrace::Combined",
+                "renderer/line/render/trace_opaque.wgsl",
+                ColorBuffer::target_blend(),
+            ),
             overlay: build(
-                include_str!("opaque.wgsl"),
+                "LineTrace::Overlay",
+                "renderer/line/render/trace_opaque.wgsl",
                 ColorBuffer::target_premultiplied(),
             ),
-            active: Cell::new(
-                VMM_SIZE_OPTIONS
-                    .iter()
-                    .position(|&size| size == 32)
-                    .unwrap(),
-            ),
-        }
-    }
-
-    fn set_vmm_size(&self, vmm_size: u32) {
-        if let Some(index) = VMM_SIZE_OPTIONS.iter().position(|&size| size == vmm_size) {
-            self.active.set(index);
         }
     }
 
@@ -112,12 +101,11 @@ impl LineRenderPipeline {
             return;
         };
 
-        self.set_vmm_size(controller.radiance().lobes());
-
         let variants = match controller.settings().render_mode {
             RenderMode::Combined => &self.combined,
             RenderMode::Overlay => &self.overlay,
         };
+        variants.set_vmm_size(controller.radiance().lobes());
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some("LineTrace"),
@@ -138,7 +126,7 @@ impl LineRenderPipeline {
             1.0,
         );
 
-        pass.set_pipeline(&variants[self.active.get()]);
+        pass.set_pipeline(variants.active());
         pass.set_bind_group(0, line.binding_trace(), &[]);
         pass.set_bind_group(1, asset.environment.binding(), &[]);
         pass.set_bind_group(2, radiance.binding(), &[]);

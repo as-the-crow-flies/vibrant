@@ -1,6 +1,6 @@
 mod importance;
 
-use std::any::type_name;
+use std::{any::type_name, cell::OnceCell};
 
 use bytemuck::{bytes_of, Pod, Zeroable};
 use glam::UVec2;
@@ -12,7 +12,7 @@ use wgpu::{
 
 use crate::{
     file::{hdri::HdriFile, File},
-    gpu::Gpu,
+    gpu::{Gpu, Lazy},
 };
 
 use importance::{Importance, Lobes};
@@ -166,8 +166,15 @@ impl HdriTexture {
         )
     }
 
-    fn bake(&self, gpu: &Gpu, importance: &Importance, sampler: &Sampler, cut: bool) {
-        importance.bake(gpu, &self.texture, sampler, &self.lobes, cut);
+    fn bake(&self, gpu: &Gpu, importance: &Importance, sampler: &Sampler, baked: Baked) {
+        importance.bake(
+            gpu,
+            &self.texture,
+            sampler,
+            &self.lobes,
+            baked.cut,
+            baked.vmm_size,
+        );
     }
 
     fn mipmap_layout(gpu: &Gpu) -> BindGroupLayout {
@@ -264,24 +271,58 @@ pub struct HdriBuffer {
     pub index: usize,
     /// Seed the environment fit from the luminance cut instead of uniform lobes.
     pub cut: bool,
-    baked_cut: bool,
-    textures: Vec<HdriTexture>,
+    baked: Option<Baked>,
+    hdris: Vec<Hdri>,
+    gpu: Gpu,
     sampler: Sampler,
     settings: HdriBufferSettings,
     settings_buffer: Buffer,
-    mipmap: ComputePipeline,
+    mipmap: Lazy<ComputePipeline>,
     importance: Importance,
+}
+
+/// A built-in map is decoded and uploaded on first use; imported maps start loaded.
+struct Hdri {
+    name: String,
+    exr: Option<&'static [u8]>,
+    texture: OnceCell<HdriTexture>,
+}
+
+impl Hdri {
+    fn builtin(name: &str, exr: &'static [u8]) -> Self {
+        Self {
+            name: name.to_owned(),
+            exr: Some(exr),
+            texture: OnceCell::new(),
+        }
+    }
+
+    fn loaded(texture: HdriTexture) -> Self {
+        Self {
+            name: texture.name().to_owned(),
+            exr: None,
+            texture: OnceCell::from(texture),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Baked {
+    cut: bool,
+    vmm_size: u32,
 }
 
 impl HdriBuffer {
     pub fn new(gpu: &Gpu) -> Self {
         let label = Some(type_name::<Self>());
 
-        let mipmap = gpu.compute(
-            "Hdri::Mipmap",
-            &gpu.pipeline_layout(&[&HdriTexture::mipmap_layout(gpu)]),
-            &gpu.shader(include_str!("mipmap.wgsl")),
-        );
+        let mipmap = gpu.lazy("Hdri::Mipmap", |gpu| {
+            gpu.compute(
+                "Hdri::Mipmap",
+                &gpu.pipeline_layout(&[&HdriTexture::mipmap_layout(gpu)]),
+                &gpu.shader("asset/hdri/mipmap.wgsl"),
+            )
+        });
 
         let importance = Importance::new(gpu);
 
@@ -314,76 +355,29 @@ impl HdriBuffer {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let textures = vec![
-            HdriTexture::default(gpu, &sampler, &settings_buffer, &mipmap),
-            HdriTexture::from_exr_bytes(
+        let hdris = vec![
+            Hdri::loaded(HdriTexture::default(
                 gpu,
-                "Brown",
-                include_bytes!("exr/brown.exr").to_vec(),
                 &sampler,
                 &settings_buffer,
                 &mipmap,
-            ),
-            HdriTexture::from_exr_bytes(
-                gpu,
-                "Country",
-                include_bytes!("exr/country.exr").to_vec(),
-                &sampler,
-                &settings_buffer,
-                &mipmap,
-            ),
-            HdriTexture::from_exr_bytes(
-                gpu,
-                "Ferndale",
-                include_bytes!("exr/ferndale.exr").to_vec(),
-                &sampler,
-                &settings_buffer,
-                &mipmap,
-            ),
-            HdriTexture::from_exr_bytes(
-                gpu,
-                "Hangar",
-                include_bytes!("exr/hangar.exr").to_vec(),
-                &sampler,
-                &settings_buffer,
-                &mipmap,
-            ),
-            HdriTexture::from_exr_bytes(
-                gpu,
-                "Loft",
-                include_bytes!("exr/loft.exr").to_vec(),
-                &sampler,
-                &settings_buffer,
-                &mipmap,
-            ),
-            HdriTexture::from_exr_bytes(
-                gpu,
-                "Studio",
-                include_bytes!("exr/studio.exr").to_vec(),
-                &sampler,
-                &settings_buffer,
-                &mipmap,
-            ),
-            HdriTexture::from_exr_bytes(
-                gpu,
-                "Workshop",
-                include_bytes!("exr/workshop.exr").to_vec(),
-                &sampler,
-                &settings_buffer,
-                &mipmap,
-            ),
+            )),
+            Hdri::builtin("Brown", include_bytes!("exr/brown.exr")),
+            Hdri::builtin("Country", include_bytes!("exr/country.exr")),
+            Hdri::builtin("Ferndale", include_bytes!("exr/ferndale.exr")),
+            Hdri::builtin("Hangar", include_bytes!("exr/hangar.exr")),
+            Hdri::builtin("Loft", include_bytes!("exr/loft.exr")),
+            Hdri::builtin("Studio", include_bytes!("exr/studio.exr")),
+            Hdri::builtin("Workshop", include_bytes!("exr/workshop.exr")),
         ];
 
-        for texture in &textures {
-            texture.bake(gpu, &importance, &sampler, true);
-        }
-
         Self {
-            textures,
+            hdris,
+            gpu: gpu.clone(),
             sampler,
             index: 0,
             cut: true,
-            baked_cut: true,
+            baked: None,
             settings,
             settings_buffer,
             mipmap,
@@ -392,7 +386,7 @@ impl HdriBuffer {
     }
 
     pub fn import(&mut self, gpu: &Gpu, file: HdriFile) {
-        self.textures.push(HdriTexture::new(
+        let texture = HdriTexture::new(
             gpu,
             file.name(),
             file.size(),
@@ -400,19 +394,45 @@ impl HdriBuffer {
             &self.sampler,
             &self.settings_buffer,
             &self.mipmap,
-        ));
-        self.index = self.textures().len() - 1;
+        );
 
-        self.texture()
-            .bake(gpu, &self.importance, &self.sampler, self.baked_cut);
+        if let Some(baked) = self.baked {
+            texture.bake(gpu, &self.importance, &self.sampler, baked);
+        }
+
+        self.hdris.push(Hdri::loaded(texture));
+        self.index = self.hdris.len() - 1;
     }
 
+    /// The selected map, decoding (and baking) it on first use.
     pub fn texture(&self) -> &HdriTexture {
-        &self.textures[self.index]
+        let hdri = &self.hdris[self.index];
+
+        hdri.texture.get_or_init(|| {
+            let exr = hdri.exr.expect("unloaded HDRI without EXR data");
+            let texture = HdriTexture::from_exr_bytes(
+                &self.gpu,
+                &hdri.name,
+                exr.to_vec(),
+                &self.sampler,
+                &self.settings_buffer,
+                &self.mipmap,
+            );
+
+            if let Some(baked) = self.baked {
+                texture.bake(&self.gpu, &self.importance, &self.sampler, baked);
+            }
+
+            texture
+        })
     }
 
-    pub fn textures(&self) -> &[HdriTexture] {
-        &self.textures
+    pub fn name(&self) -> &str {
+        &self.hdris[self.index].name
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.hdris.iter().map(|hdri| hdri.name.as_str())
     }
 
     pub fn settings_mut(&mut self) -> &mut HdriBufferSettings {
@@ -422,12 +442,22 @@ impl HdriBuffer {
     pub fn update_settings(&mut self, gpu: &Gpu) {
         gpu.queue()
             .write_buffer(&self.settings_buffer, 0, bytes_of(&self.settings));
+    }
 
-        if self.cut != self.baked_cut {
-            for texture in &self.textures {
-                texture.bake(gpu, &self.importance, &self.sampler, self.cut);
+    /// (Re)bakes every loaded texture's VMM when the seed mode or lobe count
+    /// differs from the last bake. Only the radiance cascade reads it, so this
+    /// waits until one exists.
+    pub fn bake(&mut self, gpu: &Gpu, vmm_size: u32) {
+        let baked = Baked {
+            cut: self.cut,
+            vmm_size,
+        };
+
+        if self.baked != Some(baked) {
+            for texture in self.hdris.iter().filter_map(|hdri| hdri.texture.get()) {
+                texture.bake(gpu, &self.importance, &self.sampler, baked);
             }
-            self.baked_cut = self.cut;
+            self.baked = Some(baked);
         }
     }
 

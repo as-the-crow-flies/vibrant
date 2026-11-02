@@ -1,22 +1,19 @@
 use wgpu::*;
 
 use crate::{
-    gpu::Gpu,
-    renderer::{
-        lighting::VMM_SIZE_OPTIONS,
-        wgsl::em::{EM, SAMPLES_X4},
-    },
+    gpu::{Gpu, Lazy},
+    renderer::lighting::{VmmVariants, VMM_SIZE_OPTIONS},
 };
 
-/// Bakes the environment VMM for every lobe count: K seed lobes, either cut
+/// Bakes the environment VMM for one lobe count: K seed lobes, either cut
 /// from an equal-area luminance hierarchy or at uniform Hammersley directions,
 /// refined by an EM fit. Lobe count K lives at `[K, 2K)` of each buffer.
 pub struct Importance {
-    resample: ComputePipeline,
-    mipmap: ComputePipeline,
-    cut: ComputePipeline,
-    uniform: ComputePipeline,
-    fit: Vec<ComputePipeline>,
+    resample: Lazy<ComputePipeline>,
+    mipmap: Lazy<ComputePipeline>,
+    cut: Lazy<ComputePipeline>,
+    uniform: Lazy<ComputePipeline>,
+    fit: VmmVariants<ComputePipeline>,
 }
 
 /// World-space lobes and their radiance at unit strength.
@@ -39,32 +36,36 @@ impl Importance {
     const LOBES: u32 = VMM_SIZE_OPTIONS[VMM_SIZE_OPTIONS.len() - 1];
 
     pub fn new(gpu: &Gpu) -> Self {
-        let cut = include_str!("cut.wgsl").replace("#LOBES", &Self::LOBES.to_string());
-        let fit = include_str!("fit.wgsl").to_string() + SAMPLES_X4 + EM;
-
         Self {
-            resample: pipeline(
+            resample: lazy_pipeline(gpu, "Hdri::Importance::Resample", "resample.wgsl", &[]),
+            mipmap: lazy_pipeline(gpu, "Hdri::Importance::Mipmap", "mipmap.wgsl", &[]),
+            cut: lazy_pipeline(
                 gpu,
-                "Hdri::Importance::Resample",
-                include_str!("resample.wgsl"),
+                "Hdri::Importance::Cut",
+                "cut.wgsl",
+                &[("LOBES", Self::LOBES)],
             ),
-            mipmap: pipeline(gpu, "Hdri::Importance::Mipmap", include_str!("mipmap.wgsl")),
-            cut: pipeline(gpu, "Hdri::Importance::Cut", &cut),
-            uniform: pipeline(
-                gpu,
-                "Hdri::Importance::Uniform",
-                include_str!("uniform.wgsl"),
-            ),
-            fit: VMM_SIZE_OPTIONS
-                .map(|vmm_size| {
-                    let src = fit.replace("#VMM_SIZE", &vmm_size.to_string());
-                    pipeline(gpu, "Hdri::Importance::Fit", &src)
-                })
-                .to_vec(),
+            uniform: lazy_pipeline(gpu, "Hdri::Importance::Uniform", "uniform.wgsl", &[]),
+            fit: VmmVariants::new(gpu, "Hdri::Importance::Fit", |gpu, vmm_size| {
+                pipeline(
+                    gpu,
+                    "Hdri::Importance::Fit",
+                    "fit.wgsl",
+                    &[("VMM_SIZE", vmm_size)],
+                )
+            }),
         }
     }
 
-    pub fn bake(&self, gpu: &Gpu, hdri: &Texture, sampler: &Sampler, lobes: &Lobes, cut: bool) {
+    pub fn bake(
+        &self,
+        gpu: &Gpu,
+        hdri: &Texture,
+        sampler: &Sampler,
+        lobes: &Lobes,
+        cut: bool,
+        vmm_size: u32,
+    ) {
         let seed = lobe_buffer(gpu, "Hdri::Seed");
         let hdri = hdri.create_view(&TextureViewDescriptor::default());
 
@@ -77,23 +78,24 @@ impl Importance {
             self.uniform(gpu, &mut pass, &seed);
         }
 
-        for fit in &self.fit {
-            let binding = gpu.binding(
-                "Hdri::Importance::Fit",
-                &fit.get_bind_group_layout(0),
-                vec![
-                    BindingResource::TextureView(&hdri),
-                    BindingResource::Sampler(sampler),
-                    seed.as_entire_binding(),
-                    lobes.vmm.as_entire_binding(),
-                    lobes.phi.as_entire_binding(),
-                ],
-            );
+        self.fit.set_vmm_size(vmm_size);
+        let fit = self.fit.active();
 
-            pass.set_pipeline(fit);
-            pass.set_bind_group(0, &binding, &[]);
-            pass.dispatch_workgroups(1, 1, 1);
-        }
+        let binding = gpu.binding(
+            "Hdri::Importance::Fit",
+            &fit.get_bind_group_layout(0),
+            vec![
+                BindingResource::TextureView(&hdri),
+                BindingResource::Sampler(sampler),
+                seed.as_entire_binding(),
+                lobes.vmm.as_entire_binding(),
+                lobes.phi.as_entire_binding(),
+            ],
+        );
+
+        pass.set_pipeline(fit);
+        pass.set_bind_group(0, &binding, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
 
         drop(pass);
         gpu.submit(cmd);
@@ -202,12 +204,27 @@ fn lobe_buffer(gpu: &Gpu, label: &str) -> Buffer {
     })
 }
 
-fn pipeline(gpu: &Gpu, label: &str, src: &str) -> ComputePipeline {
+fn lazy_pipeline(
+    gpu: &Gpu,
+    label: &'static str,
+    file: &'static str,
+    defines: &'static [(&'static str, u32)],
+) -> Lazy<ComputePipeline> {
+    gpu.lazy(label, move |gpu| pipeline(gpu, label, file, defines))
+}
+
+/// `file` relative to this directory; `defines` override its `u32` consts.
+fn pipeline(gpu: &Gpu, label: &str, file: &str, defines: &[(&str, u32)]) -> ComputePipeline {
+    let defines: Vec<(&str, &dyn std::fmt::Display)> = defines
+        .iter()
+        .map(|(name, value)| (*name, value as &dyn std::fmt::Display))
+        .collect();
+
     gpu.device()
         .create_compute_pipeline(&ComputePipelineDescriptor {
             label: Some(label),
             layout: None,
-            module: &gpu.shader(src),
+            module: &gpu.shader_with(&format!("asset/hdri/importance/{file}"), &defines),
             entry_point: None,
             compilation_options: Default::default(),
             cache: None,

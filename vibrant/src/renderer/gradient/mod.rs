@@ -2,40 +2,49 @@ use std::ops::{Add, Div};
 
 use wgpu::*;
 
-use crate::{asset::volume::PhysicalVolume, gpu::Gpu};
+use crate::{
+    asset::volume::PhysicalVolume,
+    gpu::{Gpu, Lazy},
+};
 
 pub struct GradientPipeline {
-    smooth_x: ComputePipeline,
-    smooth_y: ComputePipeline,
-    smooth_z: ComputePipeline,
-    gradient: ComputePipeline,
+    smooth_x: Lazy<ComputePipeline>,
+    smooth_y: Lazy<ComputePipeline>,
+    smooth_z: Lazy<ComputePipeline>,
+    gradient: Lazy<ComputePipeline>,
 }
 
 impl GradientPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let common = include_str!("common.wgsl");
-
         Self {
-            smooth_x: gpu.compute(
-                "Smooth_X",
-                &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_ping(gpu)]),
-                &gpu.shader(&[common, include_str!("smooth_x.wgsl")].concat()),
-            ),
-            smooth_y: gpu.compute(
-                "Smooth_Y",
-                &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_pong(gpu)]),
-                &gpu.shader(&[common, include_str!("smooth_y.wgsl")].concat()),
-            ),
-            smooth_z: gpu.compute(
-                "Smooth_Z",
-                &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_ping(gpu)]),
-                &gpu.shader(&[common, include_str!("smooth_z.wgsl")].concat()),
-            ),
-            gradient: gpu.compute(
-                "Gradient",
-                &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_pong(gpu)]),
-                &gpu.shader(&[common, include_str!("gradient.wgsl")].concat()),
-            ),
+            smooth_x: gpu.lazy("Smooth_X", move |gpu| {
+                gpu.compute(
+                    "Smooth_X",
+                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_ping(gpu)]),
+                    &gpu.shader("renderer/gradient/smooth_x.wgsl"),
+                )
+            }),
+            smooth_y: gpu.lazy("Smooth_Y", move |gpu| {
+                gpu.compute(
+                    "Smooth_Y",
+                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_pong(gpu)]),
+                    &gpu.shader("renderer/gradient/smooth_y.wgsl"),
+                )
+            }),
+            smooth_z: gpu.lazy("Smooth_Z", move |gpu| {
+                gpu.compute(
+                    "Smooth_Z",
+                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_ping(gpu)]),
+                    &gpu.shader("renderer/gradient/smooth_z.wgsl"),
+                )
+            }),
+            gradient: gpu.lazy("Gradient", move |gpu| {
+                gpu.compute(
+                    "Gradient",
+                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_gradient_pong(gpu)]),
+                    &gpu.shader("renderer/gradient/gradient.wgsl"),
+                )
+            }),
         }
     }
 

@@ -225,6 +225,10 @@ impl Asset {
         }
 
         self.sync_physical_volume(gpu, controller);
+
+        if self.radiance.is_some() {
+            self.hdri.bake(gpu, controller.radiance().lobes());
+        }
     }
 
     /// Keep the single shared `physical_volume` + its `radiance` cascade (and,
