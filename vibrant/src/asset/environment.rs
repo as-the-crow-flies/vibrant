@@ -73,12 +73,11 @@ impl Environment {
     /// anti-aliasing for free while frames accumulate. Pass `Vec2::ZERO` when
     /// not accumulating.
     pub fn update(&self, gpu: &Gpu, controller: &Controller, jitter: Vec2) {
-        let settings = controller.settings();
-        let width = settings.width.max(1) as f32;
-        let height = settings.height.max(1) as f32;
-
-        // NDC spans [-1, 1], so one pixel is `2 / dimension`.
-        let offset = Vec3::new(jitter.x * 2.0 / width, jitter.y * 2.0 / height, 0.0);
+        let offset = Vec3::new(
+            jitter.x * 2.0 / controller.settings().width as f32,
+            jitter.y * 2.0 / controller.settings().height as f32,
+            0.0,
+        );
         let projection = Mat4::from_translation(offset) * controller.camera().projection();
 
         let uniform = EnvironmentUniform {

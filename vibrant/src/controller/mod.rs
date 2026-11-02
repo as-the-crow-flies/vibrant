@@ -385,8 +385,8 @@ impl Controller {
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.settings.width = size.width;
-        self.settings.height = size.height;
+        self.settings.width = size.width.max(1);
+        self.settings.height = size.height.max(1);
     }
 
     /// Set the render viewport directly, for headless callers (benches) that
