@@ -1,7 +1,10 @@
+use gaussian;
+use sphere;
+
 @group(0) @binding(0) var IMPORTANCE: texture_2d<f32>;
 @group(0) @binding(1) var<storage, read_write> CUT: array<vec4<f32>>;
 
-const LOBES: u32 = #LOBES;
+const LOBES: u32 = 32u;
 
 // Smallest split whose lobe stays within the κ clamp, as a fraction of 4π.
 const SOLID_ANGLE_MIN: f32 = 1.0 - 1.0 / U_MIN;

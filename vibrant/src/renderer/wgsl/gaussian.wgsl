@@ -1,3 +1,6 @@
+use math;
+use pbr;
+
 const EPSILON    : f32 = 1e-6;
 const INV_TWO_PI : f32 = 0.15915494309189535;
 const LOG2_E     : f32 = 1.4426950408889634;
@@ -7,110 +10,6 @@ const U_MAX      : f32 = 100.0;    // κ_min ≈ 0.03 — indistinguishable from
 struct SG {
     vmf: vec4<f32>,
     phi: vec3<f32>,
-}
-
-// An Anisotropic Spherical Gaussian lobe, used below to represent a GGX NDF
-// warped from the half-vector domain into the light-vector domain.
-struct ASG {
-    amplitude: vec3<f32>,
-    basis_z: vec3<f32>,
-    basis_x: vec3<f32>,
-    basis_y: vec3<f32>,
-    sharpness_x: f32,
-    sharpness_y: f32,
-}
-
-fn evaluate_asg(asg: ASG, dir: vec3<f32>) -> vec3<f32> {
-    let s_term = saturate(dot(asg.basis_z, dir));
-    let lambda_term = asg.sharpness_x * dot(dir, asg.basis_x) *
-                       dot(dir, asg.basis_x);
-    let mu_term = asg.sharpness_y * dot(dir, asg.basis_y) *
-                  dot(dir, asg.basis_y);
-    return asg.amplitude * s_term * exp(-lambda_term - mu_term);
-}
-
-fn convolve_asg_sg(asg: ASG, sg_amplitude: vec3<f32>, sg_axis: vec3<f32>, sg_sharpness: f32) -> vec3<f32> {
-    // The ASG paper specifes an isotropic SG as
-    // exp(2 * nu * (dot(v, axis) - 1)),
-    // so we must divide our SG sharpness by 2 in order
-    // to get the nup parameter expected by the ASG formula
-    let nu = sg_sharpness * 0.5;
-
-    var convolve_asg: ASG;
-    convolve_asg.basis_x = asg.basis_x;
-    convolve_asg.basis_y = asg.basis_y;
-    convolve_asg.basis_z = asg.basis_z;
-
-    convolve_asg.sharpness_x = (nu * asg.sharpness_x) /
-                                (nu + asg.sharpness_x);
-    convolve_asg.sharpness_y = (nu * asg.sharpness_y) /
-                                (nu + asg.sharpness_y);
-
-    convolve_asg.amplitude = vec3<f32>(PI / sqrt((nu + asg.sharpness_x) *
-                                                   (nu + asg.sharpness_y)));
-
-    let asg_result = evaluate_asg(convolve_asg, sg_axis);
-    return asg_result * sg_amplitude * asg.amplitude;
-}
-
-// https://therealmjp.github.io/posts/sg-series-part-4-specular-lighting-from-an-sg-light-source/
-fn sg_specular_anisotropic(sg: SG, normal: vec3<f32>, view: vec3<f32>, roughness: f32) -> vec3<f32> {
-    // Recover the light lobe's sharpness/axis from the same `v` = (Σwᵢωᵢ,
-    // Σwᵢ) sufficient statistic consumed by vmf() and the other sg_*
-    // helpers, instead of requiring the caller to normalize/derive them.
-    let q = inverseSqrt(dot(sg.vmf.xyz, sg.vmf.xyz) + 1e-24);
-    let u = clamp((sg.vmf.w + 1e-8) * q, 1.001, 100.0);
-    let u2 = u * u;
-    let light_sharpness = (3.0 * u2 - 1.0) / (u2 * u - u); // Banerjee, reparameterized kappa
-    let light_axis = sg.vmf.xyz * q;
-
-    let alpha = roughness * roughness;
-    let alpha2 = max(alpha * alpha, 1e-8);
-
-    // Create an SG that approximates the NDF
-    let ndf_axis = normal;
-    let ndf_sharpness = 2.0 / alpha2;
-    let ndf_amplitude = vec3<f32>(1.0 / (PI * alpha2));
-
-    // Apply a warpring operation that will bring the SG from
-    // the half-angle domain the the the lighting domain.
-    var warped_ndf: ASG;
-    warped_ndf.basis_z = reflect(-view, ndf_axis);
-    warped_ndf.basis_x = normalize(cross(ndf_axis, warped_ndf.basis_z));
-    warped_ndf.basis_y = normalize(cross(warped_ndf.basis_z, warped_ndf.basis_x));
-
-    // sharpness_x below scales as 1/dot_dir_o², so flooring it at the same
-    // ~1e-4 epsilon used for plain divide-by-zero guards elsewhere lets the
-    // warped lobe narrow (and convolve_asg_sg's closed-form amplitude, which
-    // falls off as 1/sqrt(sharpness_x)) collapse toward zero far earlier than
-    // any physically plausible roughness would justify - the specular term
-    // goes fully black well before the view actually reaches grazing. Floor
-    // it high enough to bound the lobe's sharpness (and keep the highlight
-    // visible) while still letting the intended grazing-angle elongation
-    // show for less extreme angles.
-    let dot_dir_o = max(dot(view, ndf_axis), 0.2);
-
-    // Second derivative of the sharpness with respect to how
-    // far we are from basis Axis direction
-    warped_ndf.sharpness_x = ndf_sharpness / (8.0 * dot_dir_o * dot_dir_o);
-    warped_ndf.sharpness_y = ndf_sharpness / 8.0;
-    warped_ndf.amplitude = ndf_amplitude;
-
-    // Convolve the NDF with the light
-    var output = convolve_asg_sg(warped_ndf, sg.phi, light_axis, light_sharpness);
-
-    // Parameters needed for evaluating the visibility term
-    let warp_dir = warped_ndf.basis_z;
-    let n_dot_l = saturate(dot(normal, warp_dir));
-    let n_dot_v = saturate(dot(normal, view));
-
-    // Visibility term
-    output *= GGX_V1(n_dot_l, alpha2) * GGX_V1(n_dot_v, alpha2);
-
-    // Cosine term
-    output *= n_dot_l;
-
-    return max(output, vec3<f32>(0.0));
 }
 
 // https://therealmjp.github.io/posts/sg-series-part-4-specular-lighting-from-an-sg-light-source/
@@ -248,8 +147,8 @@ fn sg_phase(sg: SG, view: vec3<f32>, g: f32) -> vec3<f32> {
 // Fetches SG lobe `k` from the octahedral radiance-cascade probe grid at the
 // volume-space [0,1] coord `p`. Both the volume tracer (phase model) and the
 // line tracer (surface Disney BRDF) build their per-lobe SG the same way.
-// Textures + sampler are passed in so this can live in the always-included
-// gaussian.wgsl without depending on any particular binding layout.
+// Textures + sampler are passed in so this doesn't depend on any particular
+// binding layout.
 fn probe_sg(
     radiance_tex: texture_3d<f32>,
     gaussian_tex: texture_3d<f32>,

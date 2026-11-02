@@ -1,3 +1,5 @@
+use vertex;
+
 fn voxelize(index: u32, v0: Vertex, v1: Vertex, radius: f32) {
     let delta = v1.xyz - v0.xyz;
     let distance = length(delta);

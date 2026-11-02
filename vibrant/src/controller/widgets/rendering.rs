@@ -95,13 +95,8 @@ impl RenderingWidget {
         // Live accumulation progress from the renderer.
         accumulation: AccumulationStatus,
     ) {
-        let name = hdri.texture().name().to_owned();
-
-        let names = hdri
-            .textures()
-            .iter()
-            .map(|texture| texture.name().to_owned())
-            .collect_vec();
+        let name = hdri.name().to_owned();
+        let names = hdri.names().map(str::to_owned).collect_vec();
 
         let camera_open = ui.is_new("Rendering.Camera");
         ui.collapse(

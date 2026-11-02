@@ -1,4 +1,4 @@
-use std::{any::type_name, cell::Cell};
+use std::any::type_name;
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
@@ -13,50 +13,43 @@ use crate::{
     },
     controller::Controller,
     gpu::Gpu,
-    renderer::lighting::VMM_SIZE_OPTIONS,
+    renderer::lighting::VmmVariants,
     surface::{color::ColorBuffer, Frame},
 };
 
 pub struct GaussianVolumeRenderer {
-    // One precompiled trace pipeline per VMM_SIZE_OPTIONS entry.
-    variants: [RenderPipeline; 3],
+    variants: VmmVariants<RenderPipeline>,
     // Group 3: HDRI material settings + the combined-mode line-depth target.
     // Built per dispatch since the line-depth view lives on the (resizable) Frame.
     material_layout: BindGroupLayout,
-    active: Cell<usize>,
 }
 
 impl GaussianVolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
-        let trace_src = include_str!("trace.wgsl");
-
         let material_layout = Self::material_layout(gpu);
 
-        let variants = VMM_SIZE_OPTIONS.map(|vmm_size| {
+        let layout = gpu.pipeline_layout(&[
+            &GaussianRadianceBuffer::layout(gpu),
+            &PhysicalVolume::layout_read(gpu),
+            &Environment::layout(gpu),
+            &material_layout,
+        ]);
+
+        let variants = VmmVariants::new(gpu, "GaussianVolumeTrace", move |gpu, vmm_size| {
             gpu.quad(
                 "GaussianVolumeTrace",
-                &gpu.pipeline_layout(&[
-                    &GaussianRadianceBuffer::layout(gpu),
-                    &PhysicalVolume::layout_read(gpu),
-                    &Environment::layout(gpu),
-                    &material_layout,
-                ]),
+                &layout,
                 ColorBuffer::target_premultiplied(),
-                &gpu.shader(&vmm_template(trace_src, vmm_size)),
+                &gpu.shader_with(
+                    "renderer/volume/render/trace.wgsl",
+                    &[("VMM_SIZE", &vmm_size)],
+                ),
             )
         });
-
-        let active = Cell::new(
-            VMM_SIZE_OPTIONS
-                .iter()
-                .position(|&size| size == 32)
-                .unwrap(),
-        );
 
         Self {
             variants,
             material_layout,
-            active,
         }
     }
 
@@ -92,12 +85,6 @@ impl GaussianVolumeRenderer {
             })
     }
 
-    fn set_vmm_size(&self, vmm_size: u32) {
-        if let Some(index) = VMM_SIZE_OPTIONS.iter().position(|&size| size == vmm_size) {
-            self.active.set(index);
-        }
-    }
-
     pub fn dispatch(
         &self,
         gpu: &Gpu,
@@ -110,7 +97,7 @@ impl GaussianVolumeRenderer {
             return;
         };
 
-        self.set_vmm_size(controller.radiance().lobes());
+        self.variants.set_vmm_size(controller.radiance().lobes());
 
         let material = self.material_binding(gpu, &asset.hdri, frame);
 
@@ -129,7 +116,7 @@ impl GaussianVolumeRenderer {
             1.0,
         );
 
-        pass.set_pipeline(&self.variants[self.active.get()]);
+        pass.set_pipeline(self.variants.active());
 
         pass.set_bind_group(0, radiance.binding(), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);
@@ -154,8 +141,4 @@ impl GaussianVolumeRenderer {
             ],
         })
     }
-}
-
-fn vmm_template(src: &str, vmm_size: u32) -> String {
-    src.replace("#VMM_SIZE", &vmm_size.to_string())
 }

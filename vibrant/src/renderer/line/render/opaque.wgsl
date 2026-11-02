@@ -1,3 +1,8 @@
+use block;
+use intersect;
+use math;
+use vertex;
+
 struct Hit {
     distance: f32,
     index: u32,

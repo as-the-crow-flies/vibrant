@@ -7,44 +7,52 @@ use crate::{
         crop::CropBuffer, volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
         volume_mask::VolumeMaskBuffer,
     },
-    gpu::Gpu,
+    gpu::{Gpu, Lazy},
 };
 
 pub struct VolumeTransferPipeline {
-    clear: ComputePipeline,
-    transfer: ComputePipeline,
-    copy: ComputePipeline,
-    mipmap: ComputePipeline,
+    clear: Lazy<ComputePipeline>,
+    transfer: Lazy<ComputePipeline>,
+    copy: Lazy<ComputePipeline>,
+    mipmap: Lazy<ComputePipeline>,
 }
 
 impl VolumeTransferPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            clear: gpu.compute(
-                "VolumeClearPipeline",
-                &gpu.pipeline_layout(&[&PhysicalVolume::layout_transfer(gpu)]),
-                &gpu.shader(include_str!("clear.wgsl")),
-            ),
-            transfer: gpu.compute(
-                "VolumeTransferPipeline",
-                &gpu.pipeline_layout(&[
-                    &PhysicalVolume::layout_transfer(gpu),
-                    &VolumeFractionBuffer::layout(gpu),
-                    &VolumeMaskBuffer::layout(gpu),
-                    &CropBuffer::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("transfer.wgsl")),
-            ),
-            copy: gpu.compute(
-                "VolumeCopyPipeline",
-                &gpu.pipeline_layout(&[&PhysicalVolume::layout_copy(gpu)]),
-                &gpu.shader(include_str!("copy.wgsl")),
-            ),
-            mipmap: gpu.compute(
-                "VolumeMipMapPipeline",
-                &gpu.pipeline_layout(&[&PhysicalVolume::layout_mipmap(gpu)]),
-                &gpu.shader(include_str!("mipmap.wgsl")),
-            ),
+            clear: gpu.lazy("VolumeClearPipeline", move |gpu| {
+                gpu.compute(
+                    "VolumeClearPipeline",
+                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_transfer(gpu)]),
+                    &gpu.shader("renderer/volume/transfer/clear.wgsl"),
+                )
+            }),
+            transfer: gpu.lazy("VolumeTransferPipeline", move |gpu| {
+                gpu.compute(
+                    "VolumeTransferPipeline",
+                    &gpu.pipeline_layout(&[
+                        &PhysicalVolume::layout_transfer(gpu),
+                        &VolumeFractionBuffer::layout(gpu),
+                        &VolumeMaskBuffer::layout(gpu),
+                        &CropBuffer::layout(gpu),
+                    ]),
+                    &gpu.shader("renderer/volume/transfer/transfer.wgsl"),
+                )
+            }),
+            copy: gpu.lazy("VolumeCopyPipeline", move |gpu| {
+                gpu.compute(
+                    "VolumeCopyPipeline",
+                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_copy(gpu)]),
+                    &gpu.shader("renderer/volume/transfer/copy.wgsl"),
+                )
+            }),
+            mipmap: gpu.lazy("VolumeMipMapPipeline", move |gpu| {
+                gpu.compute(
+                    "VolumeMipMapPipeline",
+                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_mipmap(gpu)]),
+                    &gpu.shader("renderer/volume/transfer/mipmap.wgsl"),
+                )
+            }),
         }
     }
 

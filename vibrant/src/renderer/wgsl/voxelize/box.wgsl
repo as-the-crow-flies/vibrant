@@ -1,3 +1,5 @@
+use vertex;
+
 const SQRT_3_DIV_2: f32 = 0.8660254038;
 
 fn voxelize(index: u32, v0: Vertex, v1: Vertex, radius: f32) {

@@ -1,3 +1,7 @@
+use color;
+use math;
+use sphere;
+
 @group(0) @binding(0) var HDRI: texture_2d<f32>;
 @group(0) @binding(1) var HDRI_SAMPLER: sampler;
 @group(0) @binding(2) var IMPORTANCE: texture_storage_2d<rgba32float, write>;

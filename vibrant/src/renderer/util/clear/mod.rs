@@ -2,21 +2,26 @@ use std::any::type_name;
 
 use wgpu::{CommandEncoder, RenderPassDescriptor, RenderPipeline};
 
-use crate::{gpu::Gpu, surface::color::ColorBuffer};
+use crate::{
+    gpu::{Gpu, Lazy},
+    surface::color::ColorBuffer,
+};
 
 pub struct ClearPipeline {
-    pipeline: RenderPipeline,
+    pipeline: Lazy<RenderPipeline>,
 }
 
 impl ClearPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            pipeline: gpu.quad(
-                type_name::<Self>(),
-                &gpu.pipeline_layout(&[]),
-                ColorBuffer::target(),
-                &gpu.shader(include_str!("clear.wgsl")),
-            ),
+            pipeline: gpu.lazy(type_name::<Self>(), |gpu| {
+                gpu.quad(
+                    type_name::<Self>(),
+                    &gpu.pipeline_layout(&[]),
+                    ColorBuffer::target(),
+                    &gpu.shader("renderer/util/clear/clear.wgsl"),
+                )
+            }),
         }
     }
 

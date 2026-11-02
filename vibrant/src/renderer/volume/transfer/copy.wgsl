@@ -1,3 +1,5 @@
+use color;
+
 @group(0) @binding(0) var ABSORPTION_SRC: texture_storage_3d<r32uint, read>;
 @group(0) @binding(1) var SCATTERING_SRC: texture_storage_3d<r32uint, read>;
 @group(0) @binding(2) var PROPERTIES_SRC: texture_storage_3d<r32uint, read>;

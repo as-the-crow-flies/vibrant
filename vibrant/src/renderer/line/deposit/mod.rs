@@ -12,7 +12,7 @@ use crate::{
         tractography::Tractography,
         volume::PhysicalVolume,
     },
-    gpu::Gpu,
+    gpu::{Gpu, Lazy},
 };
 
 /// Writes neutral line density (from the occupancy pyramid) into the shared
@@ -21,27 +21,31 @@ use crate::{
 /// cascade(s) light lines and volume together; the volume tracer never marches
 /// it.
 pub struct LineDepositPipeline {
-    deposit: ComputePipeline,
-    mipmap: ComputePipeline,
+    deposit: Lazy<ComputePipeline>,
+    mipmap: Lazy<ComputePipeline>,
 }
 
 impl LineDepositPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            deposit: gpu.compute(
-                type_name::<Self>(),
-                &gpu.pipeline_layout(&[
-                    &MipTexture3D::<R32Float>::layout_write(gpu),
-                    &OccupancyBuffer::layout_read(gpu),
-                    &Tractography::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("deposit.wgsl")),
-            ),
-            mipmap: gpu.compute(
-                "LineDeposit::MipMap",
-                &gpu.pipeline_layout(&[&MipTexture3D::<R32Float>::layout_mipmap(gpu)]),
-                &gpu.shader(include_str!("../occupancy/mipmap.wgsl")),
-            ),
+            deposit: gpu.lazy(type_name::<Self>(), move |gpu| {
+                gpu.compute(
+                    type_name::<Self>(),
+                    &gpu.pipeline_layout(&[
+                        &MipTexture3D::<R32Float>::layout_write(gpu),
+                        &OccupancyBuffer::layout_read(gpu),
+                        &Tractography::layout(gpu),
+                    ]),
+                    &gpu.shader("renderer/line/deposit/deposit.wgsl"),
+                )
+            }),
+            mipmap: gpu.lazy("LineDeposit::MipMap", move |gpu| {
+                gpu.compute(
+                    "LineDeposit::MipMap",
+                    &gpu.pipeline_layout(&[&MipTexture3D::<R32Float>::layout_mipmap(gpu)]),
+                    &gpu.shader("renderer/line/occupancy/mipmap.wgsl"),
+                )
+            }),
         }
     }
 

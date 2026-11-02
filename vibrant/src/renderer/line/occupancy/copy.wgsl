@@ -1,3 +1,7 @@
+use block;
+use math;
+use uniforms;
+
 @group(0) @binding(0) var<storage, read_write> DENSITY_COUNT_BUFFER: array<u32>;
 @group(1) @binding(0) var DENSITY: texture_storage_3d<r32float, read_write>;
 @group(2) @binding(0) var COUNT: texture_storage_3d<r32uint, read_write>;

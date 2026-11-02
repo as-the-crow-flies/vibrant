@@ -8,59 +8,68 @@ use crate::{
         Asset,
     },
     controller::{settings::LineVoxelizationMode, Controller},
-    gpu::Gpu,
-    renderer::wgsl,
+    gpu::{Gpu, Lazy},
 };
 
 pub struct LineOccupancyPipeline {
-    voxelize_tube: ComputePipeline,
-    voxelize_line: ComputePipeline,
-    voxelize_box: ComputePipeline,
-    copy: ComputePipeline,
-    mipmap: ComputePipeline,
+    voxelize_tube: Lazy<ComputePipeline>,
+    voxelize_line: Lazy<ComputePipeline>,
+    voxelize_box: Lazy<ComputePipeline>,
+    copy: Lazy<ComputePipeline>,
+    mipmap: Lazy<ComputePipeline>,
 }
 
 impl LineOccupancyPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let voxelize_layout = &gpu.pipeline_layout(&[
-            &OccupancyBuffer::layout_write(gpu),
-            &LineBuffer::layout_render(gpu),
-            &Tractography::layout(gpu),
-        ]);
-
-        let voxelize_shader_source = include_str!("voxelize.wgsl");
+        let voxelize_layout = |gpu: &Gpu| {
+            gpu.pipeline_layout(&[
+                &OccupancyBuffer::layout_write(gpu),
+                &LineBuffer::layout_render(gpu),
+                &Tractography::layout(gpu),
+            ])
+        };
 
         Self {
-            voxelize_tube: gpu.compute(
-                "Occupancy::Voxelize::Tube",
-                voxelize_layout,
-                &gpu.shader(&(wgsl::voxelize::TUBE.to_owned() + voxelize_shader_source)),
-            ),
-            voxelize_line: gpu.compute(
-                "Occupancy::Voxelize::Line",
-                voxelize_layout,
-                &gpu.shader(&(wgsl::voxelize::LINE.to_owned() + voxelize_shader_source)),
-            ),
-            voxelize_box: gpu.compute(
-                "Occupancy::Voxelize::Box",
-                voxelize_layout,
-                &gpu.shader(&(wgsl::voxelize::BOX.to_owned() + voxelize_shader_source)),
-            ),
-            copy: gpu.compute(
-                "Occupancy::Copy",
-                &gpu.pipeline_layout(&[
-                    &OccupancyBuffer::layout_write(gpu),
-                    &MipTexture3D::<R32Float>::layout_write(gpu),
-                    &MipTexture3D::<R32Uint>::layout_write(gpu),
-                    &Tractography::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("copy.wgsl")),
-            ),
-            mipmap: gpu.compute(
-                "Occupancy::MipMap",
-                &gpu.pipeline_layout(&[&MipTexture3D::<R32Float>::layout_mipmap(gpu)]),
-                &gpu.shader(include_str!("mipmap.wgsl")),
-            ),
+            voxelize_tube: gpu.lazy("Occupancy::Voxelize::Tube", move |gpu| {
+                gpu.compute(
+                    "Occupancy::Voxelize::Tube",
+                    &voxelize_layout(gpu),
+                    &gpu.shader("renderer/line/occupancy/voxelize_tube.wgsl"),
+                )
+            }),
+            voxelize_line: gpu.lazy("Occupancy::Voxelize::Line", move |gpu| {
+                gpu.compute(
+                    "Occupancy::Voxelize::Line",
+                    &voxelize_layout(gpu),
+                    &gpu.shader("renderer/line/occupancy/voxelize_line.wgsl"),
+                )
+            }),
+            voxelize_box: gpu.lazy("Occupancy::Voxelize::Box", move |gpu| {
+                gpu.compute(
+                    "Occupancy::Voxelize::Box",
+                    &voxelize_layout(gpu),
+                    &gpu.shader("renderer/line/occupancy/voxelize_box.wgsl"),
+                )
+            }),
+            copy: gpu.lazy("Occupancy::Copy", move |gpu| {
+                gpu.compute(
+                    "Occupancy::Copy",
+                    &gpu.pipeline_layout(&[
+                        &OccupancyBuffer::layout_write(gpu),
+                        &MipTexture3D::<R32Float>::layout_write(gpu),
+                        &MipTexture3D::<R32Uint>::layout_write(gpu),
+                        &Tractography::layout(gpu),
+                    ]),
+                    &gpu.shader("renderer/line/occupancy/copy.wgsl"),
+                )
+            }),
+            mipmap: gpu.lazy("Occupancy::MipMap", move |gpu| {
+                gpu.compute(
+                    "Occupancy::MipMap",
+                    &gpu.pipeline_layout(&[&MipTexture3D::<R32Float>::layout_mipmap(gpu)]),
+                    &gpu.shader("renderer/line/occupancy/mipmap.wgsl"),
+                )
+            }),
         }
     }
 

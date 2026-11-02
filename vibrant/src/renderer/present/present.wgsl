@@ -1,15 +1,17 @@
 // Final present pass: read the linear HDR scene, tone map it once, and
 // composite the (premultiplied, sRGB-encoded) egui overlay on top.
 //
-// Baked per pipeline at creation (see `PresentPipeline`):
-//   #HDR           - drive highlights past SDR white toward `PRESENT.headroom`
+// Overridden per pipeline at creation (see `PresentPipeline`):
+//   HDR            - drive highlights past SDR white toward `PRESENT.headroom`
 //                    instead of landing everything in [0, 1].
-//   #LINEAR_OUTPUT - the swapchain wants linear values (scRGB `ExtendedSrgbLinear`,
+//   LINEAR_OUTPUT  - the swapchain wants linear values (scRGB `ExtendedSrgbLinear`,
 //                    native HDR). Otherwise it wants sRGB-encoded values -
 //                    `Bgra8Unorm`/`Auto` (SDR) or `ExtendedSrgb` (web HDR, an
 //                    sRGB curve extended past 1.0).
-//   #EXPORT        - screenshot variant: keep the scene alpha for a transparent
+//   EXPORT         - screenshot variant: keep the scene alpha for a transparent
 //                    background instead of the opaque 1.0 the swapchain needs.
+
+use color;
 
 @group(0) @binding(0) var SCENE: texture_2d<f32>;
 @group(1) @binding(0) var OVERLAY: texture_2d<f32>;
@@ -20,9 +22,9 @@ struct Present {
 };
 @group(2) @binding(0) var<uniform> PRESENT: Present;
 
-const HDR: bool = #HDR;
-const LINEAR_OUTPUT: bool = #LINEAR_OUTPUT;
-const EXPORT: bool = #EXPORT;
+const HDR: bool = false;
+const LINEAR_OUTPUT: bool = false;
+const EXPORT: bool = false;
 
 fn tonemap(color: vec3<f32>, peak: f32) -> vec3<f32> {
     let c = aces(color);

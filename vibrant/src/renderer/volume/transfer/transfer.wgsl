@@ -1,3 +1,6 @@
+use color;
+use uniforms;
+
 struct MaterialNode {
     absorption: vec3<f32>,
     position: f32,

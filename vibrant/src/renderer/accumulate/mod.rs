@@ -6,38 +6,42 @@ use wgpu::{
 };
 
 use crate::{
-    gpu::Gpu,
+    gpu::{Gpu, Lazy},
     surface::{accumulate::AccumulateBuffer, color::ColorBuffer, Frame},
 };
 
 /// The `accumulate` and `reduce` render/compute pipelines.
 pub struct AccumulatePipeline {
-    accumulate: RenderPipeline,
-    reduce: ComputePipeline,
+    accumulate: Lazy<RenderPipeline>,
+    reduce: Lazy<ComputePipeline>,
 }
 
 impl AccumulatePipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let accumulate = gpu.quad(
-            type_name::<Self>(),
-            &gpu.pipeline_layout(&[
-                &ColorBuffer::layout(gpu),
-                &ColorBuffer::layout(gpu),
-                &AccumulateBuffer::uniform_layout(gpu),
-            ]),
-            ColorBuffer::target(),
-            &gpu.shader(include_str!("accumulate.wgsl")),
-        );
+        let accumulate = gpu.lazy("Accumulate", |gpu| {
+            gpu.quad(
+                type_name::<Self>(),
+                &gpu.pipeline_layout(&[
+                    &ColorBuffer::layout(gpu),
+                    &ColorBuffer::layout(gpu),
+                    &AccumulateBuffer::uniform_layout(gpu),
+                ]),
+                ColorBuffer::target(),
+                &gpu.shader("renderer/accumulate/accumulate.wgsl"),
+            )
+        });
 
-        let reduce = gpu.compute(
-            type_name::<Self>(),
-            &gpu.pipeline_layout(&[
-                &ColorBuffer::layout(gpu),
-                &ColorBuffer::layout(gpu),
-                &AccumulateBuffer::metric_layout(gpu),
-            ]),
-            &gpu.shader(include_str!("reduce.wgsl")),
-        );
+        let reduce = gpu.lazy("Accumulate::Reduce", |gpu| {
+            gpu.compute(
+                type_name::<Self>(),
+                &gpu.pipeline_layout(&[
+                    &ColorBuffer::layout(gpu),
+                    &ColorBuffer::layout(gpu),
+                    &AccumulateBuffer::metric_layout(gpu),
+                ]),
+                &gpu.shader("renderer/accumulate/reduce.wgsl"),
+            )
+        });
 
         Self { accumulate, reduce }
     }

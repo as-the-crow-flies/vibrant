@@ -1,3 +1,7 @@
+use em/em;
+use em/samples_x4;
+use sphere;
+
 @group(0) @binding(0) var HDRI: texture_2d<f32>;
 @group(0) @binding(1) var HDRI_SAMPLER: sampler;
 @group(0) @binding(2) var<storage, read> SEED: array<vec4<f32>>;

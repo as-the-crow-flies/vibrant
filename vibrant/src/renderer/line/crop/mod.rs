@@ -2,31 +2,35 @@ use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
 
 use crate::{
     asset::{crop::CropBuffer, line::LineBuffer, tractography::Tractography, Asset},
-    gpu::Gpu,
+    gpu::{Gpu, Lazy},
 };
 
 pub struct LineCropPipeline {
-    crop: ComputePipeline,
-    adjacency: ComputePipeline,
+    crop: Lazy<ComputePipeline>,
+    adjacency: Lazy<ComputePipeline>,
 }
 
 impl LineCropPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            crop: gpu.compute(
-                "Crop",
-                &gpu.pipeline_layout(&[
-                    &LineBuffer::layout_crop(gpu),
-                    &Tractography::layout(gpu),
-                    &CropBuffer::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("crop.wgsl")),
-            ),
-            adjacency: gpu.compute(
-                "Adjacency",
-                &gpu.pipeline_layout(&[&LineBuffer::layout_transform(gpu)]),
-                &gpu.shader(include_str!("adjacency.wgsl")),
-            ),
+            crop: gpu.lazy("Crop", move |gpu| {
+                gpu.compute(
+                    "Crop",
+                    &gpu.pipeline_layout(&[
+                        &LineBuffer::layout_crop(gpu),
+                        &Tractography::layout(gpu),
+                        &CropBuffer::layout(gpu),
+                    ]),
+                    &gpu.shader("renderer/line/crop/crop.wgsl"),
+                )
+            }),
+            adjacency: gpu.lazy("Adjacency", move |gpu| {
+                gpu.compute(
+                    "Adjacency",
+                    &gpu.pipeline_layout(&[&LineBuffer::layout_transform(gpu)]),
+                    &gpu.shader("renderer/line/crop/adjacency.wgsl"),
+                )
+            }),
         }
     }
 

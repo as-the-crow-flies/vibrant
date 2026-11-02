@@ -1,3 +1,10 @@
+use color;
+use em/em;
+use gaussian;
+use math;
+use occlusion;
+use uniforms;
+
 @group(0) @binding(0) var PHI_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(1) var VMM_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(3) var PHI_IN: texture_3d<f32>;
@@ -36,8 +43,8 @@
 //     5    4096       1024         32                   4
 
 const CASCADE_MAX: u32 = 5u;
-const CASCADE: u32 = #CASCADE;
-const WORKGROUP: u32 = #WORKGROUP;
+const CASCADE: u32 = 0u;
+const WORKGROUP: u32 = 32u;
 const SUBGROUPS: u32 = WORKGROUP / 32u;
 const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
 const EM_HISTOGRAM_ROW: u32 = CASCADE;

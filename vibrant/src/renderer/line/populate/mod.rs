@@ -8,51 +8,58 @@ use crate::{
         Asset,
     },
     controller::{settings::LineVoxelizationMode, Controller},
-    gpu::Gpu,
-    renderer::wgsl,
+    gpu::{Gpu, Lazy},
 };
 
 pub struct LinePopulatePipeline {
-    scan: ComputePipeline,
-    populate_tube: ComputePipeline,
-    populate_line: ComputePipeline,
-    populate_box: ComputePipeline,
+    scan: Lazy<ComputePipeline>,
+    populate_tube: Lazy<ComputePipeline>,
+    populate_line: Lazy<ComputePipeline>,
+    populate_box: Lazy<ComputePipeline>,
 }
 
 impl LinePopulatePipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let layout = &gpu.pipeline_layout(&[
-            &VoxelIndexBuffer::layout_write(gpu),
-            &LineBuffer::layout_render(gpu),
-            &Tractography::layout(gpu),
-        ]);
-
-        let populate_source = include_str!("populate.wgsl");
+        let layout = |gpu: &Gpu| {
+            gpu.pipeline_layout(&[
+                &VoxelIndexBuffer::layout_write(gpu),
+                &LineBuffer::layout_render(gpu),
+                &Tractography::layout(gpu),
+            ])
+        };
 
         Self {
-            scan: gpu.compute(
-                "Populate::Scan",
-                &gpu.pipeline_layout(&[
-                    &VoxelIndexBuffer::layout_write(gpu),
-                    &MipTexture3D::<R32Uint>::layout(gpu),
-                ]),
-                &gpu.shader(include_str!("scan.wgsl")),
-            ),
-            populate_tube: gpu.compute(
-                "Populate::Populate::Tube",
-                layout,
-                &gpu.shader(&(wgsl::voxelize::TUBE.to_owned() + populate_source)),
-            ),
-            populate_line: gpu.compute(
-                "Populate::Populate::Line",
-                layout,
-                &gpu.shader(&(wgsl::voxelize::LINE.to_owned() + populate_source)),
-            ),
-            populate_box: gpu.compute(
-                "Populate::Populate::Box",
-                layout,
-                &gpu.shader(&(wgsl::voxelize::BOX.to_owned() + populate_source)),
-            ),
+            scan: gpu.lazy("Populate::Scan", move |gpu| {
+                gpu.compute(
+                    "Populate::Scan",
+                    &gpu.pipeline_layout(&[
+                        &VoxelIndexBuffer::layout_write(gpu),
+                        &MipTexture3D::<R32Uint>::layout(gpu),
+                    ]),
+                    &gpu.shader("renderer/line/populate/scan.wgsl"),
+                )
+            }),
+            populate_tube: gpu.lazy("Populate::Populate::Tube", move |gpu| {
+                gpu.compute(
+                    "Populate::Populate::Tube",
+                    &layout(gpu),
+                    &gpu.shader("renderer/line/populate/populate_tube.wgsl"),
+                )
+            }),
+            populate_line: gpu.lazy("Populate::Populate::Line", move |gpu| {
+                gpu.compute(
+                    "Populate::Populate::Line",
+                    &layout(gpu),
+                    &gpu.shader("renderer/line/populate/populate_line.wgsl"),
+                )
+            }),
+            populate_box: gpu.lazy("Populate::Populate::Box", move |gpu| {
+                gpu.compute(
+                    "Populate::Populate::Box",
+                    &layout(gpu),
+                    &gpu.shader("renderer/line/populate/populate_box.wgsl"),
+                )
+            }),
         }
     }
 

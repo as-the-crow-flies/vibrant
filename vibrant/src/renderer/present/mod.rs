@@ -10,7 +10,7 @@ use wgpu::{
 };
 
 use crate::{
-    gpu::Gpu,
+    gpu::{Gpu, Lazy},
     surface::{color::ColorBuffer, Frame},
 };
 
@@ -35,15 +35,15 @@ pub enum Presentation {
 
 /// Turns the linear HDR scene buffer into the swapchain image: tone map once
 /// (targeting the display headroom in the HDR variants) and composite the egui
-/// overlay on top. One pipeline is baked per [`Presentation`]; the per-frame
+/// overlay on top. One pipeline is compiled per [`Presentation`] on first use; the per-frame
 /// headroom/exposure ride in a small uniform.
 pub struct PresentPipeline {
-    sdr: RenderPipeline,
-    hdr_linear: RenderPipeline,
-    hdr_encoded: RenderPipeline,
+    sdr: Lazy<RenderPipeline>,
+    hdr_linear: Lazy<RenderPipeline>,
+    hdr_encoded: Lazy<RenderPipeline>,
     /// SDR variant targeting [`ColorBuffer::LDR_FORMAT`] for screenshot readback
     /// (the swapchain is usually `Bgra8Unorm`, but `Gpu::save` wants RGBA bytes).
-    export: RenderPipeline,
+    export: Lazy<RenderPipeline>,
     uniform: Buffer,
     binding: BindGroup,
 }
@@ -58,24 +58,28 @@ impl PresentPipeline {
             &uniform_layout,
         ]);
 
-        let flag = |value: bool| if value { "true" } else { "false" };
-
         let build = |hdr: bool, linear_output: bool, export: bool, format: TextureFormat| {
-            let source = include_str!("present.wgsl")
-                .replace("#HDR", flag(hdr))
-                .replace("#LINEAR_OUTPUT", flag(linear_output))
-                .replace("#EXPORT", flag(export));
+            let layout = layout.clone();
 
-            gpu.quad(
-                type_name::<Self>(),
-                &layout,
-                ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: ColorWrites::all(),
-                },
-                &gpu.shader(&source),
-            )
+            gpu.lazy(type_name::<Self>(), move |gpu| {
+                gpu.quad(
+                    type_name::<Self>(),
+                    &layout,
+                    ColorTargetState {
+                        format,
+                        blend: None,
+                        write_mask: ColorWrites::all(),
+                    },
+                    &gpu.shader_with(
+                        "renderer/present/present.wgsl",
+                        &[
+                            ("HDR", &hdr),
+                            ("LINEAR_OUTPUT", &linear_output),
+                            ("EXPORT", &export),
+                        ],
+                    ),
+                )
+            })
         };
 
         let uniform = gpu.device().create_buffer(&BufferDescriptor {

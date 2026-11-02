@@ -1,3 +1,8 @@
+use block;
+use math;
+use uniforms;
+use vertex;
+
 @group(0) @binding(0) var<storage, read_write> DENSITY: array<atomic<u32>>;
 
 @group(1) @binding(0) var<storage> LINE_INDEX: array<u32>;

@@ -1,3 +1,5 @@
+use em/em;
+
 const SAMPLES_PER_THREAD: u32 = 1u;
 
 alias Directions = vec3<f32>;
