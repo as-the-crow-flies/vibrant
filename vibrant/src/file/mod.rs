@@ -1,6 +1,7 @@
 pub mod bounds;
 pub mod hdri;
 pub mod line;
+pub mod trx;
 pub mod volume;
 
 pub use line::*;
@@ -189,6 +190,15 @@ impl FileStage {
                 lines.push(LineFile::from_tck(file));
             } else if file.name().ends_with(".obj") {
                 lines.push(LineFile::from_obj(file));
+            } else if file.name().ends_with(".trx") {
+                let name = file.name().to_owned();
+                match trx::load(file) {
+                    Ok((mut trx_lines, mut trx_scalars)) => {
+                        lines.append(&mut trx_lines);
+                        track_scalars.append(&mut trx_scalars);
+                    }
+                    Err(error) => warn!("Cannot open `{name}`: {error}"),
+                }
             } else if file.name().ends_with(".tsf") {
                 track_scalars.push(TrackScalarFile::from_tsf(file));
             } else if file.name().ends_with(".nii") {
@@ -199,7 +209,7 @@ impl FileStage {
                 hdris.push(HdriFile::from_exr(&file));
             } else {
                 warn!(
-                    "Cannot open `{}`. Supported file types are [.tck .obj .nii.gz]",
+                    "Cannot open `{}`. Supported file types are [.tck .obj .trx .tsf .nii .nii.gz .exr]",
                     file.name()
                 )
             }
@@ -297,3 +307,52 @@ static LOADING: AtomicBool = AtomicBool::new(false);
 
 #[allow(clippy::type_complexity)]
 static WAKER: Mutex<Option<Box<dyn Fn() + Send>>> = Mutex::new(None);
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Cursor, Write};
+
+    use zip::{write::SimpleFileOptions, ZipWriter};
+
+    use super::{File, FileStage};
+
+    fn trx() -> Vec<u8> {
+        let mut bytes = Cursor::new(Vec::new());
+
+        {
+            let mut writer = ZipWriter::new(&mut bytes);
+            let options = SimpleFileOptions::default();
+
+            writer.start_file("header.json", options).unwrap();
+            writer
+                .write_all(br#"{"NB_STREAMLINES":1,"NB_VERTICES":2}"#)
+                .unwrap();
+
+            writer.start_file("positions.3.float32", options).unwrap();
+            for value in [0.0f32, 0.0, 0.0, 1.0, 2.0, 3.0] {
+                writer.write_all(&value.to_le_bytes()).unwrap();
+            }
+
+            writer.start_file("offsets.uint32", options).unwrap();
+            writer.write_all(&0u32.to_le_bytes()).unwrap();
+
+            writer.finish().unwrap();
+        }
+
+        bytes.into_inner()
+    }
+
+    #[test]
+    fn queues_trx_files() {
+        FileStage::load_files(vec![File::new("sample.trx", trx())]);
+
+        let mut lines = Vec::new();
+        FileStage::on_lines(|queued| lines = queued);
+        let mut scalars = Vec::new();
+        FileStage::on_track_scalars(|queued| scalars = queued);
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].name(), "sample");
+        assert!(scalars.is_empty());
+    }
+}

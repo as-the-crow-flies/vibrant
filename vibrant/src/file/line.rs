@@ -62,6 +62,14 @@ impl LineFile {
         }
     }
 
+    pub(crate) fn from_parts(name: String, lines: Vec<Vec<Vec4>>) -> LineFile {
+        Self {
+            name,
+            bounds: Bounds::from_vertices(lines.iter().flatten()),
+            lines,
+        }
+    }
+
     pub fn from_tck(file: File) -> LineFile {
         let bytes = file.data();
 
@@ -86,12 +94,26 @@ impl LineFile {
     }
 }
 
+#[derive(Debug)]
 pub struct TrackScalarFile {
     name: String,
+    field: Option<String>,
     values: Vec<f32>,
 }
 
 impl TrackScalarFile {
+    pub(crate) fn from_values(
+        name: String,
+        field: Option<String>,
+        values: Vec<f32>,
+    ) -> TrackScalarFile {
+        Self {
+            name,
+            field,
+            values,
+        }
+    }
+
     pub fn from_tsf(file: File) -> TrackScalarFile {
         let bytes = file.data();
 
@@ -106,12 +128,17 @@ impl TrackScalarFile {
 
         Self {
             name: file.name,
+            field: None,
             values,
         }
     }
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn field(&self) -> Option<&str> {
+        self.field.as_deref()
     }
 
     pub fn values(&self) -> &Vec<f32> {
