@@ -12,13 +12,12 @@ use crate::{
         volume::PhysicalVolume, Asset,
     },
     controller::Controller,
-    gpu::Gpu,
-    renderer::lighting::VmmVariants,
+    gpu::{Gpu, Lazy},
     surface::{color::ColorBuffer, Frame},
 };
 
 pub struct GaussianVolumeRenderer {
-    variants: VmmVariants<RenderPipeline>,
+    pipeline: Lazy<RenderPipeline>,
     // Group 3: HDRI material settings + the combined-mode line-depth target.
     // Built per dispatch since the line-depth view lives on the (resizable) Frame.
     material_layout: BindGroupLayout,
@@ -35,20 +34,17 @@ impl GaussianVolumeRenderer {
             &material_layout,
         ]);
 
-        let variants = VmmVariants::new(gpu, "GaussianVolumeTrace", move |gpu, vmm_size| {
+        let pipeline = gpu.lazy("GaussianVolumeTrace", move |gpu| {
             gpu.quad(
                 "GaussianVolumeTrace",
                 &layout,
                 ColorBuffer::target_premultiplied(),
-                &gpu.shader_with(
-                    "renderer/volume/render/trace.wgsl",
-                    &[("VMM_SIZE", &vmm_size)],
-                ),
+                &gpu.shader("renderer/volume/render/trace.wgsl"),
             )
         });
 
         Self {
-            variants,
+            pipeline,
             material_layout,
         }
     }
@@ -97,8 +93,6 @@ impl GaussianVolumeRenderer {
             return;
         };
 
-        self.variants.set_vmm_size(controller.radiance().lobes());
-
         let material = self.material_binding(gpu, &asset.hdri, frame);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -116,7 +110,7 @@ impl GaussianVolumeRenderer {
             1.0,
         );
 
-        pass.set_pipeline(self.variants.active());
+        pass.set_pipeline(&self.pipeline);
 
         pass.set_bind_group(0, radiance.binding(), &[]);
         pass.set_bind_group(1, volume.binding_read(), &[]);

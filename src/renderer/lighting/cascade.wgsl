@@ -43,13 +43,9 @@ use uniforms;
 //     5    4096       1024         32                   4
 
 const CASCADE_MAX: u32 = 5u;
-const CASCADE: u32 = 0u;
 const WORKGROUP: u32 = 32u;
 const SUBGROUPS: u32 = WORKGROUP / 32u;
 const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
-const EM_HISTOGRAM_ROW: u32 = CASCADE;
-
-const INTERVAL = array<f32, 7>(1.0, 3.0, 7.0, 15.0, 31.0, 63.0, 127.0);
 
 const IRRADIANCE_CULL: f32 = 0.05;
 
@@ -66,19 +62,33 @@ const NEIGHBOR_OFFSET = array<vec3<f32>, 6>(
     vec3<f32>( 0.0,  0.0, -1.0), vec3<f32>( 0.0,  0.0,  1.0),
 );
 
+fn cascade() -> u32 {
+    return CASCADE_OPTS.cascade;
+}
+
+// Compiled per lobe count: workgroup memory scales with VMM_MAX, and that
+// bounds occupancy.
+fn vmm_size() -> u32 {
+    return VMM_MAX;
+}
+
+fn em_histogram_row() -> u32 {
+    return cascade();
+}
+
 @compute
 @workgroup_size(WORKGROUP)
 fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
-    if (thread.index < VMM_SIZE) { initialize_lobe(probe, thread.index); }
+    if (thread.index < vmm_size()) { initialize_lobe(probe, thread.index); }
 
     workgroupBarrier();
 
-    let origin = (vec3<f32>(probe) + 0.5) * f32(1u << CASCADE);
+    let origin = (vec3<f32>(probe) + 0.5) * f32(1u << cascade());
 
     if (is_culled(origin, thread)) {
-        if (thread.index < VMM_SIZE) { store_lobe(probe, thread.index); }
+        if (thread.index < vmm_size()) { store_lobe(probe, thread.index); }
         if (thread.index == 0u) { record_iterations(0); }
-        if (CASCADE == 0u) { store_phase(probe, thread); }
+        if (cascade() == 0u) { store_phase(probe, thread); }
         return;
     }
 
@@ -88,9 +98,9 @@ fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
 
     fit_vmm(omega, radiance, weight, thread);
 
-    if (thread.index < VMM_SIZE) { store_lobe(probe, thread.index); }
+    if (thread.index < vmm_size()) { store_lobe(probe, thread.index); }
 
-    if (CASCADE == 0u) {
+    if (cascade() == 0u) {
         store_phase(probe, thread);
     } else if (thread.index == 0u) {
         store_irradiance(probe);
@@ -98,12 +108,12 @@ fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
 }
 
 fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
-    let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << CASCADE);
+    let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
     let origin_sample = origin / dim;
-    let cell_sample = f32(1u << CASCADE) / dim;
+    let cell_sample = f32(1u << cascade()) / dim;
 
     let radiance_scale = f32(textureDimensions(EXTINCTION).x) / dim.x;
-    let mip = f32(CASCADE) + log2(radiance_scale);
+    let mip = f32(cascade()) + log2(radiance_scale);
 
     if (thread.index == 0u) { atomicStore(&CULL_OCCUPIED, 0u); }
 
@@ -118,7 +128,7 @@ fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
     workgroupBarrier();
 
     var result = atomicLoad(&CULL_OCCUPIED) == 0u;
-    if (!result && CASCADE < CASCADE_MAX) {
+    if (!result && cascade() < CASCADE_MAX) {
         let irradiance = unpack_rgb(textureSampleLevel(IRRADIANCE_IN, SAMPLER, origin_sample, 0.0));
         result = brightness(irradiance) < IRRADIANCE_CULL;
     }
@@ -129,9 +139,9 @@ fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
 }
 
 fn initialize_lobe(probe: vec3<u32>, k: u32) {
-    if (CASCADE == CASCADE_MAX) {
-        let vmm = VMM_HDRI[VMM_SIZE + k];
-        let phi = PHI_HDRI[VMM_SIZE + k];
+    if (cascade() == CASCADE_MAX) {
+        let vmm = VMM_HDRI[vmm_size() + k];
+        let phi = PHI_HDRI[vmm_size() + k];
 
         VMM[k] = vec4<f32>(rotate_hdri(vmm.xyz) * length(vmm.xyz), vmm.w);
         PHI[k] = vec4<f32>(phi.rgb * HDRI_SETTINGS.strength, phi.w);
@@ -167,7 +177,7 @@ fn store_lobe(probe: vec3<u32>, k: u32) {
 fn store_phase(probe: vec3<u32>, thread: Thread) {
     var phase = vec3<f32>(0.0);
 
-    if (thread.index < VMM_SIZE) {
+    if (thread.index < vmm_size()) {
         let lobe = sg_lobe(SG(VMM[thread.index], mean_radiance(PHI[thread.index]).rgb));
         phase = lobe.phi * (1.0 - exp2(-2.0 * lobe.kappa * LOG2_E)) / (2.0 * lobe.kappa);
     }
@@ -180,7 +190,7 @@ fn store_phase(probe: vec3<u32>, thread: Thread) {
 fn store_irradiance(probe: vec3<u32>) {
     var irradiance = vec3<f32>(0.0);
 
-    for (var k=0u; k<VMM_SIZE; k++) {
+    for (var k=0u; k<vmm_size(); k++) {
         irradiance += mean_radiance(PHI[k]).rgb;
     }
 
@@ -191,7 +201,7 @@ fn incident_radiance(origin: vec3<f32>, omega: Directions) -> Radiances {
     var radiance = Radiances();
     var expectation_sum = Weights();
 
-    for (var k=0u; k<VMM_SIZE; k++) {
+    for (var k=0u; k<vmm_size(); k++) {
         if (PHI[k].w < EPSILON) { continue; }
 
         let expectation = vmf(VMM[k], omega);
@@ -205,14 +215,16 @@ fn incident_radiance(origin: vec3<f32>, omega: Directions) -> Radiances {
     return hadamard(radiance, trace_samples(origin, omega));
 }
 
+// Interval [2^(c+1) − 1, 2^(c+2) − 1) in probe cells.
 fn trace(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
-    return transmission(origin, direction, INTERVAL[CASCADE], INTERVAL[CASCADE + 1]);
+    let c = cascade();
+    return transmission(origin, direction, f32((2u << c) - 1u), f32((4u << c) - 1u));
 }
 
 fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {
     var transmission = vec3<f32>(1.0);
 
-    let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << CASCADE);
+    let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
     let origin_sample = origin / dim;
     let direction_sample = direction / dim;
 

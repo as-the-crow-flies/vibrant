@@ -1,10 +1,7 @@
-use std::{any::type_name, mem::size_of, ops::Shr};
+use std::{any::type_name, cell::Cell, mem::size_of, ops::Shr};
 
 use glam::UVec3;
-use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
-    *,
-};
+use wgpu::*;
 
 use crate::{asset::volume::PhysicalVolume, gpu::Gpu};
 
@@ -13,9 +10,12 @@ pub struct GaussianRadianceBuffer {
     phi: Texture,
     irradiance: Texture,
     em_iterations: Buffer,
-    // `cascade.wgsl` occlusion sources: (include_volume, include_lines, _, _).
-    // Combined = (1, 1); overlay volume cascade = (1, 0); overlay line cascade = (0, 1).
+    // `CascadeOpts` (include_volume, include_lines, vmm_size, cascade), one
+    // slot per level. Combined = (1, 1); overlay volume cascade = (1, 0);
+    // overlay line cascade = (0, 1).
     cascade_opts: Buffer,
+    cascade_opts_stride: u64,
+    vmm_size: Cell<u32>,
     binding: BindGroup,
     binding_mipmap: Vec<BindGroup>,
     probes: Vec<UVec3>,
@@ -24,6 +24,7 @@ pub struct GaussianRadianceBuffer {
 impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     pub const LEVELS: u32 = 6;
+    const CASCADE_OPTS_SIZE: u64 = 4 * size_of::<u32>() as u64;
 
     // Must match EM_ITERATIONS_MAX in em.wgsl: one bucket per
     // possible iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0
@@ -84,11 +85,20 @@ impl GaussianRadianceBuffer {
             mapped_at_creation: false,
         });
 
-        let cascade_opts = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let cascade_opts_stride = gpu.device().limits().min_uniform_buffer_offset_alignment as u64;
+        let cascade_opts = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            contents: bytemuck::cast_slice(&[1u32, 0u32, 0u32, 0u32]),
+            size: Self::LEVELS as u64 * cascade_opts_stride,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
+        let cascade_opts_slot = |level: u32| {
+            BindingResource::Buffer(BufferBinding {
+                buffer: &cascade_opts,
+                offset: level as u64 * cascade_opts_stride,
+                size: BufferSize::new(Self::CASCADE_OPTS_SIZE),
+            })
+        };
 
         let sampler = gpu.device().create_sampler(&SamplerDescriptor {
             label,
@@ -162,7 +172,7 @@ impl GaussianRadianceBuffer {
                 },
                 BindGroupEntry {
                     binding: 7,
-                    resource: cascade_opts.as_entire_binding(),
+                    resource: cascade_opts_slot(0),
                 },
                 BindGroupEntry {
                     binding: 8,
@@ -263,7 +273,7 @@ impl GaussianRadianceBuffer {
                         },
                         BindGroupEntry {
                             binding: 8,
-                            resource: cascade_opts.as_entire_binding(),
+                            resource: cascade_opts_slot(level),
                         },
                     ],
                 })
@@ -276,18 +286,39 @@ impl GaussianRadianceBuffer {
             irradiance,
             em_iterations,
             cascade_opts,
+            cascade_opts_stride,
+            vmm_size: Cell::new(0),
             binding,
             binding_mipmap,
             probes,
         }
     }
 
-    pub fn set_cascade_sources(&self, gpu: &Gpu, include_volume: bool, include_lines: bool) {
-        gpu.queue().write_buffer(
-            &self.cascade_opts,
-            0,
-            bytemuck::cast_slice(&[include_volume as u32, include_lines as u32]),
-        );
+    pub fn set_cascade_opts(
+        &self,
+        gpu: &Gpu,
+        include_volume: bool,
+        include_lines: bool,
+        vmm_size: u32,
+    ) {
+        self.vmm_size.set(vmm_size);
+
+        for level in 0..Self::LEVELS {
+            gpu.queue().write_buffer(
+                &self.cascade_opts,
+                level as u64 * self.cascade_opts_stride,
+                bytemuck::cast_slice(&[
+                    include_volume as u32,
+                    include_lines as u32,
+                    vmm_size,
+                    level,
+                ]),
+            );
+        }
+    }
+
+    pub fn vmm_size(&self) -> u32 {
+        self.vmm_size.get()
     }
 
     pub fn size(&self) -> UVec3 {

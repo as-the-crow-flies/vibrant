@@ -11,22 +11,21 @@ use crate::{
         tractography::Tractography, Asset,
     },
     controller::{settings::RenderMode, Controller},
-    gpu::Gpu,
-    renderer::lighting::VmmVariants,
+    gpu::{Gpu, Lazy},
     surface::{color::ColorBuffer, Frame},
 };
 
 /// Tractography ray-marcher. Shades line surfaces with the shared VMM Disney
-/// BRDF (`trace.wgsl`) against the `radiance_lines` cascade. Two pipeline
-/// sets, one lazily compiled variant each per VMM lobe count:
+/// BRDF (`trace.wgsl`) against the `radiance_lines` cascade. Two lazily
+/// compiled pipelines:
 ///
 /// * **Combined** (`opaque.wgsl`): nearest hit only, alpha forced to 1, writes
 ///   HDR colour + the near→far hit fraction the volume tracer clamps to.
 /// * **Overlay** (`transparent.wgsl`): every crossed line accumulated
 ///   (premultiplied), honoring `settings.alpha`; composited over the volume.
 pub struct LineRenderPipeline {
-    combined: VmmVariants<RenderPipeline>,
-    overlay: VmmVariants<RenderPipeline>,
+    combined: Lazy<RenderPipeline>,
+    overlay: Lazy<RenderPipeline>,
 }
 
 impl LineRenderPipeline {
@@ -43,8 +42,8 @@ impl LineRenderPipeline {
         // the visit/result in `shader` differ. Overlay ignores the depth output.
         let build = |label: &'static str, shader: &'static str, blend: ColorTargetState| {
             let layout = layout.clone();
-            VmmVariants::new(gpu, label, move |gpu, vmm_size| {
-                let module = gpu.shader_with(shader, &[("VMM_SIZE", &vmm_size)]);
+            gpu.lazy(label, move |gpu| {
+                let module = gpu.shader(shader);
 
                 gpu.device()
                     .create_render_pipeline(&RenderPipelineDescriptor {
@@ -101,11 +100,10 @@ impl LineRenderPipeline {
             return;
         };
 
-        let variants = match controller.settings().render_mode {
+        let pipeline = match controller.settings().render_mode {
             RenderMode::Combined => &self.combined,
             RenderMode::Overlay => &self.overlay,
         };
-        variants.set_vmm_size(controller.radiance().lobes());
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some("LineTrace"),
@@ -126,7 +124,7 @@ impl LineRenderPipeline {
             1.0,
         );
 
-        pass.set_pipeline(variants.active());
+        pass.set_pipeline(pipeline);
         pass.set_bind_group(0, line.binding_trace(), &[]);
         pass.set_bind_group(1, asset.environment.binding(), &[]);
         pass.set_bind_group(2, radiance.binding(), &[]);

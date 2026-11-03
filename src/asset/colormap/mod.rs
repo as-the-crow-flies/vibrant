@@ -48,7 +48,9 @@ impl Colormap {
                     },
                     mip_level_count: 1,
                     sample_count: 1,
-                    dimension: TextureDimension::D2,
+                    // 3D like the volumes, so shaders reuse the texture code
+                    // they already instantiate instead of compiling 2D reads.
+                    dimension: TextureDimension::D3,
                     format: TextureFormat::Rgba8Unorm,
                     usage: TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],

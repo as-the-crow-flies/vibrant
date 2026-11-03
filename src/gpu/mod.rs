@@ -1,6 +1,16 @@
 pub mod readback;
+pub mod warmup;
 
-use std::{any::type_name, borrow::Cow, cell::LazyCell, fmt::Display, path::PathBuf};
+use std::{
+    any::type_name,
+    borrow::Cow,
+    fmt::Display,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 
 use bytemuck::Pod;
 use egui::Rect;
@@ -16,11 +26,9 @@ use wgpu::{
     TexelCopyTextureInfo, Texture, TextureAspect, TextureFormat, VertexState,
 };
 
-use web_time::Instant;
-
 use crate::renderer::wgsl;
 
-pub type Lazy<T> = LazyCell<T, Box<dyn FnOnce() -> T>>;
+pub use warmup::Lazy;
 
 #[derive(Clone)]
 pub struct Gpu {
@@ -28,6 +36,7 @@ pub struct Gpu {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    shader_salt: Arc<AtomicU64>,
 }
 
 impl Gpu {
@@ -64,12 +73,27 @@ impl Gpu {
             .await
             .ok()?;
 
-        Some(Self {
+        let gpu = Self {
             instance,
             adapter,
             device,
             queue,
-        })
+            shader_salt: Arc::default(),
+        };
+
+        // `VIBRANT_SHADER_SALT=1` makes this run's shaders miss the driver's
+        // shader cache, to test cold startup without clearing it.
+        #[cfg(not(target_arch = "wasm32"))]
+        if std::env::var("VIBRANT_SHADER_SALT").is_ok_and(|value| !value.is_empty() && value != "0")
+        {
+            let salt = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(1, |time| time.as_nanos() as u64);
+            log::info!("shader salt {salt}: compiling cold");
+            gpu.set_shader_salt(salt);
+        }
+
+        Some(gpu)
     }
 
     pub fn instance(&self) -> &wgpu::Instance {
@@ -95,6 +119,13 @@ impl Gpu {
             .min(self.device().limits().max_buffer_size)
     }
 
+    /// Makes every following shader distinct from previously compiled ones,
+    /// so the driver's shader cache can't serve it. For compile benchmarks;
+    /// native only.
+    pub fn set_shader_salt(&self, salt: u64) {
+        self.shader_salt.store(salt, Ordering::Relaxed);
+    }
+
     /// The root shader at `path` (relative to `src/`).
     pub fn shader(&self, path: &str) -> ShaderModule {
         self.shader_with(path, &[])
@@ -116,24 +147,62 @@ impl Gpu {
 
         self.device().create_shader_module(ShaderModuleDescriptor {
             label: Some(path),
-            source: ShaderSource::Wgsl(Cow::Owned(enable.to_string() + &source)),
+            source: self.compact(path, enable.to_string() + &source),
         })
     }
 
-    /// Defers `build` (typically shader + pipeline creation) to first use, and
-    /// logs how long it took at debug level.
+    /// wgpu only strips unused functions from modules with overrides, so
+    /// without this every `use`d helper reaches the Metal/DXC compiler.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn compact(&self, path: &str, source: String) -> ShaderSource<'static> {
+        use naga::{compact, Constant, Expression, Literal, Scalar, Span, Type, TypeInner};
+
+        let mut module = naga::front::wgsl::parse_str(&source)
+            .unwrap_or_else(|error| panic!("{path}: {}", error.emit_to_string(&source)));
+        compact::compact(&mut module, compact::KeepUnused::No);
+
+        // An unused constant survives into the generated source (wgpu doesn't
+        // compact without overrides) and so changes the cache key.
+        let salt = self.shader_salt.load(Ordering::Relaxed);
+        if salt != 0 {
+            let ty = module.types.insert(
+                Type {
+                    name: None,
+                    inner: TypeInner::Scalar(Scalar::U32),
+                },
+                Span::UNDEFINED,
+            );
+            let init = module
+                .global_expressions
+                .append(Expression::Literal(Literal::U32(0)), Span::UNDEFINED);
+            module.constants.append(
+                Constant {
+                    name: Some(format!("SALT_{salt}")),
+                    ty,
+                    init,
+                },
+                Span::UNDEFINED,
+            );
+        }
+
+        ShaderSource::Naga(Cow::Owned(module))
+    }
+
+    /// Browsers strip unused code themselves.
+    #[cfg(target_arch = "wasm32")]
+    fn compact(&self, _path: &str, source: String) -> ShaderSource<'static> {
+        ShaderSource::Wgsl(Cow::Owned(source))
+    }
+
+    /// Defers `build` (typically shader + pipeline creation) to first use or
+    /// [`warmup::step`].
     pub fn lazy<T: 'static>(
         &self,
         label: impl Display + 'static,
         build: impl FnOnce(&Gpu) -> T + 'static,
     ) -> Lazy<T> {
         let gpu = self.clone();
-        LazyCell::new(Box::new(move || {
-            let start = Instant::now();
-            let value = build(&gpu);
-            log::debug!("{label}: {:.1} ms", start.elapsed().as_secs_f64() * 1000.0);
-            value
-        }))
+        Lazy::new(label, move || build(&gpu))
     }
 
     pub fn compute(

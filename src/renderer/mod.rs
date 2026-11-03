@@ -19,7 +19,11 @@ use ui::UiRenderer;
 use wgpu::RenderPassDescriptor;
 use winit::window::Window;
 
-use crate::{asset::Asset, file::FileStage, gpu::readback::spawn_task};
+use crate::{
+    asset::Asset,
+    file::FileStage,
+    gpu::{readback::spawn_task, warmup},
+};
 
 use super::{controller::Controller, gpu::Gpu, surface::Surface};
 use crate::controller::settings::RenderMode;
@@ -29,8 +33,8 @@ pub struct RenderOutcome {
     /// The image is still progressively refining - schedule another frame as
     /// soon as the GPU goes idle.
     pub accumulating: bool,
-    /// A file load is in progress - keep the loop rendering so the spinner
-    /// animates and the built scene appears without needing further input.
+    /// A file load or pipeline warm-up is in progress - keep the loop
+    /// rendering so it finishes and the result appears without input.
     pub loading: bool,
     /// egui's requested delay until the next repaint (`Duration::MAX` = none).
     pub repaint_after: Duration,
@@ -75,7 +79,6 @@ impl Renderer {
         gpu: &Gpu,
         window: &Arc<Window>,
         controller: &mut Controller,
-        dt: f32,
     ) -> RenderOutcome {
         self.surface.maybe_reconfigure(gpu, controller.settings());
 
@@ -84,7 +87,6 @@ impl Renderer {
                 ui,
                 &mut self.asset,
                 window.scale_factor() as f32,
-                dt,
                 self.surface
                     .hdr_supported()
                     .then(|| self.surface.hdr_headroom_limit(gpu)),
@@ -146,13 +148,11 @@ impl Renderer {
                         // volume only. Sources are baked into each radiance
                         // buffer's `cascade_opts` by `Asset::sync_physical_volume`.
                         if let Some(rad) = &self.asset.radiance {
-                            self.lighting
-                                .dispatch_for(&mut cmd, &self.asset, controller, rad, pv);
+                            self.lighting.dispatch_for(&mut cmd, &self.asset, rad, pv);
                         }
                         // Overlay only: the line-only cascade.
                         if let Some(rad) = &self.asset.radiance_lines {
-                            self.lighting
-                                .dispatch_for(&mut cmd, &self.asset, controller, rad, pv);
+                            self.lighting.dispatch_for(&mut cmd, &self.asset, rad, pv);
                         }
                     }
                 }
@@ -205,9 +205,12 @@ impl Renderer {
         // the next readback (the `reduce` pass was just submitted by `present`).
         self.surface.read_metric(gpu, &settings);
 
+        // One pipeline per frame, after submit so native compiles overlap GPU work.
+        warmup::step();
+
         RenderOutcome {
             accumulating: self.surface.accumulating(&settings),
-            loading: FileStage::loading(),
+            loading: FileStage::loading() || warmup::pending(),
             repaint_after,
         }
     }

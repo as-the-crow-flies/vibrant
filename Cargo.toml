@@ -36,6 +36,8 @@ env_logger = "0.11"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 exr = { version = "1.74", features = ["rayon"] }
+wgpu = { version = "30", default-features = false, features = ["naga-ir"] }
+naga = { version = "30", features = ["wgsl-in"] }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 wgpu = { version = "30", default-features = false, features = ["metal"] }
@@ -77,6 +79,10 @@ harness = false
 
 [[bench]]
 name = "pipeline"
+harness = false
+
+[[bench]]
+name = "compile"
 harness = false
 
 # egui-winit 0.36.1 fails to compile for wasm32: its `NativeFile` only implements
