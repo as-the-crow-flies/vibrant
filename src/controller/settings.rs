@@ -58,14 +58,14 @@ pub struct Settings {
     pub alpha: f32,
     pub line_roughness: f32,
     pub line_specular: f32,
+    /// Fraction of light a fibre lets through, scaling line shadows by
+    /// (1 - t): 0 = opaque, 1 = casts no shadows.
+    pub line_translucency: f32,
     /// Whether the slicing / clipping planes cull tractography lines.
     pub line_crop: bool,
     /// Optical-depth scale of the line near-field occlusion (the first probe
     /// cell the cascade skips); 0 disables it.
     pub line_occlusion: f32,
-    /// Soft cap on line extinction (per mm): dense bundles saturate towards
-    /// it so shading never goes fully black.
-    pub line_extinction_max: f32,
     pub level: f32,
     pub smoothing: f32,
     pub slice_count: u32,
@@ -106,18 +106,18 @@ impl Settings {
             height: 1080,
             volume: 128,
             index_buffer_size: 64,
-            radius: 0.2,
+            radius: 0.15,
             lighting: 0.85,
             ambient_light: 0.5,
             direct_light: 1.0,
             tangent_color: 1.0,
             shadows: 0.0,
             alpha: 1.0,
-            line_roughness: 0.05,
+            line_roughness: 0.3,
             line_specular: 0.5,
+            line_translucency: 0.5,
             line_crop: true,
             line_occlusion: 1.0,
-            line_extinction_max: 1.0,
             level: 0.0,
             smoothing: 1.0,
             slice_count: 10,

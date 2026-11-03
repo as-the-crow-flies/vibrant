@@ -65,7 +65,7 @@ fn visit(
             let hit = f32(item >> 16u) * U16_MAX_INV * increment;
             let hit_position = position + hit * direction;
 
-            let c = shade(v0, v1, v0s, v1s, RADIUS, hit_position, settings);
+            let c = shade(v0, v1, v0s, v1s, RADIUS, hit_position, settings, index);
 
             COLOR += (1.0 - COLOR.a) * vec4<f32>(c.rgb * c.a, c.a);
 

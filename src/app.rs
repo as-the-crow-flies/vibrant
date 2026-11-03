@@ -1,10 +1,10 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 use crate::controller::event::{Key, MouseButton};
 use crate::file::FileStage;
 use crate::gpu::Gpu;
 use crate::Vec2;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use web_time::Instant;
 
 use crate::controller::{event::Event, Controller};

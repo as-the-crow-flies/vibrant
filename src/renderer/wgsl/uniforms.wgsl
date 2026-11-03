@@ -25,8 +25,8 @@ struct Tractography {
     crop_end: f32,
     line_roughness: f32,
     line_specular: f32,
+    line_translucency: f32,
     line_occlusion: f32,
-    line_extinction_max: f32,
     line_extinction: f32,
 }
 

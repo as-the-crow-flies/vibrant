@@ -36,6 +36,7 @@ pub struct GlobalLineSettings {
     pub selected: Option<bool>,
     pub visible: bool,
     pub color_mode: LineColorMode,
+    pub color: [u8; 3],
 }
 
 #[derive(Debug)]
@@ -140,6 +141,7 @@ impl LineBuffer {
             selected: Some(false),
             visible: true,
             color_mode: LineColorMode::Tangent,
+            color: [255, 255, 255],
         };
 
         let bounds = Bounds::from_bounds(&files.iter().map(|file| *file.bounds()).collect_vec());

@@ -22,7 +22,7 @@ use vibrant::{
         line::{
             crop::LineCropPipeline, deposit::LineDepositPipeline, occupancy::LineOccupancyPipeline,
             populate::LinePopulatePipeline, render::LineRenderPipeline,
-            transform::LineTransformPipeline,
+            transform::LineTransformPipeline, LineRenderer,
         },
         present::{PresentPipeline, Presentation},
         util::clear::ClearPipeline,
@@ -109,6 +109,33 @@ pub fn setup() -> Bench {
 
     let mut asset = Asset::new(&gpu);
     asset.update(&gpu, &mut controller); // builds line/volume/physical_volume/radiance
+
+    // Grow the index buffer like the app does over its first frames: build the
+    // acceleration structure, read back the size it needed, resize, repeat.
+    // Without this the lists overflow the default buffer on large tractograms.
+    let line = LineRenderer::new(&gpu);
+    loop {
+        let mut cmd = gpu.cmd();
+        line.transfer(&mut cmd, &controller, &asset);
+        gpu.submit(cmd);
+        gpu.wait();
+
+        let size = controller.settings().index_buffer_size;
+        asset.update(&gpu, &mut controller); // reads back the required size
+        asset.update(&gpu, &mut controller); // grows + resizes if it overflowed
+
+        if controller.settings().index_buffer_size == size {
+            break;
+        }
+    }
+    eprintln!(
+        "index buffer: {} MB (required {} MB)",
+        controller.settings().index_buffer_size,
+        asset
+            .line
+            .as_ref()
+            .map_or(0, |line| line.voxel_index().required_index_size()),
+    );
     asset.hdri.index = settings.hdri_index;
     asset.hdri.settings_mut().rotation = settings.hdri_rotation;
     asset.hdri.settings_mut().strength = settings.hdri_strength;
@@ -276,5 +303,18 @@ impl Bench {
             &self.present_target,
             Presentation::Sdr,
         );
+    }
+
+    /// Overrides the line near-field occlusion and re-uploads the tractography
+    /// uniform, mirroring `Asset::update`.
+    pub fn set_line_occlusion(&mut self, occlusion: f32) {
+        self.controller.settings_mut().line_occlusion = occlusion;
+
+        let mm_per_voxel = self.line().bounds().scale().max_element()
+            / self.controller.settings().volume.max(1) as f32;
+
+        self.asset
+            .tractography
+            .update(&self.gpu, &self.controller, mm_per_voxel);
     }
 }

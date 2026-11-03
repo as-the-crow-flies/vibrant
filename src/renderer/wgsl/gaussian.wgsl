@@ -169,10 +169,12 @@ fn probe_sg(
     );
 }
 
-// Surface (opaque) outgoing radiance from the probe VMM: hemisphere SG diffuse
-// (× albedo) + GGX-from-SG specular (× Schlick Fresnel), summed over `count`
-// lobes. `diffuse_gain` / `specular_gain` are the repurposed line ambient /
-// direct light sliders. Used by the tractography line tracer.
+// Surface outgoing radiance from the probe VMM: SG diffuse (× albedo) split
+// evenly into reflection around `normal` and transmission around `-normal`
+// (a Lambertian sheet, lit from both sides), + GGX-from-SG specular (× Schlick
+// Fresnel), summed over `count` lobes. `front` / `back` attenuate the light
+// arriving on either side. `diffuse_gain` / `specular_gain` are the repurposed
+// line ambient / direct light sliders. Used by the tractography line tracer.
 fn sample_outgoing_radiance_surface(
     radiance_tex: texture_3d<f32>,
     gaussian_tex: texture_3d<f32>,
@@ -185,21 +187,28 @@ fn sample_outgoing_radiance_surface(
     f0: vec3<f32>,
     diffuse_gain: f32,
     specular_gain: f32,
+    front: vec3<f32>,
+    back: vec3<f32>,
     count: u32
 ) -> vec3<f32> {
     let light = reflect(-view, normal);
     let half = normalize(view + light);
     let fresnel = F_Schlick(max(dot(view, half), 0.0), f0);
 
-    var result = vec3<f32>(0.0);
+    let diffuse = 0.5 * albedo * diffuse_gain;
+
+    var reflected = vec3<f32>(0.0);
+    var transmitted = vec3<f32>(0.0);
 
     for (var k = 0u; k < count; k++) {
         let sg = probe_sg(radiance_tex, gaussian_tex, samp, p, k);
 
-        result +=
-            sg_irradiance(sg, normal) * albedo * diffuse_gain +
+        reflected +=
+            sg_irradiance(sg, normal) * diffuse +
             sg_specular(sg, normal, view, roughness) * fresnel * specular_gain;
+
+        transmitted += sg_irradiance(sg, -normal) * diffuse;
     }
 
-    return result;
+    return reflected * front + transmitted * back;
 }

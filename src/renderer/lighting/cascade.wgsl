@@ -105,7 +105,7 @@ fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
 
     if (thread.index < CULL_NEIGHBORS) {
         let sample = origin_sample + NEIGHBOR_OFFSET[thread.index] * cell_sample;
-        let extinction = extinction_at(sample, mip, 1.0, 1.0);
+        let extinction = extinction_at(sample, mip, 1.0);
         if (any(extinction > vec3<f32>(EPSILON))) { atomicOr(&CULL_OCCUPIED, 1u); }
     }
 
@@ -208,8 +208,7 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
 
         if (any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
 
-        let line_depth = line_falloff_depth((t + step) / scale) - line_falloff_depth(t / scale);
-        let depth = extinction_at(sample, log2(diameter / voxel), step / scale, line_depth);
+        let depth = extinction_at(sample, log2(diameter / voxel), step / scale);
 
         transmission *= exp(-depth);
 
@@ -222,15 +221,14 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> ve
 }
 
 // Optical depth over a `segment` of mm: the volume's `EXTINCTION` and/or the
-// line deposit's `LINE_EXTINCTION` (over its falloff-weighted `line_segment`),
-// per this radiance buffer's `cascade_opts`.
-fn extinction_at(uv: vec3<f32>, mip: f32, segment: f32, line_segment: f32) -> vec3<f32> {
+// line deposit's `LINE_EXTINCTION`, per this radiance buffer's `cascade_opts`.
+fn extinction_at(uv: vec3<f32>, mip: f32, segment: f32) -> vec3<f32> {
     var e = vec3<f32>(0.0);
     if (CASCADE_OPTS.include_volume != 0u) {
         e += segment * unpack_rgb(textureSampleLevel(EXTINCTION, SAMPLER, uv, mip));
     }
     if (CASCADE_OPTS.include_lines != 0u) {
-        e += vec3<f32>(line_segment * textureSampleLevel(LINE_EXTINCTION, LINE_EXTINCTION_SAMPLER, uv, mip).x);
+        e += vec3<f32>(segment * textureSampleLevel(LINE_EXTINCTION, LINE_EXTINCTION_SAMPLER, uv, mip).x);
     }
     return e;
 }
