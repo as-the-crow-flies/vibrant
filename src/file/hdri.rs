@@ -59,20 +59,3 @@ impl HdriFile {
         self.data.resolution
     }
 }
-
-#[cfg(test)]
-mod test {
-    use std::fs;
-
-    use crate::file::{hdri::HdriFile, File};
-
-    #[test]
-    fn test() {
-        let file = HdriFile::from_exr(&File::new(
-            "test.exr",
-            fs::read("/Users/bkraaijeveld/Data/photo_studio_loft_hall_4k.exr").unwrap(),
-        ));
-
-        dbg!(file);
-    }
-}

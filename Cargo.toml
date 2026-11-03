@@ -1,52 +1,83 @@
-[workspace]
-members = ["vibrant"]
-
 [package]
-name = "vibrant-app"
+name = "vibrant"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "vibrant_app_web"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
-[workspace.dependencies]
-# Backends are picked per target in vibrant/Cargo.toml: WebGPU on the web
+[dependencies]
+# Backends are picked per target below: WebGPU on the web
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl"] }
 winit = "0.30"
-
 egui = { version = "0.36" }
 egui-wgpu = { version = "0.36", default-features = false, features = ["winit"] }
-egui-winit = { version = "0.36", default-features = false, features=["links"] }
+egui-winit = { version = "0.36", default-features = false, features = ["links"] }
 log = "0.4.28"
 pollster = "0.3"
 web-time = "1.1"
 
-[dependencies]
-vibrant = { path = "vibrant" }
-
-wgpu.workspace = true
-winit.workspace = true
-egui.workspace = true
-egui-wgpu.workspace = true
-egui-winit.workspace = true
-log.workspace = true
-pollster.workspace = true
-web-time.workspace = true
-
+bytemuck = { version = "1.24", features = ["derive", "min_const_generics"] }
+glam = { version = "0.29", features = ["bytemuck"] }
+rfd = "0.17"
+nifti = { version = "0.17", default-features = false, features = ["nalgebra_affine"] }
+flate2 = "1.1"
+png = "0.17"
+futures-channel = "0.3"
+itertools = "0.13"
+random_color = "1.1.0"
+exr = { version = "1.74", default-features = false }
+half = { version = "2.7", features = ["bytemuck"] }
+egui_double_slider = "4"
+num-traits = "0.2"
+strum = { version = "0.27", features = ["derive"] }
+egui_dock = "0.21.1"
 env_logger = "0.11"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+exr = { version = "1.74", features = ["rayon"] }
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["metal"] }
+
+[target.'cfg(windows)'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["dx12"] }
+
+[target.'cfg(all(unix, not(target_vendor = "apple"), not(target_arch = "wasm32")))'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["vulkan"] }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2"
+wgpu = { version = "30", default-features = false, features = ["webgpu"] }
 wasm-bindgen-futures = "0.4"
+wasm-bindgen = "0.2"
+getrandom = { version = "0.3.3", features = ["wasm_js"] }
+js-sys = "0.3"
 console_log = "1.0"
 console_error_panic_hook = "0.1"
 web-sys = { version = "0.3", features = [
     "Window",
     "Document",
     "Element",
+    "HtmlAnchorElement",
     "HtmlCanvasElement",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
 ] }
+
+[build-dependencies]
+naga = { version = "30", features = ["wgsl-in"] }
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["html_reports"] }
+
+[[bench]]
+name = "cascade"
+harness = false
+
+[[bench]]
+name = "pipeline"
+harness = false
 
 # egui-winit 0.36.1 fails to compile for wasm32: its `NativeFile` only implements
 # `DroppedFile::bytes`, but the trait requires `bytes_async` on wasm32.
