@@ -59,9 +59,9 @@ pub struct Asset {
     // `physical_volume` + `radiance` were last built for. Mode-independent so a
     // mode toggle doesn't churn them.
     physical_key: Option<(UVec3, Mat4, u32, bool, bool)>,
-    // (has_volume, has_line, render_mode): drives `radiance_lines` (de)allocation
-    // and the per-cascade `set_cascade_sources` calls.
-    cascade_key: Option<(bool, bool, RenderMode)>,
+    // (has_volume, has_line, render_mode, lobes): drives `radiance_lines`
+    // (de)allocation and the `set_cascade_opts` calls.
+    cascade_key: Option<(bool, bool, RenderMode, u32)>,
 
     pub changed: bool,
 }
@@ -287,7 +287,8 @@ impl Asset {
             self.changed = true;
         }
 
-        let cascade_key = Some((has_volume, has_line, mode));
+        let lobes = controller.radiance().lobes();
+        let cascade_key = Some((has_volume, has_line, mode, lobes));
         if cascade_key == self.cascade_key {
             return;
         }
@@ -313,10 +314,10 @@ impl Asset {
             } else {
                 (has_volume, has_line)
             };
-            rad.set_cascade_sources(gpu, volume, lines);
+            rad.set_cascade_opts(gpu, volume, lines, lobes);
         }
         if let Some(rad) = &self.radiance_lines {
-            rad.set_cascade_sources(gpu, false, true);
+            rad.set_cascade_opts(gpu, false, true, lobes);
         }
 
         self.cascade_key = cascade_key;

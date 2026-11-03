@@ -1,11 +1,12 @@
 // Workgroup-cooperative EM fit of the VMM to this workgroup's samples. Each
-// including shader defines SUBGROUPS, EM_HISTOGRAM_ROW and EM_ITERATIONS.
+// including shader defines SUBGROUPS, EM_ITERATIONS, vmm_size() (≤ VMM_MAX)
+// and em_histogram_row().
 
 use gaussian;
 use random;
 use sphere;
 
-const VMM_SIZE: u32 = 32u;
+const VMM_MAX: u32 = 32u;
 
 const EM_ITERATIONS_MAX: u32 = 100u;
 const EM_ITERATIONS_MIN: u32 = 1u;
@@ -17,18 +18,20 @@ struct Thread {
     @builtin(subgroup_invocation_id) lane: u32,
 }
 
-var<workgroup> VMM: array<vec4<f32>, VMM_SIZE>;
-var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_SIZE>;
+var<workgroup> VMM: array<vec4<f32>, VMM_MAX>;
+var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_MAX>;
 
-var<workgroup> PHI: array<vec4<f32>, VMM_SIZE>;
+var<workgroup> PHI: array<vec4<f32>, VMM_MAX>;
 
-var<workgroup> SUM: array<vec4<f32>, VMM_SIZE * SUBGROUPS>;
+var<workgroup> SUM: array<vec4<f32>, VMM_MAX * SUBGROUPS>;
 
 var<workgroup> VMM_DELTA: atomic<u32>;
 var<workgroup> VMM_CONVERGED: u32;
 
 fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thread) {
-    var expectation = array<Weights, VMM_SIZE>();
+    let lobes = vmm_size();
+
+    var expectation = array<Weights, VMM_MAX>();
     var expectation_sum_inv = Weights();
 
     var iteration = 1u;
@@ -39,7 +42,7 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
         // Expectation
         var expectation_sum = Weights();
 
-        for (var k=0u; k<VMM_SIZE; k++) {
+        for (var k=0u; k<lobes; k++) {
             expectation[k] = vmf(VMM[k], omega);
             expectation_sum += expectation[k];
         }
@@ -49,7 +52,7 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
         workgroupBarrier();
 
         // Maximization
-        for (var k=0u; k<VMM_SIZE; k++) {
+        for (var k=0u; k<lobes; k++) {
             let gamma_weight = expectation[k] * expectation_sum_inv * weight;
             let vmm = vec4<f32>(omega * gamma_weight, total(gamma_weight));
             scatter_partial(k, thread, vmm);
@@ -57,7 +60,7 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
 
         workgroupBarrier();
 
-        if (thread.index < VMM_SIZE) { update_vmm(thread.index, gather_partials(thread.index)); }
+        if (thread.index < lobes) { update_vmm(thread.index, gather_partials(thread.index)); }
 
         workgroupBarrier();
 
@@ -67,7 +70,7 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
     if (thread.index == 0u) { record_iterations(iteration); }
 
     // Maximize Phi
-    for (var k=0u; k<VMM_SIZE; k++) {
+    for (var k=0u; k<lobes; k++) {
         let gamma = expectation[k] * expectation_sum_inv;
         let phi = vec4<f32>(radiance * gamma, total(gamma));
         scatter_partial(k, thread, phi);
@@ -75,7 +78,7 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
 
     workgroupBarrier();
 
-    if (thread.index < VMM_SIZE) { PHI[thread.index] = gather_partials(thread.index); }
+    if (thread.index < lobes) { PHI[thread.index] = gather_partials(thread.index); }
 
     workgroupBarrier();
 }
@@ -122,7 +125,7 @@ fn gather_partials(k: u32) -> vec4<f32> {
 }
 
 fn record_iterations(iterations: u32) {
-    atomicAdd(&EM_ITERATIONS[EM_HISTOGRAM_ROW * (EM_ITERATIONS_MAX + 1u) + iterations], 1u);
+    atomicAdd(&EM_ITERATIONS[em_histogram_row() * (EM_ITERATIONS_MAX + 1u) + iterations], 1u);
 }
 
 fn vmf(v: vec4<f32>, omega: Directions) -> Weights {

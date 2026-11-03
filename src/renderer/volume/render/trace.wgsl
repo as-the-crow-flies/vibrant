@@ -1,13 +1,13 @@
 use color;
 use gaussian;
+use occlusion;
 use pbr;
 use random;
 use uniforms;
 
-const VMM_SIZE: u32 = 32u;
-
 @group(0) @binding(0) var RADIANCE: texture_3d<f32>;
 @group(0) @binding(1) var GAUSSIAN: texture_3d<f32>;
+@group(0) @binding(7) var<uniform> CASCADE_OPTS: CascadeOpts;
 @group(0) @binding(8) var PHASE: texture_3d<f32>;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
@@ -176,6 +176,8 @@ fn sample_outgoing_radiance(
     let phase = phase_kernel(view, anisotropy);
     let grid = probe_grid_at(GAUSSIAN, uv);
 
+    let lobes = CASCADE_OPTS.vmm_size;
+
     var specular_radiance = vec3<f32>(0.0);
     var phase_radiance = vec3<f32>(0.0);
 
@@ -183,16 +185,24 @@ fn sample_outgoing_radiance(
     if (abs(anisotropy) < 1e-3) {
         phase_radiance = textureSampleLevel(PHASE, SAMPLER, grid.base / grid.stride, 0.0).rgb;
 
-        for (var k = 0u; k < VMM_SIZE; k++) {
-            let lobe = sg_lobe(probe_grid_sg(RADIANCE, GAUSSIAN, SAMPLER, grid, k));
-            specular_radiance += lobe.phi * sg_inner_weight(lobe, specular);
+        for (var k = 0u; k < lobes; k += 4u) {
+            let l0 = grid_lobe(grid, k);
+            let l1 = grid_lobe(grid, k + 1u);
+            let l2 = grid_lobe(grid, k + 2u);
+            let l3 = grid_lobe(grid, k + 3u);
+            specular_radiance += l0.phi * sg_inner_weight(l0, specular) + l1.phi * sg_inner_weight(l1, specular)
+                + l2.phi * sg_inner_weight(l2, specular) + l3.phi * sg_inner_weight(l3, specular);
         }
     } else {
-        for (var k = 0u; k < VMM_SIZE; k++) {
-            let lobe = sg_lobe(probe_grid_sg(RADIANCE, GAUSSIAN, SAMPLER, grid, k));
-
-            specular_radiance += lobe.phi * sg_inner_weight(lobe, specular);
-            phase_radiance += lobe.phi * sg_inner_weight(lobe, phase);
+        for (var k = 0u; k < lobes; k += 4u) {
+            let l0 = grid_lobe(grid, k);
+            let l1 = grid_lobe(grid, k + 1u);
+            let l2 = grid_lobe(grid, k + 2u);
+            let l3 = grid_lobe(grid, k + 3u);
+            specular_radiance += l0.phi * sg_inner_weight(l0, specular) + l1.phi * sg_inner_weight(l1, specular)
+                + l2.phi * sg_inner_weight(l2, specular) + l3.phi * sg_inner_weight(l3, specular);
+            phase_radiance += l0.phi * sg_inner_weight(l0, phase) + l1.phi * sg_inner_weight(l1, phase)
+                + l2.phi * sg_inner_weight(l2, phase) + l3.phi * sg_inner_weight(l3, phase);
         }
     }
 
@@ -232,4 +242,8 @@ fn tex_rgb(tex: texture_3d<f32>, uv: vec3<f32>) -> vec3<f32> {
 
 fn minimum(v: vec3<f32>) -> f32 {
     return min(min(v.x, v.y), v.z);
+}
+
+fn grid_lobe(grid: ProbeGrid, k: u32) -> Lobe {
+    return sg_lobe(probe_grid_sg(RADIANCE, GAUSSIAN, SAMPLER, grid, k));
 }

@@ -1,8 +1,11 @@
-use wgpu::*;
+use wgpu::{
+    util::{BufferInitDescriptor, DeviceExt},
+    *,
+};
 
 use crate::{
     gpu::{Gpu, Lazy},
-    renderer::lighting::{VmmVariants, VMM_SIZE_OPTIONS},
+    renderer::lighting::VMM_SIZE_OPTIONS,
 };
 
 /// Bakes the environment VMM for one lobe count: K seed lobes, either cut
@@ -13,7 +16,7 @@ pub struct Importance {
     mipmap: Lazy<ComputePipeline>,
     cut: Lazy<ComputePipeline>,
     uniform: Lazy<ComputePipeline>,
-    fit: VmmVariants<ComputePipeline>,
+    fit: Lazy<ComputePipeline>,
 }
 
 /// World-space lobes and their radiance at unit strength.
@@ -46,14 +49,7 @@ impl Importance {
                 &[("LOBES", Self::LOBES)],
             ),
             uniform: lazy_pipeline(gpu, "Hdri::Importance::Uniform", "uniform.wgsl", &[]),
-            fit: VmmVariants::new(gpu, "Hdri::Importance::Fit", |gpu, vmm_size| {
-                pipeline(
-                    gpu,
-                    "Hdri::Importance::Fit",
-                    "fit.wgsl",
-                    &[("VMM_SIZE", vmm_size)],
-                )
-            }),
+            fit: lazy_pipeline(gpu, "Hdri::Importance::Fit", "fit.wgsl", &[]),
         }
     }
 
@@ -78,22 +74,26 @@ impl Importance {
             self.uniform(gpu, &mut pass, &seed);
         }
 
-        self.fit.set_vmm_size(vmm_size);
-        let fit = self.fit.active();
+        let vmm_size = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label: Some("Hdri::Importance::Fit"),
+            contents: bytemuck::bytes_of(&vmm_size),
+            usage: BufferUsages::UNIFORM,
+        });
 
         let binding = gpu.binding(
             "Hdri::Importance::Fit",
-            &fit.get_bind_group_layout(0),
+            &self.fit.get_bind_group_layout(0),
             vec![
                 BindingResource::TextureView(&hdri),
                 BindingResource::Sampler(sampler),
                 seed.as_entire_binding(),
                 lobes.vmm.as_entire_binding(),
                 lobes.phi.as_entire_binding(),
+                vmm_size.as_entire_binding(),
             ],
         );
 
-        pass.set_pipeline(fit);
+        pass.set_pipeline(&self.fit);
         pass.set_bind_group(0, &binding, &[]);
         pass.dispatch_workgroups(1, 1, 1);
 

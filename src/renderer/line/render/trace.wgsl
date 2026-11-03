@@ -6,15 +6,13 @@ use occlusion;
 use uniforms;
 use vertex;
 
-const VMM_SIZE: u32 = 32u;
-
 @group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
 @group(0) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
 @group(0) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
 @group(0) @binding(6) var<uniform> TRANSFORM: mat4x4<f32>;
 @group(0) @binding(7) var<storage> LINE_SCALAR: array<f32>;
-@group(0) @binding(8) var COLORMAP: texture_2d<f32>;
+@group(0) @binding(8) var COLORMAP: texture_3d<f32>;
 @group(0) @binding(9) var DENSITY: texture_3d<f32>;
 @group(0) @binding(10) var SAMPLER: sampler;
 @group(0) @binding(11) var COUNT: texture_3d<u32>;
@@ -227,7 +225,7 @@ fn shade(
     let line_color = unpack4x8unorm(settings.color);
 
     let scalar_sample = u32(mix(v0s, v1s, height) * 255.0);
-    let scalar_color = textureLoad(COLORMAP, vec2<u32>(scalar_sample, settings.colormap), 0).rgb;
+    let scalar_color = textureLoad(COLORMAP, vec3<u32>(scalar_sample, settings.colormap, 0u), 0).rgb;
 
     let has_scalar_color = line_color.a == 1.0;
     let has_line_color = !has_scalar_color && line_color.a > 0.4;
@@ -256,7 +254,7 @@ fn shade(
         TRACTOGRAPHY.ambient_light, TRACTOGRAPHY.direct_light,
         near_transmission(probe_p, normal_smooth) * visibility.x,
         near_transmission(probe_p, -normal_smooth) * visibility.y,
-        VMM_SIZE
+        CASCADE_OPTS.vmm_size
     );
 
     // Combined: opaque. Overlay (render_mode == 1): honor per-bundle opacity.

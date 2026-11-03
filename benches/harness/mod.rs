@@ -54,7 +54,7 @@ pub struct Settings {
     pub line_path: &'static str,
     /// Radiance lightmap resolution (probes along the volume's longest axis).
     pub lightmap_resolution: u32,
-    /// VMM lobe count -- one of `VMM_SIZE_OPTIONS`.
+    /// VMM lobe count -- one of `VMM_SIZE_OPTIONS`; `LOBES` env var overrides.
     pub lobes: u32,
     /// Render viewport the raster passes (volume trace, line trace, present) cover.
     pub width: u32,
@@ -62,6 +62,14 @@ pub struct Settings {
     pub hdri_index: usize,
     pub hdri_rotation: f32,
     pub hdri_strength: f32,
+}
+
+/// `SETTINGS.lobes`, unless overridden by the `LOBES` env var.
+pub fn lobes() -> u32 {
+    std::env::var("LOBES")
+        .ok()
+        .and_then(|lobes| lobes.parse().ok())
+        .unwrap_or(SETTINGS.lobes)
 }
 
 pub struct Bench {
@@ -105,7 +113,8 @@ pub fn setup() -> Bench {
     controller
         .rendering_mut()
         .set_lightmap_resolution(settings.lightmap_resolution);
-    controller.rendering_mut().set_lobes(settings.lobes);
+    let lobes = lobes();
+    controller.rendering_mut().set_lobes(lobes);
 
     let mut asset = Asset::new(&gpu);
     asset.update(&gpu, &mut controller); // builds line/volume/physical_volume/radiance
@@ -163,7 +172,6 @@ pub fn setup() -> Bench {
         .create_view(&TextureViewDescriptor::default());
 
     let lighting = LightingRenderer::new(&gpu);
-    lighting.set_vmm_size(settings.lobes);
 
     let bench = Bench {
         clear: ClearPipeline::new(&gpu),
@@ -277,8 +285,7 @@ impl Bench {
 
         self.record_scene_build(cmd);
 
-        self.lighting
-            .dispatch_for(cmd, asset, &self.controller, self.radiance(), pv);
+        self.lighting.dispatch_for(cmd, asset, self.radiance(), pv);
 
         // Combined mode: opaque lines first, then the volume clamped to them.
         self.line_render

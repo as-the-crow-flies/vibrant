@@ -43,7 +43,7 @@ struct MaskSettings {
 @group(1) @binding(0) var FRACTION: texture_3d<f32>;
 @group(1) @binding(1) var SAMPLER: sampler;
 @group(1) @binding(3) var<uniform> MATERIAL: Material;
-@group(1) @binding(4) var COLORMAP: texture_2d<f32>;
+@group(1) @binding(4) var COLORMAP: texture_3d<f32>;
 
 @group(2) @binding(0) var MASK: texture_3d<f32>;
 @group(2) @binding(1) var<uniform> MASK_SETTINGS: MaskSettings;
@@ -96,7 +96,7 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     // Note: intensity is already baked into `material` via the node lookup above,
     // so this only retints it - it must not also scale by fraction/color again.
     if (bool(MATERIAL.use_colormap) && fraction != 0.0) {
-        let tint = textureLoad(COLORMAP, vec2<u32>(u32(fraction * 255.0), MATERIAL.colormap), 0).rgb;
+        let tint = textureLoad(COLORMAP, vec3<u32>(u32(fraction * 255.0), MATERIAL.colormap, 0u), 0).rgb;
         absorption *= invert_hue_approx(tint);
         scattering *= tint;
     }

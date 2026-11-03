@@ -61,7 +61,8 @@ impl PresentPipeline {
         let build = |hdr: bool, linear_output: bool, export: bool, format: TextureFormat| {
             let layout = layout.clone();
 
-            gpu.lazy(type_name::<Self>(), move |gpu| {
+            let label = format!("Present (hdr {hdr}, linear {linear_output}, export {export})");
+            gpu.lazy(label, move |gpu| {
                 gpu.quad(
                     type_name::<Self>(),
                     &layout,

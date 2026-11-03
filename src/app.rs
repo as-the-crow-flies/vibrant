@@ -24,7 +24,6 @@ struct App {
     renderer: Option<Renderer>,
     controller: Controller,
     focused: bool,
-    fps: Fps<8>,
     /// When set, `about_to_wait` schedules a redraw at this instant - used for
     /// egui's timed repaints (tooltips, animations) once the render loop has
     /// otherwise gone idle on a converged frame.
@@ -51,7 +50,6 @@ impl App {
             renderer: None,
             controller: Controller::new(),
             focused: true,
-            fps: Fps::new(),
             next_repaint: None,
             in_flight: Arc::new(AtomicBool::new(false)),
             dirty: false,
@@ -89,10 +87,7 @@ impl App {
                     return;
                 }
 
-                self.fps.tick();
-
-                let outcome =
-                    renderer.render(&self.gpu, &window, &mut self.controller, self.fps.seconds());
+                let outcome = renderer.render(&self.gpu, &window, &mut self.controller);
 
                 if self.first_frame {
                     self.first_frame = false;
@@ -350,41 +345,5 @@ pub async fn run() {
     {
         use winit::platform::web::EventLoopExtWebSys;
         event_loop.spawn_app(app);
-    }
-}
-
-pub struct Fps<const N: usize> {
-    buffer: [Instant; N],
-    index: usize,
-}
-
-impl<const N: usize> Default for Fps<N> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<const N: usize> Fps<N> {
-    pub fn new() -> Self {
-        Self {
-            buffer: [Instant::now(); N],
-            index: 0,
-        }
-    }
-
-    pub fn tick(&mut self) {
-        self.buffer[self.index] = Instant::now();
-        self.index = (self.index + 1) % N;
-    }
-
-    pub fn seconds(&self) -> f32 {
-        let instants: Vec<Instant> = (1..=N).map(|i| self.buffer[(self.index + i) % N]).collect();
-
-        let total: f32 = instants
-            .windows(2)
-            .map(|window| (window[1] - window[0]).as_secs_f32())
-            .sum();
-
-        total / N as f32
     }
 }

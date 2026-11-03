@@ -5,6 +5,7 @@ pub mod icons;
 pub mod light;
 pub mod settings;
 pub mod state;
+pub mod status;
 pub mod widgets;
 
 use camera::Camera;
@@ -15,6 +16,7 @@ use event::Event;
 use light::Light;
 use settings::Settings;
 use state::ControllerState;
+use status::Status;
 use web_time::Instant;
 use winit::dpi::PhysicalSize;
 
@@ -23,7 +25,7 @@ use crate::controller::widgets::{
     crop::CropWidget, masks::MasksWidget, rendering::RenderingWidget,
     tractography::TractographyWidget, volumes::VolumesWidget,
 };
-use crate::{asset::Asset, file::FileStage, surface::accumulate::AccumulationStatus};
+use crate::{asset::Asset, file::FileStage, gpu::warmup, surface::accumulate::AccumulationStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 enum Tab {
@@ -255,7 +257,6 @@ impl Controller {
         ui: &mut Ui,
         asset: &mut Asset,
         scale: f32,
-        dt: f32,
         hdr_headroom_limit: Option<f32>,
         // Live accumulation progress from the renderer.
         accumulation: AccumulationStatus,
@@ -304,8 +305,16 @@ impl Controller {
 
                 ui.take_available_width();
 
+                let mut status = Status::default();
+                if let Some((built, total)) = warmup::progress() {
+                    status.progress(
+                        format!("Compiling shaders {built}/{total}"),
+                        built as f32 / total as f32,
+                    );
+                }
+
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(format!("{:3.0} fps", 1.0 / dt));
+                    status.show(ui);
                 });
             });
         });
