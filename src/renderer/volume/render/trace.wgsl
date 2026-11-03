@@ -168,20 +168,24 @@ fn sample_outgoing_radiance(
     F: f32,
     Fdr: f32) -> vec3<f32>
 {
-    var outgoing_radiance = vec3<f32>(0.0);
-
     let roughness = HDRI_SETTINGS.roughness;
     let anisotropy = HDRI_SETTINGS.anisotropy;
 
-    for (var k = 0u; k < VMM_SIZE; k++) {
-        let sg = probe_sg(RADIANCE, GAUSSIAN, SAMPLER, uv, k);
+    let specular = specular_kernel(normal, view, roughness);
+    let phase = phase_kernel(view, anisotropy);
+    let grid = probe_grid_at(GAUSSIAN, uv);
 
-        outgoing_radiance +=
-            sg_specular(sg, normal, view, roughness) * F +
-            sg_phase(sg, view, anisotropy) * albedo * (1.0 - Fdr);
+    var specular_radiance = vec3<f32>(0.0);
+    var phase_radiance = vec3<f32>(0.0);
+
+    for (var k = 0u; k < VMM_SIZE; k++) {
+        let lobe = sg_lobe(probe_grid_sg(RADIANCE, GAUSSIAN, SAMPLER, grid, k));
+
+        specular_radiance += lobe.phi * sg_inner_weight(lobe, specular);
+        phase_radiance += lobe.phi * sg_inner_weight(lobe, phase);
     }
 
-    return outgoing_radiance;
+    return specular_radiance * F + phase_radiance * albedo * (1.0 - Fdr);
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {

@@ -12,14 +12,48 @@ struct SG {
     phi: vec3<f32>,
 }
 
-// https://therealmjp.github.io/posts/sg-series-part-4-specular-lighting-from-an-sg-light-source/
-fn sg_specular(sg: SG, normal: vec3<f32>, view: vec3<f32>, roughness: f32) -> vec3<f32> {
-    let q     = inverseSqrt(dot(sg.vmf.xyz, sg.vmf.xyz) + 1e-24);
-    let u     = clamp((sg.vmf.w + 1e-8) * q, U_MIN, U_MAX);
-    let u2    = u * u;
-    let kappa = (3.0 * u2 - 1.0) / (u2 * u - u);
-    let mu    = sg.vmf.xyz * q;
+// A light lobe's axis and sharpness, recovered once from its moments.
+struct Lobe {
+    axis: vec3<f32>,
+    kappa: f32,
+    phi: vec3<f32>,
+}
 
+fn sg_lobe(sg: SG) -> Lobe {
+    let q  = inverseSqrt(dot(sg.vmf.xyz, sg.vmf.xyz) + 1e-24);  // 1/|s|
+    let u  = clamp((sg.vmf.w + 1e-8) * q, U_MIN, U_MAX);        // w/|s| ∈ [1, ∞)
+    let u2 = u * u;
+    let kappa = (3.0 * u2 - 1.0) / (u2 * u - u);               // Banerjee, reparameterized
+    return Lobe(sg.vmf.xyz * q, kappa, sg.phi);
+}
+
+// A per-step SG (phase lobe or warped NDF) the light lobes are integrated against.
+struct Kernel {
+    axis: vec3<f32>,
+    lambda: f32,
+    scale: f32,
+}
+
+// Exact SG product integral over S² per unit `phi`, up to `kernel.scale`:
+// λ/λ3 · (1 − e^{−2λ3}) · e^{λ3 − κ − λ}, with λ3·axis3 = κ·axis + λ·kernel.axis.
+fn sg_inner_weight(lobe: Lobe, kernel: Kernel) -> f32 {
+    let delta      = lobe.kappa * (lobe.kappa + 2.0 * kernel.lambda * dot(lobe.axis, kernel.axis));
+    let lambda3_2  = max(delta + kernel.lambda * kernel.lambda, 1e-12);
+    let lambda3_rcp = inverseSqrt(lambda3_2);
+    let lambda3    = lambda3_2 * lambda3_rcp;
+    let exponent   = delta / (lambda3 + kernel.lambda) - lobe.kappa; // λ3 − λ − κ, cancellation-safe
+
+    let tail = 1.0 - exp2(-2.0 * lambda3 * LOG2_E);
+
+    return kernel.scale * kernel.lambda * lambda3_rcp * tail * exp2(exponent * LOG2_E);
+}
+
+fn sg_inner(lobe: Lobe, kernel: Kernel) -> vec3<f32> {
+    return lobe.phi * sg_inner_weight(lobe, kernel);
+}
+
+// https://therealmjp.github.io/posts/sg-series-part-4-specular-lighting-from-an-sg-light-source/
+fn specular_kernel(normal: vec3<f32>, view: vec3<f32>, roughness: f32) -> Kernel {
     let n_dot_v    = max(dot(normal, view), EPSILON);
     let reflection = reflect(-view, normal); // warped NDF axis
 
@@ -28,21 +62,13 @@ fn sg_specular(sg: SG, normal: vec3<f32>, view: vec3<f32>, roughness: f32) -> ve
 
     let lambda_r = 0.5 / (alpha2 * n_dot_v); // = (2/α²) / (4·n_dot_v)
 
-    let cos_mu_r = dot(mu, reflection);
-    let delta    = kappa * kappa + 2.0 * kappa * lambda_r * cos_mu_r; // λ3² - λ_r², exact
-    let lambda3  = sqrt(delta + lambda_r * lambda_r);
-
-    let exponent = delta / (lambda3 + lambda_r) - kappa;
-
-    let ratio = lambda_r / lambda3;
-    let scale = exp2(exponent * LOG2_E);
-    let em2l3 = exp2(-2.0 * lambda3 * LOG2_E);
-
-    let inner_product = sg.phi * (4.0 * n_dot_v) * ratio * scale * (1.0 - em2l3);
-
     let visibility = GGX_V1(n_dot_v, alpha2) * GGX_V1(n_dot_v, alpha2); // N·L = N·V at the peak
 
-    return inner_product * visibility * n_dot_v;
+    return Kernel(reflection, lambda_r, 4.0 * n_dot_v * visibility * n_dot_v);
+}
+
+fn sg_specular(sg: SG, normal: vec3<f32>, view: vec3<f32>, roughness: f32) -> vec3<f32> {
+    return sg_inner(sg_lobe(sg), specular_kernel(normal, view, roughness));
 }
 
 // https://therealmjp.github.io/posts/sg-series-part-3-diffuse-lighting-from-an-sg-light-source/
@@ -104,14 +130,7 @@ fn sg_irradiance(sg: SG, normal: vec3<f32>) -> vec3<f32> {
 // sg_irradiance this needs no fit, just the closed-form SG sphere integral
 // (the same "SGInnerProduct" building block used by sg_specular's convolve
 // step, here without a warp).
-fn sg_phase(sg: SG, view: vec3<f32>, g: f32) -> vec3<f32> {
-    // Recover the light lobe's sharpness/axis from `v`, as elsewhere.
-    let q  = inverseSqrt(dot(sg.vmf.xyz, sg.vmf.xyz) + 1e-24);
-    let u  = clamp((sg.vmf.w + 1e-8) * q, U_MIN, U_MAX);
-    let u2 = u * u;
-    let light_kappa = (3.0 * u2 - 1.0) / (u2 * u - u); // Banerjee, reparameterized
-    let light_axis  = sg.vmf.xyz * q;
-
+fn phase_kernel(view: vec3<f32>, g: f32) -> Kernel {
     // Same reparameterization applied to g in place of a reconstructed mean
     // resultant length - keeps phase_kappa bounded to the same [~0.03, ~1000]
     // range as light_kappa, so the divisions below never hit a true 0/0
@@ -126,21 +145,13 @@ fn sg_phase(sg: SG, view: vec3<f32>, g: f32) -> vec3<f32> {
     // backscattering (g < 0) peaks when it sits alongside `view` instead.
     let phase_axis = select(-view, view, g < 0.0);
 
-    // Exact SG product integral over S^2: kappa3*axis3 = kappa1*axis1 + kappa2*axis2.
-    let cos_gamma = dot(light_axis, phase_axis);
-    let delta     = phase_kappa * phase_kappa + 2.0 * phase_kappa * light_kappa * cos_gamma;
-    let kappa3    = sqrt(max(delta + light_kappa * light_kappa, 0.0));
-    let exponent  = delta / (kappa3 + light_kappa) - phase_kappa; // kappa3 - light_kappa - phase_kappa, cancellation-safe
+    // Normalized vMF phase amplitude is kappa / (2*pi*(1 - e^(-2*kappa)));
+    // the 2*pi cancels against the sphere integral's own normalization.
+    return Kernel(phase_axis, phase_kappa, 1.0 / (1.0 - exp2(-2.0 * phase_kappa * LOG2_E)));
+}
 
-    let em2k2 = exp2(-2.0 * phase_kappa * LOG2_E);
-    let em2k3 = exp2(-2.0 * kappa3 * LOG2_E);
-
-    // Normalized vMF phase amplitude is kappa2 / (2*pi*(1 - e^(-2*kappa2)));
-    // folded into this ratio so the 2*pi cancels against the sphere
-    // integral's own 2*pi*(1 - e^(-2*kappa3))/kappa3 normalization.
-    let ratio = (phase_kappa / kappa3) * (1.0 - em2k3) / (1.0 - em2k2);
-
-    return sg.phi * ratio * exp2(exponent * LOG2_E);
+fn sg_phase(sg: SG, view: vec3<f32>, g: f32) -> vec3<f32> {
+    return sg_inner(sg_lobe(sg), phase_kernel(view, g));
 }
 
 // ── Shared VMM probe lookup ───────────────────────────────────────────────
@@ -156,12 +167,32 @@ fn probe_sg(
     p: vec3<f32>,
     k: u32
 ) -> SG {
+    return probe_grid_sg(radiance_tex, gaussian_tex, samp, probe_grid_at(gaussian_tex, p), k);
+}
+
+// Lobe k of the probe at `p` sits at `base + tile(k) * stride`.
+struct ProbeGrid {
+    base: vec3<f32>,
+    stride: vec3<f32>,
+}
+
+fn probe_grid_at(gaussian_tex: texture_3d<f32>, p: vec3<f32>) -> ProbeGrid {
     let dims = vec3<f32>(textureDimensions(gaussian_tex));
     let probes = max(floor(dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
     let local = clamp(p * probes, vec3<f32>(0.5), probes - 0.5);
 
+    return ProbeGrid(local / dims, probes / dims);
+}
+
+fn probe_grid_sg(
+    radiance_tex: texture_3d<f32>,
+    gaussian_tex: texture_3d<f32>,
+    samp: sampler,
+    grid: ProbeGrid,
+    k: u32
+) -> SG {
     let tile = vec3<f32>(vec3<u32>(k & 3u, (k >> 2u) & 3u, (k >> 4u) & 1u));
-    let lobe_uv = (tile * probes + local) / dims;
+    let lobe_uv = grid.base + tile * grid.stride;
 
     return SG(
         textureSampleLevel(gaussian_tex, samp, lobe_uv, 0.0),
