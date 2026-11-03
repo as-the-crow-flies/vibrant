@@ -29,8 +29,8 @@ pub struct TractographySettings {
     pub crop_end: f32,
     pub line_roughness: f32,
     pub line_specular: f32,
+    pub line_translucency: f32,
     pub line_occlusion: f32,
-    pub line_extinction_max: f32,
     /// Line extinction per unit volume fraction, per mm: 1 / (2 r).
     pub line_extinction: f32,
 }
@@ -78,8 +78,8 @@ impl Tractography {
             crop_end: s.crop_end,
             line_roughness: s.line_roughness,
             line_specular: s.line_specular,
+            line_translucency: s.line_translucency,
             line_occlusion: s.line_occlusion,
-            line_extinction_max: s.line_extinction_max.max(1e-6),
             // Randomly oriented cylinders: mean projected area is a quarter of
             // the surface (Cauchy), so σ = f / (2r).
             line_extinction: 1.0 / (2.0 * s.radius.max(1e-3)),

@@ -260,23 +260,14 @@ impl RenderingWidget {
 
                         ui.label("Tract Radius")
                             .on_hover_text("Rendered radius of each streamline, in millimetres.");
-                        ui.slider(&mut settings.radius, 0.0..=2.0).track(self);
+                        ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
                         ui.end_row();
 
-                        ui.label("Specular").on_hover_text(
-                            "Strength of mirror-like highlights on the bundles. \
-                             0 = matte, 1 = glossy.",
+                        ui.label("Translucency").on_hover_text(
+                            "How much light passes through the bundles, lightening \
+                             their shadows. 0 = opaque, 1 = no shadows.",
                         );
-                        ui.slider(&mut settings.line_specular, 0.0..=1.0)
-                            .track(self);
-                        ui.end_row();
-
-                        ui.label("Shadow Depth").on_hover_text(
-                            "How dark the shadows inside dense bundles can get. \
-                             Lower it to see deeper into the tractogram; \
-                             0 = bundles cast no shadows.",
-                        );
-                        ui.slider(&mut settings.line_extinction_max, 0.0..=4.0)
+                        ui.slider(&mut settings.line_translucency, 0.0..=1.0)
                             .track(self);
                         ui.end_row();
 
@@ -285,7 +276,15 @@ impl RenderingWidget {
                              right next to them, bringing out fine detail. \
                              0 = off.",
                         );
-                        ui.slider(&mut settings.line_occlusion, 0.0..=4.0)
+                        ui.slider(&mut settings.line_occlusion, 0.0..=2.0)
+                            .track(self);
+                        ui.end_row();
+
+                        ui.label("Specular").on_hover_text(
+                            "Strength of mirror-like highlights on the bundles. \
+                             0 = matte, 1 = glossy.",
+                        );
+                        ui.slider(&mut settings.line_specular, 0.0..=1.0)
                             .track(self);
                         ui.end_row();
                     });

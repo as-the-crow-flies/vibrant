@@ -67,5 +67,5 @@ fn result(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
 
     let settings = LINE_SETTINGS[LINE_MATERIAL[HIT.index]];
 
-    return shade(v0, v1, v0s, v1s, RADIUS, HIT.position, settings);
+    return shade(v0, v1, v0s, v1s, RADIUS, HIT.position, settings, HIT.index);
 }

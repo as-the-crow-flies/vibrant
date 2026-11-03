@@ -1,4 +1,5 @@
 use block;
+use depth;
 use math;
 use uniforms;
 
@@ -15,10 +16,8 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
     let density_count_encoded = DENSITY_COUNT_BUFFER[index];
     let count = density_count_encoded & U16_MAX;
 
-    // Summed tube volume fraction, unclamped: overlapping tubes still add
-    // extinction. Kept nonzero wherever a segment was visited, for traversal.
-    let fraction = U12_MAX_INV * f32(density_count_encoded >> U16_SHIFT);
-    let density = select(0.0, max(fraction, 1e-6), count > 0u);
+    // Tube volume fraction, kept nonzero wherever a segment was visited, for traversal.
+    let density = select(0.0, max(decode_fraction(density_count_encoded), 1e-6), count > 0u);
 
     textureStore(DENSITY, voxel, vec4<f32>(density));
     textureStore(COUNT, voxel, vec4<u32>(count));

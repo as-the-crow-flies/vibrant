@@ -144,14 +144,12 @@ impl TransferFunctionEditor {
                 let rect = Rect::from_min_size(ui.cursor().min, size);
 
                 let id = ui.id().with("transfer_histogram").with(volume.id);
-                let response = ui
-                    .interact(rect, id, Sense::click())
-                    .on_hover_text(
-                        "Intensity histogram of this volume. Double-click to add \
+                let response = ui.interact(rect, id, Sense::click()).on_hover_text(
+                    "Intensity histogram of this volume. Double-click to add \
                          a control point; double-click a point to remove it. \
                          Control points set which intensities are visible and \
                          how they look.",
-                    );
+                );
 
                 let add_at = (response.double_clicked())
                     .then(|| response.interact_pointer_pos())
@@ -404,106 +402,107 @@ impl TransferFunctionEditor {
         let response = ui.scope_builder(
             UiBuilder::new().id(Id::new(("transfer_settings", volume_id, node.id))),
             |ui| {
-            let mut frame = Frame::group(ui.style()).outer_margin(0.0);
+                let mut frame = Frame::group(ui.style()).outer_margin(0.0);
 
-            if node.selected {
-                frame = frame.stroke(Stroke::new(1.0_f32, Color32::WHITE));
-            }
+                if node.selected {
+                    frame = frame.stroke(Stroke::new(1.0_f32, Color32::WHITE));
+                }
 
-            let mut deleted = false;
+                let mut deleted = false;
 
-            let frame_response = frame.show(ui, |ui| {
-                ui.take_available_width();
+                let frame_response = frame.show(ui, |ui| {
+                    ui.take_available_width();
 
-                let header = CollapsingHeader::new(format!("{rank}"))
-                    .id_salt("material")
-                    .show(ui, |ui| {
-                        Grid::new("grid")
-                            .num_columns(2)
-                            .spacing(spacing)
-                            .show(ui, |ui| {
-                                ui.label("Absorption").on_hover_text(
-                                    "How much light this material removes per \
+                    let header = CollapsingHeader::new(format!("{rank}"))
+                        .id_salt("material")
+                        .show(ui, |ui| {
+                            Grid::new("grid")
+                                .num_columns(2)
+                                .spacing(spacing)
+                                .show(ui, |ui| {
+                                    ui.label("Absorption").on_hover_text(
+                                        "How much light this material removes per \
                                      millimetre as it passes through. Higher \
                                      values make the structure darker and more \
                                      solid. Per-channel, so it also tints the \
                                      transmitted light.",
-                                );
-                                ui.hdr_color_edit(&mut node.material.absorption).track(self);
-                                ui.end_row();
+                                    );
+                                    ui.hdr_color_edit(&mut node.material.absorption).track(self);
+                                    ui.end_row();
 
-                                ui.label("Scattering").on_hover_text(
-                                    "How much light this material scatters per \
+                                    ui.label("Scattering").on_hover_text(
+                                        "How much light this material scatters per \
                                      millimetre. Higher values make the \
                                      structure brighter and more opaque, like \
                                      tissue glowing under a lamp.",
-                                );
-                                ui.hdr_color_edit(&mut node.material.scattering).track(self);
-                                ui.end_row();
+                                    );
+                                    ui.hdr_color_edit(&mut node.material.scattering).track(self);
+                                    ui.end_row();
 
-                                ui.label("IOR").on_hover_text(
-                                    "Index of refraction. Higher values bend \
+                                    ui.label("IOR").on_hover_text(
+                                        "Index of refraction. Higher values bend \
                                      light more at boundaries, for a denser, \
                                      more glass-like look.",
-                                );
-                                ui.slider(&mut node.material.ior, 1.0..=5.0).track(self);
-                                ui.end_row();
-                            });
-                    });
+                                    );
+                                    ui.slider(&mut node.material.ior, 1.0..=5.0).track(self);
+                                    ui.end_row();
+                                });
+                        });
 
-                ui.inline(&header.header_response, |ui| {
-                    if ui.delete().track(self).clicked() {
-                        deleted = true;
-                    }
+                    ui.inline(&header.header_response, |ui| {
+                        if ui.delete().track(self).clicked() {
+                            deleted = true;
+                        }
 
-                    let swatch_width =
-                        ui.spacing().interact_size.x + ui.spacing().item_spacing.x;
-                    let reserved_left =
-                        ui.spacing().indent + 4.0 * ui.spacing().button_padding.x + swatch_width;
-                    let combo_width = (ui.available_width() - reserved_left).max(0.0);
+                        let swatch_width =
+                            ui.spacing().interact_size.x + ui.spacing().item_spacing.x;
+                        let reserved_left = ui.spacing().indent
+                            + 4.0 * ui.spacing().button_padding.x
+                            + swatch_width;
+                        let combo_width = (ui.available_width() - reserved_left).max(0.0);
 
-                    self.preset_combo(ui, node, combo_width);
+                        self.preset_combo(ui, node, combo_width);
 
-                    let density = node
-                        .material
-                        .absorption
-                        .iter()
-                        .zip(&node.material.scattering)
-                        .map(|(a, s)| a + s)
-                        .fold(0.0_f32, f32::max)
-                        .clamp(0.0, 1.0);
-                    let mut color = node.material.albedo().map(|channel| channel * density);
+                        let density = node
+                            .material
+                            .absorption
+                            .iter()
+                            .zip(&node.material.scattering)
+                            .map(|(a, s)| a + s)
+                            .fold(0.0_f32, f32::max)
+                            .clamp(0.0, 1.0);
+                        let mut color = node.material.albedo().map(|channel| channel * density);
 
-                    if ui
-                        .color_edit_button_rgb(&mut color)
-                        .on_hover_text(
-                            "Pick this control point's colour directly; \
+                        if ui
+                            .color_edit_button_rgb(&mut color)
+                            .on_hover_text(
+                                "Pick this control point's colour directly; \
                              absorption and scattering are set to match.",
-                        )
-                        .track(self)
-                        .changed()
-                    {
-                        let density = color.iter().cloned().fold(0.0_f32, f32::max);
+                            )
+                            .track(self)
+                            .changed()
+                        {
+                            let density = color.iter().cloned().fold(0.0_f32, f32::max);
 
-                        node.material.scattering = color;
-                        node.material.absorption = color.map(|channel| density - channel);
-                    }
+                            node.material.scattering = color;
+                            node.material.absorption = color.map(|channel| density - channel);
+                        }
+                    });
                 });
-            });
 
-            if node
-                .preset
-                .material()
-                .is_some_and(|material| !material.approx_eq(&node.material))
-            {
-                node.preset = MaterialPreset::Custom;
-            }
+                if node
+                    .preset
+                    .material()
+                    .is_some_and(|material| !material.approx_eq(&node.material))
+                {
+                    node.preset = MaterialPreset::Custom;
+                }
 
-            SettingsResponse {
-                selected: frame_response.response.contains_pointer()
-                    && ui.input(|i| i.pointer.primary_clicked()),
-                deleted,
-            }
+                SettingsResponse {
+                    selected: frame_response.response.contains_pointer()
+                        && ui.input(|i| i.pointer.primary_clicked()),
+                    deleted,
+                }
             },
         );
 

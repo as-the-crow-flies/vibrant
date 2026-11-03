@@ -4,13 +4,15 @@
 //
 //   cargo bench --bench pipeline            # full run
 //   cargo bench --bench pipeline -- --test  # one pass each, no timing
+//   cargo bench --bench pipeline -- line_shading  # line/render with/without contact occlusion
 
 mod harness;
 
 use criterion::{criterion_group, criterion_main, Criterion};
+use vibrant::controller::settings::Settings;
 
 fn bench_pipeline(c: &mut Criterion) {
-    let bench = harness::setup();
+    let mut bench = harness::setup();
     bench.prime_frame();
 
     let mut group = c.benchmark_group("pipeline");
@@ -158,6 +160,30 @@ fn bench_pipeline(c: &mut Criterion) {
     group.bench_function("present", |t| {
         t.iter(|| b.time_pass(|cmd| b.present_frame(cmd)))
     });
+
+    group.finish();
+
+    // --- line/render with the near-field contact occlusion toggled ---
+
+    let defaults = Settings::new();
+    let mut group = c.benchmark_group("line_shading");
+
+    for (name, occlusion) in [
+        ("contact_off", 0.0),
+        ("contact_on", defaults.line_occlusion),
+    ] {
+        bench.set_line_occlusion(occlusion);
+
+        let b = &bench;
+        group.bench_function(name, |t| {
+            t.iter(|| {
+                b.time_pass(|cmd| {
+                    b.line_render
+                        .dispatch(cmd, &b.asset, &b.controller, &b.frame)
+                })
+            })
+        });
+    }
 
     group.finish();
 }

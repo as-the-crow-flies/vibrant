@@ -275,7 +275,7 @@ impl GaussianRadianceBuffer {
         gpu.queue().write_buffer(
             &self.cascade_opts,
             0,
-            bytemuck::cast_slice(&[include_volume as u32, include_lines as u32, 0u32, 0u32]),
+            bytemuck::cast_slice(&[include_volume as u32, include_lines as u32]),
         );
     }
 

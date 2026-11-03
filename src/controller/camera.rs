@@ -134,7 +134,8 @@ impl Camera {
 
     /// View space -> world space.
     pub fn transform(&self) -> Mat4 {
-        (self.view() * Mat4::from_diagonal(Vec4::new(-1.0, 1.0, 1.0, 1.0))).inverse() // Flip Left/Right
+        (self.view() * Mat4::from_diagonal(Vec4::new(-1.0, 1.0, 1.0, 1.0))).inverse()
+        // Flip Left/Right
     }
 
     pub fn zoom(&mut self, zoom: f32) {

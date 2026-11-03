@@ -1,4 +1,5 @@
 use block;
+use depth;
 use math;
 use uniforms;
 use vertex;
@@ -58,10 +59,7 @@ fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length
 
     if (!in_volume(voxel, dim)) { return; }
 
-    let idx = block_index(vec3<u32>(voxel), dim);
-    let density = DENSITY_MULTIPLIER * length;
-
-    atomicAdd(&DENSITY[idx], encode_density(density));
+    accumulate(block_index(vec3<u32>(voxel), dim), index, DENSITY_MULTIPLIER * length);
 }
 
 fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
@@ -86,11 +84,16 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 
     let sdf = max(length(pv0 - delta * height) - radius_clamp, max(-dot(pv0, v0.clip), dot(pv1, v1.clip)));
 
-    let density = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
+    let coverage = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
 
-    atomicAdd(&DENSITY[idx], encode_density(density));
+    accumulate(idx, index, coverage);
 }
 
-fn encode_density(density: f32) -> u32 {
-    return (u32(round(density * U12_MAX_f32)) << U16_SHIFT) + 1;
+fn accumulate(idx: u32, index: u32, coverage: f32) {
+    if (atomicLoad(&DENSITY[idx]) >= DEPTH_SATURATED) {
+        atomicAdd(&DENSITY[idx], 1u);
+        return;
+    }
+
+    atomicAdd(&DENSITY[idx], encode_depth(coverage, dither(idx, index)) + 1u);
 }

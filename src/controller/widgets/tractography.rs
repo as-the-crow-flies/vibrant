@@ -121,6 +121,21 @@ Scalar — values from the matching .tsf file, mapped through a colormap (e.g. F
 
                         self.track();
                     };
+
+                    if lines.settings_global_mut().color_mode == LineColorMode::Color
+                        && ui
+                            .color_edit_button_srgb(&mut lines.settings_global_mut().color)
+                            .on_hover_text("Flat colour for every bundle.")
+                            .changed()
+                    {
+                        let color = lines.settings_global_mut().color;
+
+                        for line in lines.settings_mut() {
+                            line.color = color;
+                        }
+
+                        self.track();
+                    }
                 });
             });
 
