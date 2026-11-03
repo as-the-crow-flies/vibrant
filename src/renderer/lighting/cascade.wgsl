@@ -34,17 +34,16 @@ use uniforms;
 @group(3) @binding(3) var<storage, read> VMM_HDRI: array<vec4<f32>>;
 @group(3) @binding(4) var<storage, read> PHI_HDRI: array<vec4<f32>>;
 
-// LEVEL SAMPLES  WORKGROUP  SUBGROUPS  SAMPLES_PER_THREAD
-//     0      32         32          1                   1
-//     1      32         32          1                   1
-//     2     128         32          1                   4
-//     3     256         64          2                   4
-//     4    1024        256          8                   4
-//     5    4096       1024         32                   4
+// LEVEL SAMPLES  WORKGROUP  SAMPLES_PER_THREAD
+//     0      32         32                   1
+//     1      32         32                   1
+//     2     128         32                   4
+//     3     256         64                   4
+//     4    1024        256                   4
+//     5    4096       1024                   4
 
 const CASCADE_MAX: u32 = 5u;
 const WORKGROUP: u32 = 32u;
-const SUBGROUPS: u32 = WORKGROUP / 32u;
 const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
 
 const IRRADIANCE_CULL: f32 = 0.05;
@@ -173,7 +172,7 @@ fn store_lobe(probe: vec3<u32>, k: u32) {
 
 // Cascade 0's irradiance mip is read by the renderer, not by culling: it
 // holds the isotropic phase radiance Σ φ (1 − e^{−2κ}) / 2κ, unpacked.
-// Cascade 0 is a single subgroup, one lobe per thread.
+// Cascade 0 has one lobe per thread.
 fn store_phase(probe: vec3<u32>, thread: Thread) {
     var phase = vec3<f32>(0.0);
 
@@ -182,9 +181,14 @@ fn store_phase(probe: vec3<u32>, thread: Thread) {
         phase = lobe.phi * (1.0 - exp2(-2.0 * lobe.kappa * LOG2_E)) / (2.0 * lobe.kappa);
     }
 
-    phase = subgroupAdd(phase);
+    let rounds = subgroup_rounds(thread);
 
-    if (thread.index == 0u) { textureStore(IRRADIANCE_OUT, probe, vec4<f32>(phase, 1.0)); }
+    for (var round=0u; round<rounds; round++) {
+        scatter_partial(0u, round, thread, vec4<f32>(phase, 0.0));
+        workgroupBarrier();
+    }
+
+    if (thread.index == 0u) { textureStore(IRRADIANCE_OUT, probe, vec4<f32>(gather_partials(0u, thread).rgb, 1.0)); }
 }
 
 fn store_irradiance(probe: vec3<u32>) {
