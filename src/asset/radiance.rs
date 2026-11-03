@@ -164,6 +164,17 @@ impl GaussianRadianceBuffer {
                     binding: 7,
                     resource: cascade_opts.as_entire_binding(),
                 },
+                BindGroupEntry {
+                    binding: 8,
+                    resource: BindingResource::TextureView(&irradiance.create_view(
+                        &TextureViewDescriptor {
+                            label,
+                            base_mip_level: 0,
+                            mip_level_count: Some(1),
+                            ..Default::default()
+                        },
+                    )),
+                },
             ],
         });
 
@@ -390,6 +401,16 @@ impl GaussianRadianceBuffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
                         },
                         count: None,
                     },

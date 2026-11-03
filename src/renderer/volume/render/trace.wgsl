@@ -8,6 +8,7 @@ const VMM_SIZE: u32 = 32u;
 
 @group(0) @binding(0) var RADIANCE: texture_3d<f32>;
 @group(0) @binding(1) var GAUSSIAN: texture_3d<f32>;
+@group(0) @binding(8) var PHASE: texture_3d<f32>;
 
 @group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
 @group(1) @binding(1) var SCATTERING: texture_3d<f32>;
@@ -168,20 +169,34 @@ fn sample_outgoing_radiance(
     F: f32,
     Fdr: f32) -> vec3<f32>
 {
-    var outgoing_radiance = vec3<f32>(0.0);
-
     let roughness = HDRI_SETTINGS.roughness;
     let anisotropy = HDRI_SETTINGS.anisotropy;
 
-    for (var k = 0u; k < VMM_SIZE; k++) {
-        let sg = probe_sg(RADIANCE, GAUSSIAN, SAMPLER, uv, k);
+    let specular = specular_kernel(normal, view, roughness);
+    let phase = phase_kernel(view, anisotropy);
+    let grid = probe_grid_at(GAUSSIAN, uv);
 
-        outgoing_radiance +=
-            sg_specular(sg, normal, view, roughness) * F +
-            sg_phase(sg, view, anisotropy) * albedo * (1.0 - Fdr);
+    var specular_radiance = vec3<f32>(0.0);
+    var phase_radiance = vec3<f32>(0.0);
+
+    // Isotropic phase: precomputed per probe by cascade 0.
+    if (abs(anisotropy) < 1e-3) {
+        phase_radiance = textureSampleLevel(PHASE, SAMPLER, grid.base / grid.stride, 0.0).rgb;
+
+        for (var k = 0u; k < VMM_SIZE; k++) {
+            let lobe = sg_lobe(probe_grid_sg(RADIANCE, GAUSSIAN, SAMPLER, grid, k));
+            specular_radiance += lobe.phi * sg_inner_weight(lobe, specular);
+        }
+    } else {
+        for (var k = 0u; k < VMM_SIZE; k++) {
+            let lobe = sg_lobe(probe_grid_sg(RADIANCE, GAUSSIAN, SAMPLER, grid, k));
+
+            specular_radiance += lobe.phi * sg_inner_weight(lobe, specular);
+            phase_radiance += lobe.phi * sg_inner_weight(lobe, phase);
+        }
     }
 
-    return outgoing_radiance;
+    return specular_radiance * F + phase_radiance * albedo * (1.0 - Fdr);
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {

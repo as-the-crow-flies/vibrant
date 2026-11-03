@@ -78,6 +78,7 @@ fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
     if (is_culled(origin, thread)) {
         if (thread.index < VMM_SIZE) { store_lobe(probe, thread.index); }
         if (thread.index == 0u) { record_iterations(0); }
+        if (CASCADE == 0u) { store_phase(probe, thread); }
         return;
     }
 
@@ -88,7 +89,12 @@ fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
     fit_vmm(omega, radiance, weight, thread);
 
     if (thread.index < VMM_SIZE) { store_lobe(probe, thread.index); }
-    if (thread.index == 0u) { store_irradiance(probe); }
+
+    if (CASCADE == 0u) {
+        store_phase(probe, thread);
+    } else if (thread.index == 0u) {
+        store_irradiance(probe);
+    }
 }
 
 fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
@@ -153,6 +159,22 @@ fn store_lobe(probe: vec3<u32>, k: u32) {
 
     textureStore(VMM_OUT, texel, vmm);
     textureStore(PHI_OUT, texel, phi);
+}
+
+// Cascade 0's irradiance mip is read by the renderer, not by culling: it
+// holds the isotropic phase radiance Σ φ (1 − e^{−2κ}) / 2κ, unpacked.
+// Cascade 0 is a single subgroup, one lobe per thread.
+fn store_phase(probe: vec3<u32>, thread: Thread) {
+    var phase = vec3<f32>(0.0);
+
+    if (thread.index < VMM_SIZE) {
+        let lobe = sg_lobe(SG(VMM[thread.index], mean_radiance(PHI[thread.index]).rgb));
+        phase = lobe.phi * (1.0 - exp2(-2.0 * lobe.kappa * LOG2_E)) / (2.0 * lobe.kappa);
+    }
+
+    phase = subgroupAdd(phase);
+
+    if (thread.index == 0u) { textureStore(IRRADIANCE_OUT, probe, vec4<f32>(phase, 1.0)); }
 }
 
 fn store_irradiance(probe: vec3<u32>) {
