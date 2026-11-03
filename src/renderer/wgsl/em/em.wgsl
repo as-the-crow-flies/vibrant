@@ -1,5 +1,5 @@
 // Workgroup-cooperative EM fit of the VMM to this workgroup's samples. Each
-// including shader defines SUBGROUPS, EM_ITERATIONS, vmm_size() (≤ VMM_MAX)
+// including shader defines WORKGROUP, EM_ITERATIONS, vmm_size() (≤ VMM_MAX)
 // and em_histogram_row().
 
 use gaussian;
@@ -16,14 +16,20 @@ struct Thread {
     @builtin(local_invocation_index) index: u32,
     @builtin(subgroup_id) subgroup: u32,
     @builtin(subgroup_invocation_id) lane: u32,
+    @builtin(num_subgroups) subgroups: u32,
 }
+
+// One partial sum slot per 32 threads. Smaller subgroups (8, 16) share slots
+// and take turns writing them, one round each.
+const SLOTS: u32 = max(WORKGROUP / 32u, 1u);
 
 var<workgroup> VMM: array<vec4<f32>, VMM_MAX>;
 var<workgroup> VMM_PRIOR: array<vec4<f32>, VMM_MAX>;
 
 var<workgroup> PHI: array<vec4<f32>, VMM_MAX>;
 
-var<workgroup> SUM: array<vec4<f32>, VMM_MAX * SUBGROUPS>;
+var<workgroup> SUM: array<vec4<f32>, VMM_MAX * SLOTS>;
+var<workgroup> ROUNDS: u32;
 
 var<workgroup> VMM_DELTA: atomic<u32>;
 var<workgroup> VMM_CONVERGED: u32;
@@ -33,6 +39,8 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
 
     var expectation = array<Weights, VMM_MAX>();
     var expectation_sum_inv = Weights();
+
+    let rounds = subgroup_rounds(thread);
 
     var iteration = 1u;
 
@@ -52,15 +60,17 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
         workgroupBarrier();
 
         // Maximization
-        for (var k=0u; k<lobes; k++) {
-            let gamma_weight = expectation[k] * expectation_sum_inv * weight;
-            let vmm = vec4<f32>(omega * gamma_weight, total(gamma_weight));
-            scatter_partial(k, thread, vmm);
+        for (var round=0u; round<rounds; round++) {
+            for (var k=0u; k<lobes; k++) {
+                let gamma_weight = expectation[k] * expectation_sum_inv * weight;
+                let vmm = vec4<f32>(omega * gamma_weight, total(gamma_weight));
+                scatter_partial(k, round, thread, vmm);
+            }
+
+            workgroupBarrier();
         }
 
-        workgroupBarrier();
-
-        if (thread.index < lobes) { update_vmm(thread.index, gather_partials(thread.index)); }
+        if (thread.index < lobes) { update_vmm(thread.index, gather_partials(thread.index, thread)); }
 
         workgroupBarrier();
 
@@ -70,15 +80,17 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
     if (thread.index == 0u) { record_iterations(iteration); }
 
     // Maximize Phi
-    for (var k=0u; k<lobes; k++) {
-        let gamma = expectation[k] * expectation_sum_inv;
-        let phi = vec4<f32>(radiance * gamma, total(gamma));
-        scatter_partial(k, thread, phi);
+    for (var round=0u; round<rounds; round++) {
+        for (var k=0u; k<lobes; k++) {
+            let gamma = expectation[k] * expectation_sum_inv;
+            let phi = vec4<f32>(radiance * gamma, total(gamma));
+            scatter_partial(k, round, thread, phi);
+        }
+
+        workgroupBarrier();
     }
 
-    workgroupBarrier();
-
-    if (thread.index < lobes) { PHI[thread.index] = gather_partials(thread.index); }
+    if (thread.index < lobes) { PHI[thread.index] = gather_partials(thread.index, thread); }
 
     workgroupBarrier();
 }
@@ -106,19 +118,25 @@ fn record_delta(previous: vec4<f32>, next: vec4<f32>) {
     atomicMax(&VMM_DELTA, bitcast<u32>(change / scale));
 }
 
-fn scatter_partial(k: u32, thread: Thread, item: vec4<f32>) {
+fn subgroup_rounds(thread: Thread) -> u32 {
+    if (thread.index == 0u) { ROUNDS = (thread.subgroups + SLOTS - 1u) / SLOTS; }
+    return workgroupUniformLoad(&ROUNDS);
+}
+
+fn scatter_partial(k: u32, round: u32, thread: Thread, item: vec4<f32>) {
     let sum = subgroupAdd(item);
 
-    if (thread.lane == 0u) {
-        SUM[SUBGROUPS * k + thread.subgroup] = sum;
+    if (thread.lane == 0u && thread.subgroup / SLOTS == round) {
+        let slot = SLOTS * k + thread.subgroup % SLOTS;
+        if (round == 0u) { SUM[slot] = sum; } else { SUM[slot] += sum; }
     }
 }
 
-fn gather_partials(k: u32) -> vec4<f32> {
+fn gather_partials(k: u32, thread: Thread) -> vec4<f32> {
     var sum = vec4<f32>(0.0);
 
-    for (var subgroup = 0u; subgroup < SUBGROUPS; subgroup++) {
-        sum += SUM[SUBGROUPS * k + subgroup];
+    for (var slot = 0u; slot < min(thread.subgroups, SLOTS); slot++) {
+        sum += SUM[SLOTS * k + slot];
     }
 
     return sum;

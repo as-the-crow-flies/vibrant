@@ -12,7 +12,7 @@ use sphere;
 // EM records iteration counts; the bake discards them.
 var<workgroup> EM_ITERATIONS: array<atomic<u32>, EM_ITERATIONS_MAX + 1u>;
 
-const SUBGROUPS: u32 = 32u;
+const WORKGROUP: u32 = 1024u;
 const SAMPLES: u32 = 4096u;
 
 fn vmm_size() -> u32 {
@@ -26,7 +26,7 @@ fn em_histogram_row() -> u32 {
 // Fits K lobes to the HDRI in world space at unit strength, from SEED.
 // Like the seed, the fit for K lives at [K, 2K).
 @compute
-@workgroup_size(1024)
+@workgroup_size(WORKGROUP)
 fn main(thread: Thread) {
     if (thread.index < VMM_SIZE) { VMM[thread.index] = SEED[VMM_SIZE + thread.index]; }
 

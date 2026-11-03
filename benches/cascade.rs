@@ -97,7 +97,7 @@ fn bench_cascade(c: &mut Criterion) {
     });
 
     // Per-level breakdown: cascades differ hugely in cost (see the LEVEL/SAMPLES/
-    // WORKGROUP/SUBGROUPS table at the top of cascade.wgsl), so isolate each one.
+    // WORKGROUP table at the top of cascade.wgsl), so isolate each one.
     // CASCADE_MAX (level 5) seeds its per-probe EM from the HDRI fit baked at
     // load rather than starting cold, but still runs its own refinement per probe.
     for cascade in 0..GaussianRadianceBuffer::LEVELS as usize {
