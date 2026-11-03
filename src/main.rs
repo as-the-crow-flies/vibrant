@@ -1,7 +1,5 @@
 use pollster::FutureExt;
 
-pub mod app;
-
 fn main() {
     env_logger::builder()
         .filter_level(log::LevelFilter::Warn)
@@ -9,5 +7,5 @@ fn main() {
         .try_init()
         .unwrap();
 
-    app::run().block_on();
+    vibrant::app::run().block_on();
 }

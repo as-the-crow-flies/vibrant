@@ -1,14 +1,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use vibrant::controller::event::{Key, MouseButton};
-use vibrant::file::FileStage;
-use vibrant::gpu::Gpu;
-use vibrant::Vec2;
+use crate::controller::event::{Key, MouseButton};
+use crate::file::FileStage;
+use crate::gpu::Gpu;
+use crate::Vec2;
 use web_time::Instant;
 
-use vibrant::controller::{event::Event, Controller};
-use vibrant::renderer::Renderer;
+use crate::controller::{event::Event, Controller};
+use crate::renderer::Renderer;
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::{

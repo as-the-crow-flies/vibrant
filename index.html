@@ -214,7 +214,7 @@
                 showUnsupported();
             } else {
                 try {
-                    const init = (await import("./pkg/vibrant_app_web.js")).default;
+                    const init = (await import("./pkg/vibrant.js")).default;
                     await init();
                 } catch (err) {
                     console.error("Failed to start VIBRANT:", err);

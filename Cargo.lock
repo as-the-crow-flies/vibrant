@@ -3061,12 +3061,15 @@ name = "vibrant"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
  "criterion",
  "egui",
  "egui-wgpu",
  "egui-winit",
  "egui_dock",
  "egui_double_slider",
+ "env_logger",
  "exr",
  "flate2",
  "futures-channel",
@@ -3084,27 +3087,6 @@ dependencies = [
  "random_color",
  "rfd",
  "strum",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "web-time",
- "wgpu",
- "winit",
-]
-
-[[package]]
-name = "vibrant-app"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "egui",
- "egui-wgpu",
- "egui-winit",
- "env_logger",
- "log",
- "pollster 0.3.0",
- "vibrant",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
