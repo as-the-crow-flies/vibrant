@@ -8,7 +8,7 @@ use crate::file::File;
 #[derive(Debug)]
 struct HdriFileData {
     resolution: UVec2,
-    pixels: Vec<[half::f16; 4]>,
+    pixels: Vec<[f32; 3]>,
 }
 
 #[derive(Debug)]
@@ -27,14 +27,11 @@ impl HdriFile {
                 .rgb_channels(
                     |resolution, _| HdriFileData {
                         resolution: UVec2::new(resolution.x() as u32, resolution.y() as u32),
-                        pixels: vec![
-                            [f16::ZERO, f16::ZERO, f16::ZERO, f16::ZERO];
-                            resolution.x() * resolution.y()
-                        ],
+                        pixels: vec![[0.0; 3]; resolution.x() * resolution.y()],
                     },
-                    |data, index, (r, g, b)| {
-                        data.pixels[data.resolution.x as usize * index.y() + index.x()] =
-                            [r, g, b, f16::ONE]
+                    // f32, so sun pixels beyond the f16 range keep their energy.
+                    |data, index, (r, g, b): (f32, f32, f32)| {
+                        data.pixels[data.resolution.x as usize * index.y() + index.x()] = [r, g, b]
                     },
                 )
                 .first_valid_layer()
@@ -51,7 +48,7 @@ impl HdriFile {
         &self.name
     }
 
-    pub fn data(&self) -> &[[f16; 4]] {
+    pub fn data(&self) -> &[[f32; 3]] {
         &self.data.pixels
     }
 

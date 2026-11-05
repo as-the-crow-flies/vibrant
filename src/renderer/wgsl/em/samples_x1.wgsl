@@ -6,16 +6,8 @@ alias Directions = vec3<f32>;
 alias Radiances = vec3<f32>;
 alias Weights = f32;
 
-fn hammersley_directions(thread: Thread) -> Directions {
-    return hammersley_direction(thread.index, SAMPLES);
-}
-
-fn trace_samples(origin: vec3<f32>, omega: Directions) -> Radiances {
-    return trace(origin, omega);
-}
-
-fn radiance_weights(radiance: Radiances) -> Weights {
-    return radiance_weight(radiance);
+fn sample_directions(thread: Thread) -> Directions {
+    return sample_direction(thread.index);
 }
 
 fn project(v: vec3<f32>, omega: Directions) -> Weights {

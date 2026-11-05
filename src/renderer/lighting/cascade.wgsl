@@ -28,11 +28,10 @@ use uniforms;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 
-@group(3) @binding(0) var HDRI: texture_2d<f32>;
-@group(3) @binding(1) var HDRI_SAMPLER: sampler;
 @group(3) @binding(2) var<uniform> HDRI_SETTINGS: HdriSettings;
 @group(3) @binding(3) var<storage, read> VMM_HDRI: array<vec4<f32>>;
 @group(3) @binding(4) var<storage, read> PHI_HDRI: array<vec4<f32>>;
+@group(3) @binding(5) var<storage, read> CELLS_HDRI: array<EnvironmentCell>;
 
 // LEVEL SAMPLES  WORKGROUP  SAMPLES_PER_THREAD
 //     0      32         32                   1
@@ -46,10 +45,15 @@ const CASCADE_MAX: u32 = 5u;
 const WORKGROUP: u32 = 32u;
 const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
 
-const IRRADIANCE_CULL: f32 = 0.05;
+// Probes whose parent sees less mean radiance (Σ E / 4π) than this are culled.
+const IRRADIANCE_CULL: f32 = 0.0016;
 
-// Each sample covers a solid angle of 4π / SAMPLES ≈ π tan²θ.
+// A uniform sample covers a solid angle of 4π / SAMPLES ≈ π tan²θ, an
+// importance sample that times its density ratio.
 const CONE_TAN: f32 = 2.0 / sqrt(f32(SAMPLES));
+
+// How much of each parent lobe the prefiltered samples pick up together.
+var<workgroup> PICKUP: array<f32, VMM_MAX>;
 
 var<workgroup> CULL_OCCUPIED: atomic<u32>;
 var<workgroup> CULL_RESULT: u32;
@@ -75,6 +79,13 @@ fn em_histogram_row() -> u32 {
     return cascade();
 }
 
+// Luminance, like the environment's cells. Log compression keeps bright
+// sources from claiming every lobe.
+fn radiance_weight(radiance: vec3<f32>) -> f32 {
+    let luminance = brightness(radiance);
+    return select(luminance, log(1.0 + luminance), HDRI_SETTINGS.log_weights != 0u);
+}
+
 @compute
 @workgroup_size(WORKGROUP)
 fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
@@ -91,11 +102,12 @@ fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
         return;
     }
 
-    let omega = hammersley_directions(thread);
-    let radiance = incident_radiance(origin, omega);
+    let omega = sample_directions(thread);
+    let ratio = sample_ratios(thread);
+    let radiance = incident_radiance(origin, omega, ratio, thread);
     let weight = radiance_weights(radiance);
 
-    fit_vmm(omega, radiance, weight, thread);
+    fit_vmm(omega, radiance, weight, ratio, thread);
 
     if (thread.index < vmm_size()) { store_lobe(probe, thread.index); }
 
@@ -154,31 +166,44 @@ fn initialize_lobe(probe: vec3<u32>, k: u32) {
     VMM_PRIOR[k] = VMM[k];
 }
 
-// The HDRI fit is baked in world space: rotate it, then bring it into the volume.
+// Both sample sets live in the environment's space and turn with it, so the
+// same directions relative to the HDRI are always traced. Importance sampling
+// traces the environment's cut, SAMPLES cells at [SAMPLES, 2 SAMPLES).
+fn sample_direction(i: u32) -> vec3<f32> {
+    if (HDRI_SETTINGS.importance == 0u) { return rotate_hdri(hammersley_direction(i, SAMPLES)); }
+
+    return rotate_hdri(CELLS_HDRI[SAMPLES + i].direction);
+}
+
+fn sample_ratio(i: u32) -> f32 {
+    if (HDRI_SETTINGS.importance == 0u) { return 1.0; }
+
+    return CELLS_HDRI[SAMPLES + i].ratio;
+}
+
+// Lobes live in world space, where solid angles are physical. The HDRI fit and
+// its samples are baked unrotated.
 fn rotate_hdri(direction: vec3<f32>) -> vec3<f32> {
-    let world = rotation_z(-HDRI_SETTINGS.rotation * 2.0 * PI) * normalize(direction);
-    return normalize((TRANSFORM * vec4<f32>(world, 0.0)).xyz);
+    return rotation_z(-HDRI_SETTINGS.rotation * 2.0 * PI) * normalize(direction);
 }
 
 fn store_lobe(probe: vec3<u32>, k: u32) {
     let texel = probe + probe_grid(textureDimensions(VMM_OUT)) * lobe_tile(k);
 
-    let vmm = VMM[k];
-    let phi = mean_radiance(PHI[k]);
-
-    textureStore(VMM_OUT, texel, vmm);
-    textureStore(PHI_OUT, texel, phi);
+    // Energy and the solid angle it covers, so interpolation keeps energy.
+    textureStore(VMM_OUT, texel, VMM[k]);
+    textureStore(PHI_OUT, texel, PHI[k]);
 }
 
 // Cascade 0's irradiance mip is read by the renderer, not by culling: it
-// holds the isotropic phase radiance Σ φ (1 − e^{−2κ}) / 2κ, unpacked.
+// holds the isotropic phase radiance Σ E / 4π, unpacked.
 // Cascade 0 has one lobe per thread.
 fn store_phase(probe: vec3<u32>, thread: Thread) {
     var phase = vec3<f32>(0.0);
 
     if (thread.index < vmm_size()) {
-        let lobe = sg_lobe(SG(VMM[thread.index], mean_radiance(PHI[thread.index]).rgb));
-        phase = lobe.phi * (1.0 - exp2(-2.0 * lobe.kappa * LOG2_E)) / (2.0 * lobe.kappa);
+        // ∫ L dω / 4π of the lobe.
+        phase = PHI[thread.index].rgb / (4.0 * PI);
     }
 
     let rounds = subgroup_rounds(thread);
@@ -191,17 +216,32 @@ fn store_phase(probe: vec3<u32>, thread: Thread) {
     if (thread.index == 0u) { textureStore(IRRADIANCE_OUT, probe, vec4<f32>(gather_partials(0u, thread).rgb, 1.0)); }
 }
 
+// The probe's mean radiance over the sphere, Σ E / 4π, read by culling.
 fn store_irradiance(probe: vec3<u32>) {
-    var irradiance = vec3<f32>(0.0);
+    var energy = vec3<f32>(0.0);
 
     for (var k=0u; k<vmm_size(); k++) {
-        irradiance += mean_radiance(PHI[k]).rgb;
+        energy += PHI[k].rgb;
     }
 
-    textureStore(IRRADIANCE_OUT, probe, pack_rgb(irradiance));
+    textureStore(IRRADIANCE_OUT, probe, pack_rgb(energy / (4.0 * PI)));
 }
 
-fn incident_radiance(origin: vec3<f32>, omega: Directions) -> Radiances {
+fn incident_radiance(origin: vec3<f32>, omega: Directions, ratio: Weights, thread: Thread) -> Radiances {
+    var radiance = Radiances();
+
+    if (HDRI_SETTINGS.prefilter != 0u) {
+        radiance = prefiltered_radiance(omega, ratio, thread);
+    } else {
+        radiance = parent_radiance(omega);
+    }
+
+    return hadamard(radiance, trace_samples(origin, omega, ratio));
+}
+
+// The parent's lobes as a soft partition of the sphere: each direction takes
+// its lobes' mean radiances, weighted by their vMF densities.
+fn parent_radiance(omega: Directions) -> Radiances {
     var radiance = Radiances();
     var expectation_sum = Weights();
 
@@ -214,33 +254,76 @@ fn incident_radiance(origin: vec3<f32>, omega: Directions) -> Radiances {
         radiance += outer(mean_radiance(PHI[k]).rgb, expectation);
     }
 
-    radiance = scale(radiance, 1.0 / expectation_sum);
+    return scale(radiance, 1.0 / expectation_sum);
+}
 
-    return hadamard(radiance, trace_samples(origin, omega));
+// Each parent lobe's energy (Σ γ L Ω) spread over the samples by its overlap
+// with each sample's footprint Ω = 4π·ratio / SAMPLES, a normalized vMF of
+// κs ≈ 2π / Ω: vMF ⊛ vMF ≈ vMF with 1/κ' = 1/κ + 1/κs. Footprints of unequal
+// cells overlap, so each lobe is normalized by what all samples pick up of it:
+// every lobe delivers exactly its energy, and no small light falls between samples.
+fn prefiltered_radiance(omega: Directions, ratio: Weights, thread: Thread) -> Radiances {
+    let kappa_s = f32(SAMPLES) / (2.0 * ratio);
+    let solid_angle = ratio * (4.0 * PI / f32(SAMPLES));
+    let rounds = subgroup_rounds(thread);
+
+    for (var round=0u; round<rounds; round++) {
+        for (var k=0u; k<vmm_size(); k++) {
+            scatter_partial(k, round, thread, vec4<f32>(total(solid_angle * footprint(k, omega, kappa_s))));
+        }
+
+        workgroupBarrier();
+    }
+
+    if (thread.index < vmm_size()) { PICKUP[thread.index] = gather_partials(thread.index, thread).x; }
+
+    workgroupBarrier();
+
+    var radiance = Radiances();
+
+    for (var k=0u; k<vmm_size(); k++) {
+        radiance += outer(PHI[k].rgb / max(PICKUP[k], EPSILON), footprint(k, omega, kappa_s));
+    }
+
+    return radiance;
+}
+
+// Lobe k's normalized vMF, widened by the sample footprint κs, at omega.
+fn footprint(k: u32, omega: Directions, kappa_s: Weights) -> Weights {
+    if (PHI[k].w < EPSILON) { return Weights(); }
+
+    let lobe = sg_lobe(SG(VMM[k], PHI[k].rgb));
+    let kappa = lobe.kappa * kappa_s / (lobe.kappa + kappa_s);
+    let norm = INV_TWO_PI * kappa / (1.0 - exp(-2.0 * kappa));
+
+    return norm * exp(kappa * (project(lobe.axis, omega) - 1.0));
 }
 
 // Interval [2^(c+1) − 1, 2^(c+2) − 1) in probe cells.
-fn trace(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+fn trace(origin: vec3<f32>, direction: vec3<f32>, ratio: f32) -> vec3<f32> {
     let c = cascade();
-    return transmission(origin, direction, f32((2u << c) - 1u), f32((4u << c) - 1u));
+    return transmission(origin, direction, CONE_TAN * sqrt(ratio), f32((2u << c) - 1u), f32((4u << c) - 1u));
 }
 
-fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {
+// Marches the world `direction` in probe cells: t, the interval and the cone are
+// in cells.
+fn transmission(origin: vec3<f32>, direction: vec3<f32>, cone_tan: f32, t0: f32, t1: f32) -> vec3<f32> {
     var transmission = vec3<f32>(1.0);
 
     let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
     let origin_sample = origin / dim;
-    let direction_sample = direction / dim;
+
+    let cells = dim * (linear_part(TRANSFORM) * direction);
+    let scale = length(cells); // cells/mm along `direction`
+    let direction_sample = cells / (scale * dim);
 
     let radiance_scale = f32(textureDimensions(EXTINCTION).x) / dim.x;
-
-    let scale = length(TRANSFORM[0].xyz) * dim.x; // voxels/mm
     let voxel = 1.0 / radiance_scale;
 
     var t = t0;
 
     while (t < t1) {
-        let diameter = max(2.0 * CONE_TAN * t, voxel);
+        let diameter = max(2.0 * cone_tan * t, voxel);
         let step = min(diameter, t1 - t);
         let sample = origin_sample + direction_sample * (t + 0.5 * step);
 

@@ -6,31 +6,13 @@ alias Directions = mat4x3<f32>;
 alias Radiances = mat4x3<f32>;
 alias Weights = vec4<f32>;
 
-fn hammersley_directions(thread: Thread) -> Directions {
+fn sample_directions(thread: Thread) -> Directions {
     let i = SAMPLES_PER_THREAD * thread.index;
     return Directions(
-        hammersley_direction(i + 0u, SAMPLES),
-        hammersley_direction(i + 1u, SAMPLES),
-        hammersley_direction(i + 2u, SAMPLES),
-        hammersley_direction(i + 3u, SAMPLES),
-    );
-}
-
-fn trace_samples(origin: vec3<f32>, omega: Directions) -> Radiances {
-    return Radiances(
-        trace(origin, omega[0]),
-        trace(origin, omega[1]),
-        trace(origin, omega[2]),
-        trace(origin, omega[3]),
-    );
-}
-
-fn radiance_weights(radiance: Radiances) -> Weights {
-    return Weights(
-        radiance_weight(radiance[0]),
-        radiance_weight(radiance[1]),
-        radiance_weight(radiance[2]),
-        radiance_weight(radiance[3]),
+        sample_direction(i + 0u),
+        sample_direction(i + 1u),
+        sample_direction(i + 2u),
+        sample_direction(i + 3u),
     );
 }
 

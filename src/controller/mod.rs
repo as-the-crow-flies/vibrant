@@ -36,6 +36,7 @@ enum Tab {
     Tractography,
     Rendering,
     Controls,
+    Debug,
 }
 
 impl Tab {
@@ -47,12 +48,18 @@ impl Tab {
             Tab::Tractography => (icons::regular::PATH, "Tractography"),
             Tab::Rendering => (icons::regular::LIGHTBULB, "Rendering"),
             Tab::Controls => (icons::regular::MOUSE, "Controls"),
+            Tab::Debug => (icons::regular::BUG, "Debug"),
         }
     }
 }
 
 fn default_dock_state() -> DockState<Tab> {
-    let mut dock_state = DockState::new(vec![Tab::Slicing, Tab::Rendering]);
+    let mut tabs = vec![Tab::Slicing, Tab::Rendering];
+    if cfg!(debug_assertions) {
+        tabs.push(Tab::Debug);
+    }
+
+    let mut dock_state = DockState::new(tabs);
     let surface = dock_state.main_surface_mut();
 
     let [_, data] = surface.split_below(
@@ -132,11 +139,18 @@ impl egui_dock::TabViewer for ControllerTabViewer<'_> {
                     self.camera,
                     self.settings,
                     self.hdr_headroom_limit,
-                    self.accumulation,
                 );
             }
             Tab::Controls => {
                 self.controls_widget.show(ui);
+            }
+            Tab::Debug => {
+                self.rendering_widget.show_debug(
+                    ui,
+                    &mut self.asset.hdri,
+                    self.settings,
+                    self.accumulation,
+                );
             }
         }
     }

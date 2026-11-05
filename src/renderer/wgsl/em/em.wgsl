@@ -10,7 +10,7 @@ const VMM_MAX: u32 = 32u;
 
 const EM_ITERATIONS_MAX: u32 = 100u;
 const EM_ITERATIONS_MIN: u32 = 1u;
-const EM_CONVERGENCE: f32 = 0.05;
+const EM_CONVERGENCE: f32 = 0.01;
 
 struct Thread {
     @builtin(local_invocation_index) index: u32,
@@ -34,8 +34,10 @@ var<workgroup> ROUNDS: u32;
 var<workgroup> VMM_DELTA: atomic<u32>;
 var<workgroup> VMM_CONVERGED: u32;
 
-fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thread) {
+// `ratio` is the uniform density over the sampling density.
+fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, ratio: Weights, thread: Thread) {
     let lobes = vmm_size();
+    let sample_weight = weight * ratio;
 
     var expectation = array<Weights, VMM_MAX>();
     var expectation_sum_inv = Weights();
@@ -62,7 +64,7 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
         // Maximization
         for (var round=0u; round<rounds; round++) {
             for (var k=0u; k<lobes; k++) {
-                let gamma_weight = expectation[k] * expectation_sum_inv * weight;
+                let gamma_weight = expectation[k] * expectation_sum_inv * sample_weight;
                 let vmm = vec4<f32>(omega * gamma_weight, total(gamma_weight));
                 scatter_partial(k, round, thread, vmm);
             }
@@ -79,10 +81,12 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, thread: Thre
 
     if (thread.index == 0u) { record_iterations(iteration); }
 
-    // Maximize Phi
+    // Maximize Phi: (Σ γ L Ω, Σ γ Ω), so w is the solid angle the lobe covers.
+    let solid_angle = ratio * (4.0 * PI / f32(SAMPLES));
+
     for (var round=0u; round<rounds; round++) {
         for (var k=0u; k<lobes; k++) {
-            let gamma = expectation[k] * expectation_sum_inv;
+            let gamma = expectation[k] * expectation_sum_inv * solid_angle;
             let phi = vec4<f32>(radiance * gamma, total(gamma));
             scatter_partial(k, round, thread, phi);
         }
@@ -159,10 +163,7 @@ fn vmf(v: vec4<f32>, omega: Directions) -> Weights {
     return norm * e;
 }
 
+// Equal-area, so the samples are uniform over the sphere.
 fn hammersley_direction(i: u32, N: u32) -> vec3<f32> {
-    return octahedron_decode(2.0 * hammersley(i, N) - 1.0);
-}
-
-fn radiance_weight(radiance: vec3<f32>) -> f32 {
-    return log(1.0 + length(radiance));
+    return clarberg_equal_area_sphere(2.0 * hammersley(i, N) - 1.0);
 }
