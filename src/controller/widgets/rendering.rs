@@ -92,8 +92,6 @@ impl RenderingWidget {
         settings: &mut Settings,
         // `Some(limit)` = HDR available + the max peak the display can drive now.
         hdr_headroom_limit: Option<f32>,
-        // Live accumulation progress from the renderer.
-        accumulation: AccumulationStatus,
     ) {
         let name = hdri.name().to_owned();
         let names = hdri.names().map(str::to_owned).collect_vec();
@@ -211,6 +209,15 @@ impl RenderingWidget {
                             .track(self);
                         ui.end_row();
 
+                        ui.label("Phase").on_hover_text(
+                            "Strength of the light scattered inside the volume \
+                         under environment lighting. 0 = surfaces only, 1 = full \
+                         translucent glow.",
+                        );
+                        ui.slider(&mut hdri.settings_mut().phase, 0.0..=1.0)
+                            .track(self);
+                        ui.end_row();
+
                         ui.label("Roughness").on_hover_text(
                             "How spread-out the specular highlights are. Low = tight, \
                          wet-looking reflections; high = a soft, broad sheen.",
@@ -291,79 +298,102 @@ impl RenderingWidget {
             },
         );
 
-        ui.collapse(format!("{} Quality", icons::regular::GAUGE), false, |ui| {
-            Grid::new("RadianceSettings").num_columns(2).show(ui, |ui| {
-                ui.label("Preset").on_hover_text(
-                    "Overall lighting quality. Higher settings give smoother, \
+        let quality_open = ui.is_new("Rendering.Quality");
+        ui.collapse(
+            format!("{} Quality", icons::regular::GAUGE),
+            quality_open,
+            |ui| {
+                Grid::new("RadianceSettings").num_columns(2).show(ui, |ui| {
+                    ui.label("Preset").on_hover_text(
+                        "Overall lighting quality. Higher settings give smoother, \
                      more accurate light and shadows but render more slowly. \
                      Pick \"Custom\" to set the values below yourself.",
-                );
-                ComboBox::from_id_salt("QualityPreset")
-                    .selected_text(format!("{:?}", self.quality))
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        for preset in Quality::ALL {
-                            if ui
-                                .selectable_value(&mut self.quality, preset, format!("{preset:?}"))
-                                .changed()
-                            {
-                                if let Some((resolution, lobes)) = preset.preset() {
-                                    self.lightmap_resolution = resolution;
-                                    self.lobes = lobes;
+                    );
+                    ComboBox::from_id_salt("QualityPreset")
+                        .selected_text(format!("{:?}", self.quality))
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for preset in Quality::ALL {
+                                if ui
+                                    .selectable_value(
+                                        &mut self.quality,
+                                        preset,
+                                        format!("{preset:?}"),
+                                    )
+                                    .changed()
+                                {
+                                    if let Some((resolution, lobes)) = preset.preset() {
+                                        self.lightmap_resolution = resolution;
+                                        self.lobes = lobes;
+                                    }
+                                    self.track();
                                 }
-                                self.track();
                             }
-                        }
-                    });
-                ui.end_row();
+                        });
+                    ui.end_row();
 
-                let custom = self.quality == Quality::Custom;
+                    let custom = self.quality == Quality::Custom;
 
-                ui.label("Lightmap Resolution").on_hover_text(
-                    "Detail of the lighting grid across the scene. Higher values \
+                    ui.label("Lightmap Resolution").on_hover_text(
+                        "Detail of the lighting grid across the scene. Higher values \
                      resolve finer shadow and lighting detail, at the cost of \
                      speed.",
-                );
-                ui.add_enabled_ui(custom, |ui| {
-                    ComboBox::from_id_salt("Resolution")
-                        .selected_text(format!("{}", self.lightmap_resolution))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for setting in LIGHTMAP_RESOLUTIONS {
-                                ui.selectable_value(
-                                    &mut self.lightmap_resolution,
-                                    setting,
-                                    format!("{setting}"),
-                                )
-                                .track(self);
-                            }
-                        });
-                });
-                ui.end_row();
+                    );
+                    ui.add_enabled_ui(custom, |ui| {
+                        ComboBox::from_id_salt("Resolution")
+                            .selected_text(format!("{}", self.lightmap_resolution))
+                            .width(ui.available_width())
+                            .show_ui(ui, |ui| {
+                                for setting in LIGHTMAP_RESOLUTIONS {
+                                    ui.selectable_value(
+                                        &mut self.lightmap_resolution,
+                                        setting,
+                                        format!("{setting}"),
+                                    )
+                                    .track(self);
+                                }
+                            });
+                    });
+                    ui.end_row();
 
-                ui.label("Lighting Lobes").on_hover_text(
-                    "How many directions each point uses to gather light. More \
+                    ui.label("Lighting Lobes").on_hover_text(
+                        "How many directions each point uses to gather light. More \
                      lobes give smoother, less noisy lighting but render more \
                      slowly.",
-                );
-                ui.add_enabled_ui(custom, |ui| {
-                    ComboBox::from_id_salt("Lobes")
-                        .selected_text(format!("{}", self.lobes))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for setting in LOBES {
-                                ui.selectable_value(&mut self.lobes, setting, format!("{setting}"))
+                    );
+                    ui.add_enabled_ui(custom, |ui| {
+                        ComboBox::from_id_salt("Lobes")
+                            .selected_text(format!("{}", self.lobes))
+                            .width(ui.available_width())
+                            .show_ui(ui, |ui| {
+                                for setting in LOBES {
+                                    ui.selectable_value(
+                                        &mut self.lobes,
+                                        setting,
+                                        format!("{setting}"),
+                                    )
                                     .track(self);
-                            }
-                        });
+                                }
+                            });
+                    });
+                    ui.end_row();
                 });
-                ui.end_row();
-            });
-        });
+            },
+        );
+    }
 
+    /// Experimental lighting and accumulation settings, shown in debug builds.
+    pub fn show_debug(
+        &mut self,
+        ui: &mut Ui,
+        hdri: &mut HdriBuffer,
+        settings: &mut Settings,
+        // Live accumulation progress from the renderer.
+        accumulation: AccumulationStatus,
+    ) {
         ui.collapse(
             format!("{} Accumulation", icons::regular::STACK),
-            false,
+            true,
             |ui| {
                 let AccumulationStatus { samples, converged } = accumulation;
 
@@ -390,21 +420,55 @@ impl RenderingWidget {
             },
         );
 
-        ui.collapse(
-            format!("{} Advanced", icons::regular::WRENCH),
-            false,
-            |ui| {
-                Grid::new("AdvancedSettings").num_columns(2).show(ui, |ui| {
-                    ui.label("Environment Cut").on_hover_text(
-                        "Start the environment lighting fit from lobes placed on \
-                     the brightest regions of the map. When off, lobes start \
-                     evenly spread over all directions.",
-                    );
-                    ui.checkbox(&mut hdri.cut, "").track(self);
-                    ui.end_row();
-                });
-            },
-        );
+        ui.collapse(format!("{} Lighting", icons::regular::WRENCH), true, |ui| {
+            Grid::new("AdvancedSettings").num_columns(2).show(ui, |ui| {
+                ui.label("Environment Importance").on_hover_text(
+                    "Trace each lighting probe's samples through the \
+                     environment's cells, small where it is bright, instead of \
+                     spreading them evenly.",
+                );
+                ui.checkbox(&mut hdri.importance_sampling, "").track(self);
+                ui.end_row();
+
+                ui.label("Prefilter Parent Light").on_hover_text(
+                    "Let each lighting probe sample see the coarser probe's \
+                     light blurred over the patch of sky it stands for, so small \
+                     lights no longer fall between samples and flicker.",
+                );
+                ui.checkbox(&mut hdri.prefilter, "").track(self);
+                ui.end_row();
+
+                ui.label("Uniform Share").on_hover_text(
+                    "Share of the environment's cells spread evenly over all \
+                     directions, so probes whose bright directions are blocked \
+                     still see the rest of the sky. Shapes the environment fit \
+                     and importance sampling.",
+                );
+                ui.slider(&mut hdri.uniform_share, 0.0..=1.0).track(self);
+                ui.end_row();
+
+                ui.label("Sample Weighting").on_hover_text(
+                    "How the environment is cut into cells for the \
+                     environment fit and importance sampling. Linear makes cells \
+                     smallest at the brightest sources; log spreads them more \
+                     evenly.",
+                );
+                if weighting(ui, "SampleWeighting", &mut hdri.log_sample_weights) {
+                    self.track();
+                }
+                ui.end_row();
+
+                ui.label("EM Weighting").on_hover_text(
+                    "How the lighting fits and their starting lobes weigh \
+                     brightness. Log keeps bright sources from claiming every \
+                     lobe; linear follows the radiance itself.",
+                );
+                if weighting(ui, "EmWeighting", &mut hdri.log_weights) {
+                    self.track();
+                }
+                ui.end_row();
+            });
+        });
     }
 
     pub fn changed(&self) -> bool {
@@ -438,4 +502,19 @@ impl RenderingWidget {
         self.quality = Quality::Custom;
         self.lobes = lobes;
     }
+}
+
+/// A Linear / Log dropdown; true when the choice changed.
+fn weighting(ui: &mut Ui, id: &str, log: &mut bool) -> bool {
+    let before = *log;
+
+    ComboBox::from_id_salt(id)
+        .selected_text(if *log { "Log" } else { "Linear" })
+        .width(ui.available_width())
+        .show_ui(ui, |ui| {
+            ui.selectable_value(log, false, "Linear");
+            ui.selectable_value(log, true, "Log");
+        });
+
+    *log != before
 }

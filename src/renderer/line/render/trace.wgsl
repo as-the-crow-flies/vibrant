@@ -43,6 +43,8 @@ var<private> RADIUS: f32;
 // `hit_fraction`.
 var<private> DIRECTION: vec3<f32>;
 var<private> RAY_LENGTH: f32;
+// The ray's view direction in world space, where the lobes live.
+var<private> VIEW: vec3<f32>;
 
 struct Fragment {
     @builtin(position) position: vec4<f32>,
@@ -82,6 +84,7 @@ fn fragment(fragment: Fragment) -> FragmentOut {
     let segment = (camera * vec4<f32>(far - near, 0.0)).xyz;
 
     RAY_LENGTH = length(segment);
+    VIEW = -normalize((ENVIRONMENT.camera.transform * vec4<f32>(far - near, 0.0)).xyz);
 
     let direction = segment / RAY_LENGTH;
 
@@ -238,7 +241,9 @@ fn shade(
 
     // `position` is centered volume space ([-0.5, 0.5]); the probe grid is [0, 1].
     let probe_p = clamp(position + 0.5, vec3<f32>(0.0), vec3<f32>(1.0));
-    let view = -DIRECTION;
+    // The tube normal lives in volume space; normals map to world by the
+    // transpose of the world → volume transform.
+    let world_normal = normalize(transpose(linear_part(TRANSFORM)) * normal_smooth);
 
     let roughness = clamp(TRACTOGRAPHY.line_roughness, 0.04, 1.0);
     let f0 = vec3<f32>(0.16 * TRACTOGRAPHY.line_specular * TRACTOGRAPHY.line_specular);
@@ -250,7 +255,7 @@ fn shade(
 
     let radiance = sample_outgoing_radiance_surface(
         RADIANCE, GAUSSIAN, VMM_SAMPLER,
-        probe_p, normal_smooth, view, albedo, roughness, f0,
+        probe_p, world_normal, VIEW, albedo, roughness, f0,
         TRACTOGRAPHY.ambient_light, TRACTOGRAPHY.direct_light,
         near_transmission(probe_p, normal_smooth) * visibility.x,
         near_transmission(probe_p, -normal_smooth) * visibility.y,

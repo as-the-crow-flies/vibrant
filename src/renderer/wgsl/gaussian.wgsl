@@ -7,16 +7,23 @@ const LOG2_E     : f32 = 1.4426950408889634;
 const U_MIN      : f32 = 1.001;    // κ_max ≈ 1000
 const U_MAX      : f32 = 100.0;    // κ_min ≈ 0.03 — indistinguishable from uniform
 
+// A probe lobe: its vMF moments and the energy it carries, ∫ L dω.
 struct SG {
     vmf: vec4<f32>,
     phi: vec3<f32>,
 }
 
-// A light lobe's axis and sharpness, recovered once from its moments.
+// A light lobe's axis, sharpness and peak radiance, recovered once from its
+// moments and energy.
 struct Lobe {
     axis: vec3<f32>,
     kappa: f32,
     phi: vec3<f32>,
+}
+
+// Peak radiance of an SG carrying `energy`: the normalized vMF's amplitude.
+fn sg_amplitude(energy: vec3<f32>, kappa: f32) -> vec3<f32> {
+    return energy * kappa * INV_TWO_PI / (1.0 - exp2(-2.0 * kappa * LOG2_E));
 }
 
 fn sg_lobe(sg: SG) -> Lobe {
@@ -24,7 +31,7 @@ fn sg_lobe(sg: SG) -> Lobe {
     let u  = clamp((sg.vmf.w + 1e-8) * q, U_MIN, U_MAX);        // w/|s| ∈ [1, ∞)
     let u2 = u * u;
     let kappa = (3.0 * u2 - 1.0) / (u2 * u - u);               // Banerjee, reparameterized
-    return Lobe(sg.vmf.xyz * q, kappa, sg.phi);
+    return Lobe(sg.vmf.xyz * q, kappa, sg_amplitude(sg.phi, kappa));
 }
 
 // A per-step SG (phase lobe or warped NDF) the light lobes are integrated against.
@@ -79,6 +86,7 @@ fn sg_irradiance(sg: SG, normal: vec3<f32>) -> vec3<f32> {
 
     let kappa  = (3.0 * u2 - 1.0) / (u2 * u - u);      // Banerjee, reparameterized
     let lambda = max(kappa, 1.0);
+    let phi    = sg_amplitude(sg.phi, kappa);
 
     let mu_dot_n = clamp(dot(sg.vmf.xyz, normal) * q, -1.0, 1.0);
 
@@ -107,9 +115,9 @@ fn sg_irradiance(sg: SG, normal: vec3<f32>) -> vec3<f32> {
 
     // Exact SG integral over the sphere is 2π·phi·(1 − e^{−2λ})/λ; em2l is already
     // available from scale/bias above, so this reuses it instead of a third exp call.
-    let fitted = result * (2.0 * PI * sg.phi * (1.0 - em2l) / lambda);
+    let fitted = result * (2.0 * PI * phi * (1.0 - em2l) / lambda);
 
-    return mix(PI * sg.phi, fitted, clamp(kappa, 0.0, 1.0));
+    return mix(PI * phi, fitted, clamp(kappa, 0.0, 1.0));
 }
 
 // Represents the Henyey-Greenstein phase function as a single normalized

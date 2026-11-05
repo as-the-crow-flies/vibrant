@@ -10,6 +10,11 @@ const U16_MAX_INV: f32 = 1.0 / U16_MAX_f32;
 
 const PI: f32 = 3.14159265358979323846264338327950288;
 
+// The direction part of an affine transform.
+fn linear_part(m: mat4x4<f32>) -> mat3x3<f32> {
+    return mat3x3<f32>(m[0].xyz, m[1].xyz, m[2].xyz);
+}
+
 fn sign_not_zero(v: f32) -> f32 {
   return select(-1.0, 1.0, v >= 0.0);
 }

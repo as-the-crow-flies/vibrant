@@ -41,12 +41,28 @@ struct LineSettings {
     crop: u32,
 }
 
+// One cell of the environment's cut, see asset/hdri/importance/grid.rs.
+struct EnvironmentCell {
+    direction: vec3<f32>,
+    // Solid angle over that of a uniform sample.
+    ratio: f32,
+    color: vec3<f32>,
+    // Average EM weight.
+    weight: f32,
+}
+
 struct HdriSettings {
     rotation: f32,
     strength: f32,
     specular: f32,
+    // Strength of the volume's scattered light.
+    phase: f32,
     roughness: f32,
-    anisotropy: f32
+    anisotropy: f32,
+    importance: u32,
+    // Cascade samples read the parent's lobes blurred by their footprint.
+    prefilter: u32,
+    log_weights: u32,
 }
 
 struct CropSettings {

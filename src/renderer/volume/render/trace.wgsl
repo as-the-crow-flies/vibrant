@@ -74,8 +74,8 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     var transmittance = vec3<f32>(1.0);
     var color = vec3<f32>(0.0);
 
-    let direction_norm = normalize(direction);
-    let view = -direction_norm;
+    // Lobes live in world space, so shading does too.
+    let view = -normalize((ENVIRONMENT.camera.transform * vec4<f32>(far - near, 0.0)).xyz);
 
     // Coarse empty-space skip on an un-jittered `t0`, so the skipped distance
     // doesn't flicker frame to frame.
@@ -155,10 +155,14 @@ fn sample_material(uv: vec3<f32>) -> Material {
     return Material(absorption, scattering, extinction, ior);
 }
 
+// The gradient is per voxel; a normal maps to world by the transpose of the
+// world → voxel transform.
 fn sample_normal(sample: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
     let raw_normal = - 2.0 * textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0).xyz + 1.0;
-    let normal_len = length(raw_normal);
-    return select(fallback, raw_normal / normal_len, normal_len > 1E-4);
+    if (length(raw_normal) <= 1E-4) { return fallback; }
+
+    let voxels = vec3<f32>(textureDimensions(GRADIENT)) * raw_normal;
+    return normalize(transpose(linear_part(TRANSFORM)) * voxels);
 }
 
 fn sample_outgoing_radiance(
@@ -206,7 +210,7 @@ fn sample_outgoing_radiance(
         }
     }
 
-    return specular_radiance * F + phase_radiance * albedo * (1.0 - Fdr);
+    return specular_radiance * F + HDRI_SETTINGS.phase * phase_radiance * albedo * (1.0 - Fdr);
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {
