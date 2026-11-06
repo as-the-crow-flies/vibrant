@@ -175,7 +175,7 @@ fn probe_sg(
     p: vec3<f32>,
     k: u32
 ) -> SG {
-    return probe_grid_sg(radiance_tex, gaussian_tex, samp, probe_grid_at(gaussian_tex, p), k);
+    return probe_grid_sg(radiance_tex, gaussian_tex, samp, probe_grid_at(gaussian_tex, p, vec3<f32>(0.0)), k);
 }
 
 // Lobe k of the probe at `p` sits at `base + tile(k) * stride`.
@@ -184,10 +184,11 @@ struct ProbeGrid {
     stride: vec3<f32>,
 }
 
-fn probe_grid_at(gaussian_tex: texture_3d<f32>, p: vec3<f32>) -> ProbeGrid {
+// `offset` moves the lookup, in probe cells.
+fn probe_grid_at(gaussian_tex: texture_3d<f32>, p: vec3<f32>, offset: vec3<f32>) -> ProbeGrid {
     let dims = vec3<f32>(textureDimensions(gaussian_tex));
     let probes = max(floor(dims / vec3<f32>(4.0, 4.0, 2.0)), vec3<f32>(1.0));
-    let local = clamp(p * probes, vec3<f32>(0.5), probes - 0.5);
+    let local = clamp(p * probes + offset, vec3<f32>(0.5), probes - 0.5);
 
     return ProbeGrid(local / dims, probes / dims);
 }
@@ -211,8 +212,7 @@ fn probe_grid_sg(
 // Surface outgoing radiance from the probe VMM: SG diffuse (× albedo) split
 // evenly into reflection around `normal` and transmission around `-normal`
 // (a Lambertian sheet, lit from both sides), + GGX-from-SG specular (× Schlick
-// Fresnel), summed over `count` lobes. `front` / `back` attenuate the light
-// arriving on either side. `diffuse_gain` / `specular_gain` are the repurposed
+// Fresnel), summed over `count` lobes. `diffuse_gain` / `specular_gain` are the repurposed
 // line ambient / direct light sliders. Used by the tractography line tracer.
 fn sample_outgoing_radiance_surface(
     radiance_tex: texture_3d<f32>,
@@ -226,8 +226,6 @@ fn sample_outgoing_radiance_surface(
     f0: vec3<f32>,
     diffuse_gain: f32,
     specular_gain: f32,
-    front: vec3<f32>,
-    back: vec3<f32>,
     count: u32
 ) -> vec3<f32> {
     let light = reflect(-view, normal);
@@ -249,5 +247,5 @@ fn sample_outgoing_radiance_surface(
         transmitted += sg_irradiance(sg, -normal) * diffuse;
     }
 
-    return reflected * front + transmitted * back;
+    return reflected + transmitted;
 }

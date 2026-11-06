@@ -12,6 +12,7 @@ use uniforms;
 @group(0) @binding(5) var IRRADIANCE_OUT: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(6) var IRRADIANCE_IN: texture_3d<f32>;
 @group(0) @binding(8) var<uniform> CASCADE_OPTS: CascadeOpts;
+@group(0) @binding(9) var WEIGHTS_OUT: texture_storage_3d<rgba8unorm, write>;
 
 // Diagnostic Histogram
 @group(0) @binding(7) var<storage, read_write> EM_ITERATIONS: array<atomic<u32>>;
@@ -214,6 +215,28 @@ fn store_phase(probe: vec3<u32>, thread: Thread) {
     }
 
     if (thread.index == 0u) { textureStore(IRRADIANCE_OUT, probe, vec4<f32>(gather_partials(0u, thread).rgb, 1.0)); }
+
+    if (thread.index < (vmm_size() + 3u) / 4u) { store_weights(probe, thread.index); }
+}
+
+// The volume tracer picks one lobe per step by these: each lobe's energy over
+// the probe's brightest, rounded up to 8 bits so no lit lobe gets p = 0.
+// Texel j holds lobes 4j..4j+3.
+fn store_weights(probe: vec3<u32>, j: u32) {
+    var brightest = EPSILON;
+    for (var k=0u; k<vmm_size(); k++) { brightest = max(brightest, brightness(PHI[k].rgb)); }
+
+    var weights = vec4<f32>(0.0);
+
+    for (var i=0u; i<4u; i++) {
+        let k = 4u * j + i;
+        if (k < vmm_size()) { weights[i] = min(ceil(255.0 * brightness(PHI[k].rgb) / brightest), 255.0) / 255.0; }
+    }
+
+    let grid = textureDimensions(WEIGHTS_OUT) / 2u;
+    let tile = vec3<u32>(j & 1u, (j >> 1u) & 1u, (j >> 2u) & 1u);
+
+    textureStore(WEIGHTS_OUT, probe + grid * tile, weights);
 }
 
 // The probe's mean radiance over the sphere, Σ E / 4π, read by culling.
@@ -299,10 +322,11 @@ fn footprint(k: u32, omega: Directions, kappa_s: Weights) -> Weights {
     return norm * exp(kappa * (project(lobe.axis, omega) - 1.0));
 }
 
-// Interval [2^(c+1) − 1, 2^(c+2) − 1) in probe cells.
+// Interval [2^(c+1) − 2, 2^(c+2) − 2) in probe cells: contiguous from 0, each
+// twice its level's probe spacing.
 fn trace(origin: vec3<f32>, direction: vec3<f32>, ratio: f32) -> vec3<f32> {
     let c = cascade();
-    return transmission(origin, direction, CONE_TAN * sqrt(ratio), f32((2u << c) - 1u), f32((4u << c) - 1u));
+    return transmission(origin, direction, CONE_TAN * sqrt(ratio), f32((2u << c) - 2u), f32((4u << c) - 2u));
 }
 
 // Marches the world `direction` in probe cells: t, the interval and the cone are

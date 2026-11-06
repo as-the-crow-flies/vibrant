@@ -148,7 +148,9 @@ pub fn setup() -> Bench {
     asset.hdri.index = settings.hdri_index;
     asset.hdri.settings_mut().rotation = settings.hdri_rotation;
     asset.hdri.settings_mut().strength = settings.hdri_strength;
-    asset.hdri.update_settings(&gpu);
+    asset
+        .hdri
+        .update_settings(&gpu, controller.settings().accumulate);
     asset.environment.update(&gpu, &controller, Vec2::ZERO);
 
     let frame = Frame::new(&gpu, controller.settings());
@@ -310,18 +312,5 @@ impl Bench {
             &self.present_target,
             Presentation::Sdr,
         );
-    }
-
-    /// Overrides the line near-field occlusion and re-uploads the tractography
-    /// uniform, mirroring `Asset::update`.
-    pub fn set_line_occlusion(&mut self, occlusion: f32) {
-        self.controller.settings_mut().line_occlusion = occlusion;
-
-        let mm_per_voxel = self.line().bounds().scale().max_element()
-            / self.controller.settings().volume.max(1) as f32;
-
-        self.asset
-            .tractography
-            .update(&self.gpu, &self.controller, mm_per_voxel);
     }
 }
