@@ -17,43 +17,49 @@ use crate::{
         colormap::{Colormap, ColormapSelection},
         material::{Material, MaterialNode, MaterialPreset},
     },
-    file::VolumeFile,
+    file::{Bins, VolumeFile},
     gpu::Gpu,
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Histogram {
-    values: [f32; 256],
+    /// (normalized intensity, height in [0, 1]) per bin.
+    points: Vec<(f32, f32)>,
 }
 
 impl Histogram {
-    /// Bins at each end excluded when picking the display scale. Volumes often
-    /// pile a huge spike into pure min/max (empty background, saturated
-    /// intensity); scaling to those flattens everything else, so instead scale
-    /// to the tallest *central* bin and let the edge spikes clip.
-    const EDGE_MARGIN: usize = 6;
-
-    pub fn from_data(data: &[f32]) -> Self {
-        let counts = data.iter().fold([0u32; 256], |mut hist, value| {
-            hist[((value * 255.0) as usize).min(255)] += 1;
-            hist
-        });
-
-        let peak = counts[Self::EDGE_MARGIN..256 - Self::EDGE_MARGIN]
-            .iter()
+    /// Between linear and log: `ln(1 + d/k)` with `k` a thirtieth of the
+    /// reference, so sparse bins stay visible while peaks keep their contrast.
+    /// The reference is the 99th-percentile bin; the background spike clips.
+    pub fn from_bins(bins: &Bins) -> Self {
+        let density = &bins.density;
+        let mut sorted = density.clone();
+        sorted.sort_unstable_by(f32::total_cmp);
+        let reference = sorted
+            .get((sorted.len().max(1) - 1) * 99 / 100)
             .copied()
-            .max()
-            .unwrap_or(1)
-            .max(1);
-        let scale = 1.0 / peak as f32;
+            .unwrap_or(0.0)
+            .max(f32::MIN_POSITIVE);
+
+        let k = reference / 30.0;
+        let scale = 1.0 / (reference / k).ln_1p();
 
         Self {
-            values: counts.map(|count| count as f32 * scale),
+            points: density
+                .iter()
+                .enumerate()
+                .map(|(i, &d)| {
+                    (
+                        bins.first + i as f32 * bins.step,
+                        ((d / k).ln_1p() * scale).min(1.0),
+                    )
+                })
+                .collect(),
         }
     }
 
-    pub fn values(&self) -> &[f32; 256] {
-        &self.values
+    pub fn points(&self) -> &[(f32, f32)] {
+        &self.points
     }
 }
 
@@ -172,7 +178,7 @@ impl VolumeFractionBuffer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D3,
-                format: TextureFormat::R32Float,
+                format: TextureFormat::R16Float,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
             },
@@ -213,7 +219,7 @@ impl VolumeFractionBuffer {
             use_colormap: false,
             colormap: ColormapSelection::Viridis,
             opacity: 1.0,
-            histogram: Histogram::from_data(file.data()),
+            histogram: Histogram::from_bins(file.histogram()),
             nodes: vec![
                 MaterialNode {
                     id: 0,

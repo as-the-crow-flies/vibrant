@@ -23,6 +23,8 @@ struct SettingsResponse {
     deleted: bool,
 }
 
+const GRADIENT_OPACITY: f32 = 0.75;
+
 struct HistogramResponse {
     rect: Rect,
     add_at: Option<f32>,
@@ -166,14 +168,13 @@ impl TransferFunctionEditor {
                 // height during the Volumes collapse animation.
                 ui.set_clip_rect(rect.intersect(ui.clip_rect()));
 
-                let width = rect.width() / 256.0;
-
                 let mut mesh = Mesh::default();
 
                 for index in 0..=256 {
                     let t = index as f32 / 256.0;
                     let x = rect.min.x + t * rect.width();
-                    let color = self.gradient(volume, t);
+                    // Translucent, so the histogram stays visible over light materials.
+                    let color = self.gradient(volume, t).gamma_multiply(GRADIENT_OPACITY);
 
                     mesh.colored_vertex(Pos2::new(x, rect.min.y), color);
                     mesh.colored_vertex(Pos2::new(x, rect.max.y), color);
@@ -187,8 +188,7 @@ impl TransferFunctionEditor {
 
                 ui.painter().add(mesh);
 
-                let histogram = volume.histogram.clone();
-                let values = histogram.values();
+                let points = volume.histogram.points();
                 let bar_color = Color32::from_white_alpha(90);
 
                 // Sample heights at bin centers and extend to the canvas edges, so
@@ -196,18 +196,15 @@ impl TransferFunctionEditor {
                 // bin values rather than a staircase of flat-topped bars.
                 let mut area = Mesh::default();
 
-                for index in 0..=257 {
-                    let (x, value) = match index {
-                        0 => (rect.min.x, values[0]),
-                        257 => (rect.max.x, values[255]),
-                        _ => {
-                            let bin = index - 1;
-                            (rect.min.x + (bin as f32 + 0.5) * width, values[bin])
-                        }
-                    };
+                let first = points.first().map_or(0.0, |&(_, value)| value);
+                let last = points.last().map_or(0.0, |&(_, value)| value);
+                let curve = std::iter::once((0.0, first))
+                    .chain(points.iter().copied())
+                    .chain(std::iter::once((1.0, last)));
 
+                for (index, (position, value)) in curve.enumerate() {
+                    let x = rect.min.x + position.clamp(0.0, 1.0) * rect.width();
                     let y_top = rect.max.y - rect.height() * value;
-
                     area.colored_vertex(Pos2::new(x, y_top), bar_color);
                     area.colored_vertex(Pos2::new(x, rect.max.y), bar_color);
 
@@ -351,15 +348,19 @@ impl TransferFunctionEditor {
             Color32::from_gray(180)
         };
 
-        let stroke = Stroke::new(if node.selected { 1.5_f32 } else { 1.0 }, fill);
+        let width = if node.selected { 1.5_f32 } else { 1.0 };
+        let stroke = Stroke::new(width, fill);
+        let line = [
+            Pos2::new(x, histogram_rect.min.y),
+            Pos2::new(x, picker_rect.min.y),
+        ];
 
+        // Dark halo keeps the light line readable over light materials.
         ui.painter().line_segment(
-            [
-                Pos2::new(x, histogram_rect.min.y),
-                Pos2::new(x, picker_rect.min.y),
-            ],
-            stroke,
+            line,
+            Stroke::new(width + 2.0, Color32::from_black_alpha(140)),
         );
+        ui.painter().line_segment(line, stroke);
 
         let top = Pos2::new(x, picker_rect.min.y);
         let points = vec![

@@ -1,6 +1,7 @@
 pub mod bounds;
 pub mod hdri;
 pub mod line;
+pub mod nrrd;
 pub mod volume;
 
 pub use line::*;
@@ -141,18 +142,38 @@ impl FileStage {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load() {
         if let Some(paths) = rfd::FileDialog::new().pick_files() {
-            Self::spawn_load(move || paths.iter().map(|path| path.into()).collect());
+            Self::spawn_load(move || Self::read_paths(&paths));
         }
     }
 
     pub fn load_path(path: &Path) {
-        let path = path.to_path_buf();
-        Self::spawn_load(move || vec![File::from(&path)]);
+        let paths = vec![path.to_path_buf()];
+        Self::spawn_load(move || Self::read_paths(&paths));
+    }
+
+    /// Reads `paths`, pulling in each `.nhdr`'s data file from its folder if
+    /// it wasn't selected too.
+    fn read_paths(paths: &[PathBuf]) -> Vec<File> {
+        let mut files: Vec<File> = paths.iter().map(File::from).collect();
+
+        for path in paths
+            .iter()
+            .filter(|path| path.extension() == Some("nhdr".as_ref()))
+        {
+            let header = File::from(path);
+            let data_file = nrrd::nhdr_data_file(&header);
+
+            if !files.iter().any(|file| file.name() == data_file) {
+                files.push(File::from(&path.with_file_name(data_file)));
+            }
+        }
+
+        files
     }
 
     /// Parse and queue `path` on the calling thread.
     pub fn load_path_blocking(path: &Path) {
-        Self::load_files(vec![File::from(&path.to_path_buf())]);
+        Self::load_files(Self::read_paths(&[path.to_path_buf()]));
     }
 
     /// Parse `collect`'s files off the main thread and queue them, keeping
@@ -184,6 +205,24 @@ impl FileStage {
         let mut volumes: Vec<VolumeFile> = Vec::new();
         let mut hdris: Vec<HdriFile> = Vec::new();
 
+        let (headers, mut files): (Vec<File>, Vec<File>) = files
+            .into_iter()
+            .partition(|file| file.name().ends_with(".nhdr"));
+
+        for header in headers {
+            let data_file = nrrd::nhdr_data_file(&header);
+            match files.iter().position(|file| file.name() == data_file) {
+                Some(index) => {
+                    let data = files.swap_remove(index);
+                    volumes.push(VolumeFile::from_nhdr(&header, &data));
+                }
+                None => warn!(
+                    "`{}` references `{data_file}`; select both files together",
+                    header.name()
+                ),
+            }
+        }
+
         for file in files {
             if file.name().ends_with(".tck") {
                 lines.push(LineFile::from_tck(file));
@@ -195,11 +234,13 @@ impl FileStage {
                 volumes.push(VolumeFile::from_nifti(&file));
             } else if file.name().ends_with(".nii.gz") {
                 volumes.push(VolumeFile::from_comressed_nifti(&file));
+            } else if file.name().ends_with(".nrrd") {
+                volumes.push(VolumeFile::from_nrrd(&file));
             } else if file.name().ends_with(".exr") {
                 hdris.push(HdriFile::from_exr(&file));
             } else {
                 warn!(
-                    "Cannot open `{}`. Supported file types are [.tck .obj .nii.gz]",
+                    "Cannot open `{}`. Supported file types are [.tck .obj .tsf .nii .nii.gz .nrrd .nhdr .exr]",
                     file.name()
                 )
             }
