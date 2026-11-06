@@ -180,7 +180,8 @@ impl Asset {
         // light (Light::yaw) rather than its own slider, so the environment
         // rotates in lockstep with it.
         self.hdri.settings_mut().rotation = controller.light().yaw() / (2.0 * PI);
-        self.hdri.update_settings(gpu);
+        self.hdri
+            .update_settings(gpu, controller.settings().accumulate);
         self.crop.update_settings(gpu);
         let mm_per_voxel = self.line.as_ref().map_or(1.0, |line| {
             line.bounds().scale().max_element() / controller.settings().volume.max(1) as f32
@@ -260,10 +261,10 @@ impl Asset {
 
         // Scale the reference volume so its longest axis hits the requested probe
         // count, keeping aspect ratio.
-        let radiance = |size: UVec3, volume: &PhysicalVolume| {
+        let radiance = |size: UVec3| {
             let scale = lightmap_resolution as f32 / size.max_element().max(1) as f32;
             let dims = (size.as_vec3() * scale).round().as_uvec3().max(UVec3::ONE);
-            GaussianRadianceBuffer::new(gpu, dims, volume)
+            GaussianRadianceBuffer::new(gpu, dims)
         };
 
         let key = reference
@@ -273,7 +274,7 @@ impl Asset {
             match reference {
                 Some((size, transform)) => {
                     let volume = PhysicalVolume::new(gpu, size, transform);
-                    self.radiance = Some(radiance(size, &volume));
+                    self.radiance = Some(radiance(size));
                     self.physical_volume = Some(volume);
                 }
                 None => {
@@ -299,10 +300,7 @@ impl Asset {
 
         match (split, reference) {
             (true, Some((size, _))) if self.radiance_lines.is_none() => {
-                self.radiance_lines = self
-                    .physical_volume
-                    .as_ref()
-                    .map(|volume| radiance(size, volume));
+                self.radiance_lines = Some(radiance(size));
             }
             (false, _) => self.radiance_lines = None,
             _ => {}

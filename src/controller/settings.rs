@@ -63,9 +63,6 @@ pub struct Settings {
     pub line_translucency: f32,
     /// Whether the slicing / clipping planes cull tractography lines.
     pub line_crop: bool,
-    /// Optical-depth scale of the line near-field occlusion (the first probe
-    /// cell the cascade skips); 0 disables it.
-    pub line_occlusion: f32,
     pub level: f32,
     pub smoothing: f32,
     pub slice_count: u32,
@@ -117,7 +114,6 @@ impl Settings {
             line_specular: 0.5,
             line_translucency: 0.5,
             line_crop: true,
-            line_occlusion: 1.0,
             level: 0.0,
             smoothing: 1.0,
             slice_count: 10,

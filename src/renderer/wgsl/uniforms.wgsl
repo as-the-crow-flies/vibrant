@@ -26,7 +26,6 @@ struct Tractography {
     line_roughness: f32,
     line_specular: f32,
     line_translucency: f32,
-    line_occlusion: f32,
     line_extinction: f32,
 }
 
@@ -63,6 +62,12 @@ struct HdriSettings {
     // Cascade samples read the parent's lobes blurred by their footprint.
     prefilter: u32,
     log_weights: u32,
+    // Volume tracer probe lookup jitter in probe cells; 0 unless accumulating.
+    lookup_jitter: f32,
+    // The volume tracer evaluates one sampled lobe per step; 0 unless accumulating.
+    lobe_sampling: u32,
+    // Sampled lobes come from the nearest probe, unfiltered.
+    nearest_probes: u32,
 }
 
 struct CropSettings {

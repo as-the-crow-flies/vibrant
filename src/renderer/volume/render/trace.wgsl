@@ -7,6 +7,7 @@ use uniforms;
 
 @group(0) @binding(0) var RADIANCE: texture_3d<f32>;
 @group(0) @binding(1) var GAUSSIAN: texture_3d<f32>;
+@group(0) @binding(3) var WEIGHTS: texture_3d<f32>;
 @group(0) @binding(7) var<uniform> CASCADE_OPTS: CascadeOpts;
 @group(0) @binding(8) var PHASE: texture_3d<f32>;
 
@@ -120,7 +121,8 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let transmittance_in_step = 1.0 - exp(-extinction);
 
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
-        let outgoing_radiance = sample_outgoing_radiance(uv, normal, view, albedo, F, Fdr);
+        let noise = step_noise(fragment.position.xy, t);
+        let outgoing_radiance = sample_outgoing_radiance(uv, noise, normal, view, albedo, F, Fdr);
 
         color += transmittance * transmittance_in_step * outgoing_radiance;
 
@@ -165,37 +167,89 @@ fn sample_normal(sample: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
     return normalize(transpose(linear_part(TRANSFORM)) * voxels);
 }
 
+// Per pixel, step and frame. `tent` in [-1, 1]³ jitters the probe lookup:
+// averaged by accumulation, trilinear interpolation becomes a smooth B-spline.
+// `box` in [-½, ½)³ turns a nearest-probe read into trilinear on average, and
+// `xi` in [0, 1) picks the lobe.
+struct StepNoise {
+    tent: vec3<f32>,
+    box: vec3<f32>,
+    xi: f32,
+}
+
+fn step_noise(pixel: vec2<f32>, t: f32) -> StepNoise {
+    let a = pcg3d(vec3<u32>(vec2<u32>(pixel), bitcast<u32>(ENVIRONMENT.time) ^ bitcast<u32>(t)));
+    let b = pcg3d(a);
+    let c = pcg3d(b);
+
+    return StepNoise(
+        (vec3<f32>(a) + vec3<f32>(b)) * 2.3283064365386963e-10 - 1.0,
+        vec3<f32>(c) * 2.3283064365386963e-10 - 0.5,
+        f32(pcg3d(c).x) * 2.3283064365386963e-10,
+    );
+}
+
 fn sample_outgoing_radiance(
     uv: vec3<f32>,
+    noise: StepNoise,
     normal: vec3<f32>,
     view: vec3<f32>,
     albedo: vec3<f32>,
     F: f32,
     Fdr: f32) -> vec3<f32>
 {
-    let roughness = HDRI_SETTINGS.roughness;
     let anisotropy = HDRI_SETTINGS.anisotropy;
 
-    let specular = specular_kernel(normal, view, roughness);
-    let phase = phase_kernel(view, anisotropy);
-    let grid = probe_grid_at(GAUSSIAN, uv);
+    let shading = Shading(
+        specular_kernel(normal, view, HDRI_SETTINGS.roughness),
+        phase_kernel(view, anisotropy),
+        abs(anisotropy) < 1e-3,
+    );
 
+    let offset = HDRI_SETTINGS.lookup_jitter * noise.tent;
+
+    var radiance = Radiance();
+
+    if (HDRI_SETTINGS.lobe_sampling == 0u) {
+        radiance = all_lobes(probe_grid_at(GAUSSIAN, uv, offset), shading);
+    } else if (HDRI_SETTINGS.nearest_probes != 0u) {
+        radiance = nearest_lobe(nearest_probe(uv, offset + noise.box), noise.xi, shading);
+    } else {
+        radiance = filtered_lobe(probe_grid_at(GAUSSIAN, uv, offset), noise.xi, shading);
+    }
+
+    return radiance.specular * F + HDRI_SETTINGS.phase * radiance.phase * albedo * (1.0 - Fdr);
+}
+
+// The kernels the light lobes are integrated against. Isotropic phase is
+// precomputed per probe by cascade 0.
+struct Shading {
+    specular: Kernel,
+    phase: Kernel,
+    isotropic: bool,
+}
+
+struct Radiance {
+    specular: vec3<f32>,
+    phase: vec3<f32>,
+}
+
+fn all_lobes(grid: ProbeGrid, shading: Shading) -> Radiance {
     let lobes = CASCADE_OPTS.vmm_size;
 
-    var specular_radiance = vec3<f32>(0.0);
-    var phase_radiance = vec3<f32>(0.0);
+    var specular = vec3<f32>(0.0);
+    var phase = vec3<f32>(0.0);
 
-    // Isotropic phase: precomputed per probe by cascade 0.
-    if (abs(anisotropy) < 1e-3) {
-        phase_radiance = textureSampleLevel(PHASE, SAMPLER, grid.base / grid.stride, 0.0).rgb;
+    if (shading.isotropic) {
+        phase = textureSampleLevel(PHASE, SAMPLER, grid.base / grid.stride, 0.0).rgb;
 
         for (var k = 0u; k < lobes; k += 4u) {
             let l0 = grid_lobe(grid, k);
             let l1 = grid_lobe(grid, k + 1u);
             let l2 = grid_lobe(grid, k + 2u);
             let l3 = grid_lobe(grid, k + 3u);
-            specular_radiance += l0.phi * sg_inner_weight(l0, specular) + l1.phi * sg_inner_weight(l1, specular)
-                + l2.phi * sg_inner_weight(l2, specular) + l3.phi * sg_inner_weight(l3, specular);
+            specular += l0.phi * sg_inner_weight(l0, shading.specular) + l1.phi * sg_inner_weight(l1, shading.specular)
+                + l2.phi * sg_inner_weight(l2, shading.specular) + l3.phi * sg_inner_weight(l3, shading.specular);
         }
     } else {
         for (var k = 0u; k < lobes; k += 4u) {
@@ -203,14 +257,123 @@ fn sample_outgoing_radiance(
             let l1 = grid_lobe(grid, k + 1u);
             let l2 = grid_lobe(grid, k + 2u);
             let l3 = grid_lobe(grid, k + 3u);
-            specular_radiance += l0.phi * sg_inner_weight(l0, specular) + l1.phi * sg_inner_weight(l1, specular)
-                + l2.phi * sg_inner_weight(l2, specular) + l3.phi * sg_inner_weight(l3, specular);
-            phase_radiance += l0.phi * sg_inner_weight(l0, phase) + l1.phi * sg_inner_weight(l1, phase)
-                + l2.phi * sg_inner_weight(l2, phase) + l3.phi * sg_inner_weight(l3, phase);
+            specular += l0.phi * sg_inner_weight(l0, shading.specular) + l1.phi * sg_inner_weight(l1, shading.specular)
+                + l2.phi * sg_inner_weight(l2, shading.specular) + l3.phi * sg_inner_weight(l3, shading.specular);
+            phase += l0.phi * sg_inner_weight(l0, shading.phase) + l1.phi * sg_inner_weight(l1, shading.phase)
+                + l2.phi * sg_inner_weight(l2, shading.phase) + l3.phi * sg_inner_weight(l3, shading.phase);
         }
     }
 
-    return specular_radiance * F + HDRI_SETTINGS.phase * phase_radiance * albedo * (1.0 - Fdr);
+    return Radiance(specular, phase);
+}
+
+// One lobe of the probe nearest `uv` moved by `offset` cells, read unfiltered.
+fn nearest_lobe(probe: vec3<i32>, xi: f32, shading: Shading) -> Radiance {
+    let grid = vec3<i32>(probe_count());
+
+    let pick = pick_lobe(WeightSource(true, probe, vec3<f32>(0.0)), xi);
+    let texel = probe + grid * vec3<i32>(lobe_tile(pick.index));
+    let lobe = sg_lobe(SG(textureLoad(GAUSSIAN, texel, 0), textureLoad(RADIANCE, texel, 0).rgb));
+
+    var radiance = picked_radiance(lobe, pick, shading);
+    if (shading.isotropic) { radiance.phase = textureLoad(PHASE, probe, 0).rgb; }
+
+    return radiance;
+}
+
+// One lobe of the trilinearly filtered probe at `grid`.
+fn filtered_lobe(grid: ProbeGrid, xi: f32, shading: Shading) -> Radiance {
+    let local = grid.base / grid.stride;
+
+    let pick = pick_lobe(WeightSource(false, vec3<i32>(0), local), xi);
+    let lobe = grid_lobe(grid, pick.index);
+
+    var radiance = picked_radiance(lobe, pick, shading);
+    if (shading.isotropic) { radiance.phase = textureSampleLevel(PHASE, SAMPLER, local, 0.0).rgb; }
+
+    return radiance;
+}
+
+struct Pick {
+    index: u32,
+    // Σw / w: one over the pick's probability.
+    scale: f32,
+}
+
+// Where the weights are read: a probe's texels, or trilinearly at `local`.
+struct WeightSource {
+    nearest: bool,
+    probe: vec3<i32>,
+    local: vec3<f32>,
+}
+
+// The weights of lobes 4j..4j+3.
+fn weight_texel(source: WeightSource, j: u32) -> vec4<f32> {
+    if (source.nearest) {
+        let grid = vec3<i32>(probe_count());
+        return textureLoad(WEIGHTS, source.probe + grid * vec3<i32>(weight_tile(j)), 0);
+    }
+
+    return textureSampleLevel(WEIGHTS, SAMPLER, (vec3<f32>(weight_tile(j)) + source.local) / 2.0, 0.0);
+}
+
+// Lobe k with probability w_k / Σw; no lit lobe gives scale 0. Two passes over
+// the texels, no arrays: dynamically indexed arrays spill out of registers.
+fn pick_lobe(source: WeightSource, xi: f32) -> Pick {
+    let texels = (CASCADE_OPTS.vmm_size + 3u) / 4u;
+
+    var total = 0.0;
+    for (var j = 0u; j < texels; j++) { total += dot(weight_texel(source, j), vec4<f32>(1.0)); }
+
+    if (total <= 0.0) { return Pick(0u, 0.0); }
+
+    let threshold = min(xi, 0.99999) * total;
+    var cdf = 0.0;
+
+    for (var j = 0u; j < texels; j++) {
+        let w = weight_texel(source, j);
+        let prefix = cdf + vec4<f32>(w.x, w.x + w.y, w.x + w.y + w.z, w.x + w.y + w.z + w.w);
+
+        if (prefix.w > threshold) {
+            // Lobes at or below the threshold, zero weights included, come first.
+            let below = vec3<f32>(prefix.xyz <= vec3<f32>(threshold));
+            let k = u32(below.x + below.y + below.z);
+            let weight = dot(w, vec4<f32>(vec4<u32>(0u, 1u, 2u, 3u) == vec4<u32>(k)));
+            return Pick(4u * j + k, total / weight);
+        }
+
+        cdf = prefix.w;
+    }
+
+    return Pick(0u, 0.0);
+}
+
+fn picked_radiance(lobe: Lobe, pick: Pick, shading: Shading) -> Radiance {
+    let phi = pick.scale * lobe.phi;
+
+    var radiance = Radiance(phi * sg_inner_weight(lobe, shading.specular), vec3<f32>(0.0));
+    if (!shading.isotropic) { radiance.phase = phi * sg_inner_weight(lobe, shading.phase); }
+
+    return radiance;
+}
+
+fn probe_count() -> vec3<u32> {
+    return max(textureDimensions(GAUSSIAN) / vec3<u32>(4u, 4u, 2u), vec3<u32>(1u));
+}
+
+// Texel coordinates of the probe nearest `uv` moved by `offset` cells, clamped
+// to the grid.
+fn nearest_probe(uv: vec3<f32>, offset: vec3<f32>) -> vec3<i32> {
+    let probes = vec3<f32>(probe_count());
+    return vec3<i32>(clamp(floor(uv * probes + offset), vec3<f32>(0.0), probes - 1.0));
+}
+
+fn lobe_tile(k: u32) -> vec3<u32> {
+    return vec3<u32>(k & 3u, (k >> 2u) & 3u, (k >> 4u) & 1u);
+}
+
+fn weight_tile(j: u32) -> vec3<u32> {
+    return vec3<u32>(j & 1u, (j >> 1u) & 1u, (j >> 2u) & 1u);
 }
 
 fn unproject(v: vec3<f32>) -> vec3<f32> {

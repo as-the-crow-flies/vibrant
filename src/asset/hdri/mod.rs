@@ -28,6 +28,9 @@ pub struct HdriBufferSettings {
     importance: u32,
     prefilter: u32,
     log_weights: u32,
+    lookup_jitter: f32,
+    lobe_sampling: u32,
+    nearest_probes: u32,
 }
 
 pub struct HdriTexture {
@@ -109,12 +112,21 @@ impl HdriTexture {
     }
 }
 
+/// Probe lookup jitter in probe cells (tent, ±2): averaged by accumulation, it
+/// blurs away the bands where surfaces cut between probes inside and outside
+/// the material.
+const LOOKUP_JITTER: f32 = 2.0;
+
 pub struct HdriBuffer {
     pub index: usize,
     /// Draw the cascade's samples from the environment's cells instead of uniformly.
     pub importance_sampling: bool,
     /// Blur the parent's lobes by each cascade sample's footprint.
     pub prefilter: bool,
+    /// While accumulating, evaluate one sampled lobe per step instead of all.
+    pub sample_lobe: bool,
+    /// Sampled lobes come from the nearest probe instead of a trilinear blend.
+    pub nearest_probes: bool,
     /// Share of the cells spread evenly over the sphere.
     pub uniform_share: f32,
     /// Cut cells by log(1 + Y) instead of Y.
@@ -176,6 +188,9 @@ impl HdriBuffer {
             importance: 1,
             prefilter: 1,
             log_weights: 0,
+            lookup_jitter: 0.0,
+            lobe_sampling: 0,
+            nearest_probes: 1,
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -202,6 +217,8 @@ impl HdriBuffer {
             index: 0,
             importance_sampling: true,
             prefilter: true,
+            sample_lobe: true,
+            nearest_probes: true,
             uniform_share: 0.0,
             log_sample_weights: false,
             log_weights: false,
@@ -262,10 +279,14 @@ impl HdriBuffer {
         &mut self.settings
     }
 
-    pub fn update_settings(&mut self, gpu: &Gpu) {
+    /// The lookup jitter and lobe sampling only converge while frames accumulate.
+    pub fn update_settings(&mut self, gpu: &Gpu, accumulate: bool) {
         self.settings.importance = self.importance_sampling as u32;
         self.settings.prefilter = self.prefilter as u32;
         self.settings.log_weights = self.log_weights as u32;
+        self.settings.lookup_jitter = if accumulate { LOOKUP_JITTER } else { 0.0 };
+        self.settings.lobe_sampling = (accumulate && self.sample_lobe) as u32;
+        self.settings.nearest_probes = self.nearest_probes as u32;
 
         gpu.queue()
             .write_buffer(&self.settings_buffer, 0, bytes_of(&self.settings));

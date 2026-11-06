@@ -278,15 +278,6 @@ impl RenderingWidget {
                             .track(self);
                         ui.end_row();
 
-                        ui.label("Shadow Detail").on_hover_text(
-                            "Darken bundles where neighbouring tracts or volume sit \
-                             right next to them, bringing out fine detail. \
-                             0 = off.",
-                        );
-                        ui.slider(&mut settings.line_occlusion, 0.0..=2.0)
-                            .track(self);
-                        ui.end_row();
-
                         ui.label("Specular").on_hover_text(
                             "Strength of mirror-like highlights on the bundles. \
                              0 = matte, 1 = glossy.",
@@ -436,6 +427,22 @@ impl RenderingWidget {
                      lights no longer fall between samples and flicker.",
                 );
                 ui.checkbox(&mut hdri.prefilter, "").track(self);
+                ui.end_row();
+
+                ui.label("Sample One Lobe").on_hover_text(
+                    "While the image accumulates, light each step from one \
+                     randomly picked lobe instead of all of them: faster, but \
+                     noisier per frame.",
+                );
+                ui.checkbox(&mut hdri.sample_lobe, "").track(self);
+                ui.end_row();
+
+                ui.label("Nearest Probe Sampling").on_hover_text(
+                    "While the image accumulates, light each step from one \
+                     lobe of the nearest lighting probe instead of a blend of \
+                     the surrounding ones.",
+                );
+                ui.checkbox(&mut hdri.nearest_probes, "").track(self);
                 ui.end_row();
 
                 ui.label("Uniform Share").on_hover_text(

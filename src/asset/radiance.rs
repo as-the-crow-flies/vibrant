@@ -3,12 +3,14 @@ use std::{any::type_name, cell::Cell, mem::size_of, ops::Shr};
 use glam::UVec3;
 use wgpu::*;
 
-use crate::{asset::volume::PhysicalVolume, gpu::Gpu};
+use crate::gpu::Gpu;
 
 pub struct GaussianRadianceBuffer {
     vmm: Texture,
     phi: Texture,
     irradiance: Texture,
+    // Cascade 0's lobe selection weights, 4 lobes per texel in 2×2×2 tiles.
+    weights: Texture,
     em_iterations: Buffer,
     // `CascadeOpts` (include_volume, include_lines, vmm_size, cascade), one
     // slot per level. Combined = (1, 1); overlay volume cascade = (1, 0);
@@ -23,6 +25,7 @@ pub struct GaussianRadianceBuffer {
 
 impl GaussianRadianceBuffer {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+    pub const WEIGHTS_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
     pub const LEVELS: u32 = 6;
     const CASCADE_OPTS_SIZE: u64 = 4 * size_of::<u32>() as u64;
 
@@ -35,7 +38,7 @@ impl GaussianRadianceBuffer {
     // One row per cascade level.
     pub const EM_HISTOGRAM_ROWS: u32 = Self::LEVELS;
 
-    pub fn new(gpu: &Gpu, size: UVec3, volume: &PhysicalVolume) -> Self {
+    pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
 
         let size = size.max(UVec3::splat(2u32.pow(Self::LEVELS)));
@@ -75,6 +78,25 @@ impl GaussianRadianceBuffer {
             format: Self::FORMAT,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
             view_formats: &[],
+        });
+
+        let weights = gpu.device().create_texture(&TextureDescriptor {
+            label,
+            size: Extent3d {
+                width: size.x * 2,
+                height: size.y * 2,
+                depth_or_array_layers: size.z * 2,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D3,
+            format: Self::WEIGHTS_FORMAT,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
+        let weights_view = weights.create_view(&TextureViewDescriptor {
+            label,
+            ..Default::default()
         });
 
         let em_iterations = gpu.device().create_buffer(&BufferDescriptor {
@@ -143,32 +165,7 @@ impl GaussianRadianceBuffer {
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: BindingResource::TextureView(&volume.extinction().create_view(
-                        &TextureViewDescriptor {
-                            label,
-                            ..Default::default()
-                        },
-                    )),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::TextureView(
-                        &volume
-                            .line_extinction()
-                            .texture()
-                            .create_view(&TextureViewDescriptor {
-                                label,
-                                ..Default::default()
-                            }),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 5,
-                    resource: BindingResource::Sampler(volume.sampler()),
-                },
-                BindGroupEntry {
-                    binding: 6,
-                    resource: volume.transform().as_entire_binding(),
+                    resource: BindingResource::TextureView(&weights_view),
                 },
                 BindGroupEntry {
                     binding: 7,
@@ -275,6 +272,10 @@ impl GaussianRadianceBuffer {
                             binding: 8,
                             resource: cascade_opts_slot(level),
                         },
+                        BindGroupEntry {
+                            binding: 9,
+                            resource: BindingResource::TextureView(&weights_view),
+                        },
                     ],
                 })
             })
@@ -284,6 +285,7 @@ impl GaussianRadianceBuffer {
             phi,
             vmm,
             irradiance,
+            weights,
             em_iterations,
             cascade_opts,
             cascade_opts_stride,
@@ -387,8 +389,7 @@ impl GaussianRadianceBuffer {
                         ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
-                    // Near-field occluders: EXTINCTION, LINE_EXTINCTION, their
-                    // sampler, the volume TRANSFORM and CASCADE_OPTS.
+                    // Lobe selection weights.
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility,
@@ -396,32 +397,6 @@ impl GaussianRadianceBuffer {
                             sample_type: TextureSampleType::Float { filterable: true },
                             view_dimension: TextureViewDimension::D3,
                             multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 4,
-                        visibility,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D3,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 5,
-                        visibility,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 6,
-                        visibility,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
                         },
                         count: None,
                     },
@@ -541,6 +516,17 @@ impl GaussianRadianceBuffer {
                         },
                         count: None,
                     },
+                    // Lobe selection weights, written by cascade 0.
+                    BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: Self::WEIGHTS_FORMAT,
+                            view_dimension: TextureViewDimension::D3,
+                        },
+                        count: None,
+                    },
                 ],
             })
     }
@@ -552,6 +538,7 @@ impl Drop for GaussianRadianceBuffer {
         self.phi.destroy();
         self.vmm.destroy();
         self.irradiance.destroy();
+        self.weights.destroy();
         self.cascade_opts.destroy();
     }
 }
