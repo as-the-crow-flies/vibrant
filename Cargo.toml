@@ -21,8 +21,9 @@ bytemuck = { version = "1.24", features = ["derive", "min_const_generics"] }
 glam = { version = "0.29", features = ["bytemuck"] }
 rfd = "0.17"
 nifti = { version = "0.17", default-features = false, features = ["nalgebra_affine"] }
-flate2 = "1.1"
+flate2 = { version = "1.1", features = ["zlib-rs"] }
 png = "0.17"
+half = { version = "2", features = ["bytemuck"] }
 futures-channel = "0.3"
 itertools = "0.13"
 random_color = "1.1.0"
@@ -89,3 +90,11 @@ harness = false
 # https://github.com/emilk/egui/issues/7052 (unfixed upstream as of 2026-08-25).
 [patch.crates-io]
 egui-winit = { path = "vendor/egui-winit-0.36.1" }
+
+# Keeps `cargo run` loading (inflate, per-voxel decode) fast; the decode loop
+# is generic code compiled in our crate, so it needs opt-level 1 too.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
