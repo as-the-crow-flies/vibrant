@@ -68,6 +68,12 @@ VIBRANT also runs natively on Windows, macOS, and Linux. It is easy to build it 
 
 ---
 
+## Demo Video
+
+[![Vibrant demo](https://img.youtube.com/vi/BcidW6gWCrM/maxresdefault.jpg)](https://www.youtube.com/watch?v=BcidW6gWCrM)
+
+---
+
 ## Features
 
 ### Volumes
