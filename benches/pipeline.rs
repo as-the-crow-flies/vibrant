@@ -36,12 +36,8 @@ fn bench_pipeline(c: &mut Criterion) {
 
     // --- Tractography acceleration structure (LineRenderer::transfer) ---
 
-    group.bench_function("line/transform", |t| {
-        t.iter(|| b.time_pass(|cmd| b.line_transform.dispatch(cmd, &b.asset, b.line())))
-    });
-
-    group.bench_function("line/crop", |t| {
-        t.iter(|| b.time_pass(|cmd| b.line_crop.dispatch(cmd, &b.asset, b.line())))
+    group.bench_function("line/prepare", |t| {
+        t.iter(|| b.time_pass(|cmd| b.line_prepare.dispatch(cmd, &b.asset, b.line())))
     });
 
     group.bench_function("line/occupancy", |t| {

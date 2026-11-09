@@ -15,9 +15,9 @@ use vibrant::{
         gradient::GradientPipeline,
         lighting::LightingRenderer,
         line::{
-            crop::LineCropPipeline, deposit::LineDepositPipeline, occupancy::LineOccupancyPipeline,
-            populate::LinePopulatePipeline, render::LineRenderPipeline,
-            transform::LineTransformPipeline,
+            deposit::LineDepositPipeline, occupancy::LineOccupancyPipeline,
+            populate::LinePopulatePipeline, prepare::LinePreparePipeline,
+            render::LineRenderPipeline,
         },
         present::PresentPipeline,
         util::clear::ClearPipeline,
@@ -49,8 +49,7 @@ fn main() {
         GaussianVolumeRenderer::new(&gpu),
         LightingRenderer::new(&gpu),
         (
-            LineTransformPipeline::new(&gpu),
-            LineCropPipeline::new(&gpu),
+            LinePreparePipeline::new(&gpu),
             LineOccupancyPipeline::new(&gpu),
             LinePopulatePipeline::new(&gpu),
             LineDepositPipeline::new(&gpu),
