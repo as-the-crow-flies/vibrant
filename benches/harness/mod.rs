@@ -20,9 +20,9 @@ use vibrant::{
         gradient::GradientPipeline,
         lighting::LightingRenderer,
         line::{
-            crop::LineCropPipeline, deposit::LineDepositPipeline, occupancy::LineOccupancyPipeline,
-            populate::LinePopulatePipeline, render::LineRenderPipeline,
-            transform::LineTransformPipeline, LineRenderer,
+            deposit::LineDepositPipeline, occupancy::LineOccupancyPipeline,
+            populate::LinePopulatePipeline, prepare::LinePreparePipeline,
+            render::LineRenderPipeline, LineRenderer,
         },
         present::{PresentPipeline, Presentation},
         util::clear::ClearPipeline,
@@ -79,8 +79,7 @@ pub struct Bench {
     pub frame: Frame,
 
     pub clear: ClearPipeline,
-    pub line_transform: LineTransformPipeline,
-    pub line_crop: LineCropPipeline,
+    pub line_prepare: LinePreparePipeline,
     pub line_occupancy: LineOccupancyPipeline,
     pub line_populate: LinePopulatePipeline,
     pub line_deposit: LineDepositPipeline,
@@ -177,8 +176,7 @@ pub fn setup() -> Bench {
 
     let bench = Bench {
         clear: ClearPipeline::new(&gpu),
-        line_transform: LineTransformPipeline::new(&gpu),
-        line_crop: LineCropPipeline::new(&gpu),
+        line_prepare: LinePreparePipeline::new(&gpu),
         line_occupancy: LineOccupancyPipeline::new(&gpu),
         line_populate: LinePopulatePipeline::new(&gpu),
         line_deposit: LineDepositPipeline::new(&gpu),
@@ -240,8 +238,7 @@ impl Bench {
     fn record_scene_build(&self, cmd: &mut CommandEncoder) {
         let (asset, pv, line) = (&self.asset, self.pv(), self.line());
 
-        self.line_transform.dispatch(cmd, asset, line);
-        self.line_crop.dispatch(cmd, asset, line);
+        self.line_prepare.dispatch(cmd, asset, line);
         self.line_occupancy
             .dispatch(cmd, asset, &self.controller, line);
         self.line_populate

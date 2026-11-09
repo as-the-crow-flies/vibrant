@@ -100,9 +100,9 @@ pub struct LineBuffer {
 
     materials: Buffer,
 
-    raw_indices: Buffer,
     raw_vertices: Buffer,
-    raw_offsets: Buffer,
+    line_ids: Buffer,
+    line_starts: Buffer,
 
     transform: Buffer,
 
@@ -114,8 +114,7 @@ pub struct LineBuffer {
 
     colormap_view: TextureView,
 
-    binding_transform: BindGroup,
-    binding_crop: BindGroup,
+    binding_prepare: BindGroup,
     binding_render: BindGroup,
     // The single merged group for the ray-marcher (`render/trace.wgsl`). Kept
     // separate from `binding_render` because the voxelization compute pipelines
@@ -125,7 +124,7 @@ pub struct LineBuffer {
     // `None` only during `new` construction, before the first `trace_binding`.
     binding_trace: Option<BindGroup>,
 
-    n_lines: u32,
+    n_vertices: u32,
 }
 
 impl LineBuffer {
@@ -190,8 +189,6 @@ impl LineBuffer {
         let settings_buffer: Vec<LineSettingsBuffer> =
             settings.iter().map(|setting| setting.to_buffer()).collect();
 
-        let n_lines = files.iter().map(|file| file.lines().len() as u32).sum();
-
         let vertices: Vec<Vec4> = files
             .iter()
             .flat_map(|file| file.lines())
@@ -204,23 +201,23 @@ impl LineBuffer {
             .flat_map(|file| file.lines().iter().map(|vertices| vertices.len() as u32))
             .collect();
 
-        let indices: Vec<u32> = vertex_counts
+        let n_vertices = vertices.len() as u32;
+        let n_segments: u32 = vertex_counts
             .iter()
-            .scan(0u32, |sum, x| {
-                *sum += x;
-                Some(*sum - x)
-            })
-            .tuple_windows()
-            .flat_map(|(start, end)| start..end - 1)
+            .map(|count| count.saturating_sub(1))
+            .sum();
+
+        let line_ids: Vec<u32> = vertex_counts
+            .iter()
+            .enumerate()
+            .flat_map(|(id, &count)| std::iter::repeat_n(id as u32, count as usize))
             .collect();
 
-        let index_offsets: Vec<u32> = vertex_counts
-            .iter()
-            .map(|count| count - 1)
-            .scan(0u32, |sum, x| {
+        let line_starts: Vec<u32> = std::iter::once(0)
+            .chain(vertex_counts.iter().scan(0u32, |sum, x| {
                 *sum += x;
-                Some(*sum - x)
-            })
+                Some(*sum)
+            }))
             .collect();
 
         let materials: Vec<u32> = files
@@ -231,27 +228,27 @@ impl LineBuffer {
             })
             .collect();
 
-        let raw_indices = gpu.device().create_buffer_init(&BufferInitDescriptor {
-            label,
-            contents: bytemuck::cast_slice(&indices),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        });
-
         let raw_vertices = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
             contents: bytemuck::cast_slice(&vertices),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         });
 
-        let raw_offsets = gpu.device().create_buffer_init(&BufferInitDescriptor {
+        let line_ids = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytemuck::cast_slice(&index_offsets),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            contents: bytemuck::cast_slice(&line_ids),
+            usage: BufferUsages::STORAGE,
+        });
+
+        let line_starts = gpu.device().create_buffer_init(&BufferInitDescriptor {
+            label,
+            contents: bytemuck::cast_slice(&line_starts),
+            usage: BufferUsages::STORAGE,
         });
 
         let length = gpu.device().create_buffer_init(&BufferInitDescriptor {
             label,
-            contents: bytemuck::bytes_of(&(indices.len() as u32)),
+            contents: bytemuck::bytes_of(&n_segments),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
         });
 
@@ -270,7 +267,7 @@ impl LineBuffer {
 
         let indices = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: (indices.len() * 8) as u64,
+            size: (n_segments as u64 * 8).max(4),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
@@ -300,30 +297,19 @@ impl LineBuffer {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
         });
 
-        let binding_transform = gpu.binding(
-            "LineTransform",
-            &Self::layout_transform(gpu),
-            vec![
-                indices.as_entire_binding(),
-                vertices.as_entire_binding(),
-                length.as_entire_binding(),
-                offset.as_entire_binding(),
-                raw_vertices.as_entire_binding(),
-                transform.as_entire_binding(),
-            ],
-        );
-
-        let binding_crop = gpu.binding(
-            "LineCrop",
-            &Self::layout_crop(gpu),
+        let binding_prepare = gpu.binding(
+            "LinePrepare",
+            &Self::layout_prepare(gpu),
             vec![
                 indices.as_entire_binding(),
                 vertices.as_entire_binding(),
                 length.as_entire_binding(),
                 materials.as_entire_binding(),
                 settings_buffer.as_entire_binding(),
-                raw_indices.as_entire_binding(),
-                raw_offsets.as_entire_binding(),
+                raw_vertices.as_entire_binding(),
+                line_ids.as_entire_binding(),
+                line_starts.as_entire_binding(),
+                transform.as_entire_binding(),
             ],
         );
 
@@ -371,15 +357,14 @@ impl LineBuffer {
 
             colormap_view,
 
-            raw_indices,
             raw_vertices,
-            raw_offsets,
-            binding_transform,
-            binding_crop,
+            line_ids,
+            line_starts,
+            binding_prepare,
             binding_render,
             binding_trace: None,
 
-            n_lines,
+            n_vertices,
         };
 
         line.binding_trace = Some(line.trace_binding(gpu));
@@ -485,12 +470,8 @@ impl LineBuffer {
         &self.bounds
     }
 
-    pub fn binding_transform(&self) -> &BindGroup {
-        &self.binding_transform
-    }
-
-    pub fn binding_crop(&self) -> &BindGroup {
-        &self.binding_crop
+    pub fn binding_prepare(&self) -> &BindGroup {
+        &self.binding_prepare
     }
 
     pub fn binding_render(&self) -> &BindGroup {
@@ -528,25 +509,12 @@ impl LineBuffer {
             .write_buffer(&self.transform, 0, bytes_of(transform));
     }
 
-    pub fn layout_transform(gpu: &Gpu) -> BindGroupLayout {
-        let visibility = ShaderStages::COMPUTE;
-
-        let buffer_readwrite = BindGroupLayoutEntry {
-            binding: 0,
-            visibility,
+    pub fn layout_prepare(gpu: &Gpu) -> BindGroupLayout {
+        let storage = |binding, read_only| BindGroupLayoutEntry {
+            binding,
+            visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-
-        let buffer_read = BindGroupLayoutEntry {
-            binding: 0,
-            visibility,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
+                ty: BufferBindingType::Storage { read_only },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -557,109 +525,24 @@ impl LineBuffer {
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
                 entries: &[
-                    // Indices
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        ..buffer_readwrite
-                    },
-                    // Vertices
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        ..buffer_readwrite
-                    },
-                    // Length
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        ..buffer_read
-                    },
-                    // Offset
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        ..buffer_readwrite
-                    },
-                    // Raw Vertices
-                    BindGroupLayoutEntry {
-                        binding: 4,
-                        ..buffer_read
-                    },
+                    storage(0, false), // Indices
+                    storage(1, false), // Vertices
+                    storage(2, false), // Length
+                    storage(3, true),  // Material
+                    storage(4, true),  // Settings
+                    storage(5, true),  // Raw Vertices
+                    storage(6, true),  // Line Ids
+                    storage(7, true),  // Line Starts
                     // Transform
                     BindGroupLayoutEntry {
-                        binding: 5,
-                        visibility,
+                        binding: 8,
+                        visibility: ShaderStages::COMPUTE,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
                         count: None,
-                    },
-                ],
-            })
-    }
-
-    pub fn layout_crop(gpu: &Gpu) -> BindGroupLayout {
-        let visibility = ShaderStages::COMPUTE;
-
-        let buffer_readwrite = BindGroupLayoutEntry {
-            binding: 0,
-            visibility,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-
-        let buffer_read = BindGroupLayoutEntry {
-            binding: 0,
-            visibility,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-
-        gpu.device()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some(type_name::<Self>()),
-                entries: &[
-                    // Indices
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        ..buffer_readwrite
-                    },
-                    // Vertices
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        ..buffer_readwrite
-                    },
-                    // Length
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        ..buffer_readwrite
-                    },
-                    // Material
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        ..buffer_read
-                    },
-                    // Settings
-                    BindGroupLayoutEntry {
-                        binding: 4,
-                        ..buffer_read
-                    },
-                    // Index Raw
-                    BindGroupLayoutEntry {
-                        binding: 5,
-                        ..buffer_read
-                    },
-                    // Offset Raw
-                    BindGroupLayoutEntry {
-                        binding: 6,
-                        ..buffer_read
                     },
                 ],
             })
@@ -828,8 +711,8 @@ impl LineBuffer {
             })
     }
 
-    pub fn n_lines(&self) -> u32 {
-        self.n_lines
+    pub fn n_vertices(&self) -> u32 {
+        self.n_vertices
     }
 
     pub fn set_scalar(&mut self, gpu: &Gpu, scalar: TrackScalarFile) {
@@ -855,8 +738,8 @@ impl Drop for LineBuffer {
         self.offset.destroy();
         self.materials.destroy();
         self.settings_buffer.destroy();
-        self.raw_indices.destroy();
         self.raw_vertices.destroy();
-        self.raw_offsets.destroy();
+        self.line_ids.destroy();
+        self.line_starts.destroy();
     }
 }

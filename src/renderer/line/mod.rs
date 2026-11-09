@@ -1,9 +1,8 @@
-pub mod crop;
 pub mod deposit;
 pub mod occupancy;
 pub mod populate;
+pub mod prepare;
 pub mod render;
-pub mod transform;
 
 use occupancy::LineOccupancyPipeline;
 use wgpu::CommandEncoder;
@@ -13,15 +12,14 @@ use crate::{
     controller::Controller,
     gpu::Gpu,
     renderer::line::{
-        crop::LineCropPipeline, deposit::LineDepositPipeline, populate::LinePopulatePipeline,
-        render::LineRenderPipeline, transform::LineTransformPipeline,
+        deposit::LineDepositPipeline, populate::LinePopulatePipeline, prepare::LinePreparePipeline,
+        render::LineRenderPipeline,
     },
     surface::Frame,
 };
 
 pub struct LineRenderer {
-    transform: LineTransformPipeline,
-    crop: LineCropPipeline,
+    prepare: LinePreparePipeline,
     occupancy: LineOccupancyPipeline,
     deposit: LineDepositPipeline,
     populate: LinePopulatePipeline,
@@ -31,8 +29,7 @@ pub struct LineRenderer {
 impl LineRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         Self {
-            transform: LineTransformPipeline::new(gpu),
-            crop: LineCropPipeline::new(gpu),
+            prepare: LinePreparePipeline::new(gpu),
             occupancy: LineOccupancyPipeline::new(gpu),
             deposit: LineDepositPipeline::new(gpu),
             populate: LinePopulatePipeline::new(gpu),
@@ -40,16 +37,13 @@ impl LineRenderer {
         }
     }
 
-    /// Builds the tractography acceleration structure (transform/crop/occupancy/
-    /// populate). The occupancy density pyramid it produces is also what
+    /// Builds the tractography acceleration structure (prepare/occupancy/populate). The occupancy density pyramid it produces is also what
     /// [`Self::deposit`] samples to bake line density into the shared
     /// [`PhysicalVolume`](crate::asset::volume::PhysicalVolume).
     pub fn transfer(&self, cmd: &mut CommandEncoder, controller: &Controller, asset: &Asset) {
         if controller.tractography().visible() {
             if let Some(line) = &asset.line {
-                self.transform.dispatch(cmd, asset, line);
-
-                self.crop.dispatch(cmd, asset, line);
+                self.prepare.dispatch(cmd, asset, line);
 
                 self.occupancy.dispatch(cmd, asset, controller, line);
 
