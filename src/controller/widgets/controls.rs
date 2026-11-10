@@ -19,7 +19,7 @@ impl ControlsWidget {
         let camera_actions = [
             ("Rotate", "Left Mouse Button"),
             ("Pan", "Right Mouse Button"),
-            ("Zoom", "Mouse Wheel"),
+            ("Zoom", "Mouse Wheel / Middle Mouse Button"),
             ("Reset", "Backspace"),
         ];
 
