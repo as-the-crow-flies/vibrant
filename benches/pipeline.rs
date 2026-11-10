@@ -5,6 +5,7 @@
 //   cargo bench --bench pipeline            # full run
 //   cargo bench --bench pipeline -- --test  # one pass each, no timing
 //   cargo bench --bench pipeline -- line_shading  # line/render with/without contact occlusion
+//   ALPHA=0.1 cargo bench --bench pipeline -- line/render  # line opacity (default 1)
 
 mod harness;
 

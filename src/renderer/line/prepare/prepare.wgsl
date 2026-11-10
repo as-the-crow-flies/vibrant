@@ -1,4 +1,5 @@
 use math;
+use random;
 use uniforms;
 use vertex;
 
@@ -79,7 +80,8 @@ fn prepare(i: u32, n_vertices: u32, crop_normal: vec3<f32>) -> bool {
 
     let clip = select(vec3<f32>(0), normalize(vp - vm), keep_prev && keep_next);
 
-    LINE_VERTEX[i] = vec4<f32>(v, pack_clip_alpha(vec4<f32>(clip, raw.a)));
+    let hash = pcg3d(vec3<u32>(line, 0x9e3779b9u, 0u)).x >> 24u;
+    LINE_VERTEX[i] = vec4<f32>(v, pack_clip_hash(clip, hash));
 
     return keep_next;
 }

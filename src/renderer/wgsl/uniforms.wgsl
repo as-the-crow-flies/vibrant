@@ -16,8 +16,6 @@ struct Environment {
 // line passes; field order must match `TractographySettings`.
 struct Tractography {
     volume: u32,
-    // 0 = Combined, 1 = Overlay.
-    render_mode: u32,
     // Whether the slicing / clipping planes cull tractography lines.
     line_crop: u32,
     radius: f32,

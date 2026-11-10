@@ -30,9 +30,10 @@ fn main(@builtin(global_invocation_id) voxel: vec3<u32>) {
 
     // σ = depth / (2 min(r, h)): thin-rod medium for tubes below the
     // voxelization's resolution h. `line_extinction` is 1 / (2 r). Translucent
-    // fibres pass their transmitted share t on, treated as straight-through.
+    // fibres pass their transmitted share t on, treated as straight-through,
+    // and partially opaque ones block only their `alpha` share.
     let resolution = max(1.0, TRACTOGRAPHY.smoothing);
-    let transmitted = 1.0 - TRACTOGRAPHY.line_translucency;
+    let transmitted = (1.0 - TRACTOGRAPHY.line_translucency) * TRACTOGRAPHY.alpha;
     let sigma = TRACTOGRAPHY.line_extinction * max(1.0, TRACTOGRAPHY.radius / resolution) * transmitted * depth;
 
     // Written every voxel (empty ones get 0) so the mip chain is well-defined.

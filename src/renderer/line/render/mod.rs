@@ -15,14 +15,13 @@ use crate::{
     surface::{color::ColorBuffer, Frame},
 };
 
-/// Tractography ray-marcher. Shades line surfaces with the shared VMM Disney
-/// BRDF (`trace.wgsl`) against the `radiance_lines` cascade. Two lazily
-/// compiled pipelines:
+/// Tractography ray-marcher. Shades the nearest kept line hit with the shared
+/// VMM Disney BRDF (`trace.wgsl`); opacity is stochastic, so it converges under
+/// accumulation. Both pipelines share the shader and differ only in blending:
 ///
-/// * **Combined** (`opaque.wgsl`): nearest hit only, alpha forced to 1, writes
-///   HDR colour + the near→far hit fraction the volume tracer clamps to.
-/// * **Overlay** (`transparent.wgsl`): every crossed line accumulated
-///   (premultiplied), honoring `settings.alpha`; composited over the volume.
+/// * **Combined**: drawn first; writes the near→far hit fraction the volume
+///   tracer clamps to.
+/// * **Overlay**: composited over the volume.
 pub struct LineRenderPipeline {
     combined: Lazy<RenderPipeline>,
     overlay: Lazy<RenderPipeline>,
@@ -76,12 +75,12 @@ impl LineRenderPipeline {
         Self {
             combined: build(
                 "LineTrace::Combined",
-                "renderer/line/render/trace_opaque.wgsl",
+                "renderer/line/render/trace.wgsl",
                 ColorBuffer::target_blend(),
             ),
             overlay: build(
                 "LineTrace::Overlay",
-                "renderer/line/render/trace_opaque.wgsl",
+                "renderer/line/render/trace.wgsl",
                 ColorBuffer::target_premultiplied(),
             ),
         }

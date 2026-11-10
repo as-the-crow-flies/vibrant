@@ -1,12 +1,13 @@
 use block;
 use color;
 use gaussian;
+use intersect;
 use math;
+use noise;
 use occlusion;
 use uniforms;
 use vertex;
 
-@group(0) @binding(0) var<storage> LINE_INDEX: array<u32>;
 @group(0) @binding(1) var<storage> LINE_VERTEX: array<vec4<f32>>;
 @group(0) @binding(4) var<storage> LINE_MATERIAL: array<u32>;
 @group(0) @binding(5) var<storage> LINE_SETTINGS: array<LineSettings>;
@@ -21,6 +22,7 @@ use vertex;
 @group(0) @binding(18) var<storage> INDEX: array<u32>;
 
 @group(1) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(1) @binding(1) var BLUE_NOISE: texture_3d<f32>;
 
 // The shared octahedral radiance cascade (same probe grid the volume tracer
 // samples). No HDRI group: the cascade already integrates the environment.
@@ -34,13 +36,16 @@ use vertex;
 var<private> DIM: f32;
 var<private> DIM_INV: f32;
 var<private> RADIUS: f32;
-// Ray direction (normalized, volume-[0,1] space) and near→far segment length of
-// the current pixel's ray, set by `fragment` / `raymarch` for `shade` and
-// `hit_fraction`.
-var<private> DIRECTION: vec3<f32>;
-var<private> RAY_LENGTH: f32;
 // The ray's view direction in world space, where the lobes live.
 var<private> VIEW: vec3<f32>;
+// Per-pixel [0, 1) for the stochastic opacity test, see `is_kept`.
+var<private> COIN: f32;
+
+struct Hit {
+    distance: f32,
+    index: u32,
+    position: vec3<f32>,
+}
 
 struct Fragment {
     @builtin(position) position: vec4<f32>,
@@ -48,7 +53,7 @@ struct Fragment {
 }
 
 struct FragmentOut {
-    // Un-tone-mapped radiance; opaque (alpha forced to 1).
+    // Un-tone-mapped radiance of the nearest kept hit; transparent on a miss.
     @location(0) color: vec4<f32>,
     // Near→far fraction of the first hit; 1.0 on miss. The volume tracer clamps
     // its far `t` to this.
@@ -70,6 +75,7 @@ fn fragment(fragment: Fragment) -> FragmentOut {
     DIM = f32(TRACTOGRAPHY.volume);
     DIM_INV = 1.0 / DIM;
     RADIUS = TRACTOGRAPHY.radius * DIM_INV;
+    COIN = noise(vec2<u32>(fragment.position.xy), 2u).x;
 
     // View space: an imprecise `w` only slides a point along its own ray.
     let near = unproject(vec3<f32>(fragment.uv, 0.0));
@@ -79,22 +85,29 @@ fn fragment(fragment: Fragment) -> FragmentOut {
     let origin = (camera * vec4<f32>(near, 1.0)).xyz;
     let segment = (camera * vec4<f32>(far - near, 0.0)).xyz;
 
-    RAY_LENGTH = length(segment);
+    let ray_length = length(segment);
     VIEW = -normalize((ENVIRONMENT.camera.transform * vec4<f32>(far - near, 0.0)).xyz);
 
-    let direction = segment / RAY_LENGTH;
+    let hit = raymarch(origin, segment / ray_length);
 
-    let color = raymarch(origin, direction);
+    if (hit.index == U32_MAX) { return FragmentOut(vec4<f32>(0.0), 1.0); }
 
-    var out: FragmentOut;
-    out.depth = hit_fraction();
-    out.color = select(vec4<f32>(0.0), vec4<f32>(color.rgb, color.a), color.a > 0.0);
-    return out;
+    let depth = clamp(hit.distance / max(ray_length, 1e-6), 0.0, 1.0);
+    return FragmentOut(vec4<f32>(shade(hit), 1.0), depth);
 }
 
-fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
-    DIRECTION = direction;
+// Stochastic opacity: a fibre is kept with probability `alpha`, so the nearest
+// kept hit averages to sorted front-to-back compositing. One coin per fibre
+// (not per segment) avoids double counting where capsules overlap; rotating
+// the pixel's noise by the fibre's hash (packed in `w`) keeps its dither blue.
+fn is_kept(w: f32) -> bool {
+    if (TRACTOGRAPHY.alpha >= 1.0) { return true; }
 
+    let offset = (f32(unpack_hash(w)) + 0.5) / 256.0;
+    return fract(COIN + offset) < TRACTOGRAPHY.alpha;
+}
+
+fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> Hit {
     let delta = select(1.0 / direction, vec3<f32>(1E10), abs(direction) < vec3<f32>(1E-5));
     let boundary = select(vec3<u32>(0), vec3<u32>(1), direction >= vec3<f32>(0.0));
 
@@ -104,7 +117,7 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
     let t_min = maximum(min(tMinBounds, tMaxBounds)) + 1E-5;
     let t_max = minimum(max(tMinBounds, tMaxBounds)) - 1E-5;
 
-    if (t_min >= t_max || t_max < 0.0) { return vec4<f32>(0.0); }
+    if (t_min >= t_max || t_max < 0.0) { return Hit(0.0, U32_MAX, vec3<f32>()); }
 
     var t = max(t_min, 0.0);
     var mip = textureNumLevels(DENSITY) - 1;
@@ -142,8 +155,6 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         voxel[axis] = next[axis] + boundary[axis] - 1;
     }
 
-    var last_axis = 0u;
-
     while (t < t_max) {
         // Get the next voxel boundary
         let next = voxel + boundary;
@@ -157,26 +168,48 @@ fn raymarch(origin: vec3<f32>, direction: vec3<f32>) -> vec4<f32> {
         // Get Increment
         let increment = max(d[axis], 1E-5);
 
-        if (visit(voxel, origin - 0.5, direction, position - 0.5, increment, t + increment, last_axis)) {
-            break;
-        }
+        let hit = visit(voxel, position - 0.5, direction, increment, t + increment);
+        if (hit.index != U32_MAX) { return hit; }
 
         // Increment Ray Position
         t += increment;
         position += direction * increment;
         voxel[axis] = next[axis] + boundary[axis] - 1;
-        last_axis = axis;
     }
 
-    return result(origin - 0.5, direction);
+    return Hit(0.0, U32_MAX, vec3<f32>());
+}
+
+// Nearest kept hit inside `voxel`. Intersects from the voxel entry, not the ray
+// origin: the origin can be far away (narrow fov, orthographic), which wrecks
+// the capsule quadratic.
+fn visit(voxel: vec3<u32>, position: vec3<f32>, direction: vec3<f32>, increment: f32, distance: f32) -> Hit {
+    var hit = Hit(distance, U32_MAX, vec3<f32>());
+
+    let count = textureLoad(COUNT, voxel, 0).x;
+    if (count == 0) { return hit; }
+
+    let offset = OFFSET[block_index(voxel, textureDimensions(DENSITY))] - count;
+    let base = distance - increment;
+
+    for (var i = 0u; i < count; i++) {
+        let index = INDEX[offset + i];
+
+        let v0 = LINE_VERTEX[index];
+
+        let local = capsule_intersection(position, direction, v0.xyz, LINE_VERTEX[index + 1].xyz, RADIUS);
+        let intersection = base + local;
+
+        if (intersection < hit.distance && is_kept(v0.w)) {
+            hit = Hit(intersection, index, position + direction * local);
+        }
+    }
+
+    return hit;
 }
 
 fn maximum(v: vec3<f32>) -> f32 {
     return max(max(v.x, v.y), v.z);
-}
-
-fn minimum4(v: vec4<f32>) -> f32 {
-    return min(min(v.x, v.y), min(v.z, v.w));
 }
 
 fn minimum(v: vec3<f32>) -> f32 {
@@ -188,16 +221,16 @@ fn unproject(v: vec3<f32>) -> vec3<f32> {
     return t.xyz / t.w;
 }
 
-fn shade(
-    v0: Vertex,
-    v1: Vertex,
-    v0s: f32,
-    v1s: f32,
-    radius: f32,
-    position: vec3<f32>,
-    settings: LineSettings,
-    index: u32
-) -> vec4<f32> {
+fn shade(hit: Hit) -> vec3<f32> {
+    let v0 = unpack_vertex(LINE_VERTEX[hit.index + 0]);
+    let v1 = unpack_vertex(LINE_VERTEX[hit.index + 1]);
+
+    let v0s = LINE_SCALAR[hit.index + 0];
+    let v1s = LINE_SCALAR[hit.index + 1];
+
+    let settings = LINE_SETTINGS[LINE_MATERIAL[hit.index]];
+    let position = hit.position;
+
     let delta = v1.xyz - v0.xyz;
     let pa = position - v0.xyz;
     let height = saturate(dot(pa, delta) / dot(delta, delta));
@@ -212,7 +245,7 @@ fn shade(
         height
     ));
 
-    let normal = normalize((pa - height * delta) / radius);
+    let normal = normalize((pa - height * delta) / RADIUS);
 
     let use_original_normal = (is_start && height == 0.0) || (is_end && height == 1.0);
     let normal_smooth = select(orthonormalize(normal, tangent), normal, use_original_normal);
@@ -251,12 +284,5 @@ fn shade(
         CASCADE_OPTS.vmm_size
     );
 
-    // Combined: opaque. Overlay (render_mode == 1): honor per-bundle opacity.
-    let alpha = select(
-        1.0,
-        TRACTOGRAPHY.alpha * mix(v0.alpha, v1.alpha, height),
-        TRACTOGRAPHY.render_mode == 1u
-    );
-
-    return vec4<f32>(radiance, alpha);
+    return radiance;
 }

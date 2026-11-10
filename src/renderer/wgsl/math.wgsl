@@ -5,8 +5,6 @@ const U32_MAX: u32 = 4294967295;
 
 const U16_SHIFT: u32 = 16;
 const U16_MAX: u32 = 65535;
-const U16_MAX_f32: f32 = f32(U16_MAX);
-const U16_MAX_INV: f32 = 1.0 / U16_MAX_f32;
 
 const PI: f32 = 3.14159265358979323846264338327950288;
 

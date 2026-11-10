@@ -72,6 +72,14 @@ pub fn lobes() -> u32 {
         .unwrap_or(SETTINGS.lobes)
 }
 
+/// Line opacity, from the `ALPHA` env var (default 1).
+pub fn alpha() -> f32 {
+    std::env::var("ALPHA")
+        .ok()
+        .and_then(|alpha| alpha.parse().ok())
+        .unwrap_or(1.0)
+}
+
 pub struct Bench {
     pub gpu: Gpu,
     pub controller: Controller,
@@ -114,6 +122,7 @@ pub fn setup() -> Bench {
         .set_lightmap_resolution(settings.lightmap_resolution);
     let lobes = lobes();
     controller.rendering_mut().set_lobes(lobes);
+    controller.settings_mut().alpha = alpha();
 
     let mut asset = Asset::new(&gpu);
     asset.update(&gpu, &mut controller); // builds line/volume/physical_volume/radiance

@@ -18,7 +18,6 @@ use crate::{controller::Controller, gpu::Gpu};
 pub struct TractographySettings {
     /// Voxel-grid resolution the acceleration structure is built at.
     pub volume: u32,
-    pub render_mode: u32,
     pub line_crop: u32,
     pub radius: f32,
     pub alpha: f32,
@@ -66,7 +65,6 @@ impl Tractography {
 
         let settings = TractographySettings {
             volume: s.volume,
-            render_mode: s.render_mode as u32,
             line_crop: s.line_crop as u32,
             radius: s.radius / mm_per_voxel,
             alpha: s.alpha,
