@@ -89,7 +89,14 @@ fn radiance_weight(radiance: vec3<f32>) -> f32 {
 
 @compute
 @workgroup_size(WORKGROUP)
-fn main(@builtin(workgroup_id) probe: vec3<u32>, thread: Thread) {
+fn main(
+    @builtin(workgroup_id) probe: vec3<u32>,
+    @builtin(local_invocation_index) index: u32,
+    @builtin(subgroup_id) subgroup: u32,
+    @builtin(subgroup_invocation_id) lane: u32,
+    @builtin(num_subgroups) subgroups: u32,
+) {
+    let thread = Thread(index, subgroup, lane, subgroups);
     if (thread.index < vmm_size()) { initialize_lobe(probe, thread.index); }
 
     workgroupBarrier();
@@ -233,7 +240,7 @@ fn store_weights(probe: vec3<u32>, j: u32) {
         if (k < vmm_size()) { weights[i] = min(ceil(255.0 * brightness(PHI[k].rgb) / brightest), 255.0) / 255.0; }
     }
 
-    let grid = textureDimensions(WEIGHTS_OUT) / 2u;
+    let grid = probe_grid(textureDimensions(VMM_OUT));
     let tile = vec3<u32>(j & 1u, (j >> 1u) & 1u, (j >> 2u) & 1u);
 
     textureStore(WEIGHTS_OUT, probe + grid * tile, weights);

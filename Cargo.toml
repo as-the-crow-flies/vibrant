@@ -6,6 +6,11 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Named apart from the lib: on Windows both would write `vibrant.pdb`.
+[[bin]]
+name = "vibrant-app"
+path = "src/main.rs"
+
 [dependencies]
 # Backends are picked per target below: WebGPU on the web
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl"] }
@@ -43,7 +48,7 @@ naga = { version = "30", features = ["wgsl-in"] }
 wgpu = { version = "30", default-features = false, features = ["metal"] }
 
 [target.'cfg(windows)'.dependencies]
-wgpu = { version = "30", default-features = false, features = ["dx12", "static-dxc"] }
+wgpu = { version = "30", default-features = false, features = ["dx12", "static-dxc", "vulkan"] }
 
 [target.'cfg(all(unix, not(target_vendor = "apple"), not(target_arch = "wasm32")))'.dependencies]
 wgpu = { version = "30", default-features = false, features = ["vulkan"] }
