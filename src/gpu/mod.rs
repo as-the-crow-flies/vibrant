@@ -40,8 +40,9 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    pub async fn new() -> Option<Self> {
-        let instance = wgpu::Instance::default();
+    pub async fn new() -> Result<Self, String> {
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
@@ -49,7 +50,26 @@ impl Gpu {
                 ..Default::default()
             })
             .await
-            .ok()?;
+            .map_err(|error| format!("No GPU adapter found: {error}"))?;
+
+        let info = adapter.get_info();
+        log::info!("GPU: {} ({:?})", info.name, info.backend);
+
+        let required_features = Features::FLOAT32_FILTERABLE | Features::SUBGROUP;
+        let missing = required_features - adapter.features();
+
+        // wgpu's WebGPU backend never reports SUBGROUP -> patch it
+        #[cfg(target_arch = "wasm32")]
+        let missing = missing - Features::SUBGROUP;
+
+        if !missing.is_empty() {
+            return Err(format!(
+                "GPU '{}' ({:?}) lacks required features: {missing:?}\n\
+                Try updating your GPU driver. On Windows, build for x86_64 with the MSVC \
+                toolchain, which bundles the DXC shader compiler.",
+                info.name, info.backend
+            ));
+        }
 
         let limits = adapter.limits();
 
@@ -67,11 +87,13 @@ impl Gpu {
                     max_storage_textures_per_shader_stage: 8,
                     ..Default::default()
                 },
-                required_features: Features::FLOAT32_FILTERABLE | Features::SUBGROUP,
+                required_features,
                 ..Default::default()
             })
             .await
-            .ok()?;
+            .map_err(|error| {
+                format!("Could not create a device on GPU '{}': {error}", info.name)
+            })?;
 
         let gpu = Self {
             instance,
@@ -93,7 +115,7 @@ impl Gpu {
             gpu.set_shader_salt(salt);
         }
 
-        Some(gpu)
+        Ok(gpu)
     }
 
     pub fn instance(&self) -> &wgpu::Instance {

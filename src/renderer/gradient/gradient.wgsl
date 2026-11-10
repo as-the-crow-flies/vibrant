@@ -6,7 +6,7 @@ use kernel;
 @group(0) @binding(3) var PONG: texture_storage_3d<rgba8unorm, write>;
 
 fn load(vi: vec3<i32>) -> f32 {
-    let dims = vec3<i32>(textureDimensions(PING));
+    let dims = vec3<i32>(textureDimensions(GRADIENT));
     let texel = textureLoad(PING, clamp(vi, vec3<i32>(0), dims - vec3<i32>(1)));
     return unpack_rgb(texel).y;
 }

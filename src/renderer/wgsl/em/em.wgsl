@@ -13,10 +13,10 @@ const EM_ITERATIONS_MIN: u32 = 1u;
 const EM_CONVERGENCE: f32 = 0.01;
 
 struct Thread {
-    @builtin(local_invocation_index) index: u32,
-    @builtin(subgroup_id) subgroup: u32,
-    @builtin(subgroup_invocation_id) lane: u32,
-    @builtin(num_subgroups) subgroups: u32,
+    index: u32,
+    subgroup: u32,
+    lane: u32,
+    subgroups: u32,
 }
 
 // One partial sum slot per 32 threads. Smaller subgroups (8, 16) share slots

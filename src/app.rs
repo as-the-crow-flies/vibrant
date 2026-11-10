@@ -321,15 +321,16 @@ pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
 
     let gpu = match Gpu::new().await {
-        Some(gpu) => gpu,
-        None => {
+        Ok(gpu) => gpu,
+        Err(error) => {
             #[cfg(target_arch = "wasm32")]
             {
+                log::error!("{error}");
                 show_unsupported_overlay();
                 return;
             }
             #[cfg(not(target_arch = "wasm32"))]
-            panic!("Could not acquire a compatible GPU adapter/device");
+            panic!("{error}");
         }
     };
 

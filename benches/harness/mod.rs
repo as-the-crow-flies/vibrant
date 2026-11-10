@@ -106,7 +106,9 @@ pub struct Bench {
 pub fn setup() -> Bench {
     let settings = &SETTINGS;
 
-    let gpu = Gpu::new().block_on().expect("Could not acquire a GPU");
+    let gpu = Gpu::new()
+        .block_on()
+        .unwrap_or_else(|error| panic!("{error}"));
 
     // Push the scene files onto the global FileStage queue, then let `Asset`
     // drain + build them exactly as the app does on load.

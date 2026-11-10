@@ -30,7 +30,13 @@ fn em_histogram_row() -> u32 {
 // between samples.
 @compute
 @workgroup_size(WORKGROUP)
-fn main(thread: Thread) {
+fn main(
+    @builtin(local_invocation_index) index: u32,
+    @builtin(subgroup_id) subgroup: u32,
+    @builtin(subgroup_invocation_id) lane: u32,
+    @builtin(num_subgroups) subgroups: u32,
+) {
+    let thread = Thread(index, subgroup, lane, subgroups);
     if (thread.index < VMM_SIZE) { VMM[thread.index] = SEED[VMM_SIZE + thread.index]; }
 
     workgroupBarrier();
