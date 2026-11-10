@@ -57,6 +57,11 @@ impl Gpu {
 
         let required_features = Features::FLOAT32_FILTERABLE | Features::SUBGROUP;
         let missing = required_features - adapter.features();
+
+        // wgpu's WebGPU backend never reports SUBGROUP -> patch it
+        #[cfg(target_arch = "wasm32")]
+        let missing = missing - Features::SUBGROUP;
+
         if !missing.is_empty() {
             return Err(format!(
                 "GPU '{}' ({:?}) lacks required features: {missing:?}\n\
