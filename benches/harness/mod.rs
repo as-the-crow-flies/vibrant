@@ -158,9 +158,11 @@ pub fn setup() -> Bench {
     asset.hdri.index = settings.hdri_index;
     asset.hdri.settings_mut().rotation = settings.hdri_rotation;
     asset.hdri.settings_mut().strength = settings.hdri_strength;
-    asset
-        .hdri
-        .update_settings(&gpu, controller.settings().accumulate);
+    asset.hdri.update_settings(
+        &gpu,
+        controller.settings().accumulate,
+        controller.settings().lookup_jitter,
+    );
     asset.environment.update(&gpu, &controller, Vec2::ZERO, 0);
 
     let frame = Frame::new(&gpu, controller.settings());

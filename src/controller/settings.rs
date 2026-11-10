@@ -86,6 +86,8 @@ pub struct Settings {
     /// unchanged (progressive refinement + sub-pixel AA). When off, every frame
     /// renders from scratch like a game loop and the app never idles.
     pub accumulate: bool,
+    /// Jitter the probe lookups while accumulating (volume and lines).
+    pub lookup_jitter: bool,
     /// Hard cap on accumulated samples; accumulation stops here even if the
     /// noise metric never drops below `noise_threshold`.
     pub max_samples: u32,
@@ -131,6 +133,7 @@ impl Settings {
             hdr: false,
             hdr_headroom: 1.0,
             accumulate: true,
+            lookup_jitter: true,
             max_samples: 512,
             noise_threshold: 1.0e-3,
             noise: Noise::Blue,

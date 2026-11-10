@@ -181,8 +181,9 @@ impl Asset {
         // light (Light::yaw) rather than its own slider, so the environment
         // rotates in lockstep with it.
         self.hdri.settings_mut().rotation = controller.light().yaw() / (2.0 * PI);
+        let settings = controller.settings();
         self.hdri
-            .update_settings(gpu, controller.settings().accumulate);
+            .update_settings(gpu, settings.accumulate, settings.lookup_jitter);
         self.crop.update_settings(gpu);
         let mm_per_voxel = self.line.as_ref().map_or(1.0, |line| {
             line.bounds().scale().max_element() / controller.settings().volume.max(1) as f32

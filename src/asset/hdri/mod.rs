@@ -115,7 +115,7 @@ impl HdriTexture {
 /// Probe lookup jitter in probe cells (tent, ±2): averaged by accumulation, it
 /// blurs away the bands where surfaces cut between probes inside and outside
 /// the material.
-const LOOKUP_JITTER: f32 = 2.0;
+pub const LOOKUP_JITTER: f32 = 2.0;
 
 pub struct HdriBuffer {
     pub index: usize,
@@ -280,11 +280,15 @@ impl HdriBuffer {
     }
 
     /// The lookup jitter and lobe sampling only converge while frames accumulate.
-    pub fn update_settings(&mut self, gpu: &Gpu, accumulate: bool) {
+    pub fn update_settings(&mut self, gpu: &Gpu, accumulate: bool, jitter: bool) {
         self.settings.importance = self.importance_sampling as u32;
         self.settings.prefilter = self.prefilter as u32;
         self.settings.log_weights = self.log_weights as u32;
-        self.settings.lookup_jitter = if accumulate { LOOKUP_JITTER } else { 0.0 };
+        self.settings.lookup_jitter = if accumulate && jitter {
+            LOOKUP_JITTER
+        } else {
+            0.0
+        };
         self.settings.lobe_sampling = (accumulate && self.sample_lobe) as u32;
         self.settings.nearest_probes = self.nearest_probes as u32;
 

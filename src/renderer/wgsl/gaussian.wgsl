@@ -163,20 +163,8 @@ fn sg_phase(sg: SG, view: vec3<f32>, g: f32) -> vec3<f32> {
 }
 
 // ── Shared VMM probe lookup ───────────────────────────────────────────────
-// Fetches SG lobe `k` from the octahedral radiance-cascade probe grid at the
-// volume-space [0,1] coord `p`. Both the volume tracer (phase model) and the
-// line tracer (surface Disney BRDF) build their per-lobe SG the same way.
-// Textures + sampler are passed in so this doesn't depend on any particular
-// binding layout.
-fn probe_sg(
-    radiance_tex: texture_3d<f32>,
-    gaussian_tex: texture_3d<f32>,
-    samp: sampler,
-    p: vec3<f32>,
-    k: u32
-) -> SG {
-    return probe_grid_sg(radiance_tex, gaussian_tex, samp, probe_grid_at(gaussian_tex, p, vec3<f32>(0.0)), k);
-}
+// Both the volume tracer (phase model) and the line tracer (surface Disney
+// BRDF) read lobes from the octahedral radiance-cascade probe grid this way.
 
 // Lobe k of the probe at `p` sits at `base + tile(k) * stride`.
 struct ProbeGrid {
@@ -212,13 +200,14 @@ fn probe_grid_sg(
 // Surface outgoing radiance from the probe VMM: SG diffuse (× albedo) split
 // evenly into reflection around `normal` and transmission around `-normal`
 // (a Lambertian sheet, lit from both sides), + GGX-from-SG specular (× Schlick
-// Fresnel), summed over `count` lobes. `diffuse_gain` / `specular_gain` are the repurposed
+// Fresnel), summed over `count` lobes, looked up `offset` probe cells from `p`. `diffuse_gain` / `specular_gain` are the repurposed
 // line ambient / direct light sliders. Used by the tractography line tracer.
 fn sample_outgoing_radiance_surface(
     radiance_tex: texture_3d<f32>,
     gaussian_tex: texture_3d<f32>,
     samp: sampler,
     p: vec3<f32>,
+    offset: vec3<f32>,
     normal: vec3<f32>,
     view: vec3<f32>,
     albedo: vec3<f32>,
@@ -237,8 +226,10 @@ fn sample_outgoing_radiance_surface(
     var reflected = vec3<f32>(0.0);
     var transmitted = vec3<f32>(0.0);
 
+    let grid = probe_grid_at(gaussian_tex, p, offset);
+
     for (var k = 0u; k < count; k++) {
-        let sg = probe_sg(radiance_tex, gaussian_tex, samp, p, k);
+        let sg = probe_grid_sg(radiance_tex, gaussian_tex, samp, grid, k);
 
         reflected +=
             sg_irradiance(sg, normal) * diffuse +
