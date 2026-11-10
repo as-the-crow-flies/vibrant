@@ -106,7 +106,9 @@ impl Renderer {
         let settings = *controller.settings();
         let plan = self.surface.plan_accumulation(&settings, scene_dirty);
 
-        self.asset.environment.update(gpu, controller, plan.jitter);
+        self.asset
+            .environment
+            .update(gpu, controller, plan.jitter, plan.sample);
 
         if let Some(frame) = self.surface.frame() {
             let mut cmd = gpu.cmd();

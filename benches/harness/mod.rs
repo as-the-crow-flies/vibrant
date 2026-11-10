@@ -150,7 +150,7 @@ pub fn setup() -> Bench {
     asset
         .hdri
         .update_settings(&gpu, controller.settings().accumulate);
-    asset.environment.update(&gpu, &controller, Vec2::ZERO);
+    asset.environment.update(&gpu, &controller, Vec2::ZERO, 0);
 
     let frame = Frame::new(&gpu, controller.settings());
 

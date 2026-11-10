@@ -10,9 +10,11 @@
 
 use std::any::type_name;
 use std::cell::Cell;
+use std::time::Duration;
 
 use bytemuck::{bytes_of, Pod, Zeroable};
 use glam::Vec2;
+use web_time::Instant;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferDescriptor, BufferUsages,
@@ -163,6 +165,8 @@ pub struct AccumulationStatus {
     pub samples: u32,
     /// Whether accumulation has stopped (sample cap or noise threshold reached).
     pub converged: bool,
+    /// Wall-clock time from the last reset until convergence.
+    pub elapsed: Option<Duration>,
 }
 
 /// What [`Accumulator::plan`] tells the renderer to do this frame.
@@ -173,6 +177,9 @@ pub struct AccumulationPlan {
     /// Sub-pixel camera offset (pixels) to bake into the projection matrix for
     /// temporal anti-aliasing. `Vec2::ZERO` when not accumulating / not tracing.
     pub jitter: Vec2,
+    /// Noise index of the frame about to be traced. Advances every traced
+    /// frame, so the noise also animates while the camera moves.
+    pub sample: u32,
 }
 
 /// Sample counter + convergence state for one accumulation run. All mutation
@@ -185,6 +192,9 @@ pub struct Accumulator {
     /// latest running mean.
     parity: Cell<usize>,
     converged: Cell<bool>,
+    frame: Cell<u32>,
+    started: Cell<Instant>,
+    elapsed: Cell<Option<Duration>>,
     metric: Readback<[f32; 4]>,
 }
 
@@ -200,6 +210,9 @@ impl Accumulator {
             samples: Cell::new(0),
             parity: Cell::new(0),
             converged: Cell::new(false),
+            frame: Cell::new(0),
+            started: Cell::new(Instant::now()),
+            elapsed: Cell::new(None),
             metric: Readback::new(),
         }
     }
@@ -208,6 +221,14 @@ impl Accumulator {
     pub fn reset(&self) {
         self.samples.set(0);
         self.converged.set(false);
+        self.started.set(Instant::now());
+        self.elapsed.set(None);
+    }
+
+    fn converge(&self) {
+        if !self.converged.replace(true) {
+            self.elapsed.set(Some(self.started.get().elapsed()));
+        }
     }
 
     pub fn samples(&self) -> u32 {
@@ -228,6 +249,7 @@ impl Accumulator {
         AccumulationStatus {
             samples: self.samples.get(),
             converged: self.converged.get(),
+            elapsed: self.elapsed.get(),
         }
     }
 
@@ -248,7 +270,16 @@ impl Accumulator {
             Vec2::ZERO
         };
 
-        AccumulationPlan { render, jitter }
+        let sample = self.frame.get();
+        if render {
+            self.frame.set(sample.wrapping_add(1));
+        }
+
+        AccumulationPlan {
+            render,
+            jitter,
+            sample,
+        }
     }
 
     /// Whether the `reduce` pass is worth recording for the sample about to be
@@ -265,7 +296,7 @@ impl Accumulator {
         self.parity.set(self.parity.get() ^ 1);
 
         if self.samples.get() >= settings.max_samples.max(1) {
-            self.converged.set(true);
+            self.converge();
         }
     }
 
@@ -293,7 +324,7 @@ impl Accumulator {
 
         if let Some([residual, luma, _, _]) = self.metric.get() {
             if luma > 1.0e-6 && residual / luma < settings.noise_threshold {
-                self.converged.set(true);
+                self.converge();
             }
         }
     }

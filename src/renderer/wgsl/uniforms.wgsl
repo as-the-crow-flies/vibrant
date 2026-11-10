@@ -6,6 +6,10 @@ struct Camera {
 struct Environment {
     camera: Camera,
     time: f32,
+    // Noise index; advances every traced frame.
+    sample: u32,
+    // 0 = white, 1 = blue (see noise.wgsl).
+    noise: u32,
 }
 
 // Tractography-only render parameters (see asset/tractography.rs). Bound by the
