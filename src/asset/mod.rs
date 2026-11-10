@@ -4,6 +4,7 @@ pub mod environment;
 pub mod hdri;
 pub mod line;
 pub mod material;
+pub mod noise;
 pub mod radiance;
 pub mod texture;
 pub mod tractography;

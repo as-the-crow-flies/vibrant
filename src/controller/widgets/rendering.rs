@@ -1,4 +1,4 @@
-use egui::{ComboBox, Grid, Ui};
+use egui::{ComboBox, Grid, Slider, Ui};
 use itertools::Itertools;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
         camera::Camera,
         components::UIComponents,
         icons,
-        settings::{RenderMode, Settings},
+        settings::{Noise, RenderMode, Settings},
         widgets::util::UiResponseExtensions,
     },
     surface::accumulate::AccumulationStatus,
@@ -386,7 +386,11 @@ impl RenderingWidget {
             format!("{} Accumulation", icons::regular::STACK),
             true,
             |ui| {
-                let AccumulationStatus { samples, converged } = accumulation;
+                let AccumulationStatus {
+                    samples,
+                    converged,
+                    elapsed,
+                } = accumulation;
 
                 Grid::new("AccumulationSettings")
                     .num_columns(2)
@@ -400,12 +404,56 @@ impl RenderingWidget {
                             ui.checkbox(&mut settings.accumulate, "").track(self);
                             ui.label(if !settings.accumulate {
                                 "off".to_owned()
+                            } else if let (true, Some(elapsed)) = (converged, elapsed) {
+                                format!(
+                                    "converged ({samples} samples, {:.2} s)",
+                                    elapsed.as_secs_f32()
+                                )
                             } else if converged {
                                 format!("converged ({samples} samples)")
                             } else {
                                 format!("{samples} / {}", settings.max_samples.max(1))
                             });
                         });
+                        ui.end_row();
+
+                        ui.label("Max Samples").on_hover_text(
+                            "Stop accumulating after this many samples, even if \
+                             the image is still noisy.",
+                        );
+                        ui.add(Slider::new(&mut settings.max_samples, 1..=4096).logarithmic(true))
+                            .track(self);
+                        ui.end_row();
+
+                        ui.label("Threshold").on_hover_text(
+                            "Stop once a new sample changes the image by less than \
+                             this fraction on average. Higher = stop sooner.",
+                        );
+                        ui.add(
+                            Slider::new(&mut settings.noise_threshold, 1.0e-4..=1.0e-1)
+                                .logarithmic(true)
+                                .custom_formatter(|v, _| format!("{v:.1e}")),
+                        )
+                        .track(self);
+                        ui.end_row();
+
+                        ui.label("Noise").on_hover_text(
+                            "Random numbers behind each sample. Blue spreads the \
+                             error evenly over the screen and over time, so the \
+                             image looks cleaner at low sample counts.",
+                        );
+                        ComboBox::from_id_salt("NoiseSelect")
+                            .selected_text(format!("{}", settings.noise))
+                            .show_ui(ui, |ui| {
+                                for noise in [Noise::White, Noise::Blue] {
+                                    ui.selectable_value(
+                                        &mut settings.noise,
+                                        noise,
+                                        format!("{noise}"),
+                                    )
+                                    .track(self);
+                                }
+                            });
                         ui.end_row();
                     });
             },

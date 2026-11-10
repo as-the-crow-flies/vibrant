@@ -18,6 +18,23 @@ impl LineVoxelizationMode {
     }
 }
 
+/// Source of the per-pixel random numbers.
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Noise {
+    White,
+    #[default]
+    Blue,
+}
+
+impl Display for Noise {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Noise::White => f.write_str("White"),
+            Noise::Blue => f.write_str("Blue"),
+        }
+    }
+}
+
 /// How the tractography lines and the volume are composited and lit.
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RenderMode {
@@ -94,6 +111,7 @@ pub struct Settings {
     /// Relative-residual threshold below which the image counts as converged and
     /// the render loop goes idle. Larger = stop sooner (noisier).
     pub noise_threshold: f32,
+    pub noise: Noise,
 }
 
 impl Settings {
@@ -135,6 +153,7 @@ impl Settings {
             accumulate: true,
             max_samples: 512,
             noise_threshold: 1.0e-3,
+            noise: Noise::Blue,
         }
     }
 }

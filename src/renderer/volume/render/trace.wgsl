@@ -1,8 +1,8 @@
 use color;
 use gaussian;
+use noise;
 use occlusion;
 use pbr;
-use random;
 use uniforms;
 
 @group(0) @binding(0) var RADIANCE: texture_3d<f32>;
@@ -21,6 +21,7 @@ use uniforms;
 @group(1) @binding(7) var<uniform> TRANSFORM_INVERSE: mat4x4<f32>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
+@group(2) @binding(1) var BLUE_NOISE: texture_3d<f32>;
 
 // The environment map itself is already integrated into the radiance cascade,
 // so the volume tracer only needs the HDRI material settings. Binding 1 is the
@@ -89,7 +90,11 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     // Step back one stride so the fine march can't miss a thin feature the
     // look-ahead jumped over, then jitter within a single fine step (not the
     // whole `[0, 1)` range, which is 2x `step` and just adds sampling variance).
-    t0 = max(t0 - skip, entry) + step * hash(fragment.position.xy + 4096.0 * fract(ENVIRONMENT.time));
+    let pixel = vec2<u32>(fragment.position.xy);
+    let lookup = noise(pixel, 0u);
+    let pick = noise(pixel, 1u);
+
+    t0 = max(t0 - skip, entry) + step * lookup.w;
 
     var ior = 1.0;
 
@@ -121,8 +126,8 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
         let transmittance_in_step = 1.0 - exp(-extinction);
 
         let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
-        let noise = step_noise(fragment.position.xy, t);
-        let outgoing_radiance = sample_outgoing_radiance(uv, noise, normal, view, albedo, F, Fdr);
+        let i = u32(round((t - t0) / step));
+        let outgoing_radiance = sample_outgoing_radiance(uv, step_noise(lookup, pick, i), normal, view, albedo, F, Fdr);
 
         color += transmittance * transmittance_in_step * outgoing_radiance;
 
@@ -177,16 +182,11 @@ struct StepNoise {
     xi: f32,
 }
 
-fn step_noise(pixel: vec2<f32>, t: f32) -> StepNoise {
-    let a = pcg3d(vec3<u32>(vec2<u32>(pixel), bitcast<u32>(ENVIRONMENT.time) ^ bitcast<u32>(t)));
-    let b = pcg3d(a);
-    let c = pcg3d(b);
-
-    return StepNoise(
-        (vec3<f32>(a) + vec3<f32>(b)) * 2.3283064365386963e-10 - 1.0,
-        vec3<f32>(c) * 2.3283064365386963e-10 - 0.5,
-        f32(pcg3d(c).x) * 2.3283064365386963e-10,
-    );
+// `lookup.xyz` → tent, `pick.xyz` → box, `pick.w` → ξ; `lookup.w` is the `t0` jitter.
+fn step_noise(lookup: vec4<f32>, pick: vec4<f32>, step: u32) -> StepNoise {
+    let a = advance(lookup, step);
+    let b = advance(pick, step);
+    return StepNoise(tent(a.xyz), b.xyz - 0.5, b.w);
 }
 
 fn sample_outgoing_radiance(

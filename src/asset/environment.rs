@@ -4,12 +4,12 @@ use bytemuck::{bytes_of, Pod, Zeroable};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType,
-    BufferDescriptor, BufferUsages, ShaderStages,
+    BufferDescriptor, BufferUsages, ShaderStages, TextureSampleType, TextureViewDimension,
 };
 
 use glam::{Mat4, Vec2, Vec3};
 
-use crate::{controller::Controller, gpu::Gpu};
+use crate::{asset::noise::BlueNoise, controller::Controller, gpu::Gpu};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -25,15 +25,16 @@ struct CameraUniform {
 struct EnvironmentUniform {
     camera: CameraUniform,
     time: f32,
-    _pad: [f32; 3],
+    sample: u32,
+    noise: u32,
+    _pad: u32,
 }
 
-/// Camera + clock uniform shared by every view-dependent pass. Tractography
-/// render parameters used to ride along here; they now live in
-/// [`Tractography`](crate::asset::tractography::Tractography).
+/// Camera, clock and noise shared by every view-dependent pass.
 pub struct Environment {
     binding: BindGroup,
     buffer: Buffer,
+    _noise: BlueNoise,
 }
 
 impl Environment {
@@ -47,20 +48,32 @@ impl Environment {
             mapped_at_creation: false,
         });
 
+        let noise = BlueNoise::new(gpu);
+
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
             layout: &Self::layout(gpu),
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(noise.view()),
+                },
+            ],
         });
 
-        Self { binding, buffer }
+        Self {
+            binding,
+            buffer,
+            _noise: noise,
+        }
     }
 
     pub fn binding(&self) -> &BindGroup {
@@ -71,8 +84,8 @@ impl Environment {
     /// sequence in `[-0.5, 0.5]`), baked into the uploaded projection matrix so
     /// every view-dependent pass (volume trace, lines) gets temporal
     /// anti-aliasing for free while frames accumulate. Pass `Vec2::ZERO` when
-    /// not accumulating.
-    pub fn update(&self, gpu: &Gpu, controller: &Controller, jitter: Vec2) {
+    /// not accumulating. `sample` is the noise index of this frame.
+    pub fn update(&self, gpu: &Gpu, controller: &Controller, jitter: Vec2, sample: u32) {
         let offset = Vec3::new(
             jitter.x * 2.0 / controller.settings().width as f32,
             jitter.y * 2.0 / controller.settings().height as f32,
@@ -86,7 +99,9 @@ impl Environment {
                 projection_inverse: projection.inverse(),
             },
             time: controller.time(),
-            _pad: [0.0; 3],
+            sample,
+            noise: controller.settings().noise as u32,
+            _pad: 0,
         };
 
         gpu.queue()
@@ -97,16 +112,28 @@ impl Environment {
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(type_name::<Self>()),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                ],
             })
     }
 }
