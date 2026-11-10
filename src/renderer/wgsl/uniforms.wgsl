@@ -29,6 +29,8 @@ struct Tractography {
     line_specular: f32,
     line_translucency: f32,
     line_extinction: f32,
+    // Probe lookup jitter in probe cells; 0 unless accumulating.
+    lookup_jitter: f32,
 }
 
 struct LineSettings {

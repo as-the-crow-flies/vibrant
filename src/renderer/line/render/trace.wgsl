@@ -40,6 +40,8 @@ var<private> RADIUS: f32;
 var<private> VIEW: vec3<f32>;
 // Per-pixel [0, 1) for the stochastic opacity test, see `is_kept`.
 var<private> COIN: f32;
+// Per-pixel probe lookup offset in probe cells, see `shade`.
+var<private> LOOKUP: vec3<f32>;
 
 struct Hit {
     distance: f32,
@@ -76,6 +78,7 @@ fn fragment(fragment: Fragment) -> FragmentOut {
     DIM_INV = 1.0 / DIM;
     RADIUS = TRACTOGRAPHY.radius * DIM_INV;
     COIN = noise(vec2<u32>(fragment.position.xy), 2u).x;
+    LOOKUP = TRACTOGRAPHY.lookup_jitter * tent(noise(vec2<u32>(fragment.position.xy), 3u).xyz);
 
     // View space: an imprecise `w` only slides a point along its own ray.
     let near = unproject(vec3<f32>(fragment.uv, 0.0));
@@ -268,6 +271,8 @@ fn shade(hit: Hit) -> vec3<f32> {
         f32(has_scalar_color) * scalar_color +
         f32(has_tangent_color) * tangent_color;
 
+    // Accumulated, the jittered lookup turns the blocky trilinear probe
+    // interpolation into a smooth B-spline (as in the volume tracer).
     // `position` is centered volume space ([-0.5, 0.5]); the probe grid is [0, 1].
     let probe_p = clamp(position + 0.5, vec3<f32>(0.0), vec3<f32>(1.0));
     // The tube normal lives in volume space; normals map to world by the
@@ -279,7 +284,7 @@ fn shade(hit: Hit) -> vec3<f32> {
 
     let radiance = sample_outgoing_radiance_surface(
         RADIANCE, GAUSSIAN, VMM_SAMPLER,
-        probe_p, world_normal, VIEW, albedo, roughness, f0,
+        probe_p, LOOKUP, world_normal, VIEW, albedo, roughness, f0,
         TRACTOGRAPHY.ambient_light, TRACTOGRAPHY.direct_light,
         CASCADE_OPTS.vmm_size
     );

@@ -493,6 +493,14 @@ impl RenderingWidget {
                 ui.checkbox(&mut hdri.sample_lobe, "").track(self);
                 ui.end_row();
 
+                ui.label("Lookup Jitter").on_hover_text(
+                    "While the image accumulates, randomly offset each lighting \
+                     probe lookup by up to two probes, so the blocky blend \
+                     between probes averages out smooth. Volume and lines.",
+                );
+                ui.checkbox(&mut settings.lookup_jitter, "").track(self);
+                ui.end_row();
+
                 ui.label("Nearest Probe Sampling").on_hover_text(
                     "While the image accumulates, light each step from one \
                      lobe of the nearest lighting probe instead of a blend of \
