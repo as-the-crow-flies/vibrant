@@ -84,7 +84,7 @@ impl Camera {
             self.zoom(state.relative_delta().y);
         }
 
-        self.zoom(-10.0 * state.scroll.y);
+        self.zoom(-0.03 * state.scroll.y);
     }
 
     pub fn fov(&self) -> f32 {
@@ -115,12 +115,17 @@ impl Camera {
     pub fn projection(&self) -> Mat4 {
         let far = self.far + self.distance;
         if self.orthographic() {
-            let h = self.distance * (0.5 * self.framing).tan();
+            let h = self.extent();
             let w = h * self.aspect;
             Mat4::orthographic_lh(-w, w, -h, h, -far, far)
         } else {
             Mat4::perspective_lh(self.fov, self.aspect, self.near, far)
         }
+    }
+
+    /// Half-height of the view at the pivot plane.
+    pub fn extent(&self) -> f32 {
+        self.distance * (0.5 * self.framing).tan()
     }
 
     pub fn rotation(&self) -> Quat {
@@ -138,11 +143,12 @@ impl Camera {
         // Flip Left/Right
     }
 
+    /// Scales the extent by `exp(zoom)`, so the rate is independent of fov.
     pub fn zoom(&mut self, zoom: f32) {
         if zoom != 0.0 {
             self.changed = true;
         }
-        self.distance = (self.distance + zoom).max(1.0);
+        self.distance = (self.distance * zoom.exp()).max(1.0);
     }
 
     pub fn rotate(&mut self, yaw: f32, pitch: f32) {
@@ -153,11 +159,14 @@ impl Camera {
         self.pitch += pitch;
     }
 
+    /// Pans by a fraction of the viewport, so the pivot plane follows the cursor.
     pub fn pan(&mut self, x: f32, y: f32) {
         if x != 0.0 || y != 0.0 {
             self.changed = true;
         }
-        self.pan += self.rotation().inverse().mul_vec3(Vec3::new(x, y, 0.0)) * self.distance;
+        let h = 2.0 * self.extent();
+        let offset = Vec3::new(x * h * self.aspect, y * h, 0.0);
+        self.pan += self.rotation().inverse().mul_vec3(offset);
     }
 
     pub fn near(&self) -> f32 {
