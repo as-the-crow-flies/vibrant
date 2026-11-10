@@ -7,48 +7,28 @@ use crate::{
         tractography::Tractography,
         Asset,
     },
-    controller::{settings::LineVoxelizationMode, Controller},
+    controller::Controller,
     gpu::{Gpu, Lazy},
 };
 
 pub struct LineOccupancyPipeline {
-    voxelize_tube: Lazy<ComputePipeline>,
-    voxelize_line: Lazy<ComputePipeline>,
-    voxelize_box: Lazy<ComputePipeline>,
+    voxelize: Lazy<ComputePipeline>,
     copy: Lazy<ComputePipeline>,
     mipmap: Lazy<ComputePipeline>,
 }
 
 impl LineOccupancyPipeline {
     pub fn new(gpu: &Gpu) -> Self {
-        let voxelize_layout = |gpu: &Gpu| {
-            gpu.pipeline_layout(&[
-                &OccupancyBuffer::layout_write(gpu),
-                &LineBuffer::layout_render(gpu),
-                &Tractography::layout(gpu),
-            ])
-        };
-
         Self {
-            voxelize_tube: gpu.lazy("Occupancy::Voxelize::Tube", move |gpu| {
+            voxelize: gpu.lazy("Occupancy::Voxelize", move |gpu| {
                 gpu.compute(
-                    "Occupancy::Voxelize::Tube",
-                    &voxelize_layout(gpu),
-                    &gpu.shader("renderer/line/occupancy/voxelize_tube.wgsl"),
-                )
-            }),
-            voxelize_line: gpu.lazy("Occupancy::Voxelize::Line", move |gpu| {
-                gpu.compute(
-                    "Occupancy::Voxelize::Line",
-                    &voxelize_layout(gpu),
-                    &gpu.shader("renderer/line/occupancy/voxelize_line.wgsl"),
-                )
-            }),
-            voxelize_box: gpu.lazy("Occupancy::Voxelize::Box", move |gpu| {
-                gpu.compute(
-                    "Occupancy::Voxelize::Box",
-                    &voxelize_layout(gpu),
-                    &gpu.shader("renderer/line/occupancy/voxelize_box.wgsl"),
+                    "Occupancy::Voxelize",
+                    &gpu.pipeline_layout(&[
+                        &OccupancyBuffer::layout_write(gpu),
+                        &LineBuffer::layout_render(gpu),
+                        &Tractography::layout(gpu),
+                    ]),
+                    &gpu.shader("renderer/line/occupancy/occupancy.wgsl"),
                 )
             }),
             copy: gpu.lazy("Occupancy::Copy", move |gpu| {
@@ -96,11 +76,7 @@ impl LineOccupancyPipeline {
         pass.set_bind_group(1, line.binding_render(), &[]);
         pass.set_bind_group(2, asset.tractography.binding(), &[]);
 
-        pass.set_pipeline(match settings.voxelization {
-            LineVoxelizationMode::Line => &self.voxelize_line,
-            LineVoxelizationMode::Box => &self.voxelize_box,
-            LineVoxelizationMode::Tube => &self.voxelize_tube,
-        });
+        pass.set_pipeline(&self.voxelize);
         pass.dispatch_workgroups(settings.workgroups, 1, 1);
 
         pass.set_pipeline(&self.copy);

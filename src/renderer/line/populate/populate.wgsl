@@ -1,6 +1,7 @@
 use block;
 use uniforms;
 use vertex;
+use voxelize;
 
 @group(0) @binding(0) var<storage, read_write> OFFSET: array<atomic<u32>>;
 @group(0) @binding(2) var<storage, read_write> INDEX: array<u32>;
@@ -48,15 +49,11 @@ fn main(@builtin(local_invocation_index) local: u32) {
     }
 }
 
-fn visit_voxel_line(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex, length: f32) {
+fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
     let dim = vec3<u32>(TRACTOGRAPHY.volume);
 
     if (!in_volume(voxel, dim)) { return; }
 
     let idx = block_index(vec3<u32>(voxel), dim);
     INDEX[atomicAdd(&OFFSET[idx], 1u)] = index;
-}
-
-fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
-    visit_voxel_line(voxel, index, v0, v1, 0.0);
 }
