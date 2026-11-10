@@ -1,23 +1,5 @@
 use std::fmt::Display;
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
-pub enum LineVoxelizationMode {
-    #[default]
-    Tube,
-    Line,
-    Box,
-}
-
-impl LineVoxelizationMode {
-    pub fn iter() -> Vec<LineVoxelizationMode> {
-        vec![
-            LineVoxelizationMode::Tube,
-            LineVoxelizationMode::Line,
-            LineVoxelizationMode::Box,
-        ]
-    }
-}
-
 /// Source of the per-pixel random numbers.
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Noise {
@@ -93,7 +75,6 @@ pub struct Settings {
     pub crop_y_end: f32,
     pub crop_z_start: f32,
     pub crop_z_end: f32,
-    pub voxelization: LineVoxelizationMode,
     pub plane: f32,
     /// Present to an HDR (scRGB) swapchain instead of ACES-to-SDR. Ignored when
     /// [`Surface::hdr_supported`](crate::surface::Surface::hdr_supported) is false.
@@ -147,7 +128,6 @@ impl Settings {
             workgroups: 64,
             plane: 0.33,
             render_mode: RenderMode::Combined,
-            voxelization: LineVoxelizationMode::Tube,
             hdr: false,
             hdr_headroom: 1.0,
             accumulate: true,
