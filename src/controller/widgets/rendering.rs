@@ -270,6 +270,14 @@ impl RenderingWidget {
                         ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
                         ui.end_row();
 
+                        ui.label("Opacity").on_hover_text(
+                            "How see-through the bundles are. Below 1 they are \
+                             dithered and become smooth as the image accumulates.",
+                        );
+                        ui.add(Slider::new(&mut settings.alpha, 0.01..=1.0).logarithmic(true))
+                            .track(self);
+                        ui.end_row();
+
                         ui.label("Translucency").on_hover_text(
                             "How much light passes through the bundles, lightening \
                              their shadows. 0 = opaque, 1 = no shadows.",

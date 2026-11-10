@@ -75,7 +75,7 @@ fn visit_voxel(voxel: vec3<i32>, index: u32, v0: Vertex, v1: Vertex) {
 
     let sdf = max(length(pv0 - delta * height) - radius_clamp, max(-dot(pv0, v0.clip), dot(pv1, v1.clip)));
 
-    let coverage = radius_ratio * mix(v0.alpha, v1.alpha, height) * saturate(0.5 - sdf);
+    let coverage = radius_ratio * saturate(0.5 - sdf);
 
     atomicAdd(&DENSITY[idx], encode_depth(coverage, dither(idx, index)) + 1u);
 }
