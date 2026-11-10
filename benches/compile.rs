@@ -28,7 +28,9 @@ use web_time::Instant;
 use wgpu::TextureFormat;
 
 fn main() {
-    let gpu = Gpu::new().block_on().expect("Could not acquire a GPU");
+    let gpu = Gpu::new()
+        .block_on()
+        .unwrap_or_else(|error| panic!("{error}"));
 
     let salt = SystemTime::now()
         .duration_since(UNIX_EPOCH)

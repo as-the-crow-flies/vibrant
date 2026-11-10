@@ -43,7 +43,7 @@ naga = { version = "30", features = ["wgsl-in"] }
 wgpu = { version = "30", default-features = false, features = ["metal"] }
 
 [target.'cfg(windows)'.dependencies]
-wgpu = { version = "30", default-features = false, features = ["dx12"] }
+wgpu = { version = "30", default-features = false, features = ["dx12", "static-dxc"] }
 
 [target.'cfg(all(unix, not(target_vendor = "apple"), not(target_arch = "wasm32")))'.dependencies]
 wgpu = { version = "30", default-features = false, features = ["vulkan"] }
