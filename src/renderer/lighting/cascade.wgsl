@@ -48,18 +48,15 @@ const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
 // - EMPTY: no extinction within EMPTY_MARGIN cells. Never read, so it writes
 //   nothing: the renderer reads up to LOOKUP_JITTER (2) + 1 cells from what
 //   it shades, and a child sits within one parent cell of its parents.
-// - DARK: its parent sees less mean radiance (Σ E / 4π) than IRRADIANCE_CULL of
-//   the sky's. Stores zero lobes.
-// - COPY: no neighbour has LOCAL_MATTER optical depth across a probe cell, so
-//   nothing nearby blocks the parent's light. Stores the parent's lobes.
+// - COPY: stores the parent's lobes. Either no neighbour has LOCAL_MATTER
+//   optical depth across a probe cell, so nothing nearby blocks the parent's
+//   light, or the parent sees less mean radiance (Σ E / 4π) than
+//   IRRADIANCE_CULL of the sky's. A copy, not zero: a parent buried in matter
+//   is dark while its children outside are lit.
 // - SOLVE: traces and fits.
 const EMPTY_MARGIN: f32 = 4.0;
 const IRRADIANCE_CULL: f32 = 0.01;
 const LOCAL_MATTER: f32 = 1e-3;
-
-const SOLVE: u32 = 0u;
-const COPY: u32 = 1u;
-const DARK: u32 = 2u;
 
 // A uniform sample covers a solid angle of 4π / SAMPLES ≈ π tan²θ, an
 // importance sample that times its density ratio.
@@ -109,20 +106,13 @@ fn main(
 
     if (is_empty(origin, thread)) { return; }
 
-    let kind = classify(origin, thread);
+    let copy = copies_parent(origin, thread);
 
-    if (thread.index < vmm_size()) {
-        if (kind == DARK) {
-            VMM[thread.index] = vec4<f32>(0.0);
-            PHI[thread.index] = vec4<f32>(0.0);
-        } else {
-            initialize_lobe(probe, thread.index);
-        }
-    }
+    if (thread.index < vmm_size()) { initialize_lobe(probe, thread.index); }
 
     workgroupBarrier();
 
-    if (kind != SOLVE) {
+    if (copy) {
         if (thread.index < vmm_size()) { store_lobe(probe, thread.index); }
 
         if (cascade() == 0u) {
@@ -174,7 +164,7 @@ fn is_empty(origin: vec3<f32>, thread: Thread) -> bool {
     return workgroupUniformLoad(&CULL_RESULT) != 0u;
 }
 
-fn classify(origin: vec3<f32>, thread: Thread) -> u32 {
+fn copies_parent(origin: vec3<f32>, thread: Thread) -> bool {
     let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
     let origin_sample = origin / dim;
     let cell_sample = f32(1u << cascade()) / dim;
@@ -195,16 +185,16 @@ fn classify(origin: vec3<f32>, thread: Thread) -> u32 {
     workgroupBarrier();
 
     if (thread.index == 0u) {
-        var kind = select(SOLVE, COPY, atomicLoad(&CULL_OCCUPIED) == 0u);
-        if (cascade() < CASCADE_MAX) {
+        var copy = atomicLoad(&CULL_OCCUPIED) == 0u;
+        if (!copy && cascade() < CASCADE_MAX) {
             let irradiance = unpack_rgb(textureSampleLevel(IRRADIANCE_IN, SAMPLER, origin_sample, 0.0));
             // Environments are normalized to mean luminance 1 at unit strength.
-            if (brightness(irradiance) < IRRADIANCE_CULL * HDRI_SETTINGS.strength) { kind = DARK; }
+            copy = brightness(irradiance) < IRRADIANCE_CULL * HDRI_SETTINGS.strength;
         }
-        CULL_RESULT = kind;
+        CULL_RESULT = select(0u, 1u, copy);
     }
 
-    return workgroupUniformLoad(&CULL_RESULT);
+    return workgroupUniformLoad(&CULL_RESULT) != 0u;
 }
 
 // This level's probe spacing in mm.
