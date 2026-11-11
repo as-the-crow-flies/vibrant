@@ -8,18 +8,11 @@ use uniforms;
 @group(0) @binding(3) var<storage, read_write> PHI_OUT: array<vec4<f32>>;
 @group(0) @binding(4) var<uniform> VMM_SIZE: u32;
 
-// EM records iteration counts; the bake discards them.
-var<workgroup> EM_ITERATIONS: array<atomic<u32>, EM_ITERATIONS_MAX + 1u>;
-
 const WORKGROUP: u32 = 1024u;
 const SAMPLES: u32 = 4096u;
 
 fn vmm_size() -> u32 {
     return VMM_SIZE;
-}
-
-fn em_histogram_row() -> u32 {
-    return 0u;
 }
 
 // Fits K lobes to the HDRI in world space at unit strength, from SEED.

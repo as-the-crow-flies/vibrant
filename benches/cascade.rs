@@ -3,78 +3,15 @@
 // shared with `benches/pipeline.rs` (see `harness`).
 //
 //   cargo bench --bench cascade            # full run
-//   cargo bench --bench cascade -- --test  # one pass + the histogram, no timing
+//   cargo bench --bench cascade -- --test  # one pass, no timing
 
 mod harness;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use pollster::FutureExt;
 use vibrant::asset::radiance::GaussianRadianceBuffer;
-
-use harness::Bench;
-
-// Zeroes the EM-iteration histogram, dispatches one radiance pass, and
-// prints how many probes converged at each iteration count per cascade level
-// -- run outside criterion's timing loop since it's a one-shot diagnostic, not
-// a benchmark. Bucket 0 is culled probes (they never enter the EM loop).
-// Useful for deciding whether EM_ITERATIONS_MAX/MIN/EM_CONVERGENCE in em.wgsl
-// can be tightened, and for seeing how much is_culled() is actually skipping.
-fn print_em_iteration_histogram(bench: &Bench) {
-    let buckets = GaussianRadianceBuffer::EM_HISTOGRAM_BUCKETS as usize;
-    let rows = GaussianRadianceBuffer::EM_HISTOGRAM_ROWS as usize;
-    let zeros = vec![0u8; rows * buckets * 4];
-    bench
-        .gpu
-        .queue()
-        .write_buffer(bench.radiance().em_iterations(), 0, &zeros);
-
-    bench.time_pass(|cmd| {
-        bench.lighting.radiance(
-            cmd,
-            &bench.asset.environment,
-            &bench.asset.hdri,
-            bench.radiance(),
-            bench.pv(),
-        );
-    });
-
-    let counts: Vec<u32> = bench
-        .gpu
-        .read_buffer(bench.radiance().em_iterations())
-        .block_on()
-        .expect("em_iterations buffer should still be alive during the benchmark");
-
-    let print_row = |label: &str, row: &[u32]| {
-        let total: u32 = row.iter().sum();
-        if total == 0 {
-            return;
-        }
-
-        let breakdown = row
-            .iter()
-            .map(|&count| 100 * count / total)
-            .enumerate()
-            .filter(|(_, count)| *count > 0)
-            .map(|(iterations, count)| format!("{iterations}:{:?}%", count))
-            .collect::<Vec<_>>()
-            .join("  ");
-
-        println!("  {label} ({total} probes): {breakdown}");
-    };
-
-    println!("\nEM iterations-to-converge:");
-
-    for cascade in (0..GaussianRadianceBuffer::LEVELS as usize).rev() {
-        let row = &counts[cascade * buckets..(cascade + 1) * buckets];
-        print_row(&format!("cascade {cascade}"), row);
-    }
-    println!();
-}
 
 fn bench_cascade(c: &mut Criterion) {
     let bench = harness::setup();
-
-    print_em_iteration_histogram(&bench);
 
     let b = &bench;
 
