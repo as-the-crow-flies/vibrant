@@ -14,9 +14,6 @@ use uniforms;
 @group(0) @binding(8) var<uniform> CASCADE_OPTS: CascadeOpts;
 @group(0) @binding(9) var WEIGHTS_OUT: texture_storage_3d<rgba8unorm, write>;
 
-// Diagnostic Histogram
-@group(0) @binding(7) var<storage, read_write> EM_ITERATIONS: array<atomic<u32>>;
-
 @group(1) @binding(2) var EXTINCTION: texture_3d<f32>;
 @group(1) @binding(3) var PROPERTIES: texture_3d<f32>;
 @group(1) @binding(4) var GRADIENT: texture_3d<f32>;
@@ -44,10 +41,25 @@ use uniforms;
 
 const CASCADE_MAX: u32 = 5u;
 const WORKGROUP: u32 = 32u;
+
 const SAMPLES: u32 = WORKGROUP * SAMPLES_PER_THREAD;
 
-// Probes whose parent sees less mean radiance (Σ E / 4π) than this are culled.
-const IRRADIANCE_CULL: f32 = 0.0016;
+// Every probe takes the cheapest of:
+// - EMPTY: no extinction within EMPTY_MARGIN cells. Never read, so it writes
+//   nothing: the renderer reads up to LOOKUP_JITTER (2) + 1 cells from what
+//   it shades, and a child sits within one parent cell of its parents.
+// - DARK: its parent sees less mean radiance (Σ E / 4π) than IRRADIANCE_CULL of
+//   the sky's. Stores zero lobes.
+// - COPY: no neighbour has LOCAL_MATTER optical depth across a probe cell, so
+//   nothing nearby blocks the parent's light. Stores the parent's lobes.
+// - SOLVE: traces and fits.
+const EMPTY_MARGIN: f32 = 4.0;
+const IRRADIANCE_CULL: f32 = 0.01;
+const LOCAL_MATTER: f32 = 1e-3;
+
+const SOLVE: u32 = 0u;
+const COPY: u32 = 1u;
+const DARK: u32 = 2u;
 
 // A uniform sample covers a solid angle of 4π / SAMPLES ≈ π tan²θ, an
 // importance sample that times its density ratio.
@@ -76,10 +88,6 @@ fn vmm_size() -> u32 {
     return VMM_MAX;
 }
 
-fn em_histogram_row() -> u32 {
-    return cascade();
-}
-
 // Luminance, like the environment's cells. Log compression keeps bright
 // sources from claiming every lobe.
 fn radiance_weight(radiance: vec3<f32>) -> f32 {
@@ -97,16 +105,31 @@ fn main(
     @builtin(num_subgroups) subgroups: u32,
 ) {
     let thread = Thread(index, subgroup, lane, subgroups);
-    if (thread.index < vmm_size()) { initialize_lobe(probe, thread.index); }
+    let origin = (vec3<f32>(probe) + 0.5) * f32(1u << cascade());
+
+    if (is_empty(origin, thread)) { return; }
+
+    let kind = classify(origin, thread);
+
+    if (thread.index < vmm_size()) {
+        if (kind == DARK) {
+            VMM[thread.index] = vec4<f32>(0.0);
+            PHI[thread.index] = vec4<f32>(0.0);
+        } else {
+            initialize_lobe(probe, thread.index);
+        }
+    }
 
     workgroupBarrier();
 
-    let origin = (vec3<f32>(probe) + 0.5) * f32(1u << cascade());
-
-    if (is_culled(origin, thread)) {
+    if (kind != SOLVE) {
         if (thread.index < vmm_size()) { store_lobe(probe, thread.index); }
-        if (thread.index == 0u) { record_iterations(0); }
-        if (cascade() == 0u) { store_phase(probe, thread); }
+
+        if (cascade() == 0u) {
+            store_phase(probe, thread);
+        } else if (thread.index == 0u) {
+            store_irradiance(probe);
+        }
         return;
     }
 
@@ -126,7 +149,32 @@ fn main(
     }
 }
 
-fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
+// Eight lookups, each at a mip whose texels span half the margin box, so
+// together they see every voxel within EMPTY_MARGIN cells.
+fn is_empty(origin: vec3<f32>, thread: Thread) -> bool {
+    let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
+    let cell_sample = f32(1u << cascade()) / dim;
+    let radiance_scale = f32(textureDimensions(EXTINCTION).x) / dim.x;
+    let mip = ceil(log2((EMPTY_MARGIN + 0.5) * f32(1u << cascade()) * radiance_scale));
+
+    if (thread.index == 0u) { atomicStore(&CULL_OCCUPIED, 0u); }
+
+    workgroupBarrier();
+
+    if (thread.index < 8u) {
+        let corner = vec3<f32>(vec3<u32>(thread.index & 1u, (thread.index >> 1u) & 1u, thread.index >> 2u)) * 2.0 - 1.0;
+        let sample = (origin + corner * 0.5 * EMPTY_MARGIN * f32(1u << cascade())) / dim;
+        if (any(extinction_at(sample, mip, 1.0) > vec3<f32>(0.0))) { atomicOr(&CULL_OCCUPIED, 1u); }
+    }
+
+    workgroupBarrier();
+
+    if (thread.index == 0u) { CULL_RESULT = select(0u, 1u, atomicLoad(&CULL_OCCUPIED) == 0u); }
+
+    return workgroupUniformLoad(&CULL_RESULT) != 0u;
+}
+
+fn classify(origin: vec3<f32>, thread: Thread) -> u32 {
     let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
     let origin_sample = origin / dim;
     let cell_sample = f32(1u << cascade()) / dim;
@@ -140,21 +188,29 @@ fn is_culled(origin: vec3<f32>, thread: Thread) -> bool {
 
     if (thread.index < CULL_NEIGHBORS) {
         let sample = origin_sample + NEIGHBOR_OFFSET[thread.index] * cell_sample;
-        let extinction = extinction_at(sample, mip, 1.0);
-        if (any(extinction > vec3<f32>(EPSILON))) { atomicOr(&CULL_OCCUPIED, 1u); }
+        let depth = extinction_at(sample, mip, cell_mm());
+        if (any(depth > vec3<f32>(LOCAL_MATTER))) { atomicOr(&CULL_OCCUPIED, 1u); }
     }
 
     workgroupBarrier();
 
-    var result = atomicLoad(&CULL_OCCUPIED) == 0u;
-    if (!result && cascade() < CASCADE_MAX) {
-        let irradiance = unpack_rgb(textureSampleLevel(IRRADIANCE_IN, SAMPLER, origin_sample, 0.0));
-        result = brightness(irradiance) < IRRADIANCE_CULL;
+    if (thread.index == 0u) {
+        var kind = select(SOLVE, COPY, atomicLoad(&CULL_OCCUPIED) == 0u);
+        if (cascade() < CASCADE_MAX) {
+            let irradiance = unpack_rgb(textureSampleLevel(IRRADIANCE_IN, SAMPLER, origin_sample, 0.0));
+            // Environments are normalized to mean luminance 1 at unit strength.
+            if (brightness(irradiance) < IRRADIANCE_CULL * HDRI_SETTINGS.strength) { kind = DARK; }
+        }
+        CULL_RESULT = kind;
     }
 
-    if (thread.index == 0u) { CULL_RESULT = select(0u, 1u, result); }
+    return workgroupUniformLoad(&CULL_RESULT);
+}
 
-    return workgroupUniformLoad(&CULL_RESULT) != 0u;
+// This level's probe spacing in mm.
+fn cell_mm() -> f32 {
+    let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
+    return f32(1u << cascade()) / length(dim * (linear_part(TRANSFORM) * vec3<f32>(1.0, 0.0, 0.0)));
 }
 
 fn initialize_lobe(probe: vec3<u32>, k: u32) {

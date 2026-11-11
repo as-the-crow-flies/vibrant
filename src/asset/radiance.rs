@@ -11,7 +11,6 @@ pub struct GaussianRadianceBuffer {
     irradiance: Texture,
     // Cascade 0's lobe selection weights, 4 lobes per texel in 2×2×2 tiles.
     weights: Texture,
-    em_iterations: Buffer,
     // `CascadeOpts` (include_volume, include_lines, vmm_size, cascade), one
     // slot per level. Combined = (1, 1); overlay volume cascade = (1, 0);
     // overlay line cascade = (0, 1).
@@ -28,15 +27,6 @@ impl GaussianRadianceBuffer {
     pub const WEIGHTS_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
     pub const LEVELS: u32 = 6;
     const CASCADE_OPTS_SIZE: u64 = 4 * size_of::<u32>() as u64;
-
-    // Must match EM_ITERATIONS_MAX in em.wgsl: one bucket per
-    // possible iteration count (1..=EM_ITERATIONS_MAX), plus a bucket for 0
-    // (unused; cascade.wgsl reserves it for culled probes).
-    pub const EM_ITERATIONS_MAX: u32 = 100;
-    pub const EM_HISTOGRAM_BUCKETS: u32 = Self::EM_ITERATIONS_MAX + 1;
-
-    // One row per cascade level.
-    pub const EM_HISTOGRAM_ROWS: u32 = Self::LEVELS;
 
     pub fn new(gpu: &Gpu, size: UVec3) -> Self {
         let label = Some(type_name::<Self>());
@@ -97,14 +87,6 @@ impl GaussianRadianceBuffer {
         let weights_view = weights.create_view(&TextureViewDescriptor {
             label,
             ..Default::default()
-        });
-
-        let em_iterations = gpu.device().create_buffer(&BufferDescriptor {
-            label,
-            size: (Self::EM_HISTOGRAM_ROWS * Self::EM_HISTOGRAM_BUCKETS) as u64
-                * size_of::<u32>() as u64,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
         });
 
         let cascade_opts_stride = gpu.device().limits().min_uniform_buffer_offset_alignment as u64;
@@ -265,10 +247,6 @@ impl GaussianRadianceBuffer {
                             )),
                         },
                         BindGroupEntry {
-                            binding: 7,
-                            resource: em_iterations.as_entire_binding(),
-                        },
-                        BindGroupEntry {
                             binding: 8,
                             resource: cascade_opts_slot(level),
                         },
@@ -286,7 +264,6 @@ impl GaussianRadianceBuffer {
             vmm,
             irradiance,
             weights,
-            em_iterations,
             cascade_opts,
             cascade_opts_stride,
             vmm_size: Cell::new(0),
@@ -350,10 +327,6 @@ impl GaussianRadianceBuffer {
 
     pub fn probes(&self, cascade: usize) -> UVec3 {
         self.probes[cascade]
-    }
-
-    pub fn em_iterations(&self) -> &Buffer {
-        &self.em_iterations
     }
 
     pub fn layout(gpu: &Gpu) -> BindGroupLayout {
@@ -495,16 +468,6 @@ impl GaussianRadianceBuffer {
                         },
                         count: None,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 7,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                     // CASCADE_OPTS
                     BindGroupLayoutEntry {
                         binding: 8,
@@ -534,7 +497,6 @@ impl GaussianRadianceBuffer {
 
 impl Drop for GaussianRadianceBuffer {
     fn drop(&mut self) {
-        self.em_iterations.destroy();
         self.phi.destroy();
         self.vmm.destroy();
         self.irradiance.destroy();

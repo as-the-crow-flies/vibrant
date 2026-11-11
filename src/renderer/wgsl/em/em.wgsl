@@ -1,6 +1,5 @@
 // Workgroup-cooperative EM fit of the VMM to this workgroup's samples. Each
-// including shader defines WORKGROUP, EM_ITERATIONS, vmm_size() (≤ VMM_MAX)
-// and em_histogram_row().
+// including shader defines WORKGROUP and vmm_size() (≤ VMM_MAX).
 
 use gaussian;
 use random;
@@ -79,8 +78,6 @@ fn fit_vmm(omega: Directions, radiance: Radiances, weight: Weights, ratio: Weigh
         if (is_converged(iteration, thread)) { break; }
     }
 
-    if (thread.index == 0u) { record_iterations(iteration); }
-
     // Maximize Phi: (Σ γ L Ω, Σ γ Ω), so w is the solid angle the lobe covers.
     let solid_angle = ratio * (4.0 * PI / f32(SAMPLES));
 
@@ -144,10 +141,6 @@ fn gather_partials(k: u32, thread: Thread) -> vec4<f32> {
     }
 
     return sum;
-}
-
-fn record_iterations(iterations: u32) {
-    atomicAdd(&EM_ITERATIONS[em_histogram_row() * (EM_ITERATIONS_MAX + 1u) + iterations], 1u);
 }
 
 fn vmf(v: vec4<f32>, omega: Directions) -> Weights {
