@@ -1,126 +1,239 @@
-use std::ops::{Add, Div};
+use std::any::type_name;
 
+use glam::UVec3;
 use wgpu::*;
 
 use crate::{
     asset::{
-        crop::CropBuffer, volume::PhysicalVolume, volume_fraction::VolumeFractionBuffer,
-        volume_mask::VolumeMaskBuffer,
+        volume::{PhysicalVolume, BINS},
+        volume_fraction::VolumeFractionBuffer,
+        Asset,
     },
     gpu::{Gpu, Lazy},
 };
 
+/// Bakes the transfer functions after any fraction, mask or crop edit: per
+/// fraction lookup tables (the tracer classifies through them per sample), the
+/// tracer's occupancy grid, and the cascades' extinction + mip chain.
 pub struct VolumeTransferPipeline {
-    clear: Lazy<ComputePipeline>,
-    transfer: Lazy<ComputePipeline>,
-    copy: Lazy<ComputePipeline>,
+    lut: Lazy<ComputePipeline>,
+    occupancy: Lazy<ComputePipeline>,
+    extinction: Lazy<ComputePipeline>,
     mipmap: Lazy<ComputePipeline>,
+    lut_layout: BindGroupLayout,
+    occupancy_layout: BindGroupLayout,
+    extinction_layout: BindGroupLayout,
+    classified_layout: BindGroupLayout,
 }
 
 impl VolumeTransferPipeline {
     pub fn new(gpu: &Gpu) -> Self {
+        let lut_layout = Self::lut_layout(gpu);
+        let occupancy_layout = Self::occupancy_layout(gpu);
+        let extinction_layout = PhysicalVolume::layout_write(gpu);
+        let classified_layout = PhysicalVolume::layout_classified(gpu);
+
+        let layout = lut_layout.clone();
+        let lut = gpu.lazy("VolumeLutPipeline", move |gpu| {
+            gpu.compute(
+                "VolumeLutPipeline",
+                &gpu.pipeline_layout(&[&layout, &VolumeFractionBuffer::layout(gpu)]),
+                &gpu.shader("renderer/volume/transfer/lut.wgsl"),
+            )
+        });
+
+        let layout = occupancy_layout.clone();
+        let occupancy = gpu.lazy("VolumeOccupancyPipeline", move |gpu| {
+            gpu.compute(
+                "VolumeOccupancyPipeline",
+                &gpu.pipeline_layout(&[&layout, &VolumeFractionBuffer::layout(gpu)]),
+                &gpu.shader("renderer/volume/transfer/occupancy.wgsl"),
+            )
+        });
+
+        let layouts = (extinction_layout.clone(), classified_layout.clone());
+        let extinction = gpu.lazy("VolumeExtinctionPipeline", move |gpu| {
+            gpu.compute(
+                "VolumeExtinctionPipeline",
+                &gpu.pipeline_layout(&[&layouts.0, &layouts.1]),
+                &gpu.shader("renderer/volume/transfer/extinction.wgsl"),
+            )
+        });
+
+        let mipmap = gpu.lazy("VolumeMipMapPipeline", move |gpu| {
+            gpu.compute(
+                "VolumeMipMapPipeline",
+                &gpu.pipeline_layout(&[&PhysicalVolume::layout_mipmap(gpu)]),
+                &gpu.shader("renderer/volume/transfer/mipmap.wgsl"),
+            )
+        });
+
         Self {
-            clear: gpu.lazy("VolumeClearPipeline", move |gpu| {
-                gpu.compute(
-                    "VolumeClearPipeline",
-                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_transfer(gpu)]),
-                    &gpu.shader("renderer/volume/transfer/clear.wgsl"),
-                )
-            }),
-            transfer: gpu.lazy("VolumeTransferPipeline", move |gpu| {
-                gpu.compute(
-                    "VolumeTransferPipeline",
-                    &gpu.pipeline_layout(&[
-                        &PhysicalVolume::layout_transfer(gpu),
-                        &VolumeFractionBuffer::layout(gpu),
-                        &VolumeMaskBuffer::layout(gpu),
-                        &CropBuffer::layout(gpu),
-                    ]),
-                    &gpu.shader("renderer/volume/transfer/transfer.wgsl"),
-                )
-            }),
-            copy: gpu.lazy("VolumeCopyPipeline", move |gpu| {
-                gpu.compute(
-                    "VolumeCopyPipeline",
-                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_copy(gpu)]),
-                    &gpu.shader("renderer/volume/transfer/copy.wgsl"),
-                )
-            }),
-            mipmap: gpu.lazy("VolumeMipMapPipeline", move |gpu| {
-                gpu.compute(
-                    "VolumeMipMapPipeline",
-                    &gpu.pipeline_layout(&[&PhysicalVolume::layout_mipmap(gpu)]),
-                    &gpu.shader("renderer/volume/transfer/mipmap.wgsl"),
-                )
-            }),
+            lut,
+            occupancy,
+            extinction,
+            mipmap,
+            lut_layout,
+            occupancy_layout,
+            extinction_layout,
+            classified_layout,
         }
     }
 
-    /// Full volume transfer in one shot: [`Self::begin`] + [`Self::finalize`].
-    /// The renderer interposes the line deposit pass between the two; callers
-    /// with no line density (e.g. `benches/cascade.rs`) use this wrapper.
-    pub fn dispatch(
-        &self,
-        cmd: &mut CommandEncoder,
-        fractions: &[VolumeFractionBuffer],
-        masks: &[VolumeMaskBuffer],
-        volume: &PhysicalVolume,
-        crop: &CropBuffer,
-    ) {
-        self.begin(cmd, fractions, masks, volume, crop);
-        self.finalize(cmd, volume);
-    }
+    pub fn dispatch(&self, gpu: &Gpu, cmd: &mut CommandEncoder, asset: &Asset) {
+        let Some(volume) = &asset.physical_volume else {
+            return;
+        };
 
-    /// Clears the `r32uint` accumulation textures and adds every visible volume
-    /// fraction into them. After this, `LineDepositPipeline` can read-modify-write
-    /// more density in before [`Self::finalize`] resolves it.
-    pub fn begin(
-        &self,
-        cmd: &mut CommandEncoder,
-        fractions: &[VolumeFractionBuffer],
-        masks: &[VolumeMaskBuffer],
-        volume: &PhysicalVolume,
-        crop: &CropBuffer,
-    ) {
-        let n_workgroups = volume.size().add(3).div(4);
+        let fractions = asset.visible_volumes();
+
+        volume.update_classify(gpu, &fractions, &asset.masks, &asset.crop);
+        cmd.clear_buffer(volume.occupancy(), 0, None);
+
+        let slots = volume.lut_slots().iter().zip(&fractions);
+        let lut: Vec<_> = slots
+            .clone()
+            .map(|(slot, _)| self.lut_binding(gpu, slot))
+            .collect();
+        let occupancy: Vec<_> = slots
+            .map(|(slot, _)| self.occupancy_binding(gpu, volume, slot))
+            .collect();
+
+        let classified =
+            volume.binding_classified(gpu, &self.classified_layout, &fractions, &asset.masks);
+        let extinction = gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some(type_name::<Self>()),
+            layout: &self.extinction_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(volume.extinction_write()),
+            }],
+        });
 
         let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
 
-        pass.set_bind_group(0, volume.binding_transfer(), &[]);
-
-        pass.set_pipeline(&self.clear);
-        pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
-
-        pass.set_bind_group(3, crop.binding(), &[]);
-
-        pass.set_pipeline(&self.transfer);
-        for fraction in fractions.iter().filter(|x| x.settings().visible) {
+        pass.set_pipeline(&self.lut);
+        for (binding, fraction) in lut.iter().zip(&fractions) {
+            pass.set_bind_group(0, binding, &[]);
             pass.set_bind_group(1, fraction.binding(), &[]);
-            pass.set_bind_group(2, masks[fraction.settings().mask].binding(), &[]);
-            pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
+            pass.dispatch_workgroups(BINS.div_ceil(64), 1, 1);
         }
-    }
 
-    /// Resolves the accumulated `r32uint` textures into the sampled `rgba8` +
-    /// `extinction` textures and builds their mip chain.
-    pub fn finalize(&self, cmd: &mut CommandEncoder, volume: &PhysicalVolume) {
-        let n_workgroups = volume.size().add(3).div(4);
+        let blocks = workgroups(PhysicalVolume::blocks(volume.size()));
 
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        pass.set_pipeline(&self.occupancy);
+        for (binding, fraction) in occupancy.iter().zip(&fractions) {
+            pass.set_bind_group(0, binding, &[]);
+            pass.set_bind_group(1, fraction.binding(), &[]);
+            pass.dispatch_workgroups(blocks.x, blocks.y, blocks.z);
+        }
 
-        pass.set_pipeline(&self.copy);
-        pass.set_bind_group(0, volume.binding_copy(), &[]);
-        pass.dispatch_workgroups(n_workgroups.x, n_workgroups.y, n_workgroups.z);
+        let voxels = workgroups(volume.size());
+
+        pass.set_pipeline(&self.extinction);
+        pass.set_bind_group(0, &extinction, &[]);
+        pass.set_bind_group(1, &classified, &[]);
+        pass.dispatch_workgroups(voxels.x, voxels.y, voxels.z);
 
         pass.set_pipeline(&self.mipmap);
 
-        let mut mipmap = volume.size().add(3).div(4);
-
+        let mut size = volume.size();
         for binding in volume.binding_mipmap() {
-            pass.set_bind_group(0, binding, &[]);
-            pass.dispatch_workgroups(mipmap.x, mipmap.y, mipmap.z);
+            size = (size / 2).max(UVec3::ONE);
+            let n = workgroups(size);
 
-            mipmap = mipmap.add(1).div(2);
+            pass.set_bind_group(0, binding, &[]);
+            pass.dispatch_workgroups(n.x, n.y, n.z);
         }
     }
+
+    fn lut_binding(&self, gpu: &Gpu, slot: &TextureView) -> BindGroup {
+        gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some(type_name::<Self>()),
+            layout: &self.lut_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(slot),
+            }],
+        })
+    }
+
+    fn occupancy_binding(
+        &self,
+        gpu: &Gpu,
+        volume: &PhysicalVolume,
+        slot: &TextureView,
+    ) -> BindGroup {
+        gpu.device().create_bind_group(&BindGroupDescriptor {
+            label: Some(type_name::<Self>()),
+            layout: &self.occupancy_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: volume.occupancy().as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(slot),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: volume.classify().as_entire_binding(),
+                },
+            ],
+        })
+    }
+
+    fn lut_layout(gpu: &Gpu) -> BindGroupLayout {
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::WriteOnly,
+                        format: TextureFormat::Rgba16Float,
+                        view_dimension: TextureViewDimension::D2Array,
+                    },
+                    count: None,
+                }],
+            })
+    }
+
+    fn occupancy_layout(gpu: &Gpu) -> BindGroupLayout {
+        let buffer = |binding, ty| BindGroupLayoutEntry {
+            binding,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        gpu.device()
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some(type_name::<Self>()),
+                entries: &[
+                    buffer(0, BufferBindingType::Storage { read_only: false }),
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2Array,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    buffer(2, BufferBindingType::Uniform),
+                ],
+            })
+    }
+}
+
+fn workgroups(size: UVec3) -> UVec3 {
+    (size + 3) / 4
 }

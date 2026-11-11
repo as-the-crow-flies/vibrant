@@ -436,6 +436,19 @@ impl Controller {
         self.changed() || self.light().changed()
     }
 
+    /// Edits that invalidate the volume's transfer bake.
+    pub fn volume_changed(&self) -> bool {
+        self.crop().changed()
+            || self.volumes().changed()
+            || self.masks().changed()
+            || self.rendering().changed()
+    }
+
+    /// Edits that invalidate the line acceleration structure and deposit.
+    pub fn line_changed(&self) -> bool {
+        self.crop().changed() || self.tractography().changed() || self.rendering().changed()
+    }
+
     pub fn changed(&self) -> bool {
         self.crop().changed()
             || self.volumes().changed()

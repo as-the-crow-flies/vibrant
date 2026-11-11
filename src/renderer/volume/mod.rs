@@ -4,7 +4,7 @@ pub mod transfer;
 use wgpu::CommandEncoder;
 
 use crate::{
-    asset::{volume::PhysicalVolume, Asset},
+    asset::Asset,
     controller::Controller,
     gpu::Gpu,
     renderer::volume::{render::GaussianVolumeRenderer, transfer::VolumeTransferPipeline},
@@ -24,12 +24,9 @@ impl VolumeRenderer {
         }
     }
 
-    /// Clear + accumulate the visible volume fractions into the `r32uint`
-    /// textures, then resolve them into the sampled textures + mip chain. The
-    /// line deposit writes its own `line_extinction` texture separately.
-    pub fn transfer(&self, cmd: &mut CommandEncoder, asset: &Asset, volume: &PhysicalVolume) {
-        self.transfer
-            .dispatch(cmd, &asset.volumes, &asset.masks, volume, &asset.crop);
+    /// After any fraction, mask or crop edit.
+    pub fn transfer(&self, gpu: &Gpu, cmd: &mut CommandEncoder, asset: &Asset) {
+        self.transfer.dispatch(gpu, cmd, asset);
     }
 
     pub fn render(

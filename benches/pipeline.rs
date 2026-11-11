@@ -61,26 +61,8 @@ fn bench_pipeline(c: &mut Criterion) {
 
     // --- Shared medium ---
 
-    group.bench_function("volume/transfer_begin", |t| {
-        t.iter(|| {
-            b.time_pass(|cmd| {
-                b.volume_transfer.begin(
-                    cmd,
-                    &b.asset.volumes,
-                    &b.asset.masks,
-                    b.pv(),
-                    &b.asset.crop,
-                )
-            })
-        })
-    });
-
-    group.bench_function("volume/transfer_finalize", |t| {
-        t.iter(|| b.time_pass(|cmd| b.volume_transfer.finalize(cmd, b.pv())))
-    });
-
-    group.bench_function("gradient", |t| {
-        t.iter(|| b.time_pass(|cmd| b.gradient.dispatch(cmd, b.pv())))
+    group.bench_function("volume/transfer", |t| {
+        t.iter(|| b.time_pass(|cmd| b.volume_transfer.dispatch(&b.gpu, cmd, &b.asset)))
     });
 
     group.bench_function("line/deposit", |t| {

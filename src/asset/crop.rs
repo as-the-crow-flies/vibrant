@@ -61,6 +61,10 @@ impl CropBuffer {
         &self.binding
     }
 
+    pub fn settings(&self) -> &CropSettings {
+        &self.settings
+    }
+
     pub fn settings_mut(&mut self) -> &mut CropSettings {
         &mut self.settings
     }

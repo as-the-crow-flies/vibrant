@@ -17,7 +17,6 @@ use vibrant::{
     gpu::Gpu,
     renderer::{
         accumulate::AccumulatePipeline,
-        gradient::GradientPipeline,
         lighting::LightingRenderer,
         line::{
             deposit::LineDepositPipeline, occupancy::LineOccupancyPipeline,
@@ -93,7 +92,6 @@ pub struct Bench {
     pub line_deposit: LineDepositPipeline,
     pub line_render: LineRenderPipeline,
     pub volume_transfer: VolumeTransferPipeline,
-    pub gradient: GradientPipeline,
     pub volume_render: GaussianVolumeRenderer,
     pub lighting: LightingRenderer,
     pub accumulate: AccumulatePipeline,
@@ -195,7 +193,6 @@ pub fn setup() -> Bench {
         line_deposit: LineDepositPipeline::new(&gpu),
         line_render: LineRenderPipeline::new(&gpu),
         volume_transfer: VolumeTransferPipeline::new(&gpu),
-        gradient: GradientPipeline::new(&gpu),
         volume_render: GaussianVolumeRenderer::new(&gpu),
         lighting,
         accumulate: AccumulatePipeline::new(&gpu),
@@ -209,8 +206,8 @@ pub fn setup() -> Bench {
         present_target,
     };
 
-    // Populate every 3D texture the passes read from -- the marched volume +
-    // gradients, the tractography occupancy pyramid, the deposited line density,
+    // Populate every 3D texture the passes read from -- the volume
+    // transfer bake, the tractography occupancy pyramid, the deposited line density,
     // and one full radiance-cascade solve -- so benchmarked passes measure
     // steady-state cost, not work against zeroed buffers (an unpopulated
     // extinction volume makes `is_culled()` reject every probe). `pipeline.rs`
@@ -246,7 +243,7 @@ impl Bench {
         &self.present_target
     }
 
-    /// Line accel structure + shared medium (marched volume, gradients,
+    /// Line accel structure + shared medium (volume transfer bake,
     /// deposited line density). Shared by both prime paths.
     fn record_scene_build(&self, cmd: &mut CommandEncoder) {
         let (asset, pv, line) = (&self.asset, self.pv(), self.line());
@@ -257,10 +254,7 @@ impl Bench {
         self.line_populate
             .dispatch(cmd, asset, &self.controller, line);
 
-        self.volume_transfer
-            .begin(cmd, &asset.volumes, &asset.masks, pv, &asset.crop);
-        self.volume_transfer.finalize(cmd, pv);
-        self.gradient.dispatch(cmd, pv);
+        self.volume_transfer.dispatch(&self.gpu, cmd, asset);
         self.line_deposit
             .dispatch(cmd, pv, line, &asset.tractography);
     }
