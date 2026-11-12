@@ -445,7 +445,8 @@ impl TransferFunctionEditor {
                                      light more at boundaries, for a denser, \
                                      more glass-like look.",
                                     );
-                                    ui.slider(&mut node.material.ior, 1.0..=5.0).track(self);
+                                    ui.slider(&mut node.material.ior, 1.0..=5.0, false)
+                                        .track(self);
                                     ui.end_row();
                                 });
                         });
