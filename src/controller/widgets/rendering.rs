@@ -107,7 +107,7 @@ impl RenderingWidget {
                          zero is orthographic. High values exaggerate depth.",
                     );
                     let mut fov = camera.fov();
-                    ui.slider(&mut fov, 0.0..=1.0).track(self);
+                    ui.slider(&mut fov, 0.0..=1.0, false).track(self);
                     camera.set_fov(fov);
                     ui.end_row();
 
@@ -134,7 +134,7 @@ impl RenderingWidget {
 
                             let changed = ui
                                 .add_enabled_ui(settings.hdr, |ui| {
-                                    ui.slider(&mut settings.hdr_headroom, 1.0..=limit)
+                                    ui.slider(&mut settings.hdr_headroom, 1.0..=limit, false)
                                         .on_hover_text(
                                             "Peak brightness of the HDR image, as a \
                                              multiple of standard-display white. \
@@ -180,7 +180,7 @@ impl RenderingWidget {
                             "Brightness of the environment lighting. Raise it \
                              for a brighter scene and stronger highlights.",
                         );
-                        ui.slider(&mut hdri.settings_mut().strength, 0.0..=8.0)
+                        ui.slider(&mut hdri.settings_mut().strength, 0.0..=8.0, false)
                             .track(self);
                         ui.end_row();
                     });
@@ -205,7 +205,7 @@ impl RenderingWidget {
                             "Strength of mirror-like highlights on dense structures \
                          under environment lighting. 0 = matte, 1 = glossy.",
                         );
-                        ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0)
+                        ui.slider(&mut hdri.settings_mut().specular, 0.0..=1.0, false)
                             .track(self);
                         ui.end_row();
 
@@ -214,7 +214,7 @@ impl RenderingWidget {
                          under environment lighting. 0 = surfaces only, 1 = full \
                          translucent glow.",
                         );
-                        ui.slider(&mut hdri.settings_mut().phase, 0.0..=1.0)
+                        ui.slider(&mut hdri.settings_mut().phase, 0.0..=1.0, false)
                             .track(self);
                         ui.end_row();
 
@@ -222,7 +222,7 @@ impl RenderingWidget {
                             "How spread-out the specular highlights are. Low = tight, \
                          wet-looking reflections; high = a soft, broad sheen.",
                         );
-                        ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0)
+                        ui.slider(&mut hdri.settings_mut().roughness, 0.0..=1.0, false)
                             .track(self);
                         ui.end_row();
                     });
@@ -267,7 +267,8 @@ impl RenderingWidget {
 
                         ui.label("Tract Radius")
                             .on_hover_text("Rendered radius of each streamline, in millimetres.");
-                        ui.slider(&mut settings.radius, 0.0..=1.0).track(self);
+                        ui.slider(&mut settings.radius, 0.0..=1.0, false)
+                            .track(self);
                         ui.end_row();
 
                         ui.label("Opacity").on_hover_text(
@@ -282,7 +283,7 @@ impl RenderingWidget {
                             "How much light passes through the bundles, lightening \
                              their shadows. 0 = opaque, 1 = no shadows.",
                         );
-                        ui.slider(&mut settings.line_translucency, 0.0..=1.0)
+                        ui.slider(&mut settings.line_translucency, 0.0..=1.0, false)
                             .track(self);
                         ui.end_row();
 
@@ -290,7 +291,7 @@ impl RenderingWidget {
                             "Strength of mirror-like highlights on the bundles. \
                              0 = matte, 1 = glossy.",
                         );
-                        ui.slider(&mut settings.line_specular, 0.0..=1.0)
+                        ui.slider(&mut settings.line_specular, 0.0..=1.0, false)
                             .track(self);
                         ui.end_row();
                     });
@@ -515,7 +516,8 @@ impl RenderingWidget {
                      still see the rest of the sky. Shapes the environment fit \
                      and importance sampling.",
                 );
-                ui.slider(&mut hdri.uniform_share, 0.0..=1.0).track(self);
+                ui.slider(&mut hdri.uniform_share, 0.0..=1.0, false)
+                    .track(self);
                 ui.end_row();
 
                 ui.label("Sample Weighting").on_hover_text(

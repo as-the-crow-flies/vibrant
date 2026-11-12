@@ -18,7 +18,12 @@ pub trait UIComponents {
     /// `min_size` floor can't shrink a glyph that already renders wider than it,
     /// so different icons (e.g. "➕" vs "🗑") end up different widths.
     fn icon_button(&mut self, icon: &str, enabled: bool, selected: bool) -> Response;
-    fn slider<Num>(&mut self, value: &mut Num, range: RangeInclusive<Num>) -> Response
+    fn slider<Num>(
+        &mut self,
+        value: &mut Num,
+        range: RangeInclusive<Num>,
+        logarithmic: bool,
+    ) -> Response
     where
         Num: Numeric;
 
@@ -120,13 +125,22 @@ impl UIComponents for Ui {
             });
     }
 
-    fn slider<Num: Numeric>(&mut self, value: &mut Num, range: RangeInclusive<Num>) -> Response {
+    fn slider<Num: Numeric>(
+        &mut self,
+        value: &mut Num,
+        range: RangeInclusive<Num>,
+        logarithmic: bool,
+    ) -> Response {
         self.spacing_mut().slider_width = self
             .available_width()
             .sub(self.spacing().interact_size.x)
             .sub(self.spacing().button_padding.x * 2.0)
             .max(0.0);
-        self.add(Slider::new(value, range).fixed_decimals(2))
+        self.add(
+            Slider::new(value, range)
+                .logarithmic(logarithmic)
+                .fixed_decimals(2),
+        )
     }
 
     fn collapse(

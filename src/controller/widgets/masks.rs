@@ -85,14 +85,14 @@ impl MasksWidget {
                  inward, positive values dilate outward.",
             );
 
-            ui.slider(&mut mask.offset, -1.0..=1.0).track(self);
+            ui.slider(&mut mask.offset, -1.0..=1.0, false).track(self);
             ui.end_row();
 
             ui.label("Smoothing").on_hover_text(
                 "Softness of the mask edge. Higher values fade the boundary \
                  over a wider band instead of a hard cut.",
             );
-            ui.slider(&mut mask.width, 0.1..=1.0).track(self);
+            ui.slider(&mut mask.width, 0.1..=1.0, false).track(self);
             ui.end_row();
         });
     }
