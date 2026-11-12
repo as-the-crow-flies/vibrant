@@ -53,8 +53,11 @@ pub struct PhysicalVolume {
     // Neutral line density (mipmapped) written by the deposit pass; folded into
     // the radiance cascades' occlusion, never marched by the volume tracer.
     line_extinction: MipTexture3D<R32Float>,
-    // One u32 per BLOCK³ voxels: non-zero where the tracer may find material.
-    occupancy: Buffer,
+    // Per BLOCK³ voxels, (absorption, scattering) bounds of the classified
+    // material over every channel: the tracer's majorants.
+    majorant: Buffer,
+    // Per COARSE³ blocks, non-zero where any of them may hold material.
+    coarse: Buffer,
     // Layers 2k, 2k + 1: (absorption, ior), (scattering, density) of slot k.
     lut: TextureView,
     lut_slots: Vec<TextureView>,
@@ -68,6 +71,8 @@ pub struct PhysicalVolume {
 impl PhysicalVolume {
     pub const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
     pub const BLOCK: u32 = 4;
+    /// Blocks per coarse cell, per axis.
+    pub const COARSE: u32 = 8;
 
     pub fn new(gpu: &Gpu, size: UVec3, transform: Mat4) -> Self {
         let label = Some(type_name::<Self>());
@@ -109,9 +114,16 @@ impl PhysicalVolume {
         });
         let extinction_write = level(0);
 
-        let occupancy = gpu.device().create_buffer(&BufferDescriptor {
+        let majorant = gpu.device().create_buffer(&BufferDescriptor {
             label,
-            size: 4 * blocks.element_product() as u64,
+            size: 8 * blocks.element_product() as u64,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let coarse = gpu.device().create_buffer(&BufferDescriptor {
+            label,
+            size: 4 * Self::coarse_cells(size).element_product() as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -228,7 +240,8 @@ impl PhysicalVolume {
             extinction,
             extinction_write,
             line_extinction,
-            occupancy,
+            majorant,
+            coarse,
             lut,
             lut_slots,
             classify,
@@ -250,8 +263,17 @@ impl PhysicalVolume {
         (size + Self::BLOCK - 1) / Self::BLOCK
     }
 
-    pub fn occupancy(&self) -> &Buffer {
-        &self.occupancy
+    /// Coarse cells per axis.
+    pub fn coarse_cells(size: UVec3) -> UVec3 {
+        (Self::blocks(size) + Self::COARSE - 1) / Self::COARSE
+    }
+
+    pub fn majorant(&self) -> &Buffer {
+        &self.majorant
+    }
+
+    pub fn coarse(&self) -> &Buffer {
+        &self.coarse
     }
 
     pub fn lut_slots(&self) -> &[TextureView] {
@@ -327,7 +349,7 @@ impl PhysicalVolume {
     }
 
     /// `classify.wgsl`'s group: the visible fractions, their masks, the lookup
-    /// tables and the occupancy grid.
+    /// tables and the majorant grid.
     pub fn binding_classified(
         &self,
         gpu: &Gpu,
@@ -348,7 +370,7 @@ impl PhysicalVolume {
         let mut entries = vec![
             BindGroupEntry {
                 binding: 0,
-                resource: self.occupancy.as_entire_binding(),
+                resource: self.majorant.as_entire_binding(),
             },
             BindGroupEntry {
                 binding: 1,
@@ -377,6 +399,10 @@ impl PhysicalVolume {
                     resource: BindingResource::TextureView(view),
                 }),
         );
+        entries.push(BindGroupEntry {
+            binding: 5 + 2 * SLOTS as u32,
+            resource: self.coarse.as_entire_binding(),
+        });
 
         gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
@@ -423,6 +449,10 @@ impl PhysicalVolume {
             buffer(4, BufferBindingType::Uniform),
         ];
         entries.extend((5..5 + 2 * SLOTS as u32).map(|b| texture(b, TextureViewDimension::D3)));
+        entries.push(buffer(
+            5 + 2 * SLOTS as u32,
+            BufferBindingType::Storage { read_only: true },
+        ));
 
         gpu.device()
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -535,7 +565,8 @@ impl Drop for PhysicalVolume {
     fn drop(&mut self) {
         self.extinction.destroy();
         self.transform.destroy();
-        self.occupancy.destroy();
+        self.majorant.destroy();
+        self.coarse.destroy();
         self.classify.destroy();
     }
 }

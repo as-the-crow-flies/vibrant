@@ -308,7 +308,7 @@ impl Bench {
     /// The on-screen present: tone map `frame.color()` + overlay into an
     /// off-screen `Bgra8Unorm` target (stands in for the swapchain image).
     pub fn present_frame(&self, cmd: &mut CommandEncoder) {
-        self.present.set_headroom(&self.gpu, 1.0);
+        self.present.set_uniform(&self.gpu, 1.0, 1);
         self.present.dispatch(
             cmd,
             self.frame.color(),

@@ -61,87 +61,193 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     // LINE_DEPTH is cleared to 1.0, making this a no-op where no line was drawn.
     let line_s = textureLoad(LINE_DEPTH, vec2<i32>(fragment.position.xy), 0).r;
 
-    let step = 0.5;
-    let skip = 2.0;
-
     let entry = max(hit.x, 0.0);
-    let t1 = min(hit.y, line_s * length(far - near));
-
-    var transmittance = vec3<f32>(1.0);
-    var color = vec3<f32>(0.0);
+    let exit = min(hit.y, line_s * length(far - near));
 
     // Lobes live in world space, so shading does too.
     let view = -normalize((ENVIRONMENT.camera.transform * vec4<f32>(far - near, 0.0)).xyz);
 
-    // Coarse empty-space skip on an un-jittered `t0`, so the skipped distance
-    // doesn't flicker frame to frame.
-    var t0 = entry;
-    while (t0 + skip < t1) {
-        if (is_occupied(origin + direction * (t0 + skip))) { break; }
-        t0 += skip;
-    }
-
-    // Step back one stride so the fine march can't miss a thin feature the
-    // look-ahead jumped over, then jitter within a single fine step (not the
-    // whole `[0, 1)` range, which is 2x `step` and just adds sampling variance).
     let pixel = vec2<u32>(fragment.position.xy);
     let lookup = noise(pixel, 0u);
     let pick = noise(pixel, 1u);
 
-    t0 = max(t0 - skip, entry) + step * lookup.w;
+    // Matches `to_material`'s reduced scattering.
+    let scattering_scale = 1.0 / (1.0 - HDRI_SETTINGS.anisotropy);
 
-    // 0 = unknown: at the ray start or just through a cut.
-    var ior = 0.0;
+    // Both estimators share the tentative collisions: spectral delta tracking
+    // (Kutz et al. 2017) picks the one real collision that's shaded, ratio
+    // tracking estimates the transmittance behind alpha.
+    var weight = vec3<f32>(1.0);
+    var transmittance = vec3<f32>(1.0);
+    var collided = false;
+    // The real collision, shaded after the loop so neighbouring pixels shade
+    // together instead of each at its own iteration.
+    var collision = vec3<f32>(0.0);
+    var collision_weight = vec3<f32>(0.0);
 
-    for (var t = t0; t < t1; t += step) {
-        let uv = origin + direction * t;
+    // The empty space in front of the material is crossed a coarse cell at a
+    // time; the block walk starts where it ends.
+    var t = entry;
+    var coarse = begin_walk(origin, direction, t, BLOCK * COARSE, coarse_count());
 
-        let classified = classify(uv);
-        let material = to_material(classified);
+    while (t < exit && all(coarse.cell < coarse_count()) && coarse_empty(coarse.cell)) {
+        t = max(t, walk_exit(coarse));
+        coarse = walk_next(coarse);
+    }
 
-        // A cut isn't a real interface: entering through one takes the
-        // tissue's ior without a Fresnel reflection.
-        if (classified.crop <= 0.0) {
-            ior = 0.0;
+    var walk = begin_walk(origin, direction, t, BLOCK, block_count());
+
+    // One draw per tentative collision: the optical depth to it carries across
+    // block boundaries, so the first collision takes the pixel's blue noise.
+    var i = 0u;
+    var u = track_noise(pixel, i);
+    var depth = -log(1.0 - u.x);
+
+    while (t < exit && all(walk.cell < block_count())) {
+        let boundary = min(walk_exit(walk), exit);
+        let majorant = block_majorant(walk.cell, scattering_scale);
+
+        let span = majorant * max(boundary - t, 0.0);
+
+        if (depth >= span) {
+            depth -= span;
+            t = max(t, boundary);
+            walk = walk_next(walk);
             continue;
         }
 
-        let eta = select(material.ior / ior, 1.0, ior == 0.0);
-        ior = material.ior;
+        t += depth / majorant;
+        let uv = origin + direction * t;
+        let classified = classify(uv);
+        let material = to_material(classified);
+        let fictitious = max(majorant - material.extinction, vec3<f32>(0.0));
 
-        let extinction = step * material.extinction;
+        if (!collided) {
+            let real = average(weight * material.extinction);
+            let total = real + average(weight * fictitious);
+            let p = select(1.0, real / total, total > 0.0);
 
-        if (all(extinction < vec3<f32>(1E-5))) { continue; }
+            if (u.y < p) {
+                collision = uv;
+                collision_weight = weight * material.extinction / (majorant * p);
+                collided = true;
+            } else {
+                weight *= fictitious / (majorant * (1.0 - p));
+            }
+        }
 
-        // Fall back to `view` where the gradient is degenerate (a flat plateau).
-        // A zero normal makes `half` below `normalize(0)` -> NaN, which poisons
-        // the accumulation buffer.
-        let normal = sample_normal(uv, classified, view);
-        let light = reflect(-view, normal);
-        let half = normalize(view + light);
+        transmittance *= fictitious / majorant;
 
-        let eta_boosted = mix(1.0, (eta - 1.0) * 5.0 + 1.0, HDRI_SETTINGS.specular);
+        // Russian roulette ends ratio tracking once little light gets through.
+        let largest = max(transmittance.x, max(transmittance.y, transmittance.z));
+        if (largest < 0.1) {
+            let survival = 10.0 * largest;
+            transmittance = select(vec3<f32>(0.0), transmittance / survival, u.z < survival);
+        }
 
-        let F = fresnel(dot(view, half), eta_boosted);
-        let Fdr = fresnel_diffuse(eta_boosted);
+        if (collided && all(transmittance == vec3<f32>(0.0))) { break; }
 
-        let transmittance_in_step = 1.0 - exp(-extinction);
+        i++;
+        u = track_noise(pixel, i);
+        depth = -log(1.0 - u.x);
+    }
 
-        let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
-        let i = u32(round((t - t0) / step));
-        let outgoing_radiance = sample_outgoing_radiance(uv, step_noise(lookup, pick, i), normal, view, albedo, F, Fdr);
+    var color = vec3<f32>(0.0);
 
-        color += transmittance * transmittance_in_step * outgoing_radiance;
-
-        transmittance *= exp(-extinction);
-
-        if (all(transmittance <= vec3<f32>(1E-2))) { break; }
+    if (collided) {
+        let classified = classify(collision);
+        let noise = StepNoise(tent(lookup.xyz), pick.xyz - 0.5, pick.w, lookup.w);
+        color = collision_weight * scatter(collision, direction, classified, to_material(classified), view, noise);
     }
 
     let alpha = 1.0 - brightness(transmittance);
 
     // Linear HDR radiance; tone mapping happens once in the present pass.
-    return vec4<f32>(color.rgb, alpha);
+    return vec4<f32>(color, alpha);
+}
+
+// Outgoing radiance at a real collision. The ior one voxel back along the ray
+// sets the Fresnel interface; behind a cut (or outside the crop) there's none.
+fn scatter(uv: vec3<f32>, direction: vec3<f32>, classified: Classified, material: Material, view: vec3<f32>, noise: StepNoise) -> vec3<f32> {
+    let behind = classify(uv - normalize(direction) * voxel_step());
+    let eta = select(material.ior / to_material(behind).ior, 1.0, behind.crop <= 0.0);
+    let eta_boosted = mix(1.0, (eta - 1.0) * 2.0 + 1.0, HDRI_SETTINGS.specular);
+
+    let Fdr = fresnel_diffuse(eta_boosted);
+    let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
+
+    // Without an interface F is 0 whatever the normal: no gradient, no lobes.
+    var normal = view;
+    var specular = 0.0;
+
+    if (eta_boosted != 1.0) {
+        // Fall back to `view` where the gradient is degenerate (a flat plateau).
+        // A zero normal makes `half` below `normalize(0)` -> NaN, which poisons
+        // the accumulation buffer.
+        normal = sample_normal(uv, classified, view);
+        let half = normalize(view + reflect(-view, normal));
+        let F = fresnel(dot(view, half), eta_boosted);
+
+        // Russian roulette: the specular lobes run with probability ~F and are
+        // weighted back to F, so weak reflections rarely pay for them.
+        let p = min(F / SPECULAR_ROULETTE, 1.0);
+        specular = select(0.0, F / p, noise.coin < p);
+    }
+
+    return sample_outgoing_radiance(uv, noise, normal, view, albedo, specular, Fdr);
+}
+
+// Fresnel factor at and above which the specular lobes always run.
+const SPECULAR_ROULETTE: f32 = 0.05;
+
+// Free flights must be independent: a rotated sequence ties each flight to
+// the last and biases the tracking. Only the first is blue.
+fn track_noise(pixel: vec2<u32>, i: u32) -> vec4<f32> {
+    if (i == 0u) { return noise(pixel, 2u); }
+    return white_noise(vec3<u32>(pixel, ENVIRONMENT.sample) ^ (vec3<u32>(0x9e3779b9u, 0x85ebca6bu, 0xc2b2ae35u) * i));
+}
+
+fn average(v: vec3<f32>) -> f32 {
+    return (v.x + v.y + v.z) / 3.0;
+}
+
+// A walk through grid cells along the ray (Amanatides & Woo 1987).
+struct Walk {
+    cell: vec3<u32>,
+    step: vec3<i32>,
+    // `t` where the ray crosses into the next cell, per axis.
+    next: vec3<f32>,
+    // `t` per cell, per axis.
+    delta: vec3<f32>,
+}
+
+// A walk through cells of `voxels`³ voxels, `cells` per axis.
+fn begin_walk(origin: vec3<f32>, direction: vec3<f32>, t: f32, voxels: u32, cells: vec3<u32>) -> Walk {
+    let scale = vec3<f32>(CLASSIFY.size) / f32(voxels);
+    let o = origin * scale;
+    // Axes the ray runs parallel to are never crossed.
+    let d = select(direction * scale, vec3<f32>(1e-20), abs(direction) < vec3<f32>(1e-20));
+    let inverse = 1.0 / d;
+
+    let last = vec3<f32>(cells - 1u);
+    let cell = clamp(floor(o + d * t), vec3<f32>(0.0), last);
+    let step = select(vec3<i32>(-1), vec3<i32>(1), d > vec3<f32>(0.0));
+    let next = (cell + vec3<f32>(d > vec3<f32>(0.0)) - o) * inverse;
+
+    return Walk(vec3<u32>(cell), step, next, abs(inverse));
+}
+
+fn walk_exit(walk: Walk) -> f32 {
+    return min(walk.next.x, min(walk.next.y, walk.next.z));
+}
+
+// Leaving the grid wraps the cell past the cell count, which ends the walk.
+fn walk_next(walk: Walk) -> Walk {
+    let crossed = walk.next == vec3<f32>(walk_exit(walk));
+    var result = walk;
+    result.cell = vec3<u32>(vec3<i32>(walk.cell) + select(vec3<i32>(0), walk.step, crossed));
+    result.next += select(vec3<f32>(0.0), walk.delta, crossed);
+    return result;
 }
 
 struct Material {
@@ -165,21 +271,15 @@ fn sample_normal(uv: vec3<f32>, classified: Classified, fallback: vec3<f32>) -> 
     return normalize(normal);
 }
 
-// Per pixel, step and frame. `tent` in [-1, 1]³ jitters the probe lookup:
+// Per pixel and frame. `tent` in [-1, 1]³ jitters the probe lookup:
 // averaged by accumulation, trilinear interpolation becomes a smooth B-spline.
-// `box` in [-½, ½)³ turns a nearest-probe read into trilinear on average, and
-// `xi` in [0, 1) picks the lobe.
+// `box` in [-½, ½)³ turns a nearest-probe read into trilinear on average,
+// `xi` in [0, 1) picks the lobe and `coin` in [0, 1) plays the specular roulette.
 struct StepNoise {
     tent: vec3<f32>,
     box: vec3<f32>,
     xi: f32,
-}
-
-// `lookup.xyz` → tent, `pick.xyz` → box, `pick.w` → ξ; `lookup.w` is the `t0` jitter.
-fn step_noise(lookup: vec4<f32>, pick: vec4<f32>, step: u32) -> StepNoise {
-    let a = advance(lookup, step);
-    let b = advance(pick, step);
-    return StepNoise(tent(a.xyz), b.xyz - 0.5, b.w);
+    coin: f32,
 }
 
 fn sample_outgoing_radiance(
@@ -188,7 +288,7 @@ fn sample_outgoing_radiance(
     normal: vec3<f32>,
     view: vec3<f32>,
     albedo: vec3<f32>,
-    F: f32,
+    specular: f32,
     Fdr: f32) -> vec3<f32>
 {
     let anisotropy = HDRI_SETTINGS.anisotropy;
@@ -197,6 +297,7 @@ fn sample_outgoing_radiance(
         specular_kernel(normal, view, HDRI_SETTINGS.roughness),
         phase_kernel(view, anisotropy),
         abs(anisotropy) < 1e-3,
+        specular > 0.0,
     );
 
     let offset = HDRI_SETTINGS.lookup_jitter * noise.tent;
@@ -211,7 +312,7 @@ fn sample_outgoing_radiance(
         radiance = filtered_lobe(probe_grid_at(GAUSSIAN, uv, offset), noise.xi, shading);
     }
 
-    return radiance.specular * F + HDRI_SETTINGS.phase * radiance.phase * albedo * (1.0 - Fdr);
+    return radiance.specular * specular + HDRI_SETTINGS.phase * radiance.phase * albedo * (1.0 - Fdr);
 }
 
 // The kernels the light lobes are integrated against. Isotropic phase is
@@ -220,6 +321,8 @@ struct Shading {
     specular: Kernel,
     phase: Kernel,
     isotropic: bool,
+    // Whether the specular sum is weighted in at all.
+    reflects: bool,
 }
 
 struct Radiance {
@@ -236,7 +339,7 @@ fn all_lobes(grid: ProbeGrid, shading: Shading) -> Radiance {
     if (shading.isotropic) {
         phase = textureSampleLevel(PHASE, SAMPLER, grid.base / grid.stride, 0.0).rgb;
 
-        for (var k = 0u; k < lobes; k += 4u) {
+        for (var k = 0u; k < select(0u, lobes, shading.reflects); k += 4u) {
             let l0 = grid_lobe(grid, k);
             let l1 = grid_lobe(grid, k + 1u);
             let l2 = grid_lobe(grid, k + 2u);

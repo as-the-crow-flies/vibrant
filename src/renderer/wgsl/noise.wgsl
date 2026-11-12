@@ -2,9 +2,6 @@
 // Roots declare `ENVIRONMENT` and `BLUE_NOISE: texture_3d<f32>`.
 use random;
 
-// R4 sequence (Roberts): per-step rotation, low discrepancy along the ray.
-const R4 = vec4<f32>(0.8566748838545029, 0.733891856627126, 0.6287067210378086, 0.53859725722361);
-
 const U24_TO_UNIT: f32 = 5.960464477539063e-8;
 
 // Four independent [0, 1) values. Distinct `dimension`s are uncorrelated.
@@ -13,22 +10,19 @@ fn noise(pixel: vec2<u32>, dimension: u32) -> vec4<f32> {
         return white_noise(vec3<u32>(pixel, ENVIRONMENT.sample ^ (dimension << 24u)));
     }
 
-    // One slice per sample; each dimension and each pass through the slices
-    // reads a randomly shifted tile.
+    // One slice per sample. Each screen tile, dimension and pass through the
+    // slices reads the texture shifted and in one of its 8 orientations, so the
+    // tiles don't repeat; within a pass a pixel's sequence stays blue in time.
     let size = textureDimensions(BLUE_NOISE);
-    let shift = pcg3d(vec3<u32>(ENVIRONMENT.sample / size.z, dimension, 0x5bd1e995u)).xy;
-    let texel = vec3<u32>((pixel + shift) % size.xy, ENVIRONMENT.sample % size.z);
+    let tile = pixel / size.xy;
+    let hash = pcg3d(vec3<u32>(ENVIRONMENT.sample / size.z, dimension, tile.x | (tile.y << 16u)));
+
+    let local = pixel % size.xy;
+    let mirrored = select(local, size.xy - 1u - local, (vec2<u32>(hash.z) & vec2<u32>(1u, 2u)) != vec2<u32>(0u));
+    let oriented = select(mirrored, mirrored.yx, (hash.z & 4u) != 0u);
+    let texel = vec3<u32>((oriented + hash.xy) % size.xy, ENVIRONMENT.sample % size.z);
 
     return (textureLoad(BLUE_NOISE, texel, 0) * 255.0 + 0.5) / 256.0;
-}
-
-// `u` for ray step `step`: rotated (blue) or redrawn (white).
-fn advance(u: vec4<f32>, step: u32) -> vec4<f32> {
-    if (ENVIRONMENT.noise == 0u) {
-        return white_noise(bitcast<vec3<u32>>(u.xyz) ^ vec3<u32>(step));
-    }
-
-    return fract(u + R4 * f32(step));
 }
 
 fn white_noise(seed: vec3<u32>) -> vec4<f32> {

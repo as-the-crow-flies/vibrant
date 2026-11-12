@@ -171,7 +171,8 @@ impl Surface {
     /// exactly the on-screen SDR look, UI included. `scene` is the tone-map
     /// input (the accumulated mean, or the raw sample buffer).
     pub fn export(&self, gpu: &Gpu, cmd: &mut CommandEncoder, frame: &Frame, scene: &ColorBuffer) {
-        self.present.set_headroom(gpu, 1.0);
+        self.present
+            .set_uniform(gpu, 1.0, self.accumulator.samples());
         self.present
             .export(cmd, scene, frame, frame.export().view());
     }
@@ -188,7 +189,8 @@ impl Surface {
                 self.hdr_headroom.clamp(1.0, self.hdr_headroom_limit(gpu))
             };
 
-            self.present.set_headroom(gpu, headroom);
+            self.present
+                .set_uniform(gpu, headroom, self.accumulator.samples());
             self.present
                 .dispatch(&mut cmd, scene, frame, &view, self.presentation);
 

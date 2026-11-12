@@ -19,6 +19,8 @@ use color;
 struct Present {
     headroom: f32,
     exposure: f32,
+    // 1 / samples in the scene.
+    blur: f32,
 };
 @group(2) @binding(0) var<uniform> PRESENT: Present;
 
@@ -32,6 +34,25 @@ fn tonemap(color: vec3<f32>, peak: f32) -> vec3<f32> {
     let ramp = smoothstep(0.0, 1.0, m);
     let lifted = m + (peak - 1.0) * ramp * ramp;
     return min(c * (lifted / max(m, 1e-4)), vec3<f32>(peak));
+}
+
+// A single noisy sample reads darker once tone mapped: the curve compresses
+// its bright outliers more than its dark ones. Blurring the first samples a
+// little keeps the brightness steady as they accumulate; it fades as 1/N.
+fn scene_at(coord: vec2<u32>) -> vec4<f32> {
+    let center = vec2<i32>(coord);
+    let last = vec2<i32>(textureDimensions(SCENE)) - 1;
+
+    var blurred = vec4<f32>(0.0);
+    for (var y = -1; y <= 1; y++) {
+        for (var x = -1; x <= 1; x++) {
+            // 3×3 binomial: ¼, ½, ¼ per axis.
+            let weight = (0.5 - 0.25 * f32(abs(x))) * (0.5 - 0.25 * f32(abs(y)));
+            blurred += weight * textureLoad(SCENE, clamp(center + vec2<i32>(x, y), vec2<i32>(0), last), 0);
+        }
+    }
+
+    return mix(textureLoad(SCENE, center, 0), blurred, PRESENT.blur);
 }
 
 // -----------------------------------------------------------------------
@@ -50,7 +71,7 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 fn fragment(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let coord = vec2<u32>(pixel.xy);
 
-    let texel = textureLoad(SCENE, coord, 0);
+    let texel = scene_at(coord);
     let scene = texel.rgb * PRESENT.exposure;
 
     let tone = tonemap(scene, select(1.0, PRESENT.headroom, HDR));

@@ -5,7 +5,8 @@ use attenuation;
 use color;
 use uniforms;
 
-@group(1) @binding(0) var<storage, read> OCCUPANCY: array<u32>;
+// Per 4³ voxel block: bounds on (absorption, scattering) over every channel.
+@group(1) @binding(0) var<storage, read> MAJORANT: array<vec2<f32>>;
 @group(1) @binding(1) var SAMPLER: sampler;
 @group(1) @binding(2) var<uniform> TRANSFORM: mat4x4<f32>;
 @group(1) @binding(3) var LUT: texture_2d_array<f32>;
@@ -26,6 +27,8 @@ use uniforms;
 @group(1) @binding(18) var MASK_5: texture_3d<f32>;
 @group(1) @binding(19) var MASK_6: texture_3d<f32>;
 @group(1) @binding(20) var MASK_7: texture_3d<f32>;
+// Per COARSE³ blocks: non-zero where any of them may hold material.
+@group(1) @binding(21) var<storage, read> COARSE_CELLS: array<u32>;
 
 struct Slot {
     inverted: u32,
@@ -316,10 +319,27 @@ fn tap(texture: texture_3d<f32>, x: f32, y: f32, z: f32) -> f32 {
     return textureSampleLevel(texture, SAMPLER, vec3<f32>(x, y, z), 0.0).x;
 }
 
-fn is_occupied(uv: vec3<f32>) -> bool {
-    let size = CLASSIFY.size;
-    let blocks = (size + 3u) / 4u;
-    let voxel = vec3<u32>(clamp(uv * vec3<f32>(size), vec3<f32>(0.0), vec3<f32>(size - 1u)));
-    let block = voxel / 4u;
-    return OCCUPANCY[block.x + blocks.x * (block.y + blocks.y * block.z)] != 0u;
+const BLOCK: u32 = 4u;
+// Blocks per coarse cell, per axis.
+const COARSE: u32 = 8u;
+
+fn block_count() -> vec3<u32> {
+    return (CLASSIFY.size + BLOCK - 1u) / BLOCK;
+}
+
+// Bounds the classified extinction of every channel, with scattering scaled
+// by `scattering_scale`.
+fn block_majorant(block: vec3<u32>, scattering_scale: f32) -> f32 {
+    let blocks = block_count();
+    let bound = MAJORANT[block.x + blocks.x * (block.y + blocks.y * block.z)];
+    return bound.x + scattering_scale * bound.y;
+}
+
+fn coarse_count() -> vec3<u32> {
+    return (block_count() + COARSE - 1u) / COARSE;
+}
+
+fn coarse_empty(cell: vec3<u32>) -> bool {
+    let cells = coarse_count();
+    return COARSE_CELLS[cell.x + cells.x * (cell.y + cells.y * cell.z)] == 0u;
 }
