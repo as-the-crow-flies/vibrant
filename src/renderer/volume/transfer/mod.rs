@@ -14,14 +14,14 @@ use crate::{
 
 /// Bakes the transfer functions after any fraction, mask or crop edit: per
 /// fraction lookup tables (the tracer classifies through them per sample), the
-/// tracer's occupancy grid, and the cascades' extinction + mip chain.
+/// tracer's majorant grid, and the cascades' extinction + mip chain.
 pub struct VolumeTransferPipeline {
     lut: Lazy<ComputePipeline>,
-    occupancy: Lazy<ComputePipeline>,
+    majorant: Lazy<ComputePipeline>,
     extinction: Lazy<ComputePipeline>,
     mipmap: Lazy<ComputePipeline>,
     lut_layout: BindGroupLayout,
-    occupancy_layout: BindGroupLayout,
+    majorant_layout: BindGroupLayout,
     extinction_layout: BindGroupLayout,
     classified_layout: BindGroupLayout,
 }
@@ -29,7 +29,7 @@ pub struct VolumeTransferPipeline {
 impl VolumeTransferPipeline {
     pub fn new(gpu: &Gpu) -> Self {
         let lut_layout = Self::lut_layout(gpu);
-        let occupancy_layout = Self::occupancy_layout(gpu);
+        let majorant_layout = Self::majorant_layout(gpu);
         let extinction_layout = PhysicalVolume::layout_write(gpu);
         let classified_layout = PhysicalVolume::layout_classified(gpu);
 
@@ -42,12 +42,12 @@ impl VolumeTransferPipeline {
             )
         });
 
-        let layout = occupancy_layout.clone();
-        let occupancy = gpu.lazy("VolumeOccupancyPipeline", move |gpu| {
+        let layout = majorant_layout.clone();
+        let majorant = gpu.lazy("VolumeMajorantPipeline", move |gpu| {
             gpu.compute(
-                "VolumeOccupancyPipeline",
+                "VolumeMajorantPipeline",
                 &gpu.pipeline_layout(&[&layout, &VolumeFractionBuffer::layout(gpu)]),
-                &gpu.shader("renderer/volume/transfer/occupancy.wgsl"),
+                &gpu.shader("renderer/volume/transfer/majorant.wgsl"),
             )
         });
 
@@ -70,11 +70,11 @@ impl VolumeTransferPipeline {
 
         Self {
             lut,
-            occupancy,
+            majorant,
             extinction,
             mipmap,
             lut_layout,
-            occupancy_layout,
+            majorant_layout,
             extinction_layout,
             classified_layout,
         }
@@ -88,15 +88,16 @@ impl VolumeTransferPipeline {
         let fractions = asset.visible_volumes();
 
         volume.update_classify(gpu, &fractions, &asset.masks, &asset.crop);
-        cmd.clear_buffer(volume.occupancy(), 0, None);
+        cmd.clear_buffer(volume.majorant(), 0, None);
+        cmd.clear_buffer(volume.coarse(), 0, None);
 
         let slots = volume.lut_slots().iter().zip(&fractions);
         let lut: Vec<_> = slots
             .clone()
             .map(|(slot, _)| self.lut_binding(gpu, slot))
             .collect();
-        let occupancy: Vec<_> = slots
-            .map(|(slot, _)| self.occupancy_binding(gpu, volume, slot))
+        let majorant: Vec<_> = slots
+            .map(|(slot, _)| self.majorant_binding(gpu, volume, slot))
             .collect();
 
         let classified =
@@ -121,8 +122,8 @@ impl VolumeTransferPipeline {
 
         let blocks = workgroups(PhysicalVolume::blocks(volume.size()));
 
-        pass.set_pipeline(&self.occupancy);
-        for (binding, fraction) in occupancy.iter().zip(&fractions) {
+        pass.set_pipeline(&self.majorant);
+        for (binding, fraction) in majorant.iter().zip(&fractions) {
             pass.set_bind_group(0, binding, &[]);
             pass.set_bind_group(1, fraction.binding(), &[]);
             pass.dispatch_workgroups(blocks.x, blocks.y, blocks.z);
@@ -158,7 +159,7 @@ impl VolumeTransferPipeline {
         })
     }
 
-    fn occupancy_binding(
+    fn majorant_binding(
         &self,
         gpu: &Gpu,
         volume: &PhysicalVolume,
@@ -166,11 +167,11 @@ impl VolumeTransferPipeline {
     ) -> BindGroup {
         gpu.device().create_bind_group(&BindGroupDescriptor {
             label: Some(type_name::<Self>()),
-            layout: &self.occupancy_layout,
+            layout: &self.majorant_layout,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: volume.occupancy().as_entire_binding(),
+                    resource: volume.majorant().as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 1,
@@ -179,6 +180,10 @@ impl VolumeTransferPipeline {
                 BindGroupEntry {
                     binding: 2,
                     resource: volume.classify().as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: volume.coarse().as_entire_binding(),
                 },
             ],
         })
@@ -201,7 +206,7 @@ impl VolumeTransferPipeline {
             })
     }
 
-    fn occupancy_layout(gpu: &Gpu) -> BindGroupLayout {
+    fn majorant_layout(gpu: &Gpu) -> BindGroupLayout {
         let buffer = |binding, ty| BindGroupLayoutEntry {
             binding,
             visibility: ShaderStages::COMPUTE,
@@ -229,6 +234,7 @@ impl VolumeTransferPipeline {
                         count: None,
                     },
                     buffer(2, BufferBindingType::Uniform),
+                    buffer(3, BufferBindingType::Storage { read_only: false }),
                 ],
             })
     }

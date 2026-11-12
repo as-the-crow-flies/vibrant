@@ -1,6 +1,6 @@
 use std::iter::zip;
 
-use egui::{ComboBox, Grid, ScrollArea, Ui};
+use egui::{ComboBox, Grid, ScrollArea, Slider, Ui};
 use itertools::Itertools;
 use strum::IntoEnumIterator;
 
@@ -113,7 +113,8 @@ impl VolumesWidget {
                      so you can fade a volume in or out without re-editing \
                      every stop.",
                 );
-                ui.slider(&mut volume.opacity, 0.0..=1.0).track(self);
+                ui.add(Slider::new(&mut volume.opacity, 0.01..=1.0).logarithmic(true))
+                    .track(self);
                 ui.end_row();
 
                 ui.label("Mask").on_hover_text(
