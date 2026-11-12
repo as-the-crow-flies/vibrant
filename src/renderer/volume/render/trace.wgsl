@@ -1,3 +1,4 @@
+use classify;
 use color;
 use gaussian;
 use noise;
@@ -10,15 +11,6 @@ use uniforms;
 @group(0) @binding(3) var WEIGHTS: texture_3d<f32>;
 @group(0) @binding(7) var<uniform> CASCADE_OPTS: CascadeOpts;
 @group(0) @binding(8) var PHASE: texture_3d<f32>;
-
-@group(1) @binding(0) var ABSORPTION: texture_3d<f32>;
-@group(1) @binding(1) var SCATTERING: texture_3d<f32>;
-@group(1) @binding(2) var EXTINCTION: texture_3d<f32>;
-@group(1) @binding(3) var PROPERTIES: texture_3d<f32>;
-@group(1) @binding(4) var GRADIENT: texture_3d<f32>;
-@group(1) @binding(5) var SAMPLER: sampler;
-@group(1) @binding(6) var<uniform> TRANSFORM: mat4x4<f32>;
-@group(1) @binding(7) var<uniform> TRANSFORM_INVERSE: mat4x4<f32>;
 
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 @group(2) @binding(1) var BLUE_NOISE: texture_3d<f32>;
@@ -55,7 +47,9 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let origin = (camera * vec4<f32>(near, 1.0)).xyz;
     let direction = (camera * vec4<f32>(normalize(far - near), 0.0)).xyz;
 
-    let hit = intersectAABB(origin, direction);
+    // Clipping to the crop box keeps the empty-space skip from marching it.
+    let crop = CLASSIFY.crop;
+    let hit = intersectAABB(origin, direction, max(0.5 + crop.min.xyz, vec3<f32>(0.0)), min(0.5 + crop.max.xyz, vec3<f32>(1.0)));
 
     if (hit.x > hit.y) { return vec4<f32>(0.0); }
 
@@ -83,7 +77,7 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     // doesn't flicker frame to frame.
     var t0 = entry;
     while (t0 + skip < t1) {
-        if (textureSampleLevel(GRADIENT, SAMPLER, origin + direction * (t0 + skip), 0.0).a > 0.0) { break; }
+        if (is_occupied(origin + direction * (t0 + skip))) { break; }
         t0 += skip;
     }
 
@@ -96,32 +90,40 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
     t0 = max(t0 - skip, entry) + step * lookup.w;
 
-    var ior = 1.0;
+    // 0 = unknown: at the ray start or just through a cut.
+    var ior = 0.0;
 
     for (var t = t0; t < t1; t += step) {
         let uv = origin + direction * t;
 
-        let material = sample_material(uv);
+        let classified = classify(uv);
+        let material = to_material(classified);
 
-        // Fall back to `view` where the gradient is degenerate (a volume face
-        // cut flat by the domain edge). A zero normal makes `half` below
-        // `normalize(0)` -> NaN, which poisons the accumulation buffer and shows
-        // up as a persistent noisy plane on that face.
-        let normal = sample_normal(uv, view);
+        // A cut isn't a real interface: entering through one takes the
+        // tissue's ior without a Fresnel reflection.
+        if (classified.crop <= 0.0) {
+            ior = 0.0;
+            continue;
+        }
+
+        let eta = select(material.ior / ior, 1.0, ior == 0.0);
+        ior = material.ior;
+
+        let extinction = step * material.extinction;
+
+        if (all(extinction < vec3<f32>(1E-5))) { continue; }
+
+        // Fall back to `view` where the gradient is degenerate (a flat plateau).
+        // A zero normal makes `half` below `normalize(0)` -> NaN, which poisons
+        // the accumulation buffer.
+        let normal = sample_normal(uv, classified, view);
         let light = reflect(-view, normal);
         let half = normalize(view + light);
-
-        let eta = material.ior / ior;
-        ior = material.ior;
 
         let eta_boosted = mix(1.0, (eta - 1.0) * 5.0 + 1.0, HDRI_SETTINGS.specular);
 
         let F = fresnel(dot(view, half), eta_boosted);
         let Fdr = fresnel_diffuse(eta_boosted);
-
-        let extinction = step * material.extinction;
-
-        if (all(extinction < vec3<f32>(1E-5))) { continue; }
 
         let transmittance_in_step = 1.0 - exp(-extinction);
 
@@ -149,27 +151,18 @@ struct Material {
     ior: f32
 };
 
-fn sample_material(uv: vec3<f32>) -> Material {
-    let absorption = tex_rgb(ABSORPTION, uv);
-    let reduced_scattering = tex_rgb(SCATTERING, uv);
-    let properties = tex_rgb(PROPERTIES, uv);
+fn to_material(sum: Classified) -> Material {
+    let scattering = sum.scattering / (1.0 - HDRI_SETTINGS.anisotropy);
 
-    let scattering = reduced_scattering / (1.0 - HDRI_SETTINGS.anisotropy);
-
-    let extinction = absorption + scattering;
-    let ior = average_ior(properties);
-
-    return Material(absorption, scattering, extinction, ior);
+    return Material(sum.absorption, scattering, sum.absorption + scattering, average_ior(sum.properties));
 }
 
-// The gradient is per voxel; a normal maps to world by the transpose of the
-// world → voxel transform.
-fn sample_normal(sample: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
-    let raw_normal = - 2.0 * textureSampleLevel(GRADIENT, SAMPLER, sample, 0.0).xyz + 1.0;
-    if (length(raw_normal) <= 1E-4) { return fallback; }
+// A gradient maps to world by the transpose of the world → uv transform.
+fn sample_normal(uv: vec3<f32>, classified: Classified, fallback: vec3<f32>) -> vec3<f32> {
+    let normal = -(transpose(linear_part(TRANSFORM)) * sample_gradient(uv, classified));
+    if (length(normal) <= 1E-6) { return fallback; }
 
-    let voxels = vec3<f32>(textureDimensions(GRADIENT)) * raw_normal;
-    return normalize(transpose(linear_part(TRANSFORM)) * voxels);
+    return normalize(normal);
 }
 
 // Per pixel, step and frame. `tent` in [-1, 1]³ jitters the probe lookup:
@@ -381,10 +374,7 @@ fn unproject(v: vec3<f32>) -> vec3<f32> {
     return t.xyz / t.w;
 }
 
-fn intersectAABB(origin: vec3<f32>, direction: vec3<f32>) -> vec2<f32> {
-    let boxMin = vec3<f32>(0.0);
-    let boxMax = vec3<f32>(1.0);
-
+fn intersectAABB(origin: vec3<f32>, direction: vec3<f32>, boxMin: vec3<f32>, boxMax: vec3<f32>) -> vec2<f32> {
     let invDir = 1.0 / direction;
 
     let t1 = (boxMin - origin) * invDir;
@@ -397,14 +387,6 @@ fn intersectAABB(origin: vec3<f32>, direction: vec3<f32>) -> vec2<f32> {
     let tMax = min(min(tMaxVec.x, tMaxVec.y), tMaxVec.z);
 
     return vec2<f32>(tMin, tMax);
-}
-
-fn tex(tex: texture_3d<f32>, uv: vec3<f32>) -> vec4<f32> {
-    return textureSampleLevel(tex, SAMPLER, uv, 0.0);
-}
-
-fn tex_rgb(tex: texture_3d<f32>, uv: vec3<f32>) -> vec3<f32> {
-    return unpack_rgb(textureSampleLevel(tex, SAMPLER, uv, 0.0));
 }
 
 fn minimum(v: vec3<f32>) -> f32 {

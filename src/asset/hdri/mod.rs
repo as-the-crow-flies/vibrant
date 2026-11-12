@@ -180,10 +180,10 @@ impl HdriBuffer {
 
         let settings = HdriBufferSettings {
             rotation: 0.0,
-            strength: 1.0,
+            strength: 2.0,
             specular: 1.0,
             phase: 1.0,
-            roughness: 0.3,
+            roughness: 0.5,
             anisotropy: 0.0,
             importance: 1,
             prefilter: 1,
@@ -217,7 +217,7 @@ impl HdriBuffer {
             index: 0,
             importance_sampling: true,
             prefilter: true,
-            sample_lobe: true,
+            sample_lobe: false,
             nearest_probes: true,
             uniform_share: 0.0,
             log_sample_weights: false,

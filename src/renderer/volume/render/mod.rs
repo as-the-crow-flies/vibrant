@@ -21,15 +21,17 @@ pub struct GaussianVolumeRenderer {
     // Group 3: HDRI material settings + the combined-mode line-depth target.
     // Built per dispatch since the line-depth view lives on the (resizable) Frame.
     material_layout: BindGroupLayout,
+    classified_layout: BindGroupLayout,
 }
 
 impl GaussianVolumeRenderer {
     pub fn new(gpu: &Gpu) -> Self {
         let material_layout = Self::material_layout(gpu);
+        let classified_layout = PhysicalVolume::layout_classified(gpu);
 
         let layout = gpu.pipeline_layout(&[
             &GaussianRadianceBuffer::layout(gpu),
-            &PhysicalVolume::layout_read(gpu),
+            &classified_layout,
             &Environment::layout(gpu),
             &material_layout,
         ]);
@@ -46,6 +48,7 @@ impl GaussianVolumeRenderer {
         Self {
             pipeline,
             material_layout,
+            classified_layout,
         }
     }
 
@@ -93,6 +96,13 @@ impl GaussianVolumeRenderer {
             return;
         };
 
+        let classified = volume.binding_classified(
+            gpu,
+            &self.classified_layout,
+            &asset.visible_volumes(),
+            &asset.masks,
+        );
+
         let material = self.material_binding(gpu, &asset.hdri, frame);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
@@ -113,7 +123,7 @@ impl GaussianVolumeRenderer {
         pass.set_pipeline(&self.pipeline);
 
         pass.set_bind_group(0, radiance.binding(), &[]);
-        pass.set_bind_group(1, volume.binding_read(), &[]);
+        pass.set_bind_group(1, &classified, &[]);
         pass.set_bind_group(2, asset.environment.binding(), &[]);
         pass.set_bind_group(3, &material, &[]);
         pass.draw(0..4, 0..1);

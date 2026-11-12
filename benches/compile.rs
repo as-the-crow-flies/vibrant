@@ -12,7 +12,6 @@ use vibrant::{
     gpu::{warmup, Gpu},
     renderer::{
         accumulate::AccumulatePipeline,
-        gradient::GradientPipeline,
         lighting::LightingRenderer,
         line::{
             deposit::LineDepositPipeline, occupancy::LineOccupancyPipeline,
@@ -47,7 +46,6 @@ fn main() {
         AccumulatePipeline::new(&gpu),
         PresentPipeline::new(&gpu, TextureFormat::Bgra8Unorm, TextureFormat::Rgba16Float),
         VolumeTransferPipeline::new(&gpu),
-        GradientPipeline::new(&gpu),
         GaussianVolumeRenderer::new(&gpu),
         LightingRenderer::new(&gpu),
         (

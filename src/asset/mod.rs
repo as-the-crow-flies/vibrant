@@ -18,7 +18,7 @@ use environment::Environment;
 use glam::{Mat4, UVec3};
 use line::LineBuffer;
 use tractography::Tractography;
-use volume::PhysicalVolume;
+use volume::{PhysicalVolume, SLOTS};
 
 use crate::{
     asset::{
@@ -40,9 +40,9 @@ pub struct Asset {
     pub line: Option<LineBuffer>,
     pub volumes: Vec<VolumeFractionBuffer>,
     pub masks: Vec<VolumeMaskBuffer>,
-    // The single shared medium: volume density in the sampled textures (marched
-    // by the volume renderer), plus a `line_extinction` side texture the line
-    // deposit fills. Allocated whenever a volume OR a line is loaded.
+    // The single shared medium: transfer-function tables + baked extinction
+    // for the cascades, plus a `line_extinction` side texture the line deposit
+    // fills. Allocated whenever a volume OR a line is loaded.
     pub physical_volume: Option<PhysicalVolume>,
     // Primary cascade. Combined: occlusion = volume + lines, sampled by both
     // renderers. Overlay: occlusion = volume only, sampled by the volume renderer.
@@ -196,9 +196,6 @@ impl Asset {
         for volume in &self.volumes {
             volume.update_settings(gpu);
         }
-        for mask in &self.masks {
-            mask.update_settings(gpu);
-        }
 
         // Rebuild the tractography acceleration structure when the voxel
         // resolution or index-buffer budget changed (this used to rebuild the
@@ -326,5 +323,14 @@ impl Asset {
 
     pub fn changed(&self) -> bool {
         self.changed
+    }
+
+    /// The fractions the volume is classified from, at most [`SLOTS`].
+    pub fn visible_volumes(&self) -> Vec<&VolumeFractionBuffer> {
+        self.volumes
+            .iter()
+            .filter(|volume| volume.settings().visible)
+            .take(SLOTS)
+            .collect()
     }
 }
