@@ -58,10 +58,6 @@ const IRRADIANCE_CULL: f32 = 0.01;
 const IRRADIANCE_MARGIN: i32 = 1;
 const LOCAL_MATTER: f32 = 1e-3;
 
-// A uniform sample covers a solid angle of 4π / SAMPLES ≈ π tan²θ, an
-// importance sample that times its density ratio.
-const CONE_TAN: f32 = 2.0 / sqrt(f32(SAMPLES));
-
 // How much of each parent lobe the prefiltered samples pick up together.
 var<workgroup> PICKUP: array<f32, VMM_MAX>;
 
@@ -330,7 +326,7 @@ fn incident_radiance(origin: vec3<f32>, omega: Directions, ratio: Weights, threa
         radiance = parent_radiance(omega);
     }
 
-    return hadamard(radiance, trace_samples(origin, omega, ratio));
+    return hadamard(radiance, trace_samples(origin, omega));
 }
 
 // The parent's lobes as a soft partition of the sphere: each direction takes
@@ -395,14 +391,15 @@ fn footprint(k: u32, omega: Directions, kappa_s: Weights) -> Weights {
 
 // Interval [2^(c+1) − 2, 2^(c+2) − 2) in probe cells: contiguous from 0, each
 // twice its level's probe spacing.
-fn trace(origin: vec3<f32>, direction: vec3<f32>, ratio: f32) -> vec3<f32> {
+fn trace(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
     let c = cascade();
-    return transmission(origin, direction, CONE_TAN * sqrt(ratio), f32((2u << c) - 2u), f32((4u << c) - 2u));
+    return transmission(origin, direction, f32((2u << c) - 2u), f32((4u << c) - 2u));
 }
 
-// Marches the world `direction` in probe cells: t, the interval and the cone are
-// in cells.
-fn transmission(origin: vec3<f32>, direction: vec3<f32>, cone_tan: f32, t0: f32, t1: f32) -> vec3<f32> {
+// Marches the world `direction` a voxel at a time at full resolution; t and
+// the interval are in probe cells. Cones through the mips averaged gaps in the
+// matter away, and exp(−mean σ) ≤ mean exp(−σ): far too dark.
+fn transmission(origin: vec3<f32>, direction: vec3<f32>, t0: f32, t1: f32) -> vec3<f32> {
     var transmission = vec3<f32>(1.0);
 
     let dim = vec3<f32>(probe_grid(textureDimensions(VMM_OUT))) * f32(1u << cascade());
@@ -418,13 +415,12 @@ fn transmission(origin: vec3<f32>, direction: vec3<f32>, cone_tan: f32, t0: f32,
     var t = t0;
 
     while (t < t1) {
-        let diameter = max(2.0 * cone_tan * t, voxel);
-        let step = min(diameter, t1 - t);
+        let step = min(voxel, t1 - t);
         let sample = origin_sample + direction_sample * (t + 0.5 * step);
 
         if (any(abs(sample - 0.5) > vec3<f32>(0.5))) { break; }
 
-        let depth = extinction_at(sample, log2(diameter / voxel), step / scale);
+        let depth = extinction_at(sample, 0.0, step / scale);
 
         transmission *= exp(-depth);
 
