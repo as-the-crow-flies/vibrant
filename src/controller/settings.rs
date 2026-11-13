@@ -95,6 +95,12 @@ pub struct Settings {
     /// the render loop goes idle. Larger = stop sooner (noisier).
     pub noise_threshold: f32,
     pub noise: Noise,
+    /// Light the volume by tracing a ray to the environment per sample instead
+    /// of reading the radiance cascade. Accumulates separately.
+    pub ray_traced: bool,
+    /// Ray traced: Fresnel at the mirror direction for the whole lobe, as the
+    /// cascade, instead of per microfacet.
+    pub mirror_fresnel: bool,
 }
 
 impl Settings {
@@ -137,6 +143,8 @@ impl Settings {
             max_samples: 512,
             noise_threshold: 1.0e-3,
             noise: Noise::Blue,
+            ray_traced: false,
+            mirror_fresnel: false,
         }
     }
 }

@@ -449,6 +449,11 @@ impl Controller {
         self.crop().changed() || self.tractography().changed() || self.rendering().changed()
     }
 
+    /// Edits that only invalidate the ray traced image.
+    pub fn traced_changed(&self) -> bool {
+        self.rendering().traced_changed()
+    }
+
     pub fn changed(&self) -> bool {
         self.crop().changed()
             || self.volumes().changed()

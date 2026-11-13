@@ -18,8 +18,8 @@ use crate::{
 /// Writes neutral line density (from the occupancy pyramid) into the shared
 /// `PhysicalVolume`'s `line_extinction` texture (mip 0), then builds its mip
 /// chain. `cascade.wgsl` folds that into its occlusion so the radiance
-/// cascade(s) light lines and volume together; the volume tracer never marches
-/// it.
+/// cascade(s) light lines and volume together; the ray traced volume's shadow
+/// rays march it too.
 pub struct LineDepositPipeline {
     deposit: Lazy<ComputePipeline>,
     mipmap: Lazy<ComputePipeline>,

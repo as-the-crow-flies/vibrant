@@ -101,7 +101,9 @@ impl Renderer {
             self.asset.changed() | controller.lighting_changed() | controller.take_camera_changed();
 
         let settings = *controller.settings();
-        let plan = self.surface.plan_accumulation(&settings, scene_dirty);
+        let plan =
+            self.surface
+                .plan_accumulation(&settings, scene_dirty, controller.traced_changed());
 
         self.asset
             .environment
@@ -140,7 +142,7 @@ impl Renderer {
                         self.volume.transfer(gpu, &mut cmd, &self.asset);
                     }
                     // Neutral line density -> `pv.line_extinction` (a
-                    // separate texture the volume tracer never reads).
+                    // separate texture the cascades and traced shadow rays read).
                     if line_changed {
                         self.line.deposit(&mut cmd, controller, &self.asset);
                     }

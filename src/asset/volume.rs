@@ -51,7 +51,7 @@ pub struct PhysicalVolume {
     extinction: Texture,
     extinction_write: TextureView,
     // Neutral line density (mipmapped) written by the deposit pass; folded into
-    // the radiance cascades' occlusion, never marched by the volume tracer.
+    // the radiance cascades' occlusion and the traced shadow rays.
     line_extinction: MipTexture3D<R32Float>,
     // Per BLOCK³ voxels, (absorption, scattering) bounds of the classified
     // material over every channel: the tracer's majorants.

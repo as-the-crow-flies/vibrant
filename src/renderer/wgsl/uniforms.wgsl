@@ -72,6 +72,10 @@ struct HdriSettings {
     lobe_sampling: u32,
     // Sampled lobes come from the nearest probe, unfiltered.
     nearest_probes: u32,
+    // Ray traced: uniform share of the environment samples.
+    traced_uniform_share: f32,
+    // Ray traced: 0 = MIS, 1 = environment only, 2 = BSDF only.
+    traced_strategy: u32,
 }
 
 struct CropSettings {

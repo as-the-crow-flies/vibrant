@@ -35,3 +35,13 @@ fn clarberg_equal_area_sphere(uv: vec2<f32>) -> vec3<f32> {
 
     return vec3<f32>(xy, z);
 }
+
+fn clarberg_equal_area_inverse(direction: vec3<f32>) -> vec2<f32> {
+    let r = sqrt(max(1.0 - abs(direction.z), 0.0));
+    let phi0 = atan2(abs(direction.y), abs(direction.x));
+
+    let difference = r * (4.0 * phi0 / PI - 1.0);
+    let sum = select(2.0 - r, r, direction.z >= 0.0);
+
+    return sign_not_zero_2(direction.xy) * 0.5 * vec2<f32>(sum - difference, sum + difference);
+}

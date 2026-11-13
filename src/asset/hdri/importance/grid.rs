@@ -101,6 +101,16 @@ impl Grid {
         Self { levels }
     }
 
+    /// Every level, finest first, as rgb at unit strength + luminance.
+    pub fn texels(&self) -> impl Iterator<Item = Vec<[f32; 4]>> + '_ {
+        self.levels.iter().map(|level| {
+            level
+                .iter()
+                .map(|texel| texel.color.extend(texel.linear).into())
+                .collect()
+        })
+    }
+
     /// N cells for every power-of-two N up to `samples`, at `[N, 2N)`: a greedy
     /// cut by mass under `uniform_share` uniform + the rest by the sampling
     /// weight, so cells are small where the environment is bright.

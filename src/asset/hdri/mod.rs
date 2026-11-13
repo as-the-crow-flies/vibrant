@@ -31,6 +31,11 @@ pub struct HdriBufferSettings {
     lookup_jitter: f32,
     lobe_sampling: u32,
     nearest_probes: u32,
+    /// Ray traced: uniform share of the environment samples.
+    pub traced_uniform_share: f32,
+    /// Ray traced: 0 = MIS, 1 = environment only, 2 = BSDF only.
+    pub traced_strategy: u32,
+    _pad: [u32; 2],
 }
 
 pub struct HdriTexture {
@@ -39,6 +44,9 @@ pub struct HdriTexture {
     grid: Grid,
     lobes: Lobes,
     cells: Buffer,
+    /// The grid's levels: rgb at unit strength, a = luminance. The ray traced
+    /// mode reads radiance and warps its samples through it.
+    map: TextureView,
     binding: BindGroup,
 }
 
@@ -53,6 +61,7 @@ impl HdriTexture {
         let grid = Grid::new(size, data);
         let lobes = Lobes::new(gpu);
         let cells = cell_buffer(gpu, "Hdri::Cells");
+        let map = environment_map(gpu, &grid);
 
         let binding = gpu.device().create_bind_group(&BindGroupDescriptor {
             label,
@@ -86,6 +95,7 @@ impl HdriTexture {
             grid,
             lobes,
             cells,
+            map,
             binding,
         }
     }
@@ -191,6 +201,9 @@ impl HdriBuffer {
             lookup_jitter: 0.0,
             lobe_sampling: 0,
             nearest_probes: 1,
+            traced_uniform_share: 0.1,
+            traced_strategy: 0,
+            _pad: [0; 2],
         };
 
         let settings_buffer = gpu.device().create_buffer_init(&BufferInitDescriptor {
@@ -321,6 +334,10 @@ impl HdriBuffer {
         &self.texture().binding
     }
 
+    pub fn map(&self) -> &TextureView {
+        &self.texture().map
+    }
+
     pub fn settings_buffer(&self) -> &Buffer {
         &self.settings_buffer
     }
@@ -389,4 +406,49 @@ impl Drop for HdriBuffer {
     fn drop(&mut self) {
         self.settings_buffer.destroy();
     }
+}
+
+fn environment_map(gpu: &Gpu, grid: &Grid) -> TextureView {
+    let levels = grid.texels().collect::<Vec<_>>();
+
+    let texture = gpu.device().create_texture(&TextureDescriptor {
+        label: Some("Hdri::Map"),
+        size: Extent3d {
+            width: Grid::SIZE,
+            height: Grid::SIZE,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: levels.len() as u32,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba32Float,
+        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+
+    for (level, texels) in levels.iter().enumerate() {
+        let size = Grid::SIZE >> level;
+
+        gpu.queue().write_texture(
+            TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: level as u32,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            bytemuck::cast_slice(texels),
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(16 * size),
+                rows_per_image: Some(size),
+            },
+            Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    texture.create_view(&TextureViewDescriptor::default())
 }
