@@ -7,12 +7,12 @@ fn sample_ratios(thread: Thread) -> Weights {
     return Weights(sample_ratio(i + 0u), sample_ratio(i + 1u), sample_ratio(i + 2u), sample_ratio(i + 3u));
 }
 
-fn trace_samples(origin: vec3<f32>, omega: Directions, ratio: Weights) -> Radiances {
+fn trace_samples(origin: vec3<f32>, omega: Directions) -> Radiances {
     return Radiances(
-        trace(origin, omega[0], ratio[0]),
-        trace(origin, omega[1], ratio[1]),
-        trace(origin, omega[2], ratio[2]),
-        trace(origin, omega[3], ratio[3]),
+        trace(origin, omega[0]),
+        trace(origin, omega[1]),
+        trace(origin, omega[2]),
+        trace(origin, omega[3]),
     );
 }
 
