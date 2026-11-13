@@ -301,8 +301,13 @@ impl Bench {
 
         // Fold into the running mean.
         self.accumulate_buffer.set_sample(&self.gpu, 1);
-        self.accumulate
-            .accumulate(cmd, &self.accumulate_buffer, frame, 0);
+        self.accumulate.accumulate(
+            cmd,
+            &self.accumulate_buffer,
+            frame,
+            frame.accum(0, 0),
+            frame.accum(0, 1),
+        );
     }
 
     /// The on-screen present: tone map `frame.color()` + overlay into an

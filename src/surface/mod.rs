@@ -18,11 +18,13 @@ use crate::{
 };
 
 use super::gpu::Gpu;
+use std::cell::Cell;
 
 pub struct Frame {
     color: ColorBuffer,
     line_depth: ColorBuffer,
-    accum: [ColorBuffer; 2],
+    /// Per lighting mode (cascade, ray traced), a ping-pong pair.
+    accum: [[ColorBuffer; 2]; 2],
     overlay: ColorBuffer,
     export: ColorBuffer,
 }
@@ -32,10 +34,8 @@ impl Frame {
         Self {
             color: ColorBuffer::new(gpu, settings.width, settings.height),
             line_depth: ColorBuffer::depth(gpu, settings.width, settings.height),
-            accum: [
-                ColorBuffer::new(gpu, settings.width, settings.height),
-                ColorBuffer::new(gpu, settings.width, settings.height),
-            ],
+            accum: [0, 1]
+                .map(|_| [0, 1].map(|_| ColorBuffer::new(gpu, settings.width, settings.height))),
             overlay: ColorBuffer::overlay(gpu, settings.width, settings.height),
             export: ColorBuffer::export(gpu, settings.width, settings.height),
         }
@@ -53,11 +53,11 @@ impl Frame {
         &self.line_depth
     }
 
-    /// One of the two ping-ponged accumulation buffers (running mean of all
-    /// samples since the scene last changed). `parity` selects which; see
-    /// [`accumulate::Accumulator`].
-    pub fn accum(&self, parity: usize) -> &ColorBuffer {
-        &self.accum[parity]
+    /// One of the two ping-ponged accumulation buffers of lighting `mode`
+    /// (running mean of all samples since the scene last changed). `parity`
+    /// selects which; see [`accumulate::Accumulator`].
+    pub fn accum(&self, mode: usize, parity: usize) -> &ColorBuffer {
+        &self.accum[mode][parity]
     }
 
     /// egui paints here; the present pass composites it over the tone-mapped scene.
@@ -79,7 +79,10 @@ pub struct Surface {
     /// the sample counter / convergence state they drive.
     accumulate: AccumulatePipeline,
     accumulate_buffer: AccumulateBuffer,
-    accumulator: Accumulator,
+    /// Per lighting mode, so switching between them keeps both images.
+    accumulators: [Accumulator; 2],
+    /// The lighting mode of the last plan.
+    mode: Cell<usize>,
     changed: bool,
     /// The HDR presentation to use when the toggle is on, or `None` when the
     /// surface can't present HDR at all. `ExtendedSrgbLinear` (native) is
@@ -122,7 +125,8 @@ impl Surface {
             present: PresentPipeline::new(gpu, Self::SDR_FORMAT, Self::HDR_FORMAT),
             accumulate: AccumulatePipeline::new(gpu),
             accumulate_buffer: AccumulateBuffer::new(gpu),
-            accumulator: Accumulator::new(),
+            accumulators: [Accumulator::new(), Accumulator::new()],
+            mode: Cell::new(0),
             hdr,
             presentation: Presentation::Sdr,
             hdr_headroom: 2.0,
@@ -172,7 +176,7 @@ impl Surface {
     /// input (the accumulated mean, or the raw sample buffer).
     pub fn export(&self, gpu: &Gpu, cmd: &mut CommandEncoder, frame: &Frame, scene: &ColorBuffer) {
         self.present
-            .set_uniform(gpu, 1.0, self.accumulator.samples());
+            .set_uniform(gpu, 1.0, self.accumulator().samples());
         self.present
             .export(cmd, scene, frame, frame.export().view());
     }
@@ -190,7 +194,7 @@ impl Surface {
             };
 
             self.present
-                .set_uniform(gpu, headroom, self.accumulator.samples());
+                .set_uniform(gpu, headroom, self.accumulator().samples());
             self.present
                 .dispatch(&mut cmd, scene, frame, &view, self.presentation);
 
@@ -199,17 +203,38 @@ impl Surface {
         }
     }
 
+    fn accumulator(&self) -> &Accumulator {
+        &self.accumulators[self.mode.get()]
+    }
+
     /// Progress snapshot for the UI.
     pub fn accumulation(&self) -> AccumulationStatus {
-        self.accumulator.status()
+        self.accumulator().status()
     }
 
     /// Decide whether the renderer should trace the scene this frame and with
     /// what sub-pixel jitter. `scene_dirty` = something the surface can't see
-    /// changed (assets, camera, lighting); the surface folds in its own
+    /// changed (assets, camera, lighting) and resets both modes; `traced_dirty`
+    /// only the ray traced one. The surface folds in its own
     /// resize/reconfigure `changed` flag.
-    pub fn plan_accumulation(&self, settings: &Settings, scene_dirty: bool) -> AccumulationPlan {
-        self.accumulator.plan(settings, scene_dirty || self.changed)
+    pub fn plan_accumulation(
+        &self,
+        settings: &Settings,
+        scene_dirty: bool,
+        traced_dirty: bool,
+    ) -> AccumulationPlan {
+        let dirty = scene_dirty || self.changed;
+        let mode = settings.ray_traced as usize;
+        self.mode.set(mode);
+
+        if dirty {
+            self.accumulators[mode ^ 1].reset();
+        }
+        if traced_dirty && mode == 0 {
+            self.accumulators[1].reset();
+        }
+
+        self.accumulators[mode].plan(settings, dirty || (traced_dirty && mode == 1))
     }
 
     /// After the renderer has traced into `frame.color()` (when `rendered`),
@@ -225,47 +250,47 @@ impl Surface {
     ) -> Option<&ColorBuffer> {
         let frame = self.frame.as_ref()?;
 
+        let mode = self.mode.get();
+        let accumulator = self.accumulator();
+
         if !rendered {
-            return Some(frame.accum(self.accumulator.parity()));
+            return Some(frame.accum(mode, accumulator.parity()));
         }
 
         if !settings.accumulate {
             return Some(frame.color());
         }
 
-        let parity = self.accumulator.parity();
+        let prev = frame.accum(mode, accumulator.parity());
+        let next = frame.accum(mode, accumulator.parity() ^ 1);
 
         self.accumulate_buffer
-            .set_sample(gpu, self.accumulator.samples());
+            .set_sample(gpu, accumulator.samples());
         self.accumulate
-            .accumulate(cmd, &self.accumulate_buffer, frame, parity);
+            .accumulate(cmd, &self.accumulate_buffer, frame, prev, next);
 
         // Only run the whole-image reduction on frames whose result is read back.
-        if self.accumulator.wants_metric() {
-            self.accumulate.reduce(
-                cmd,
-                &self.accumulate_buffer,
-                frame.accum(parity),
-                frame.accum(parity ^ 1),
-            );
+        if accumulator.wants_metric() {
+            self.accumulate
+                .reduce(cmd, &self.accumulate_buffer, prev, next);
         }
 
-        self.accumulator.advance(settings);
+        accumulator.advance(settings);
 
-        Some(frame.accum(parity ^ 1))
+        Some(next)
     }
 
     /// Fold any finished convergence reading in and, on the interval, kick off
     /// the next readback. Call after `present` has submitted the `reduce` pass.
     pub fn read_metric(&self, gpu: &Gpu, settings: &Settings) {
-        self.accumulator
+        self.accumulator()
             .read_metric(gpu, &self.accumulate_buffer, settings);
     }
 
     /// Whether the render loop should schedule another frame immediately
     /// (still refining, or legacy continuous mode).
     pub fn accumulating(&self, settings: &Settings) -> bool {
-        self.accumulator.accumulating(settings)
+        self.accumulator().accumulating(settings)
     }
 
     fn config(width: u32, height: u32, presentation: Presentation) -> SurfaceConfiguration {

@@ -48,9 +48,27 @@ impl Quality {
     }
 }
 
+const TRACED_STRATEGIES: [&str; 3] = ["MIS", "Environment Only", "Reflection Only"];
+const TRACED_FRESNEL: [&str; 2] = ["Per Microfacet", "Mirror"];
+
+/// A combo over `names`, indexed by `value`; true when it changed.
+fn combo(ui: &mut Ui, id: &str, value: &mut u32, names: &[&str]) -> bool {
+    let mut changed = false;
+    ComboBox::from_id_salt(id)
+        .selected_text(names[*value as usize])
+        .show_ui(ui, |ui| {
+            for (index, name) in names.iter().enumerate() {
+                changed |= ui.selectable_value(value, index as u32, *name).changed();
+            }
+        });
+    changed
+}
+
 #[derive(Debug)]
 pub struct RenderingWidget {
     changed: bool,
+    /// Only the ray traced image is stale.
+    traced_changed: bool,
     quality: Quality,
     lightmap_resolution: u32,
     lobes: u32,
@@ -76,6 +94,7 @@ impl RenderingWidget {
     pub fn new() -> Self {
         Self {
             changed: false,
+            traced_changed: false,
             quality: Quality::Medium,
             lightmap_resolution: 96,
             lobes: 16,
@@ -391,9 +410,10 @@ impl RenderingWidget {
         // Live accumulation progress from the renderer.
         accumulation: AccumulationStatus,
     ) {
+        let accumulation_open = ui.is_new("Debug.Accumulation");
         ui.collapse(
             format!("{} Accumulation", icons::regular::STACK),
-            true,
+            accumulation_open,
             |ui| {
                 let AccumulationStatus {
                     samples,
@@ -468,80 +488,149 @@ impl RenderingWidget {
             },
         );
 
-        ui.collapse(format!("{} Lighting", icons::regular::WRENCH), true, |ui| {
-            Grid::new("AdvancedSettings").num_columns(2).show(ui, |ui| {
-                ui.label("Environment Importance").on_hover_text(
-                    "Trace each lighting probe's samples through the \
+        let lighting_open = ui.is_new("Debug.Lighting");
+        ui.collapse(
+            format!("{} Lighting", icons::regular::WRENCH),
+            lighting_open,
+            |ui| {
+                Grid::new("AdvancedSettings").num_columns(2).show(ui, |ui| {
+                    ui.label("Environment Importance").on_hover_text(
+                        "Trace each lighting probe's samples through the \
                      environment's cells, small where it is bright, instead of \
                      spreading them evenly.",
-                );
-                ui.checkbox(&mut hdri.importance_sampling, "").track(self);
-                ui.end_row();
+                    );
+                    ui.checkbox(&mut hdri.importance_sampling, "").track(self);
+                    ui.end_row();
 
-                ui.label("Prefilter Parent Light").on_hover_text(
-                    "Let each lighting probe sample see the coarser probe's \
+                    ui.label("Prefilter Parent Light").on_hover_text(
+                        "Let each lighting probe sample see the coarser probe's \
                      light blurred over the patch of sky it stands for, so small \
                      lights no longer fall between samples and flicker.",
-                );
-                ui.checkbox(&mut hdri.prefilter, "").track(self);
-                ui.end_row();
+                    );
+                    ui.checkbox(&mut hdri.prefilter, "").track(self);
+                    ui.end_row();
 
-                ui.label("Sample One Lobe").on_hover_text(
-                    "While the image accumulates, light each step from one \
+                    ui.label("Sample One Lobe").on_hover_text(
+                        "While the image accumulates, light each step from one \
                      randomly picked lobe instead of all of them: faster, but \
                      noisier per frame.",
-                );
-                ui.checkbox(&mut hdri.sample_lobe, "").track(self);
-                ui.end_row();
+                    );
+                    ui.checkbox(&mut hdri.sample_lobe, "").track(self);
+                    ui.end_row();
 
-                ui.label("Lookup Jitter").on_hover_text(
-                    "While the image accumulates, randomly offset each lighting \
+                    ui.label("Lookup Jitter").on_hover_text(
+                        "While the image accumulates, randomly offset each lighting \
                      probe lookup by up to two probes, so the blocky blend \
                      between probes averages out smooth. Volume and lines.",
-                );
-                ui.checkbox(&mut settings.lookup_jitter, "").track(self);
-                ui.end_row();
+                    );
+                    ui.checkbox(&mut settings.lookup_jitter, "").track(self);
+                    ui.end_row();
 
-                ui.label("Nearest Probe Sampling").on_hover_text(
-                    "While the image accumulates, light each step from one \
+                    ui.label("Nearest Probe Sampling").on_hover_text(
+                        "While the image accumulates, light each step from one \
                      lobe of the nearest lighting probe instead of a blend of \
                      the surrounding ones.",
-                );
-                ui.checkbox(&mut hdri.nearest_probes, "").track(self);
-                ui.end_row();
+                    );
+                    ui.checkbox(&mut hdri.nearest_probes, "").track(self);
+                    ui.end_row();
 
-                ui.label("Uniform Share").on_hover_text(
-                    "Share of the environment's cells spread evenly over all \
+                    ui.label("Uniform Share").on_hover_text(
+                        "Share of the environment's cells spread evenly over all \
                      directions, so probes whose bright directions are blocked \
                      still see the rest of the sky. Shapes the environment fit \
                      and importance sampling.",
-                );
-                ui.slider(&mut hdri.uniform_share, 0.0..=1.0, false)
-                    .track(self);
-                ui.end_row();
+                    );
+                    ui.slider(&mut hdri.uniform_share, 0.0..=1.0, false)
+                        .track(self);
+                    ui.end_row();
 
-                ui.label("Sample Weighting").on_hover_text(
-                    "How the environment is cut into cells for the \
+                    ui.label("Sample Weighting").on_hover_text(
+                        "How the environment is cut into cells for the \
                      environment fit and importance sampling. Linear makes cells \
                      smallest at the brightest sources; log spreads them more \
                      evenly.",
-                );
-                if weighting(ui, "SampleWeighting", &mut hdri.log_sample_weights) {
-                    self.track();
-                }
-                ui.end_row();
+                    );
+                    if weighting(ui, "SampleWeighting", &mut hdri.log_sample_weights) {
+                        self.track();
+                    }
+                    ui.end_row();
 
-                ui.label("EM Weighting").on_hover_text(
-                    "How the lighting fits and their starting lobes weigh \
+                    ui.label("EM Weighting").on_hover_text(
+                        "How the lighting fits and their starting lobes weigh \
                      brightness. Log keeps bright sources from claiming every \
                      lobe; linear follows the radiance itself.",
-                );
-                if weighting(ui, "EmWeighting", &mut hdri.log_weights) {
-                    self.track();
-                }
-                ui.end_row();
-            });
-        });
+                    );
+                    if weighting(ui, "EmWeighting", &mut hdri.log_weights) {
+                        self.track();
+                    }
+                    ui.end_row();
+                });
+            },
+        );
+
+        let ray_tracing_open = ui.is_new("Debug.RayTracing");
+        ui.collapse(
+            format!("{} Ray Tracing", icons::regular::LIGHTNING),
+            ray_tracing_open,
+            |ui| {
+                Grid::new("RayTracingSettings")
+                    .num_columns(2)
+                    .show(ui, |ui| self.show_ray_tracing(ui, hdri, settings));
+            },
+        );
+    }
+
+    fn show_ray_tracing(&mut self, ui: &mut Ui, hdri: &mut HdriBuffer, settings: &mut Settings) {
+        // Not tracked: each mode keeps its own accumulated image.
+        ui.label("Enabled").on_hover_text(
+            "Light the volume by tracing rays to the environment instead of the \
+             precomputed lighting: slow to converge, but exact. Both images keep \
+             accumulating separately, so you can flip between them to compare.",
+        );
+        ui.checkbox(&mut settings.ray_traced, "");
+        ui.end_row();
+
+        let traced = hdri.settings_mut();
+
+        ui.label("Uniform Share").on_hover_text(
+            "Share of the environment rays spread evenly over all directions, so \
+             light blocked from the brightest directions still finds the rest of \
+             the sky.",
+        );
+        if ui
+            .slider(&mut traced.traced_uniform_share, 0.0..=1.0, false)
+            .changed()
+        {
+            self.traced_changed = true;
+        }
+        ui.end_row();
+
+        ui.label("Strategy").on_hover_text(
+            "How ray directions are picked. MIS combines the reflection lobe and \
+             the environment; the others isolate one. Reflection only misses the \
+             light scattered inside the volume.",
+        );
+        if combo(
+            ui,
+            "TracedStrategy",
+            &mut traced.traced_strategy,
+            &TRACED_STRATEGIES,
+        ) {
+            self.traced_changed = true;
+        }
+        ui.end_row();
+
+        ui.label("Fresnel").on_hover_text(
+            "Per microfacet evaluates the reflectance for every reflected ray, as \
+             the microfacet model does. Mirror uses the single value at the mirror \
+             direction everywhere, as the precomputed lighting does.",
+        );
+        let mut mirror = settings.mirror_fresnel as u32;
+        if combo(ui, "TracedFresnel", &mut mirror, &TRACED_FRESNEL) {
+            settings.mirror_fresnel = mirror != 0;
+            self.traced_changed = true;
+        }
+        ui.end_row();
     }
 
     pub fn changed(&self) -> bool {
@@ -550,6 +639,11 @@ impl RenderingWidget {
 
     pub fn reset_changed(&mut self) {
         self.changed = false;
+        self.traced_changed = false;
+    }
+
+    pub fn traced_changed(&self) -> bool {
+        self.traced_changed
     }
 
     /// Target probe count along the volume's longest axis for the radiance

@@ -1,10 +1,21 @@
 use classify;
 use color;
+use environment;
 use gaussian;
+use microfacet;
 use noise;
 use occlusion;
 use pbr;
+use tracking;
 use uniforms;
+
+// Light each collision with a traced ray to the environment instead of the
+// cascade: the cascade's ground truth.
+const TRACED: bool = false;
+
+// Traced: one Fresnel factor for the whole lobe, at the mirror direction, as
+// the cascade. A const: as a uniform it made the traced shader 2× slower.
+const MIRROR_FRESNEL: bool = false;
 
 @group(0) @binding(0) var RADIANCE: texture_3d<f32>;
 @group(0) @binding(1) var GAUSSIAN: texture_3d<f32>;
@@ -15,12 +26,14 @@ use uniforms;
 @group(2) @binding(0) var<uniform> ENVIRONMENT: Environment;
 @group(2) @binding(1) var BLUE_NOISE: texture_3d<f32>;
 
-// The environment map itself is already integrated into the radiance cascade,
-// so the volume tracer only needs the HDRI material settings. Binding 1 is the
-// combined-mode line-depth target: the near→far fraction `s` of the first line
-// hit, used to clamp this trace's far `t`.
+// Binding 1 is the combined-mode line-depth target: the near→far fraction `s`
+// of the first line hit, used to clamp this trace's far `t`. The rest is only
+// read when TRACED: the environment and the lines as shadow-ray occluders.
 @group(3) @binding(0) var<uniform> HDRI_SETTINGS: HdriSettings;
 @group(3) @binding(1) var LINE_DEPTH: texture_2d<f32>;
+@group(3) @binding(2) var ENVIRONMENT_MAP: texture_2d<f32>;
+@group(3) @binding(3) var LINE_EXTINCTION: texture_3d<f32>;
+@group(3) @binding(4) var LINE_SAMPLER: sampler;
 
 struct Fragment {
     @builtin(position) position: vec4<f32>,
@@ -68,11 +81,6 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     let view = -normalize((ENVIRONMENT.camera.transform * vec4<f32>(far - near, 0.0)).xyz);
 
     let pixel = vec2<u32>(fragment.position.xy);
-    let lookup = noise(pixel, 0u);
-    let pick = noise(pixel, 1u);
-
-    // Matches `to_material`'s reduced scattering.
-    let scattering_scale = 1.0 / (1.0 - HDRI_SETTINGS.anisotropy);
 
     // Both estimators share the tentative collisions: spectral delta tracking
     // (Kutz et al. 2017) picks the one real collision that's shaded, ratio
@@ -85,39 +93,24 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     var collision = vec3<f32>(0.0);
     var collision_weight = vec3<f32>(0.0);
 
-    // The empty space in front of the material is crossed a coarse cell at a
-    // time; the block walk starts where it ends.
-    var t = entry;
-    var coarse = begin_walk(origin, direction, t, BLOCK * COARSE, coarse_count());
-
-    while (t < exit && all(coarse.cell < coarse_count()) && coarse_empty(coarse.cell)) {
-        t = max(t, walk_exit(coarse));
-        coarse = walk_next(coarse);
-    }
-
-    var walk = begin_walk(origin, direction, t, BLOCK, block_count());
+    var tracker = begin_tracking(origin, direction, entry, exit);
 
     // One draw per tentative collision: the optical depth to it carries across
     // block boundaries, so the first collision takes the pixel's blue noise.
     var i = 0u;
-    var u = track_noise(pixel, i);
-    var depth = -log(1.0 - u.x);
+    var u = flight_noise(pixel, 2u, i);
+    tracker.depth = -log(1.0 - u.x);
 
-    while (t < exit && all(walk.cell < block_count())) {
-        let boundary = min(walk_exit(walk), exit);
-        let majorant = block_majorant(walk.cell, scattering_scale);
-
-        let span = majorant * max(boundary - t, 0.0);
-
-        if (depth >= span) {
-            depth -= span;
-            t = max(t, boundary);
-            walk = walk_next(walk);
+    // Measured fastest: flat for the cascade, nested when traced.
+    while (tracking(tracker)) {
+        if (TRACED) {
+            if (!next_collision(&tracker)) { break; }
+        } else if (!advance(&tracker)) {
             continue;
         }
 
-        t += depth / majorant;
-        let uv = origin + direction * t;
+        let majorant = tracker.majorant;
+        let uv = origin + direction * tracker.t;
         let classified = classify(uv);
         let material = to_material(classified);
         let fictitious = max(majorant - material.extinction, vec3<f32>(0.0));
@@ -140,24 +133,32 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
 
         // Russian roulette ends ratio tracking once little light gets through.
         let largest = max(transmittance.x, max(transmittance.y, transmittance.z));
-        if (largest < 0.1) {
-            let survival = 10.0 * largest;
+        if (largest < ROULETTE) {
+            let survival = largest / ROULETTE;
             transmittance = select(vec3<f32>(0.0), transmittance / survival, u.z < survival);
         }
 
         if (collided && all(transmittance == vec3<f32>(0.0))) { break; }
 
         i++;
-        u = track_noise(pixel, i);
-        depth = -log(1.0 - u.x);
+        u = flight_noise(pixel, 2u, i);
+        tracker.depth = -log(1.0 - u.x);
     }
 
     var color = vec3<f32>(0.0);
 
     if (collided) {
         let classified = classify(collision);
-        let noise = StepNoise(tent(lookup.xyz), pick.xyz - 0.5, pick.w, lookup.w);
-        color = collision_weight * scatter(collision, direction, classified, to_material(classified), view, noise);
+        let material = to_material(classified);
+
+        if (TRACED) {
+            color = collision_weight * traced_scatter(collision, direction, classified, material, view, pixel);
+        } else {
+            let lookup = noise(pixel, 0u);
+            let pick = noise(pixel, 1u);
+            let noise = StepNoise(tent(lookup.xyz), pick.xyz - 0.5, pick.w, lookup.w);
+            color = collision_weight * scatter(collision, direction, classified, material, view, noise);
+        }
     }
 
     let alpha = 1.0 - brightness(transmittance);
@@ -166,27 +167,38 @@ fn fragment(fragment: Fragment) -> @location(0) vec4<f32> {
     return vec4<f32>(color, alpha);
 }
 
-// Outgoing radiance at a real collision. The ior one voxel back along the ray
-// sets the Fresnel interface; behind a cut (or outside the crop) there's none.
-fn scatter(uv: vec3<f32>, direction: vec3<f32>, classified: Classified, material: Material, view: vec3<f32>, noise: StepNoise) -> vec3<f32> {
+// The interface at a real collision. The ior one voxel back along the ray sets
+// it; behind a cut (or outside the crop) there's none.
+struct Interface {
+    eta: f32,
+    Fdr: f32,
+    albedo: vec3<f32>,
+}
+
+fn interface_at(uv: vec3<f32>, direction: vec3<f32>, material: Material) -> Interface {
     let behind = classify(uv - normalize(direction) * voxel_step());
     let eta = select(material.ior / to_material(behind).ior, 1.0, behind.crop <= 0.0);
     let eta_boosted = mix(1.0, (eta - 1.0) * 2.0 + 1.0, HDRI_SETTINGS.specular);
-
-    let Fdr = fresnel_diffuse(eta_boosted);
     let albedo = material.scattering / max(material.extinction, vec3<f32>(0.001));
+
+    return Interface(eta_boosted, fresnel_diffuse(eta_boosted), albedo);
+}
+
+// Outgoing radiance at a real collision from the cascade.
+fn scatter(uv: vec3<f32>, direction: vec3<f32>, classified: Classified, material: Material, view: vec3<f32>, noise: StepNoise) -> vec3<f32> {
+    let surface = interface_at(uv, direction, material);
 
     // Without an interface F is 0 whatever the normal: no gradient, no lobes.
     var normal = view;
     var specular = 0.0;
 
-    if (eta_boosted != 1.0) {
+    if (surface.eta != 1.0) {
         // Fall back to `view` where the gradient is degenerate (a flat plateau).
         // A zero normal makes `half` below `normalize(0)` -> NaN, which poisons
         // the accumulation buffer.
         normal = sample_normal(uv, classified, view);
         let half = normalize(view + reflect(-view, normal));
-        let F = fresnel(dot(view, half), eta_boosted);
+        let F = fresnel(dot(view, half), surface.eta);
 
         // Russian roulette: the specular lobes run with probability ~F and are
         // weighted back to F, so weak reflections rarely pay for them.
@@ -194,60 +206,90 @@ fn scatter(uv: vec3<f32>, direction: vec3<f32>, classified: Classified, material
         specular = select(0.0, F / p, noise.coin < p);
     }
 
-    return sample_outgoing_radiance(uv, noise, normal, view, albedo, specular, Fdr);
+    return sample_outgoing_radiance(uv, noise, normal, view, surface.albedo, specular, surface.Fdr);
 }
 
 // Fresnel factor at and above which the specular lobes always run.
 const SPECULAR_ROULETTE: f32 = 0.05;
 
-// Free flights must be independent: a rotated sequence ties each flight to
-// the last and biases the tracking. Only the first is blue.
-fn track_noise(pixel: vec2<u32>, i: u32) -> vec4<f32> {
-    if (i == 0u) { return noise(pixel, 2u); }
-    return white_noise(vec3<u32>(pixel, ENVIRONMENT.sample) ^ (vec3<u32>(0x9e3779b9u, 0x85ebca6bu, 0xc2b2ae35u) * i));
+// Outgoing radiance at a real collision from one traced ray to the
+// environment: one-sample MIS (balance heuristic) over bounded VNDF sampling of
+// the GGX lobe and hierarchical warping of the environment, with a uniform
+// share against blocked bright light. The phase is isotropic.
+fn traced_scatter(uv: vec3<f32>, direction: vec3<f32>, classified: Classified, material: Material, view: vec3<f32>, pixel: vec2<u32>) -> vec3<f32> {
+    let surface = interface_at(uv, direction, material);
+    let diffuse = HDRI_SETTINGS.phase * surface.albedo * (1.0 - surface.Fdr) / (4.0 * PI);
+
+    var frame = orthonormal_frame(view);
+    var reflects = false;
+
+    if (surface.eta != 1.0) {
+        frame = orthonormal_frame(sample_normal(uv, classified, view));
+        reflects = dot(frame[2], view) > 0.0;
+    }
+
+    let wi = view * frame;
+    let alpha = max(HDRI_SETTINGS.roughness * HDRI_SETTINGS.roughness, 1e-3);
+
+    // VNDF takes the specular lobe's share of the energy, by its mirror Fresnel.
+    let mirror = select(0.0, fresnel(wi.z, surface.eta), reflects);
+    var specular = mirror / max(mirror + 4.0 * PI * brightness(diffuse), EPSILON);
+
+    let strategy = HDRI_SETTINGS.traced_strategy;
+    if (strategy == STRATEGY_ENVIRONMENT) { specular = 0.0; }
+    if (strategy == STRATEGY_REFLECTION && reflects) { specular = 1.0; }
+
+    let mean = environment_mean();
+    let share = select(1.0, HDRI_SETTINGS.traced_uniform_share, mean > 0.0);
+
+    let xi = noise(pixel, 3u);
+    var omega = vec3<f32>(0.0);
+
+    if (xi.x < specular) {
+        omega = frame * sample_bounded_vndf(wi, alpha, xi.yz);
+    } else if (xi.w < share) {
+        omega = uniform_sphere(xi.yz);
+    } else {
+        omega = sample_environment(xi.yz);
+    }
+
+    let wo = omega * frame;
+
+    var pdf = (1.0 - specular) * (share / (4.0 * PI) + select(0.0, (1.0 - share) * environment_pdf(omega), mean > 0.0));
+    if (reflects) { pdf += specular * bounded_vndf_pdf(wi, wo, alpha); }
+
+    var f = diffuse;
+
+    if (reflects && wo.z > 0.0) {
+        let h = normalize(wi + wo);
+        let alpha2 = alpha * alpha;
+        let F = select(fresnel(dot(wi, h), surface.eta), mirror, MIRROR_FRESNEL);
+        f += F * D_GGX(h.z, alpha) * GGX_V1(wi.z, alpha2) * GGX_V1(wo.z, alpha2) * wo.z;
+    }
+
+    let radiance = f * environment_radiance(omega);
+    if (pdf <= 0.0 || all(radiance <= vec3<f32>(0.0))) { return vec3<f32>(0.0); }
+
+    // To the crop box, through the volume and (as the cascade sees them) lines.
+    let step = linear_part(TRANSFORM) * omega;
+    let crop = CLASSIFY.crop;
+    let exit = intersectAABB(uv, step, max(0.5 + crop.min.xyz, vec3<f32>(0.0)), min(0.5 + crop.max.xyz, vec3<f32>(1.0))).y;
+    let lines = CASCADE_OPTS.include_lines != 0u;
+
+    return radiance * ratio_tracking(uv, step, 0.0, exit, lines, pixel, 4u) / pdf;
 }
+
+// HdriSettings.traced_strategy; 0 is MIS.
+const STRATEGY_ENVIRONMENT: u32 = 1u;
+const STRATEGY_REFLECTION: u32 = 2u;
 
 fn average(v: vec3<f32>) -> f32 {
     return (v.x + v.y + v.z) / 3.0;
 }
 
-// A walk through grid cells along the ray (Amanatides & Woo 1987).
-struct Walk {
-    cell: vec3<u32>,
-    step: vec3<i32>,
-    // `t` where the ray crosses into the next cell, per axis.
-    next: vec3<f32>,
-    // `t` per cell, per axis.
-    delta: vec3<f32>,
-}
-
-// A walk through cells of `voxels`³ voxels, `cells` per axis.
-fn begin_walk(origin: vec3<f32>, direction: vec3<f32>, t: f32, voxels: u32, cells: vec3<u32>) -> Walk {
-    let scale = vec3<f32>(CLASSIFY.size) / f32(voxels);
-    let o = origin * scale;
-    // Axes the ray runs parallel to are never crossed.
-    let d = select(direction * scale, vec3<f32>(1e-20), abs(direction) < vec3<f32>(1e-20));
-    let inverse = 1.0 / d;
-
-    let last = vec3<f32>(cells - 1u);
-    let cell = clamp(floor(o + d * t), vec3<f32>(0.0), last);
-    let step = select(vec3<i32>(-1), vec3<i32>(1), d > vec3<f32>(0.0));
-    let next = (cell + vec3<f32>(d > vec3<f32>(0.0)) - o) * inverse;
-
-    return Walk(vec3<u32>(cell), step, next, abs(inverse));
-}
-
-fn walk_exit(walk: Walk) -> f32 {
-    return min(walk.next.x, min(walk.next.y, walk.next.z));
-}
-
-// Leaving the grid wraps the cell past the cell count, which ends the walk.
-fn walk_next(walk: Walk) -> Walk {
-    let crossed = walk.next == vec3<f32>(walk_exit(walk));
-    var result = walk;
-    result.cell = vec3<u32>(vec3<i32>(walk.cell) + select(vec3<i32>(0), walk.step, crossed));
-    result.next += select(vec3<f32>(0.0), walk.delta, crossed);
-    return result;
+// Matches `to_material`'s reduced scattering.
+fn scattering_scale() -> f32 {
+    return 1.0 / (1.0 - HDRI_SETTINGS.anisotropy);
 }
 
 struct Material {

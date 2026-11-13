@@ -47,19 +47,17 @@ impl AccumulatePipeline {
     }
 
     /// Fold `frame.color()` (this frame's raw sample) into the running mean:
-    /// `frame.accum(parity)` holds the mean of the earlier samples, the result
-    /// is written to `frame.accum(parity ^ 1)`. The caller primes the sample
-    /// count via [`AccumulateBuffer::set_sample`] first.
+    /// `prev` holds the mean of the earlier samples, the result is written to
+    /// `next`. The caller primes the sample count via
+    /// [`AccumulateBuffer::set_sample`] first.
     pub fn accumulate(
         &self,
         cmd: &mut CommandEncoder,
         buffer: &AccumulateBuffer,
         frame: &Frame,
-        parity: usize,
+        prev: &ColorBuffer,
+        next: &ColorBuffer,
     ) {
-        let prev = frame.accum(parity);
-        let next = frame.accum(parity ^ 1);
-
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
             label: Some(type_name::<Self>()),
             color_attachments: &[Some(RenderPassColorAttachment {
