@@ -110,13 +110,17 @@ impl CropWidget {
             label.to_lowercase(),
         ));
 
+        // DoubleSlider marks changed on every dragged frame, even when still.
+        let before = (*min, *max);
         ui.add(
             DoubleSlider::new(min, max, -0.5..=0.5)
                 .control_point_radius(5.0)
                 .width(ui.available_width())
                 .separation_distance(0.001),
-        )
-        .track(self);
+        );
+        if (*min, *max) != before {
+            self.track();
+        }
 
         ui.end_row();
     }

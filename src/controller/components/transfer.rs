@@ -336,8 +336,11 @@ impl TransferFunctionEditor {
 
         if response.dragged() {
             let delta = response.drag_delta().x / histogram_rect.width();
-            node.position = (node.position + delta).clamp(0.0, 1.0);
-            self.changed = true;
+            let position = (node.position + delta).clamp(0.0, 1.0);
+            if position != node.position {
+                node.position = position;
+                self.changed = true;
+            }
         }
 
         let x = histogram_rect.min.x + node.position * histogram_rect.width();
