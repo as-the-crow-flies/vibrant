@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec2, Vec3};
 
 use super::state::ControllerState;
 
@@ -33,7 +33,7 @@ impl Light {
             let rotation = state.relative_delta() * 10.0;
             self.rotate(-rotation.x, -rotation.y);
 
-            self.changed = true;
+            self.changed = rotation != Vec2::ZERO;
         }
     }
 
