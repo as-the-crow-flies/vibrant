@@ -2,83 +2,105 @@ from multiprocessing import Pool
 
 import numpy as np
 
-# Spatiotemporal blue noise (Wolfe et al. 2022): void-and-cluster (Ulichney 1993) over a
-# DEPTH x SIZE x SIZE volume whose energy is a spatial Gaussian within each slice plus a
-# temporal Gaussian along each pixel. Every slice is 2D blue noise and every pixel's
-# sequence over the slices is 1D blue noise. One independent volume per RGBA channel.
-SIZE = 64
+# Spatiotemporal blue noise (Wolfe et al. 2022) by void-and-cluster (Ulichney 1993), as
+# seamless Wang-style cells (Cohen et al. 2003): the screen is a checkerboard of SIZE x SIZE
+# cells, each picking one of VARIANTS patterns of its colour by hash. A point's energy
+# spills into its neighbour cells, averaged over the variants they may hold, so every
+# arrangement stays blue across cell edges. Every slice is 2D blue noise and every pixel's
+# sequence over the slices is 1D blue noise. Ranks are uniform per cell and slice.
+# Output: CELLS x DEPTH x SIZE x SIZE x RGBA, cell = colour * VARIANTS + variant.
+SIZE = 22
 DEPTH = 32
+VARIANTS = 4
+CELLS = 2 * VARIANTS
 SIGMA = 1.9
 DENSITY = 0.1
 
+TEMPORAL = np.exp(-np.minimum(np.arange(DEPTH), DEPTH - np.arange(DEPTH)) ** 2 / (2 * SIGMA ** 2))
 
-def gaussian(n):
-    d = np.minimum(np.arange(n), n - np.arange(n)).astype(np.float32)
-    return np.exp(-d ** 2 / (2 * SIGMA ** 2))
+# Gaussian over [-SIZE, 2 SIZE) around each position, folded into the cell itself
+# (centre) and into its neighbour cells' local coordinates (outer).
+_d = np.arange(-SIZE, 2 * SIZE)[None, :] - np.arange(SIZE)[:, None]
+_g = np.exp(-_d ** 2 / (2 * SIGMA ** 2))
+CENTRE = _g[:, SIZE:2 * SIZE]
+OUTER = _g[:, :SIZE] + _g[:, 2 * SIZE:]
 
 
-SPATIAL = gaussian(SIZE)[:, None] * gaussian(SIZE)[None, :]
-TEMPORAL = gaussian(DEPTH)
+def splat(energy, cell, t, y, x, sign):
+    cy, cx, oy, ox = CENTRE[y], CENTRE[x], OUTER[y], OUTER[x]
+    side = (np.outer(oy, cx) + np.outer(cy, ox)) * (sign / VARIANTS)
+    corner = np.outer(oy, ox) * (sign / VARIANTS)
 
+    colour = cell // VARIANTS
+    same = slice(colour * VARIANTS, (colour + 1) * VARIANTS)
+    other = slice((1 - colour) * VARIANTS, (2 - colour) * VARIANTS)
 
-def splat(energy, index, sign):
-    t, y, x = np.unravel_index(index, energy.shape)
-    energy[t] += sign * np.roll(SPATIAL, (y, x), axis=(0, 1))
-    energy[:, y, x] += sign * np.roll(TEMPORAL, t)
+    energy[cell, t] += sign * np.outer(cy, cx)
+    energy[other, t] += side
+    energy[same, t] += corner
+    energy[cell, :, y, x] += sign * np.roll(TEMPORAL, t)
 
 
 def blue_noise(seed):
-    shape = (DEPTH, SIZE, SIZE)
-    n = DEPTH * SIZE * SIZE
-
     rng = np.random.default_rng(seed)
-    pattern = np.zeros(n, dtype=bool)
-    pattern[rng.choice(n, int(DENSITY * n), replace=False)] = True
+    shape = (CELLS, DEPTH, SIZE, SIZE)
+    groups = CELLS * DEPTH
+    area = SIZE * SIZE
 
-    energy = np.zeros(shape, dtype=np.float32)
-    for index in np.flatnonzero(pattern):
-        splat(energy, index, 1)
+    def unravel(group, local):
+        return group // DEPTH, group % DEPTH, local // SIZE, local % SIZE
 
-    # Energies masked to the candidates, so each step is a single argmax/argmin.
-    clusters = np.where(pattern.reshape(shape), energy, -np.inf)
-    voids = np.where(pattern.reshape(shape), np.inf, energy)
+    def move(energy, pattern, group, local, sign):
+        cell, t, y, x = unravel(group, local)
+        pattern[cell, t, y, x] = sign > 0
+        splat(energy, cell, t, y, x, sign)
 
-    def move(index, sign):
-        for e in (energy, clusters, voids):
-            splat(e, index, sign)
-        clusters.flat[index] = energy.flat[index] if sign > 0 else -np.inf
-        voids.flat[index] = np.inf if sign > 0 else energy.flat[index]
+    def tightest(energy, pattern, group):
+        g = group // DEPTH, group % DEPTH
+        return int(np.argmax(np.where(pattern[g], energy[g], -np.inf)))
 
-    # Initial binary pattern: move the tightest cluster to the largest void until stable.
+    def largest(energy, pattern, group):
+        g = group // DEPTH, group % DEPTH
+        return int(np.argmin(np.where(pattern[g], np.inf, energy[g])))
+
+    # Initial binary pattern, the same count in every cell slice.
+    ones = int(DENSITY * area)
+    energy = np.zeros(shape)
+    pattern = np.zeros(shape, dtype=bool)
+    for group in range(groups):
+        for local in rng.choice(area, ones, replace=False):
+            move(energy, pattern, group, local, 1)
+
+    # Move the tightest cluster to the largest void of its cell slice until stable.
     while True:
-        cluster = np.argmax(clusters)
-        move(cluster, -1)
+        index = int(np.argmax(np.where(pattern, energy, -np.inf)))
+        group, local = divmod(index, area)
+        move(energy, pattern, group, local, -1)
 
-        void = np.argmin(voids)
-        move(void, 1)
+        void = largest(energy, pattern, group)
+        move(energy, pattern, group, void, 1)
 
-        if void == cluster:
+        if void == local:
             break
 
-    rank = np.zeros(n, dtype=np.int64)
-    ones = int(np.isfinite(clusters).sum())
+    rank = np.zeros((groups, area), dtype=np.int64)
 
-    # Rank the initial points by removing tightest clusters.
-    c = clusters.copy()
+    # Rank the initial points by removing tightest clusters, in lockstep over cell slices.
+    e, p = energy.copy(), pattern.copy()
     for r in range(ones - 1, -1, -1):
-        cluster = np.argmax(c)
-        splat(c, cluster, -1)
-        c.flat[cluster] = -np.inf
-        rank[cluster] = r
+        for group in rng.permutation(groups):
+            cluster = tightest(e, p, group)
+            move(e, p, group, cluster, -1)
+            rank[group, cluster] = r
 
     # Rank the rest by filling the largest voids.
-    for r in range(ones, n):
-        void = np.argmin(voids)
-        splat(voids, void, 1)
-        voids.flat[void] = np.inf
-        rank[void] = r
+    for r in range(ones, area):
+        for group in rng.permutation(groups):
+            void = largest(energy, pattern, group)
+            move(energy, pattern, group, void, 1)
+            rank[group, void] = r
 
-    return (rank * 256 // n).astype(np.uint8).reshape(shape)
+    return (rank * 256 // area).astype(np.uint8).reshape(shape)
 
 
 if __name__ == '__main__':
