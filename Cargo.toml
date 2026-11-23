@@ -12,31 +12,42 @@ name = "vibrant-app"
 path = "src/main.rs"
 
 [dependencies]
-# Backends are picked per target below: WebGPU on the web
+# GPU and windowing. Backends are picked per target below: WebGPU on the web
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl"] }
 winit = "0.30"
+
+# UI
 egui = { version = "0.36" }
 egui-wgpu = { version = "0.36", default-features = false, features = ["winit"] }
 egui-winit = { version = "0.36", default-features = false, features = ["links"] }
-log = "0.4.28"
-pollster = "0.3"
+egui_dock = "0.21.1"
+egui_double_slider = "4"
+
+# Math and GPU data
+glam = { version = "0.34", features = ["bytemuck"] }
+bytemuck = { version = "1.24", features = ["derive", "min_const_generics"] }
+half = { version = "2", features = ["bytemuck"] }
+num-traits = "0.2"
+
+# File formats and dialogs
+nifti = { version = "0.18", default-features = false, features = ["nalgebra_affine"] }
+exr = { version = "1.74", default-features = false }
+png = "0.18"
+flate2 = { version = "1.1", features = ["zlib-rs"] }
+rfd = "0.18"
+
+# Async and time
+pollster = "1"
+futures-channel = "0.3"
 web-time = "1.1"
 
-bytemuck = { version = "1.24", features = ["derive", "min_const_generics"] }
-glam = { version = "0.29", features = ["bytemuck"] }
-rfd = "0.17"
-nifti = { version = "0.17", default-features = false, features = ["nalgebra_affine"] }
-flate2 = { version = "1.1", features = ["zlib-rs"] }
-png = "0.17"
-half = { version = "2", features = ["bytemuck"] }
-futures-channel = "0.3"
-itertools = "0.13"
+# Utilities
+itertools = "0.15"
+strum = { version = "0.28", features = ["derive"] }
 random_color = "1.1.0"
-exr = { version = "1.74", default-features = false }
-egui_double_slider = "4"
-num-traits = "0.2"
-strum = { version = "0.27", features = ["derive"] }
-egui_dock = "0.21.1"
+
+# Logging
+log = "0.4.28"
 env_logger = "0.11"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
