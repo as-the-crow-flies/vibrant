@@ -2,6 +2,10 @@
 // Roots declare `ENVIRONMENT` and `BLUE_NOISE: texture_3d<f32>`.
 use random;
 
+// Must match `BlueNoise`
+const BLUE_NOISE_SIZE: u32 = 22u;
+const BLUE_NOISE_DEPTH: u32 = 32u;
+const BLUE_NOISE_VARIANTS: u32 = 4u;
 const U24_TO_UNIT: f32 = 5.960464477539063e-8;
 
 // Four independent [0, 1) values. Distinct `dimension`s are uncorrelated.
@@ -10,17 +14,18 @@ fn noise(pixel: vec2<u32>, dimension: u32) -> vec4<f32> {
         return white_noise(vec3<u32>(pixel, ENVIRONMENT.sample ^ (dimension << 24u)));
     }
 
-    // One slice per sample. Each screen tile, dimension and pass through the
-    // slices reads the texture shifted and in one of its 8 orientations, so the
-    // tiles don't repeat; within a pass a pixel's sequence stays blue in time.
-    let size = textureDimensions(BLUE_NOISE);
-    let tile = pixel / size.xy;
-    let hash = pcg3d(vec3<u32>(ENVIRONMENT.sample / size.z, dimension, tile.x | (tile.y << 16u)));
+    // One slice per sample. The screen is a checkerboard of cells, each showing
+    // one of its colour's variants by hash; the variants are baked to stay blue
+    // across cell edges (blue_noise.py). Each dimension and pass through the
+    // slices shifts the board and rehashes it.
+    let hash = pcg3d(vec3<u32>(ENVIRONMENT.sample / BLUE_NOISE_DEPTH, dimension, 0u));
 
-    let local = pixel % size.xy;
-    let mirrored = select(local, size.xy - 1u - local, (vec2<u32>(hash.z) & vec2<u32>(1u, 2u)) != vec2<u32>(0u));
-    let oriented = select(mirrored, mirrored.yx, (hash.z & 4u) != 0u);
-    let texel = vec3<u32>((oriented + hash.xy) % size.xy, ENVIRONMENT.sample % size.z);
+    let p = pixel + (hash.xy & vec2<u32>(0xffffu));
+    let cell = p / BLUE_NOISE_SIZE;
+    let colour = (cell.x + cell.y) & 1u;
+    let variant = pcg3d(vec3<u32>(cell, hash.z)).x % BLUE_NOISE_VARIANTS;
+    let layer = (colour * BLUE_NOISE_VARIANTS + variant) * BLUE_NOISE_DEPTH + ENVIRONMENT.sample % BLUE_NOISE_DEPTH;
+    let texel = vec3<u32>(p % BLUE_NOISE_SIZE, layer);
 
     return (textureLoad(BLUE_NOISE, texel, 0) * 255.0 + 0.5) / 256.0;
 }
