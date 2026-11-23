@@ -31,7 +31,7 @@ VIBRANT provides open-source real-time physically-based rendering of medical vol
 
 ### The User Interface
 
-VIBRANT lets you load muliple volumes and tractograms, configure their appearance, and export a screenshot to spice up your research.
+VIBRANT lets you load multiple volumes and tractograms, configure their appearance using the histogram, cropping, and rendering settings, and export a screenshot to spice up your research.
 
 <p align="center">
   <img src="docs/screenshots/interface-overview.png" alt="The VIBRANT interface with a dataset loaded" width="80%" />
@@ -44,13 +44,21 @@ VIBRANT lets you load muliple volumes and tractograms, configure their appearanc
 
 ---
 
+## Demo Video
+
+Demo video showcasing a typical workflow when visualizing a T1 MRI Scan and Tractography.
+
+[![Vibrant demo](https://img.youtube.com/vi/BcidW6gWCrM/maxresdefault.jpg)](https://www.youtube.com/watch?v=BcidW6gWCrM)
+
+---
+
 ## Running the App
 
-VIBRANT runs on all platforms, web and native, exposing the same features anywhere!
+VIBRANT runs on all platforms, web and native, exposing the same feature set anywhere!
 
-### Web App
+### Web
 
-VIBRANT runs entirely in the browser using WebGPU: **https://vibrant.software/**
+Visit **https://vibrant.software/**
 
 > [!NOTE]  
 > VIBRANT is based on WebGPU and currently only runs in Google Chrome.
@@ -59,7 +67,7 @@ VIBRANT runs entirely in the browser using WebGPU: **https://vibrant.software/**
 
 #### Build from Source
 
-VIBRANT can be built from source using Rust for Windows/Mac/Linux:
+VIBRANT can be built from source using Rust on Windows/Mac/Linux:
 
 1. [Install Rust](https://rustup.rs/)
 2. Build and run:
@@ -73,14 +81,6 @@ VIBRANT can be built from source using Rust for Windows/Mac/Linux:
 #### Pre-Built Binaries
 
 (coming soon)
-
----
-
-## Demo Video
-
-Demo video showing a typical workflow when visualizing a T1 MRI Scan and Tractography.
-
-[![Vibrant demo](https://img.youtube.com/vi/BcidW6gWCrM/maxresdefault.jpg)](https://www.youtube.com/watch?v=BcidW6gWCrM)
 
 ---
 
