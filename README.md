@@ -1,51 +1,73 @@
 # VIBRANT — Cinematic Neuroanatomy & Tractography
 
 <p align="center">
-  <a href="https://as-the-crow-flies.github.io/vibrant/">
     <img src="docs/screenshots/hero.png" alt="VIBRANT rendering a tractogram over an anatomical volume" width="80%" />
-  </a>
 </p>
 
 <p align="center">
-  <strong>Real-Time Cinematic Visualization of Neuroanatomy and Tractography</strong>
+  <strong>VIBRANT: Real-Time Cinematic Visualization of Neuroanatomy and Tractography</strong>
 </p>
 
 <p align="center">
-  <a href="https://as-the-crow-flies.github.io/vibrant/">Launch the web app</a>
-</p>
-
-<p align="center">
-  (Use Google Chrome)
+  <a href="https://vibrant.software/">Visit the Web App at vibrant.software</a>
 </p>
 
 ---
 
 ## What is VIBRANT?
 
-VIBRANT is a tool for visualizing tractography and brain anatomy together in 3D. It takes the files you already work with — NIfTI volumes (`.nii` / `.nii.gz`), tractograms (`.tck`), and track scalar files (`.tsf`) — and renders them with physically based lighting at interactive frame rates.
+VIBRANT is a visualization tool focussing on medical volume rendering and tractography.
 
-- **Physically based.** Light, shadows, and materials follow real-world optics.
-- **Interactive.** Rotate, slice, and adjust lighting and materials in real time.
-- **Nothing leaves your computer.** Files are opened and rendered locally.
-- **Publication output.** One-click screenshot with a transparent background.
+### Rendering
+
+VIBRANT provides open-source real-time physically-based rendering of medical volumes on the web, highlighting the depth and shape of your datasets, while remaining interactive on your laptop! VIBRANT allows you to configure how to render your data to create publication ready output for your papers and presentations. just don't forget to [cite us](#citation), when you do ;).
+
+### File Support
+
+- **Medical Volumes** (.nii.gz)
+- **Scientific Volumes** (.nrrd)
+- **dMRI Tractography** (.tck/.tsf)
+- [Environment Maps](https://polyhaven.com/hdris) (.exr)
+
+### The User Interface
+
+VIBRANT lets you load multiple volumes and tractograms, configure their appearance using the histogram, cropping, and rendering settings, and export a screenshot to spice up your research.
 
 <p align="center">
   <img src="docs/screenshots/interface-overview.png" alt="The VIBRANT interface with a dataset loaded" width="80%" />
 </p>
 
+
+
+> [!NOTE]  
+> VIBRANT is in active development and its output and UI will change over time.
+
 ---
 
-## Run the App
+## Demo Video
 
-### Web App (recommended)
+Demo video showcasing a typical workflow when visualizing a T1 MRI Scan and Tractography.
 
-VIBRANT runs entirely in the browser: **https://as-the-crow-flies.github.io/vibrant/**
+[![Vibrant demo](https://img.youtube.com/vi/BcidW6gWCrM/maxresdefault.jpg)](https://www.youtube.com/watch?v=BcidW6gWCrM)
 
-Currently, the web app only runs in Google Chrome.
+---
 
-### Running on the desktop
+## Running the App
 
-VIBRANT also runs natively on Windows, macOS, and Linux. It is easy to build it yourself using the Rust Toolchain.
+VIBRANT runs on all platforms, web and native, exposing the same feature set anywhere!
+
+### Web
+
+Visit **https://vibrant.software/**
+
+> [!NOTE]  
+> VIBRANT is based on WebGPU and currently only runs in Google Chrome.
+
+### Desktop
+
+#### Build from Source
+
+VIBRANT can be built from source using Rust on Windows/Mac/Linux:
 
 1. [Install Rust](https://rustup.rs/)
 2. Build and run:
@@ -56,29 +78,17 @@ VIBRANT also runs natively on Windows, macOS, and Linux. It is easy to build it 
     cargo run
     ```
 
----
+#### Pre-Built Binaries
 
-## What you can do with VIBRANT
-
-- **Bring a whole study into one scene.** Load any number of volumes and bundles at once — anatomical scans, ROIs, segmentations, tractograms — and view them together under consistent lighting.
-- **Make bundles readable.** Colour streamlines by tangent direction, per bundle, or by a track scalar such as FA, and let the cinematic lighting reveal the 3D structure.
-- **Look inside.** Slice the scene with orthogonal or spherical cut planes and restrict volumes to a region of interest with NIfTI masks.
-- **Light it like a photograph.** Use lighting to reveal the depth and shape of neuroanatomy and tractography.
-- **Export figures.** Grab a transparent-background screenshot at any point for slides, papers, and posters.
-
----
-
-## Demo Video
-
-[![Vibrant demo](https://img.youtube.com/vi/BcidW6gWCrM/maxresdefault.jpg)](https://www.youtube.com/watch?v=BcidW6gWCrM)
+(coming soon)
 
 ---
 
 ## Features
 
-### Volumes
+### Volume Rendering
 
-Load scalar NIfTI volumes for direct volume rendering. A histogram-based transfer-function editor controls which intensities are visible and how they are coloured, while environment lighting and material settings highlight the three-dimensionality of the data.
+Load scalar NIfTI volumes (`.nii.gz`) or Nearly Raw Raster Data (`.nrrd`) files for direct volume rendering. A histogram-based transfer-function editor controls which intensities are visible and how they appear on screen, while environment lighting and material settings highlight the three-dimensionality of the data.
 
 | Standard volume rendering | With cinematic lighting |
 | --- | --- |
@@ -86,25 +96,21 @@ Load scalar NIfTI volumes for direct volume rendering. A histogram-based transfe
 
 ### Tractography
 
-Load one or many `.tck` tractograms and render them as lit tubes with shadows and ambient occlusion, so crossing and fanning geometry stays legible. Each bundle can be shown, hidden, coloured, and sliced on its own.
+Load one or many Tractograms (`.tck`) and render them as lit tubes with shadows and ambient occlusion, so crossing and fanning geometry stays legible. Each bundle can be shown, hidden, coloured, and sliced on its own.
 
-Streamlines can be coloured by **tangent direction**, by a **fixed colour per bundle**, or by a **track scalar** — drop a `.tsf` next to its `.tck` and VIBRANT pairs them automatically and maps the values through a sequential colormap.
+Streamlines can be coloured by **tangent direction**, by a **fixed colour per bundle**, or by a **Track Scalar File** (`.tsf`)
 
 | Tangent direction | Per-bundle colour | Track scalar (`.tsf`) |
 | --- | --- | --- |
 | ![Streamlines coloured by local tangent direction](docs/screenshots/tractography-tangent.png) | ![Streamlines with one solid colour per bundle](docs/screenshots/tractography-bundle.png) | ![Streamlines coloured by a track scalar](docs/screenshots/tractography-scalar.png) |
 
-Two render modes control how bundles sit against the volume: **Combined** lights and composites them with the volume so the two occlude one another, while **Overlay** draws the bundles unoccluded on top for a clear, see-through view.
+### Slicing
 
-| Combined | Overlay |
-| --- | --- |
-| ![Streamlines lit and composited together with the volume](docs/screenshots/tractography-combined.png) | ![Streamlines drawn as an overlay on top of the volume](docs/screenshots/tractography-overlay.png) |
+Explore interior structure with orthogonal (axial / sagittal / coronal) clip planes and/or a spherical cutaway.
 
-### Slicing & masking
+### Masking
 
-Explore interior structure with orthogonal (axial / sagittal / coronal) clip planes and a spherical cutaway. Slicing can apply to the volumes alone or to the streamlines as well.
-
-Any NIfTI whose filename contains `mask` is loaded as a mask and can be assigned to one or more volumes to restrict them to a region of interest. Both binary and signed-distance masks are supported, and masks can be inverted.
+Any NIfTI whose filename contains `mask` is loaded as a mask and can be assigned to one or more volumes to restrict them to a region of interest. Both binary and signed-distance masks are supported.
 
 ---
 
