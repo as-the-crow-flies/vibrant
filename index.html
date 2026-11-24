@@ -210,12 +210,19 @@
                 }
             };
 
+            // Make sure .js and .wasm are never out of sync due to caching
+            const start = async () => {
+                const init = (await import(`./pkg/vibrant.js?v=${Date.now()}`)).default;
+                await init({
+                    module_or_path: fetch("./pkg/vibrant_bg.wasm", { cache: "no-cache" }),
+                });
+            };
+
             if (!(await webGpuAvailable())) {
                 showUnsupported();
             } else {
                 try {
-                    const init = (await import("./pkg/vibrant.js")).default;
-                    await init();
+                    await start();
                 } catch (err) {
                     console.error("Failed to start VIBRANT:", err);
                     showUnsupported();
