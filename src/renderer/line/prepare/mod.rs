@@ -1,8 +1,8 @@
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::{CommandEncoder, ComputePipeline};
 
 use crate::{
     asset::{crop::CropBuffer, line::LineBuffer, tractography::Tractography, Asset},
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
 };
 
 const WORKGROUP_SIZE: u32 = 256;
@@ -33,10 +33,7 @@ impl LinePreparePipeline {
     pub fn dispatch(&self, cmd: &mut CommandEncoder, asset: &Asset, line: &LineBuffer) {
         line.clear_length(cmd);
 
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("LinePrepare"),
-            ..Default::default()
-        });
+        let mut pass = compute_pass(cmd, "line/prepare");
 
         pass.set_pipeline(&self.prepare);
         pass.set_bind_group(0, line.binding_prepare(), &[]);

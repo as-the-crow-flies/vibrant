@@ -1,4 +1,3 @@
-use std::any::type_name;
 use std::time::Duration;
 
 use egui_wgpu::RendererOptions;
@@ -124,7 +123,7 @@ impl UiRenderer {
 
         let mut pass = cmd
             .begin_render_pass(&RenderPassDescriptor {
-                label: Some(type_name::<Self>()),
+                label: Some("ui"),
                 color_attachments: &[Some(frame.overlay().attachment_clear())],
                 ..Default::default()
             })

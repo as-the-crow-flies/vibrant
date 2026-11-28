@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::{CommandEncoder, ComputePipeline};
 
 use crate::{
     asset::{
@@ -8,7 +8,7 @@ use crate::{
         Asset,
     },
     controller::Controller,
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
 };
 
 pub struct LineOccupancyPipeline {
@@ -65,27 +65,27 @@ impl LineOccupancyPipeline {
         line.occupancy().clear(cmd);
         line.clear_offset(cmd);
 
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Occupancy"),
-            ..Default::default()
-        });
-
         let n = line.occupancy().pyramid().resolution().div_ceil(4);
 
+        let mut pass = compute_pass(cmd, "line/occupancy/voxelize");
         pass.set_bind_group(0, line.occupancy().binding_write(), &[]);
         pass.set_bind_group(1, line.binding_render(), &[]);
         pass.set_bind_group(2, asset.tractography.binding(), &[]);
 
         pass.set_pipeline(&self.voxelize);
         pass.dispatch_workgroups(settings.workgroups, 1, 1);
+        drop(pass);
 
+        let mut pass = compute_pass(cmd, "line/occupancy/copy");
         pass.set_pipeline(&self.copy);
         pass.set_bind_group(0, line.occupancy().binding_write(), &[]);
         pass.set_bind_group(1, line.occupancy().pyramid().binding_write(), &[]);
         pass.set_bind_group(2, line.occupancy().count().binding_write(), &[]);
         pass.set_bind_group(3, asset.tractography.binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
+        drop(pass);
 
+        let mut pass = compute_pass(cmd, "line/occupancy/mipmap");
         pass.set_pipeline(&self.mipmap);
 
         let mut mipmap = line.occupancy().pyramid().resolution().div_ceil(4);

@@ -27,6 +27,7 @@ impl ClearPipeline {
 
     pub fn dispatch(&self, cmd: &mut CommandEncoder, color: &ColorBuffer) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+            label: Some("clear"),
             color_attachments: &[Some(color.attachment_clear())],
             ..Default::default()
         });

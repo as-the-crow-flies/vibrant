@@ -1,12 +1,12 @@
 use itertools::Itertools;
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::{CommandEncoder, ComputePipeline};
 
 use crate::{
     asset::{
         environment::Environment, hdri::HdriBuffer, radiance::GaussianRadianceBuffer,
         volume::PhysicalVolume, Asset,
     },
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
 };
 
 pub const VMM_SIZE_OPTIONS: [u32; 3] = [8, 16, 32];
@@ -96,10 +96,7 @@ impl LightingRenderer {
         volume: &PhysicalVolume,
         cascade: usize,
     ) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some(&format!("Cascade {}", cascade)),
-            ..Default::default()
-        });
+        let mut pass = compute_pass(cmd, &format!("cascade/{cascade}"));
 
         let (workgroup, shader) = CASCADE_LAYOUT[cascade];
         let key = (workgroup, shader, radiance.vmm_size());

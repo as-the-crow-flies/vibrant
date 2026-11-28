@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::{CommandEncoder, ComputePipeline};
 
 use crate::{
     asset::{
@@ -8,7 +8,7 @@ use crate::{
         Asset,
     },
     controller::Controller,
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
 };
 
 pub struct LinePopulatePipeline {
@@ -55,18 +55,16 @@ impl LinePopulatePipeline {
         line.voxel_index().clear(cmd);
         line.clear_offset(cmd);
 
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Populate"),
-            ..Default::default()
-        });
-
         let n = line.occupancy().resolution().div_ceil(4);
 
+        let mut pass = compute_pass(cmd, "line/populate/scan");
         pass.set_pipeline(&self.scan);
         pass.set_bind_group(0, line.voxel_index().binding_write(), &[]);
         pass.set_bind_group(1, line.occupancy().count().binding(), &[]);
         pass.dispatch_workgroups(n, n, n);
+        drop(pass);
 
+        let mut pass = compute_pass(cmd, "line/populate/populate");
         pass.set_pipeline(&self.populate);
         pass.set_bind_group(0, line.voxel_index().binding_write(), &[]);
         pass.set_bind_group(1, line.binding_render(), &[]);

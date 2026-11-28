@@ -12,6 +12,11 @@ pub fn source(path: &str) -> &'static str {
         .unwrap_or_else(|| panic!("no root shader {path}"))
 }
 
+/// Every root shader: (path relative to `src/`, flattened source).
+pub fn roots() -> &'static [(&'static str, &'static str)] {
+    SHADERS
+}
+
 /// Replaces the value of `const name: T = value;` in `source`.
 pub fn define(source: &str, name: &str, value: &dyn Display) -> String {
     let start = source

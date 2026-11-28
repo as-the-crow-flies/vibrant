@@ -6,7 +6,7 @@ use wgpu::{
 };
 
 use crate::{
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
     renderer::lighting::VMM_SIZE_OPTIONS,
 };
 
@@ -111,7 +111,7 @@ impl Importance {
         );
 
         let mut cmd = gpu.cmd();
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut pass = compute_pass(&mut cmd, "hdri/importance");
 
         pass.set_pipeline(&self.fit);
         pass.set_bind_group(0, &binding, &[]);
