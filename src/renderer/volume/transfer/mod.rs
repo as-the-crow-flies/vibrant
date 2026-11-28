@@ -9,7 +9,7 @@ use crate::{
         volume_fraction::VolumeFractionBuffer,
         Asset,
     },
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
 };
 
 /// Bakes the transfer functions after any fraction, mask or crop edit: per
@@ -111,31 +111,36 @@ impl VolumeTransferPipeline {
             }],
         });
 
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
-
+        let mut pass = compute_pass(cmd, "volume/transfer/lut");
         pass.set_pipeline(&self.lut);
         for (binding, fraction) in lut.iter().zip(&fractions) {
             pass.set_bind_group(0, binding, &[]);
             pass.set_bind_group(1, fraction.binding(), &[]);
             pass.dispatch_workgroups(BINS.div_ceil(64), 1, 1);
         }
+        drop(pass);
 
         let blocks = workgroups(PhysicalVolume::blocks(volume.size()));
 
+        let mut pass = compute_pass(cmd, "volume/transfer/majorant");
         pass.set_pipeline(&self.majorant);
         for (binding, fraction) in majorant.iter().zip(&fractions) {
             pass.set_bind_group(0, binding, &[]);
             pass.set_bind_group(1, fraction.binding(), &[]);
             pass.dispatch_workgroups(blocks.x, blocks.y, blocks.z);
         }
+        drop(pass);
 
         let voxels = workgroups(volume.size());
 
+        let mut pass = compute_pass(cmd, "volume/transfer/extinction");
         pass.set_pipeline(&self.extinction);
         pass.set_bind_group(0, &extinction, &[]);
         pass.set_bind_group(1, &classified, &[]);
         pass.dispatch_workgroups(voxels.x, voxels.y, voxels.z);
+        drop(pass);
 
+        let mut pass = compute_pass(cmd, "volume/transfer/mipmap");
         pass.set_pipeline(&self.mipmap);
 
         let mut size = volume.size();

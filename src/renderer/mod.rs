@@ -119,7 +119,7 @@ impl Renderer {
                 // line pass overwrites hit pixels; the volume tracer's `min`
                 // clamp is a no-op wherever it stays 1.0 (no line, or lines off).
                 cmd.begin_render_pass(&RenderPassDescriptor {
-                    label: Some("LineDepthClear"),
+                    label: Some("line/depth_clear"),
                     color_attachments: &[Some(frame.line_depth().attachment_clear_far())],
                     ..Default::default()
                 });

@@ -180,7 +180,7 @@ impl PresentPipeline {
         target: &TextureView,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            label: Some(type_name::<Self>()),
+            label: Some("present"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: target,
                 depth_slice: None,

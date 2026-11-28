@@ -89,8 +89,24 @@ naga = { version = "30", features = ["wgsl-in"] }
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["html_reports"] }
 
+# benches/registers.rs: compiles naga's MSL on the Metal device for its reflection.
+[target.'cfg(target_vendor = "apple")'.dev-dependencies]
+naga = { version = "30", features = ["wgsl-in", "msl-out"] }
+objc2-foundation = "0.3"
+objc2-metal = "0.3"
+# benches/counters.rs: streams Instruments' counter exports.
+quick-xml = "0.41"
+
 [[bench]]
 name = "cascade"
+harness = false
+
+[[bench]]
+name = "registers"
+harness = false
+
+[[bench]]
+name = "counters"
 harness = false
 
 [[bench]]

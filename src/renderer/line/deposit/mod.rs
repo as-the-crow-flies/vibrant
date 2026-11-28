@@ -3,7 +3,7 @@ use std::{
     ops::{Add, Div},
 };
 
-use wgpu::{CommandEncoder, ComputePassDescriptor, ComputePipeline};
+use wgpu::{CommandEncoder, ComputePipeline};
 
 use crate::{
     asset::{
@@ -12,7 +12,7 @@ use crate::{
         tractography::Tractography,
         volume::PhysicalVolume,
     },
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
 };
 
 /// Writes neutral line density (from the occupancy pyramid) into the shared
@@ -58,10 +58,7 @@ impl LineDepositPipeline {
     ) {
         let n = volume.size().add(3).div(4);
 
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("LineDeposit"),
-            ..Default::default()
-        });
+        let mut pass = compute_pass(cmd, "line/deposit/deposit");
 
         pass.set_pipeline(&self.deposit);
         pass.set_bind_group(0, volume.line_extinction().binding_write(), &[]);
@@ -71,6 +68,8 @@ impl LineDepositPipeline {
 
         drop(pass);
 
-        volume.line_extinction().mipmap(cmd, &self.mipmap);
+        volume
+            .line_extinction()
+            .mipmap(cmd, "line/deposit/mipmap", &self.mipmap);
     }
 }

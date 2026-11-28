@@ -135,6 +135,7 @@ impl GaussianVolumeRenderer {
         let material = self.material_binding(gpu, &asset.hdri, volume, frame);
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
+            label: Some("volume/trace"),
             color_attachments: &[Some(frame.color().attachment())],
             ..Default::default()
         });

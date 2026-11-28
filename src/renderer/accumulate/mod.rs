@@ -1,12 +1,12 @@
 use std::any::type_name;
 
 use wgpu::{
-    Color, CommandEncoder, ComputePassDescriptor, ComputePipeline, LoadOp, Operations,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, StoreOp,
+    Color, CommandEncoder, ComputePipeline, LoadOp, Operations, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, StoreOp,
 };
 
 use crate::{
-    gpu::{Gpu, Lazy},
+    gpu::{compute_pass, Gpu, Lazy},
     surface::{accumulate::AccumulateBuffer, color::ColorBuffer, Frame},
 };
 
@@ -59,7 +59,7 @@ impl AccumulatePipeline {
         next: &ColorBuffer,
     ) {
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            label: Some(type_name::<Self>()),
+            label: Some("accumulate/accumulate"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: next.view(),
                 depth_slice: None,
@@ -89,10 +89,7 @@ impl AccumulatePipeline {
         prev: &ColorBuffer,
         next: &ColorBuffer,
     ) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor {
-            label: Some(type_name::<Self>()),
-            ..Default::default()
-        });
+        let mut pass = compute_pass(cmd, "accumulate/reduce");
 
         pass.set_pipeline(&self.reduce);
         pass.set_bind_group(0, prev.binding(), &[]);

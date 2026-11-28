@@ -218,6 +218,102 @@ pub fn setup() -> Bench {
 }
 
 impl Bench {
+    /// Every GPU pass `Renderer::render` dispatches per frame, in render order,
+    /// by name. `benches/pipeline.rs` times them, `benches/counters.rs` reads
+    /// their GPU counters.
+    pub fn passes(&self) -> Vec<Pass<'_>> {
+        let b = self;
+        vec![
+            Pass::new("clear", move |cmd| b.clear.dispatch(cmd, b.frame.color())),
+            Pass::new("line/depth_clear", move |cmd| {
+                cmd.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("line/depth_clear"),
+                    color_attachments: &[Some(b.frame.line_depth().attachment_clear_far())],
+                    ..Default::default()
+                });
+            }),
+            // Tractography acceleration structure (LineRenderer::transfer).
+            Pass::new("line/prepare", move |cmd| {
+                b.line_prepare.dispatch(cmd, &b.asset, b.line())
+            }),
+            Pass::new("line/occupancy", move |cmd| {
+                b.line_occupancy
+                    .dispatch(cmd, &b.asset, &b.controller, b.line())
+            }),
+            Pass::new("line/populate", move |cmd| {
+                b.line_populate
+                    .dispatch(cmd, &b.asset, &b.controller, b.line())
+            }),
+            // Shared medium.
+            Pass::new("volume/transfer", move |cmd| {
+                b.volume_transfer.dispatch(&b.gpu, cmd, &b.asset)
+            }),
+            Pass::new("line/deposit", move |cmd| {
+                b.line_deposit
+                    .dispatch(cmd, b.pv(), b.line(), &b.asset.tractography)
+            }),
+            // Radiance cascade (benches/cascade.rs breaks it down per level).
+            Pass::new("cascade", move |cmd| {
+                b.lighting.radiance(
+                    cmd,
+                    &b.asset.environment,
+                    &b.asset.hdri,
+                    b.radiance(),
+                    b.pv(),
+                )
+            }),
+            // Raster traces.
+            Pass::new("line/trace", move |cmd| {
+                b.line_render
+                    .dispatch(cmd, &b.asset, &b.controller, &b.frame)
+            }),
+            Pass::new("volume/trace", move |cmd| {
+                b.volume_render
+                    .dispatch(&b.gpu, cmd, &b.asset, &b.controller, &b.frame)
+            }),
+            // Resolve + present.
+            Pass::new("accumulate/accumulate", move |cmd| {
+                b.accumulate_buffer.set_sample(&b.gpu, 1);
+                b.accumulate.accumulate(
+                    cmd,
+                    &b.accumulate_buffer,
+                    &b.frame,
+                    b.frame.accum(0, 0),
+                    b.frame.accum(0, 1),
+                )
+            }),
+            Pass::new("accumulate/reduce", move |cmd| {
+                b.accumulate.reduce(
+                    cmd,
+                    &b.accumulate_buffer,
+                    b.frame.accum(0, 0),
+                    b.frame.accum(0, 1),
+                )
+            }),
+            Pass::new("present", move |cmd| b.present_frame(cmd)),
+        ]
+    }
+
+    /// Each radiance cascade level on its own, as `cascade/<n>`.
+    pub fn cascade_levels(&self) -> Vec<Pass<'_>> {
+        let b = self;
+        (0..GaussianRadianceBuffer::LEVELS as usize)
+            .map(|level| {
+                let name: &'static str = Box::leak(format!("cascade/{level}").into_boxed_str());
+                Pass::new(name, move |cmd| {
+                    b.lighting.cascade(
+                        cmd,
+                        &b.asset.environment,
+                        &b.asset.hdri,
+                        b.radiance(),
+                        b.pv(),
+                        level,
+                    )
+                })
+            })
+            .collect()
+    }
+
     /// Record one command buffer, submit it, block until the GPU is idle. The
     /// unit every `b.iter` body wraps.
     pub fn time_pass<F: FnMut(&mut CommandEncoder)>(&self, mut record: F) {
@@ -284,7 +380,7 @@ impl Bench {
 
         self.clear.dispatch(cmd, frame.color());
         cmd.begin_render_pass(&RenderPassDescriptor {
-            label: Some("LineDepthClear"),
+            label: Some("line/depth_clear"),
             color_attachments: &[Some(frame.line_depth().attachment_clear_far())],
             ..Default::default()
         });
@@ -321,5 +417,20 @@ impl Bench {
             &self.present_target,
             Presentation::Sdr,
         );
+    }
+}
+
+/// One named GPU pass: records its commands into an encoder.
+pub struct Pass<'a> {
+    pub name: &'static str,
+    pub record: Box<dyn Fn(&mut CommandEncoder) + 'a>,
+}
+
+impl<'a> Pass<'a> {
+    fn new(name: &'static str, record: impl Fn(&mut CommandEncoder) + 'a) -> Self {
+        Self {
+            name,
+            record: Box::new(record),
+        }
     }
 }

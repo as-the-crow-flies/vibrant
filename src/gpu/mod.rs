@@ -315,7 +315,8 @@ impl Gpu {
     pub fn cmd(&self) -> wgpu::CommandEncoder {
         self.device
             .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some(type_name::<Self>()),
+                // What GPU captures name work outside a labelled pass (clears).
+                label: Some("Unlabelled"),
             })
     }
 
@@ -493,4 +494,13 @@ impl Gpu {
 
         let _ = Url::revoke_object_url(&url);
     }
+}
+
+/// A compute pass labelled by path ("line/occupancy/voxelize"), as GPU captures
+/// and `benches/counters.rs` name and group it.
+pub fn compute_pass<'a>(cmd: &'a mut wgpu::CommandEncoder, label: &str) -> wgpu::ComputePass<'a> {
+    cmd.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some(label),
+        ..Default::default()
+    })
 }

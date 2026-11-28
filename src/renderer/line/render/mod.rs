@@ -105,7 +105,7 @@ impl LineRenderPipeline {
         };
 
         let mut pass = cmd.begin_render_pass(&RenderPassDescriptor {
-            label: Some("LineTrace"),
+            label: Some("line/trace"),
             color_attachments: &[
                 Some(frame.color().attachment()),
                 Some(frame.line_depth().attachment()),

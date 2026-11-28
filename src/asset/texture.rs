@@ -2,7 +2,7 @@ use std::{any::type_name, marker::PhantomData};
 
 use wgpu::*;
 
-use crate::gpu::Gpu;
+use crate::gpu::{compute_pass, Gpu};
 
 pub trait MipTextureFormat {
     fn format() -> TextureFormat;
@@ -282,8 +282,8 @@ impl<const DIMENSION: u32, Format: MipTextureFormat> MipTexture<DIMENSION, Forma
         );
     }
 
-    pub fn mipmap(&self, cmd: &mut CommandEncoder, pipeline: &ComputePipeline) {
-        let mut pass = cmd.begin_compute_pass(&ComputePassDescriptor::default());
+    pub fn mipmap(&self, cmd: &mut CommandEncoder, label: &str, pipeline: &ComputePipeline) {
+        let mut pass = compute_pass(cmd, label);
 
         pass.set_pipeline(pipeline);
         for (level, binding) in self.bindings_mipmap().iter().enumerate() {
